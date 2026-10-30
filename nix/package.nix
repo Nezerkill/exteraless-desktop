@@ -26,11 +26,20 @@ in
 }).overrideAttrs (old: {
   postInstall = (old.postInstall or "") + ''
     if [ -e "$out/share/applications/org.telegram.desktop.desktop" ]; then
+      chmod -R u+w "$out/share/applications"
       mv "$out/share/applications/org.telegram.desktop.desktop" \
         "$out/share/applications/org.exteraless.desktop.desktop"
       substituteInPlace "$out/share/applications/org.exteraless.desktop.desktop" \
         --replace-fail "Name=Telegram" "Name=Exteraless Desktop" \
         --replace-fail "Comment=New era of messaging" "Comment=Telegram client with exteraless features"
+    fi
+  '';
+
+  postFixup = ''
+    if [ -d "$out/share/dbus-1/services" ]; then
+      chmod -R u+w "$out/share/dbus-1/services"
+      substituteInPlace "$out/share/dbus-1/services"/* \
+        --replace-fail "$unwrapped" "$out"
     fi
   '';
 })
