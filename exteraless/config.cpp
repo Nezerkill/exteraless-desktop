@@ -17,6 +17,14 @@ constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
+constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
+constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
+constexpr auto kGhostSendOnline = "OEGhostSendOnline";
+constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
+constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
+constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
+constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
+constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 
 [[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 	const auto values = root.value("exteraconfig");
@@ -86,6 +94,90 @@ void Config::setProxyAutoDisabled(bool value) {
 	setValue(kProxyAutoDisabled, value);
 }
 
+bool Config::ghostSendReadPackets() const {
+	return boolValue(kGhostSendReadPackets, true);
+}
+
+void Config::setGhostSendReadPackets(bool value) {
+	setValue(kGhostSendReadPackets, value);
+}
+
+bool Config::ghostSendReadStories() const {
+	return boolValue(kGhostSendReadStories, true);
+}
+
+void Config::setGhostSendReadStories(bool value) {
+	setValue(kGhostSendReadStories, value);
+}
+
+bool Config::ghostSendOnline() const {
+	return boolValue(kGhostSendOnline, true);
+}
+
+void Config::setGhostSendOnline(bool value) {
+	setValue(kGhostSendOnline, value);
+}
+
+bool Config::ghostSendUploadProgress() const {
+	return boolValue(kGhostSendUploadProgress, true);
+}
+
+void Config::setGhostSendUploadProgress(bool value) {
+	setValue(kGhostSendUploadProgress, value);
+}
+
+bool Config::ghostSendOfflineAfterOnline() const {
+	return boolValue(kGhostSendOfflineAfterOnline, false);
+}
+
+void Config::setGhostSendOfflineAfterOnline(bool value) {
+	setValue(kGhostSendOfflineAfterOnline, value);
+}
+
+bool Config::ghostReadExcluded(qint64 peerId) const {
+	ensureLoaded();
+	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
+	return _values.value(kGhostReadExclusions).toObject().value(key).toBool();
+}
+
+void Config::setGhostReadExcluded(qint64 peerId, bool value) {
+	ensureLoaded();
+	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
+	auto exclusions = _values.value(kGhostReadExclusions).toObject();
+	if (value) {
+		exclusions[key] = true;
+	} else {
+		exclusions.remove(key);
+	}
+	setValue(kGhostReadExclusions, exclusions);
+}
+
+bool Config::ghostTypingExcluded(qint64 peerId) const {
+	ensureLoaded();
+	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
+	return _values.value(kGhostTypingExclusions).toObject().value(key).toBool();
+}
+
+void Config::setGhostTypingExcluded(qint64 peerId, bool value) {
+	ensureLoaded();
+	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
+	auto exclusions = _values.value(kGhostTypingExclusions).toObject();
+	if (value) {
+		exclusions[key] = true;
+	} else {
+		exclusions.remove(key);
+	}
+	setValue(kGhostTypingExclusions, exclusions);
+}
+
+bool Config::saveDeletedMessages() const {
+	return boolValue(kSaveDeletedMessages, false);
+}
+
+void Config::setSaveDeletedMessages(bool value) {
+	setValue(kSaveDeletedMessages, value);
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -104,7 +196,15 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 		if (key == kRelativeLastSeen
 			|| key == kAddCommaAfterMention
 			|| key == kProxyDisableConditions
-			|| key == kProxyAutoDisabled) {
+			|| key == kProxyAutoDisabled
+			|| key == kGhostSendReadPackets
+			|| key == kGhostSendReadStories
+			|| key == kGhostSendOnline
+			|| key == kGhostSendUploadProgress
+			|| key == kGhostSendOfflineAfterOnline
+			|| key == kGhostReadExclusions
+			|| key == kGhostTypingExclusions
+			|| key == kSaveDeletedMessages) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

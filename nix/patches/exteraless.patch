@@ -701,10 +701,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..b2ce865
+index 0000000..67d1c57
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,262 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -724,6 +724,14 @@ index 0000000..b2ce865
 +constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
++constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
++constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
++constexpr auto kGhostSendOnline = "OEGhostSendOnline";
++constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
++constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
++constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
++constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
++constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 +
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
@@ -793,6 +801,90 @@ index 0000000..b2ce865
 +	setValue(kProxyAutoDisabled, value);
 +}
 +
++bool Config::ghostSendReadPackets() const {
++	return boolValue(kGhostSendReadPackets, true);
++}
++
++void Config::setGhostSendReadPackets(bool value) {
++	setValue(kGhostSendReadPackets, value);
++}
++
++bool Config::ghostSendReadStories() const {
++	return boolValue(kGhostSendReadStories, true);
++}
++
++void Config::setGhostSendReadStories(bool value) {
++	setValue(kGhostSendReadStories, value);
++}
++
++bool Config::ghostSendOnline() const {
++	return boolValue(kGhostSendOnline, true);
++}
++
++void Config::setGhostSendOnline(bool value) {
++	setValue(kGhostSendOnline, value);
++}
++
++bool Config::ghostSendUploadProgress() const {
++	return boolValue(kGhostSendUploadProgress, true);
++}
++
++void Config::setGhostSendUploadProgress(bool value) {
++	setValue(kGhostSendUploadProgress, value);
++}
++
++bool Config::ghostSendOfflineAfterOnline() const {
++	return boolValue(kGhostSendOfflineAfterOnline, false);
++}
++
++void Config::setGhostSendOfflineAfterOnline(bool value) {
++	setValue(kGhostSendOfflineAfterOnline, value);
++}
++
++bool Config::ghostReadExcluded(qint64 peerId) const {
++	ensureLoaded();
++	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
++	return _values.value(kGhostReadExclusions).toObject().value(key).toBool();
++}
++
++void Config::setGhostReadExcluded(qint64 peerId, bool value) {
++	ensureLoaded();
++	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
++	auto exclusions = _values.value(kGhostReadExclusions).toObject();
++	if (value) {
++		exclusions[key] = true;
++	} else {
++		exclusions.remove(key);
++	}
++	setValue(kGhostReadExclusions, exclusions);
++}
++
++bool Config::ghostTypingExcluded(qint64 peerId) const {
++	ensureLoaded();
++	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
++	return _values.value(kGhostTypingExclusions).toObject().value(key).toBool();
++}
++
++void Config::setGhostTypingExcluded(qint64 peerId, bool value) {
++	ensureLoaded();
++	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
++	auto exclusions = _values.value(kGhostTypingExclusions).toObject();
++	if (value) {
++		exclusions[key] = true;
++	} else {
++		exclusions.remove(key);
++	}
++	setValue(kGhostTypingExclusions, exclusions);
++}
++
++bool Config::saveDeletedMessages() const {
++	return boolValue(kSaveDeletedMessages, false);
++}
++
++void Config::setSaveDeletedMessages(bool value) {
++	setValue(kSaveDeletedMessages, value);
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -811,7 +903,15 @@ index 0000000..b2ce865
 +		if (key == kRelativeLastSeen
 +			|| key == kAddCommaAfterMention
 +			|| key == kProxyDisableConditions
-+			|| key == kProxyAutoDisabled) {
++			|| key == kProxyAutoDisabled
++			|| key == kGhostSendReadPackets
++			|| key == kGhostSendReadStories
++			|| key == kGhostSendOnline
++			|| key == kGhostSendUploadProgress
++			|| key == kGhostSendOfflineAfterOnline
++			|| key == kGhostReadExclusions
++			|| key == kGhostTypingExclusions
++			|| key == kSaveDeletedMessages) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -869,10 +969,10 @@ index 0000000..b2ce865
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..e2c36bc
+index 0000000..0a8318c
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,64 @@
 +#pragma once
 +
 +#include <QJsonObject>
@@ -900,6 +1000,25 @@ index 0000000..e2c36bc
 +
 +	[[nodiscard]] bool proxyAutoDisabled() const;
 +	void setProxyAutoDisabled(bool value);
++
++	[[nodiscard]] bool ghostSendReadPackets() const;
++	void setGhostSendReadPackets(bool value);
++	[[nodiscard]] bool ghostSendReadStories() const;
++	void setGhostSendReadStories(bool value);
++	[[nodiscard]] bool ghostSendOnline() const;
++	void setGhostSendOnline(bool value);
++	[[nodiscard]] bool ghostSendUploadProgress() const;
++	void setGhostSendUploadProgress(bool value);
++	[[nodiscard]] bool ghostSendOfflineAfterOnline() const;
++	void setGhostSendOfflineAfterOnline(bool value);
++
++	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
++	void setGhostReadExcluded(qint64 peerId, bool value);
++	[[nodiscard]] bool ghostTypingExcluded(qint64 peerId) const;
++	void setGhostTypingExcluded(qint64 peerId, bool value);
++
++	[[nodiscard]] bool saveDeletedMessages() const;
++	void setSaveDeletedMessages(bool value);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
