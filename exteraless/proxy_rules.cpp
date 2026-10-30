@@ -12,16 +12,12 @@
 namespace Exteraless {
 namespace {
 
-constexpr auto kVpn = 1;
-constexpr auto kMobile = 2;
-constexpr auto kWiFi = 4;
-
-[[nodiscard]] int ConditionFor(Transport transport) {
+[[nodiscard]] ProxyCondition ConditionFor(Transport transport) {
 	switch (transport) {
-	case Transport::VPN: return kVpn;
-	case Transport::Cellular: return kMobile;
-	case Transport::WiFi: return kWiFi;
-	default: return 0;
+	case Transport::VPN: return ProxyCondition::VPN;
+	case Transport::Cellular: return ProxyCondition::Mobile;
+	case Transport::WiFi: return ProxyCondition::WiFi;
+	default: return ProxyCondition::None;
 	}
 }
 
@@ -30,8 +26,8 @@ constexpr auto kWiFi = 4;
 void ApplyProxyRules() {
 	auto &config = Config::Instance();
 	const auto condition = ConditionFor(CurrentTransport());
-	const auto shouldDisable = (condition != 0)
-		&& ((config.proxyDisableConditions() & condition) != 0);
+	const auto shouldDisable = (condition != ProxyCondition::None)
+		&& HasProxyCondition(config.proxyDisableConditions(), condition);
 	auto &proxy = Core::App().settings().proxy();
 
 	if (shouldDisable) {

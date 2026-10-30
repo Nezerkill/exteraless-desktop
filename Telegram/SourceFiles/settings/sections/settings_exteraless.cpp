@@ -148,27 +148,25 @@ const auto kMeta = Builder::BuildHelper({
 	});
 
 	const auto addProxyCondition = [&](
-			int flag,
+			Exteraless::ProxyCondition condition,
 			QString id,
 			rpl::producer<QString> title,
 			QStringList keywords) {
 		const auto checkbox = builder.addCheckbox({
 			.id = std::move(id),
 			.title = std::move(title),
-			.checked = (Exteraless::Config::Instance()
-				.proxyDisableConditions() & flag) != 0,
+			.checked = Exteraless::HasProxyCondition(
+				Exteraless::Config::Instance().proxyDisableConditions(),
+				condition),
 			.keywords = std::move(keywords),
 		});
 		if (checkbox) {
 			checkbox->checkedChanges(
 			) | rpl::on_next([=](bool checked) {
-				auto mask = Exteraless::Config::Instance()
-					.proxyDisableConditions();
-				if (checked) {
-					mask |= flag;
-				} else {
-					mask &= ~flag;
-				}
+				const auto mask = Exteraless::WithProxyCondition(
+					Exteraless::Config::Instance().proxyDisableConditions(),
+					condition,
+					checked);
 				Exteraless::Config::Instance()
 					.setProxyDisableConditions(mask);
 				Exteraless::ApplyProxyRules();
@@ -176,17 +174,17 @@ const auto kMeta = Builder::BuildHelper({
 		}
 	};
 	addProxyCondition(
-		1,
+		Exteraless::ProxyCondition::VPN,
 		u"exteraless/proxy/vpn"_q,
 		tr::lng_settings_exteraless_proxy_vpn(),
 		{ u"vpn"_q, u"proxy"_q });
 	addProxyCondition(
-		2,
+		Exteraless::ProxyCondition::Mobile,
 		u"exteraless/proxy/mobile"_q,
 		tr::lng_settings_exteraless_proxy_mobile(),
 		{ u"mobile"_q, u"cellular"_q, u"proxy"_q });
 	addProxyCondition(
-		4,
+		Exteraless::ProxyCondition::WiFi,
 		u"exteraless/proxy/wifi"_q,
 		tr::lng_settings_exteraless_proxy_wifi(),
 		{ u"wifi"_q, u"proxy"_q });

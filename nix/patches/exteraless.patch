@@ -519,10 +519,10 @@ index 0000000..5e394d8
 +} // namespace MTP
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..546b03d
+index 0000000..2eabec5
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,300 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -673,27 +673,25 @@ index 0000000..546b03d
 +	});
 +
 +	const auto addProxyCondition = [&](
-+			int flag,
++			Exteraless::ProxyCondition condition,
 +			QString id,
 +			rpl::producer<QString> title,
 +			QStringList keywords) {
 +		const auto checkbox = builder.addCheckbox({
 +			.id = std::move(id),
 +			.title = std::move(title),
-+			.checked = (Exteraless::Config::Instance()
-+				.proxyDisableConditions() & flag) != 0,
++			.checked = Exteraless::HasProxyCondition(
++				Exteraless::Config::Instance().proxyDisableConditions(),
++				condition),
 +			.keywords = std::move(keywords),
 +		});
 +		if (checkbox) {
 +			checkbox->checkedChanges(
 +			) | rpl::on_next([=](bool checked) {
-+				auto mask = Exteraless::Config::Instance()
-+					.proxyDisableConditions();
-+				if (checked) {
-+					mask |= flag;
-+				} else {
-+					mask &= ~flag;
-+				}
++				const auto mask = Exteraless::WithProxyCondition(
++					Exteraless::Config::Instance().proxyDisableConditions(),
++					condition,
++					checked);
 +				Exteraless::Config::Instance()
 +					.setProxyDisableConditions(mask);
 +				Exteraless::ApplyProxyRules();
@@ -701,17 +699,17 @@ index 0000000..546b03d
 +		}
 +	};
 +	addProxyCondition(
-+		1,
++		Exteraless::ProxyCondition::VPN,
 +		u"exteraless/proxy/vpn"_q,
 +		tr::lng_settings_exteraless_proxy_vpn(),
 +		{ u"vpn"_q, u"proxy"_q });
 +	addProxyCondition(
-+		2,
++		Exteraless::ProxyCondition::Mobile,
 +		u"exteraless/proxy/mobile"_q,
 +		tr::lng_settings_exteraless_proxy_mobile(),
 +		{ u"mobile"_q, u"cellular"_q, u"proxy"_q });
 +	addProxyCondition(
-+		4,
++		Exteraless::ProxyCondition::WiFi,
 +		u"exteraless/proxy/wifi"_q,
 +		tr::lng_settings_exteraless_proxy_wifi(),
 +		{ u"wifi"_q, u"proxy"_q });
@@ -2036,10 +2034,10 @@ index 0000000..0679761
 +} // namespace Exteraless
 diff --git a/exteraless/proxy_rules.cpp b/exteraless/proxy_rules.cpp
 new file mode 100644
-index 0000000..9292708
+index 0000000..c45177b
 --- /dev/null
 +++ b/exteraless/proxy_rules.cpp
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,67 @@
 +#include "exteraless/proxy_rules.h"
 +
 +#include "core/application.h"
@@ -2054,16 +2052,12 @@ index 0000000..9292708
 +namespace Exteraless {
 +namespace {
 +
-+constexpr auto kVpn = 1;
-+constexpr auto kMobile = 2;
-+constexpr auto kWiFi = 4;
-+
-+[[nodiscard]] int ConditionFor(Transport transport) {
++[[nodiscard]] ProxyCondition ConditionFor(Transport transport) {
 +	switch (transport) {
-+	case Transport::VPN: return kVpn;
-+	case Transport::Cellular: return kMobile;
-+	case Transport::WiFi: return kWiFi;
-+	default: return 0;
++	case Transport::VPN: return ProxyCondition::VPN;
++	case Transport::Cellular: return ProxyCondition::Mobile;
++	case Transport::WiFi: return ProxyCondition::WiFi;
++	default: return ProxyCondition::None;
 +	}
 +}
 +
@@ -2072,8 +2066,8 @@ index 0000000..9292708
 +void ApplyProxyRules() {
 +	auto &config = Config::Instance();
 +	const auto condition = ConditionFor(CurrentTransport());
-+	const auto shouldDisable = (condition != 0)
-+		&& ((config.proxyDisableConditions() & condition) != 0);
++	const auto shouldDisable = (condition != ProxyCondition::None)
++		&& HasProxyCondition(config.proxyDisableConditions(), condition);
 +	auto &proxy = Core::App().settings().proxy();
 +
 +	if (shouldDisable) {
@@ -2113,13 +2107,43 @@ index 0000000..9292708
 +} // namespace Exteraless
 diff --git a/exteraless/proxy_rules.h b/exteraless/proxy_rules.h
 new file mode 100644
-index 0000000..34ae612
+index 0000000..204b97a
 --- /dev/null
 +++ b/exteraless/proxy_rules.h
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,38 @@
 +#pragma once
 +
 +namespace Exteraless {
++
++enum class ProxyCondition : int {
++	None = 0,
++	VPN = 1,
++	Mobile = 2,
++	WiFi = 4,
++};
++
++[[nodiscard]] constexpr bool HasProxyCondition(
++		int mask,
++		ProxyCondition condition) {
++	return (mask & int(condition)) != 0;
++}
++
++[[nodiscard]] constexpr int WithProxyCondition(
++		int mask,
++		ProxyCondition condition,
++		bool enabled) {
++	return enabled
++		? (mask | int(condition))
++		: (mask & ~int(condition));
++}
++
++static_assert(int(ProxyCondition::VPN) == 1);
++static_assert(int(ProxyCondition::Mobile) == 2);
++static_assert(int(ProxyCondition::WiFi) == 4);
++static_assert(HasProxyCondition(1, ProxyCondition::VPN));
++static_assert(!HasProxyCondition(0, ProxyCondition::VPN));
++static_assert(WithProxyCondition(0, ProxyCondition::WiFi, true) == 4);
++static_assert(WithProxyCondition(4, ProxyCondition::WiFi, false) == 0);
 +
 +void StartProxyRulesWatcher();
 +void ApplyProxyRules();
