@@ -31,8 +31,8 @@
 
 ### Артефакты
 
-- Коммиты: `4d4d258`, `86ef5c7`.
-- Nix-пакет: `/nix/store/jm0wncqbnlfj3nbqlww84gyd1q3y555i-exteraless-desktop-7.3.1-exteraless.0.1`
+- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`.
+- Nix-пакет: `/nix/store/pxcrrn79wmvgv61yxbab2pxayzgdshaz-exteraless-desktop-7.3.1-exteraless.0.1`
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
 ## В работе / дальше
