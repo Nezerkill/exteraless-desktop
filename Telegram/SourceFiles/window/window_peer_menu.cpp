@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "chat_helpers/compose/compose_show.h"
 #include "chat_helpers/message_field.h"
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages.h"
+#include "boxes/deleted_messages_box.h"
 #include "chat_helpers/share_message_phrase_factory.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/controls/userpic_button.h"
@@ -315,6 +317,7 @@ private:
 	void addToggleUnreadMark();
 	void addToggleArchive();
 	void addClearHistory();
+	void addDeletedMessages();
 	void addDeleteChat();
 	void addLeaveChat();
 	void addJoinChat();
@@ -860,8 +863,22 @@ void Filler::addToggleArchive() {
 	SetActionText(archiveAction, std::move(actionText));
 }
 
-void Filler::addClearHistory() {
-	if (_topic || _peer->isMonoforum()) {
+void Filler::addDeletedMessages() {
+	if (!_peer) {
+		return;
+	}
+	const auto count = Exteraless::DeletedMessages::Instance().count(
+		_peer->id);
+	if (!count) {
+		return;
+	}
+	_addAction(
+		u"Deleted messages (%1)"_q.arg(count),
+		[=] { Exteraless::ShowDeletedMessagesBox(_controller.get(), _peer); },
+		&st::menuIconDelete);
+}
+
+void Filler::addClearHistory() {	if (_topic || _peer->isMonoforum()) {
 		return;
 	}
 	const auto channel = _peer->asChannel();
@@ -1929,6 +1946,7 @@ void Filler::fillContextMenuActions() {
 		}
 	}
 	addBanFromChannel();
+	addDeletedMessages();
 	addClearHistory();
 	addDeleteChat();
 	addLeaveChat();
@@ -1953,6 +1971,7 @@ void Filler::fillHistoryActions() {
 	addExportChat();
 	addTranslate();
 	addReport();
+	addDeletedMessages();
 	addClearHistory();
 	addDeleteChat();
 	addLeaveChat();

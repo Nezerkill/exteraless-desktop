@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #pragma once
 
 #include "mtproto/details/mtproto_serialized_request.h"
+#include "mtproto/mtproto_request_filter.h"
 #include "mtproto/mtproto_response.h"
 
 namespace MTP {
@@ -104,6 +105,7 @@ public:
 	void logout(Fn<void()> done);
 
 	void setUpdatesHandler(Fn<void(const Response&)> handler);
+	void setRequestFilter(RequestFilter filter);
 	void setGlobalFailHandler(
 		Fn<void(const Error&, const Response&)> handler);
 	void setStateChangedHandler(

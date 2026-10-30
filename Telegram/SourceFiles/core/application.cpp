@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/application.h"
+#include "exteraless/deleted_messages.h"
 #include "exteraless/proxy_rules.h"
 
 #include "data/data_abstract_structure.h"
@@ -210,6 +211,9 @@ Application::Application()
 
 	_domain->activeSessionChanges(
 	) | rpl::on_next([=](Main::Session *session) {
+		if (session) {
+			Exteraless::DeletedMessages::Instance().attach(session);
+		}
 		if (session && !UpdaterDisabled()) { // #TODO multi someSessionValue
 			UpdateChecker().setMtproto(session);
 		}

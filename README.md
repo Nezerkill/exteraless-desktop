@@ -7,6 +7,8 @@ Linux-клиент Telegram на базе [Telegram Desktop](https://github.com/
 Сейчас это ранний каркас: сборка, брендинг и Nix-упаковка. Функции exteraless
 добавляются поэтапно.
 
+Текущий статус и список готового: [STATUS.md](STATUS.md).
+
 ## Состояние
 
 - [x] Форк tdesktop 7.3.1

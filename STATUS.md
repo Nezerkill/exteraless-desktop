@@ -39,11 +39,11 @@
 
 ### MVP2
 
-- [ ] Ghost Mode: read receipts, stories, online/offline, typing/upload progress.
-- [ ] Per-chat исключения Ghost Mode.
-- [ ] Сохранение удалённых сообщений и просмотр.
-- [ ] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen.
-- [ ] Drawer: аккаунты, меню, unread-бейджи, порядок пунктов.
+- [x] Ghost Mode: read receipts, stories, online/offline, typing/upload progress — код готов, идёт сборка/проверка.
+- [x] Сохранение удалённых сообщений: JSON-sidecar, контекстное меню и бокс — код готов, идёт сборка/проверка.
+- [ ] Per-chat исключения Ghost Mode (ключи конфига уже есть).
+- [ ] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen — исследование готово.
+- [ ] Drawer: аккаунты, меню, unread-бейджи, порядок пунктов — исследование готово.
 
 ### MVP3
 

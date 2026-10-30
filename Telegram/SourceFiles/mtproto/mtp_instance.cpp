@@ -157,6 +157,7 @@ public:
 	}
 
 	void setUpdatesHandler(Fn<void(const Response&)> handler);
+	void setRequestFilter(RequestFilter filter);
 	void setGlobalFailHandler(
 		Fn<void(const Error&, const Response&)> handler);
 	void setStateChangedHandler(Fn<void(ShiftedDcId shiftedDcId, int32 state)> handler);
@@ -289,6 +290,7 @@ private:
 	std::map<DcId, std::vector<mtpRequestId>> _authWaiters;
 
 	Fn<void(const Response&)> _updatesHandler;
+	RequestFilter _requestFilter;
 	Fn<void(const Error&, const Response&)> _globalFailHandler;
 	Fn<void(ShiftedDcId shiftedDcId, int32 state)> _stateChangedHandler;
 	Fn<void(ShiftedDcId shiftedDcId)> _sessionResetHandler;
@@ -1027,6 +1029,29 @@ void Instance::Private::sendRequest(
 		bool needsLayer,
 		mtpRequestId afterRequestId) {
 	const auto session = getSession(shiftedDcId);
+
+	if (_requestFilter
+		&& request->size() > SerializedRequest::kMessageBodyPosition) {
+		const auto type = mtpTypeId((*request)[
+			SerializedRequest::kMessageBodyPosition]);
+		if (_requestFilter({ requestId, type })
+			== RequestFilterResult::Drop) {
+			auto response = Response();
+			response.requestId = requestId;
+			auto handler = std::move(callbacks);
+			const auto instance = _instance.get();
+			crl::on_main(instance, [handler = std::move(handler), response]() mutable {
+				if (handler.fail) {
+					handler.fail(
+						Error::Local(
+							u"GHOST_MODE"_q,
+							u"Request suppressed by Ghost Mode."_q),
+						response);
+				}
+			});
+			return;
+		}
+	}
 
 	request->requestId = requestId;
 	storeRequest(requestId, request, std::move(callbacks));
@@ -1893,6 +1918,10 @@ void Instance::Private::setUpdatesHandler(
 	_updatesHandler = std::move(handler);
 }
 
+void Instance::Private::setRequestFilter(RequestFilter filter) {
+	_requestFilter = std::move(filter);
+}
+
 void Instance::Private::setGlobalFailHandler(
 		Fn<void(const Error&, const Response&)> handler) {
 	_globalFailHandler = std::move(handler);
@@ -2135,6 +2164,10 @@ void Instance::setUpdatesHandler(Fn<void(const Response&)> handler) {
 void Instance::setGlobalFailHandler(
 		Fn<void(const Error&, const Response&)> handler) {
 	_private->setGlobalFailHandler(std::move(handler));
+}
+
+void Instance::setRequestFilter(RequestFilter filter) {
+	_private->setRequestFilter(std::move(filter));
 }
 
 void Instance::setStateChangedHandler(

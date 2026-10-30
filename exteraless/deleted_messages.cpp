@@ -1,0 +1,216 @@
+#include "exteraless/deleted_messages.h"
+
+#include "data/data_peer.h"
+#include "data/data_session.h"
+#include "history/history.h"
+#include "history/history_item.h"
+#include "main/main_session.h"
+#include "storage/storage_account.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QSaveFile>
+
+#include <algorithm>
+#include <rpl/rpl.h>
+
+namespace Exteraless {
+namespace {
+
+constexpr auto kVersion = 1;
+
+[[nodiscard]] QString IdString(qint64 value) {
+	return QString::number(value);
+}
+
+[[nodiscard]] qint64 IdValue(const QJsonObject &object, const char *key) {
+	return object.value(key).toString().toLongLong();
+}
+
+[[nodiscard]] bool ShouldSave(not_null<HistoryItem*> item) {
+	return item->isRegular()
+		&& !item->isService()
+		&& !item->isScheduled()
+		&& !item->isEphemeral()
+		&& !item->isBusinessShortcut()
+		&& !item->isAdminLogEntry()
+		&& !item->isSending()
+		&& !item->hasFailed()
+		&& !item->ttlDestroyAt();
+}
+
+} // namespace
+
+DeletedMessages &DeletedMessages::Instance() {
+	static auto instance = DeletedMessages();
+	return instance;
+}
+
+void DeletedMessages::attach(Main::Session *session) {
+	if (!session) {
+		return;
+	}
+	const auto path = QFileInfo(
+		session->local().cachePath()).absolutePath()
+		+ u"/exteraless/deleted_messages.json"_q;
+	if (_path == path) {
+		return;
+	}
+
+	save();
+	_path = path;
+	_entries.clear();
+	load();
+
+	session->data().itemsAboutToBeDestroyed(
+	) | rpl::on_next([=](
+			std::vector<not_null<HistoryItem*>> items) {
+		onItemsDestroyed(items);
+	}, session->lifetime());
+}
+
+int DeletedMessages::count(PeerId peerId) const {
+	const auto key = IdString(peerId.value);
+	auto result = 0;
+	for (const auto &entry : _entries) {
+		if (IdString(entry.peerId) == key) {
+			++result;
+		}
+	}
+	return result;
+}
+
+std::vector<DeletedMessages::Entry> DeletedMessages::list(
+		PeerId peerId) const {
+	const auto key = IdString(peerId.value);
+	auto result = std::vector<Entry>();
+	for (const auto &entry : _entries) {
+		if (IdString(entry.peerId) == key) {
+			result.push_back(entry);
+		}
+	}
+	return result;
+}
+
+void DeletedMessages::clear(PeerId peerId) {
+	const auto key = IdString(peerId.value);
+	std::erase_if(_entries, [&](const Entry &entry) {
+		return IdString(entry.peerId) == key;
+	});
+	save();
+}
+
+void DeletedMessages::onItemsDestroyed(
+		const std::vector<not_null<HistoryItem*>> &items) {
+	auto changed = false;
+	for (const auto &item : items) {
+		if (!ShouldSave(item)) {
+			continue;
+		}
+		const auto fullId = item->fullId();
+		const auto peerId = qint64(fullId.peer.value);
+		const auto msgId = qint64(fullId.msg.bare);
+		const auto duplicate = std::any_of(
+			_entries.begin(),
+			_entries.end(),
+			[&](const Entry &entry) {
+				return entry.peerId == peerId && entry.msgId == msgId;
+			});
+		if (duplicate) {
+			continue;
+		}
+
+		auto entry = Entry();
+		entry.peerId = peerId;
+		entry.peerName = item->history()->peer->name();
+		entry.msgId = msgId;
+		entry.fromId = item->from()
+			? qint64(item->from()->id.value)
+			: 0;
+		entry.fromName = item->from() ? item->from()->name() : QString();
+		entry.date = item->date();
+		entry.text = item->originalText().text;
+		entry.media = item->media() ? u"media"_q : QString();
+		entry.out = item->out();
+		_entries.push_back(std::move(entry));
+		changed = true;
+	}
+	if (changed) {
+		save();
+	}
+}
+
+void DeletedMessages::load() {
+	if (_path.isEmpty()) {
+		return;
+	}
+	auto file = QFile(_path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	auto error = QJsonParseError{0, QJsonParseError::NoError};
+	const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return;
+	}
+	const auto messages = document.object().value("messages").toArray();
+	for (const auto &value : messages) {
+		const auto object = value.toObject();
+		auto entry = Entry();
+		entry.peerId = IdValue(object, "peerId");
+		entry.peerName = object.value("peerName").toString();
+		entry.msgId = IdValue(object, "msgId");
+		entry.fromId = IdValue(object, "fromId");
+		entry.fromName = object.value("fromName").toString();
+		entry.date = qint64(object.value("date").toDouble());
+		entry.text = object.value("text").toString();
+		entry.media = object.value("media").toString();
+		entry.out = object.value("out").toBool();
+		if (entry.peerId && entry.msgId) {
+			_entries.push_back(std::move(entry));
+		}
+	}
+}
+
+void DeletedMessages::save() {
+	if (_path.isEmpty()) {
+		return;
+	}
+	const auto directory = QFileInfo(_path).absolutePath();
+	if (!QDir().mkpath(directory)) {
+		return;
+	}
+
+	auto messages = QJsonArray();
+	for (const auto &entry : _entries) {
+		auto object = QJsonObject();
+		object["peerId"] = IdString(entry.peerId);
+		object["peerName"] = entry.peerName;
+		object["msgId"] = IdString(entry.msgId);
+		object["fromId"] = IdString(entry.fromId);
+		object["fromName"] = entry.fromName;
+		object["date"] = double(entry.date);
+		object["text"] = entry.text;
+		object["media"] = entry.media;
+		object["out"] = entry.out;
+		messages.append(object);
+	}
+
+	auto root = QJsonObject();
+	root["version"] = kVersion;
+	root["messages"] = messages;
+
+	auto file = QSaveFile(_path);
+	if (!file.open(QIODevice::WriteOnly)) {
+		return;
+	}
+	file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+	file.commit();
+}
+
+} // namespace Exteraless

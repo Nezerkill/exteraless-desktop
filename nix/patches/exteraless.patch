@@ -9,22 +9,28 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..c5ccbab 100644
+index 811707d..2dd3aaf 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,11 @@ endif()
+@@ -70,6 +70,17 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
 +target_sources(Telegram PRIVATE
++    ../exteraless/deleted_messages.cpp
++    ../exteraless/deleted_messages.h
++    ../exteraless/ghost_mode.cpp
++    ../exteraless/ghost_mode.h
 +    ../exteraless/proxy_rules.cpp
 +    ../exteraless/proxy_rules.h
++    SourceFiles/boxes/deleted_messages_box.cpp
++    SourceFiles/boxes/deleted_messages_box.h
 +)
 +
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +114,7 @@ PRIVATE
+@@ -109,6 +120,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -32,7 +38,15 @@ index 811707d..c5ccbab 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1897,6 +1903,8 @@ PRIVATE
+@@ -1680,6 +1692,7 @@ PRIVATE
+     mtproto/facade.h
+     mtproto/mtp_instance.cpp
+     mtproto/mtp_instance.h
++    mtproto/mtproto_request_filter.h
+     mtproto/proxy_check.cpp
+     mtproto/proxy_check.h
+     mtproto/sender.h
+@@ -1897,6 +1910,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -41,6 +55,17 @@ index 811707d..c5ccbab 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
+@@ -2530,6 +2545,10 @@ else()
+     generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
+     generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
+     generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
++    target_compile_options(Telegram_XdpBackground_dbus PRIVATE -g0)
++    target_compile_options(Telegram_FlatpakPortal_dbus PRIVATE -g0)
++    target_compile_options(Telegram_XdgNotifications_dbus PRIVATE -g0)
++    target_compile_options(Telegram_Logind_dbus PRIVATE -g0)
+ endif()
+ 
+ if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
 index ffc8ec9..de9aee6 100644
 --- a/Telegram/Resources/langs/lang.strings
@@ -62,6 +87,75 @@ index ffc8ec9..de9aee6 100644
 +"lng_settings_exteraless_import" = "Import settings";
 +
  // Keys finished
+diff --git a/Telegram/SourceFiles/api/api_updates.cpp b/Telegram/SourceFiles/api/api_updates.cpp
+index 4fbafd1..f3172d8 100644
+--- a/Telegram/SourceFiles/api/api_updates.cpp
++++ b/Telegram/SourceFiles/api/api_updates.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "api/api_updates.h"
+ 
++#include "exteraless/config.h"
++
+ #include "api/api_authorizations.h"
+ #include "api/api_user_names.h"
+ #include "api/api_chat_participants.h"
+@@ -1017,6 +1019,9 @@ void Updates::updateOnline(crl::time lastNonIdleTime, bool gotOtherOffline) {
+ 			Assert(updateIn >= 0);
+ 		}
+ 	}
++	if (!Exteraless::Config::Instance().ghostSendOnline()) {
++		isOnline = false;
++	}
+ 	auto ms = crl::now();
+ 	if (isOnline != _lastWasOnline
+ 		|| (isOnline && _lastSetOnline + config.onlineUpdatePeriod <= ms)
+diff --git a/Telegram/SourceFiles/api/api_views.cpp b/Telegram/SourceFiles/api/api_views.cpp
+index 6e6ac4d..868b820 100644
+--- a/Telegram/SourceFiles/api/api_views.cpp
++++ b/Telegram/SourceFiles/api/api_views.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "api/api_views.h"
+ 
++#include "exteraless/config.h"
++
+ #include "apiwrap.h"
+ #include "data/data_peer.h"
+ #include "data/data_peer_id.h"
+@@ -97,7 +99,7 @@ void ViewsManager::viewsIncrement() {
+ 		const auto requestId = _api.request(MTPmessages_GetMessagesViews(
+ 			i->first->input(),
+ 			MTP_vector<MTPint>(ids),
+-			MTP_bool(true)
++			MTP_bool(!Exteraless::Config::Instance().ghostSendReadPackets())
+ 		)).done([=](
+ 				const MTPmessages_MessageViews &result,
+ 				mtpRequestId requestId) {
+diff --git a/Telegram/SourceFiles/apiwrap.cpp b/Telegram/SourceFiles/apiwrap.cpp
+index 23afed5..ef5ecb6 100644
+--- a/Telegram/SourceFiles/apiwrap.cpp
++++ b/Telegram/SourceFiles/apiwrap.cpp
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "apiwrap.h"
+ 
++#include "exteraless/config.h"
++#include "exteraless/ghost_mode.h"
++
+ #include "api/api_authorizations.h"
+ #include "api/api_attached_stickers.h"
+ #include "api/api_blocked_peers.h"
+@@ -3847,6 +3850,9 @@ void ApiWrap::sendAction(const SendAction &action) {
+ 		const auto sublist = monoforumPeerId
+ 			? action.history->peer->monoforumSublistFor(monoforumPeerId)
+ 			: nullptr;
++		if (!Exteraless::Config::Instance().ghostSendReadPackets()) {
++			Exteraless::GhostMode::AllowReadPackets(1);
++		}
+ 		if (topic) {
+ 			topic->readTillEnd();
+ 		} else if (sublist && sublist->parentChat()) {
 diff --git a/Telegram/SourceFiles/boxes/about_box.cpp b/Telegram/SourceFiles/boxes/about_box.cpp
 index 31c60aa..7f7abc1 100644
 --- a/Telegram/SourceFiles/boxes/about_box.cpp
@@ -75,6 +169,98 @@ index 31c60aa..7f7abc1 100644
  
  	auto layout = box->verticalLayout();
  
+diff --git a/Telegram/SourceFiles/boxes/deleted_messages_box.cpp b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
+new file mode 100644
+index 0000000..737126d
+--- /dev/null
++++ b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
+@@ -0,0 +1,65 @@
++#include "boxes/deleted_messages_box.h"
++
++#include "exteraless/deleted_messages.h"
++#include "data/data_peer.h"
++#include "lang/lang_keys.h"
++#include "ui/layers/generic_box.h"
++#include "ui/widgets/labels.h"
++#include "ui/wrap/vertical_layout.h"
++#include "window/window_session_controller.h"
++#include "styles/style_boxes.h"
++#include "styles/style_layers.h"
++
++#include <QDateTime>
++#include <QLocale>
++
++#include <algorithm>
++#include <rpl/rpl.h>
++
++namespace Exteraless {
++
++void ShowDeletedMessagesBox(
++		Window::SessionController *controller,
++		PeerData *peer) {
++	if (!controller || !peer) {
++		return;
++	}
++	const auto entries = DeletedMessages::Instance().list(peer->id);
++
++	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++		box->setTitle(u"Deleted messages"_q);
++		const auto layout = box->verticalLayout();
++
++		if (entries.empty()) {
++			layout->add(
++				object_ptr<Ui::FlatLabel>(
++					box,
++					rpl::single(u"No deleted messages in this chat."_q),
++					st::boxLabel),
++				st::boxRowPadding);
++		} else {
++			const auto limit = std::min<int>(entries.size(), 100);
++			for (auto i = 0; i != limit; ++i) {
++				const auto &entry = entries[i];
++				const auto date = QDateTime::fromSecsSinceEpoch(
++					entry.date).toString(u"yyyy-MM-dd HH:mm"_q);
++				auto text = entry.fromName.isEmpty()
++					? entry.text
++					: (entry.fromName + u": "_q + entry.text);
++				if (!entry.media.isEmpty()) {
++					text += u" [media]"_q;
++				}
++				layout->add(
++					object_ptr<Ui::FlatLabel>(
++						box,
++						rpl::single(date + u"  "_q + text),
++						st::boxLabel),
++					st::boxRowPadding);
++			}
++		}
++
++		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
++	}));
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/boxes/deleted_messages_box.h b/Telegram/SourceFiles/boxes/deleted_messages_box.h
+new file mode 100644
+index 0000000..84f48fa
+--- /dev/null
++++ b/Telegram/SourceFiles/boxes/deleted_messages_box.h
+@@ -0,0 +1,15 @@
++#pragma once
++
++namespace Window {
++class SessionController;
++} // namespace Window
++
++class PeerData;
++
++namespace Exteraless {
++
++void ShowDeletedMessagesBox(
++	Window::SessionController *controller,
++	PeerData *peer);
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp b/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
 index d2f8a9f..e573e5b 100644
 --- a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
@@ -101,18 +287,29 @@ index d2f8a9f..e573e5b 100644
  	}, raw->lifetime());
  
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..6c3fa80 100644
+index 7a309ac..a45ddf5 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
-@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
+@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
  https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "core/application.h"
++#include "exteraless/deleted_messages.h"
 +#include "exteraless/proxy_rules.h"
  
  #include "data/data_abstract_structure.h"
  #include "data/data_channel.h"
-@@ -559,6 +560,7 @@ void Application::startSettingsAndBackground() {
+@@ -209,6 +211,9 @@ Application::Application()
+ 
+ 	_domain->activeSessionChanges(
+ 	) | rpl::on_next([=](Main::Session *session) {
++		if (session) {
++			Exteraless::DeletedMessages::Instance().attach(session);
++		}
+ 		if (session && !UpdaterDisabled()) { // #TODO multi someSessionValue
+ 			UpdateChecker().setMtproto(session);
+ 		}
+@@ -559,6 +564,7 @@ void Application::startSettingsAndBackground() {
  	checkSystemDarkMode();
  	Ui::SetScreenReaderModeDisabled(
  		settings().readPref<bool>(kScreenReaderModeDisabledKey));
@@ -181,12 +378,151 @@ index edd65ef..51a1d56 100644
  	}
  	return OnlineText(user->lastseen(), now);
  }
+diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
+index 2721c7a..6bfa900 100644
+--- a/Telegram/SourceFiles/main/main_account.cpp
++++ b/Telegram/SourceFiles/main/main_account.cpp
+@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ #include "base/platform/base_platform_info.h"
+ #include "core/application.h"
++#include "exteraless/ghost_mode.h"
+ #include "storage/storage_account.h"
+ #include "storage/storage_domain.h" // Storage::StartResult.
+ #include "storage/serialize_common.h"
+@@ -434,6 +435,8 @@ void Account::startMtp(std::unique_ptr<MTP::Config> config) {
+ 		MTP::Instance::Mode::Normal,
+ 		std::move(fields));
+ 
++	Exteraless::InstallGhostMode(*_mtp);
++
+ 	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
+ 	_mtp->writeKeysRequests(
+ 	) | rpl::filter([=] {
+diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
+index d25fe3b..a0feff8 100644
+--- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
++++ b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
+@@ -157,6 +157,7 @@ public:
+ 	}
+ 
+ 	void setUpdatesHandler(Fn<void(const Response&)> handler);
++	void setRequestFilter(RequestFilter filter);
+ 	void setGlobalFailHandler(
+ 		Fn<void(const Error&, const Response&)> handler);
+ 	void setStateChangedHandler(Fn<void(ShiftedDcId shiftedDcId, int32 state)> handler);
+@@ -289,6 +290,7 @@ private:
+ 	std::map<DcId, std::vector<mtpRequestId>> _authWaiters;
+ 
+ 	Fn<void(const Response&)> _updatesHandler;
++	RequestFilter _requestFilter;
+ 	Fn<void(const Error&, const Response&)> _globalFailHandler;
+ 	Fn<void(ShiftedDcId shiftedDcId, int32 state)> _stateChangedHandler;
+ 	Fn<void(ShiftedDcId shiftedDcId)> _sessionResetHandler;
+@@ -1028,6 +1030,29 @@ void Instance::Private::sendRequest(
+ 		mtpRequestId afterRequestId) {
+ 	const auto session = getSession(shiftedDcId);
+ 
++	if (_requestFilter
++		&& request->size() > SerializedRequest::kMessageBodyPosition) {
++		const auto type = mtpTypeId((*request)[
++			SerializedRequest::kMessageBodyPosition]);
++		if (_requestFilter({ requestId, type })
++			== RequestFilterResult::Drop) {
++			auto response = Response();
++			response.requestId = requestId;
++			auto handler = std::move(callbacks);
++			const auto instance = _instance.get();
++			crl::on_main(instance, [handler = std::move(handler), response]() mutable {
++				if (handler.fail) {
++					handler.fail(
++						Error::Local(
++							u"GHOST_MODE"_q,
++							u"Request suppressed by Ghost Mode."_q),
++						response);
++				}
++			});
++			return;
++		}
++	}
++
+ 	request->requestId = requestId;
+ 	storeRequest(requestId, request, std::move(callbacks));
+ 
+@@ -1893,6 +1918,10 @@ void Instance::Private::setUpdatesHandler(
+ 	_updatesHandler = std::move(handler);
+ }
+ 
++void Instance::Private::setRequestFilter(RequestFilter filter) {
++	_requestFilter = std::move(filter);
++}
++
+ void Instance::Private::setGlobalFailHandler(
+ 		Fn<void(const Error&, const Response&)> handler) {
+ 	_globalFailHandler = std::move(handler);
+@@ -2137,6 +2166,10 @@ void Instance::setGlobalFailHandler(
+ 	_private->setGlobalFailHandler(std::move(handler));
+ }
+ 
++void Instance::setRequestFilter(RequestFilter filter) {
++	_private->setRequestFilter(std::move(filter));
++}
++
+ void Instance::setStateChangedHandler(
+ 		Fn<void(ShiftedDcId shiftedDcId, int32 state)> handler) {
+ 	_private->setStateChangedHandler(std::move(handler));
+diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.h b/Telegram/SourceFiles/mtproto/mtp_instance.h
+index eeb56d2..27565b6 100644
+--- a/Telegram/SourceFiles/mtproto/mtp_instance.h
++++ b/Telegram/SourceFiles/mtproto/mtp_instance.h
+@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #pragma once
+ 
+ #include "mtproto/details/mtproto_serialized_request.h"
++#include "mtproto/mtproto_request_filter.h"
+ #include "mtproto/mtproto_response.h"
+ 
+ namespace MTP {
+@@ -104,6 +105,7 @@ public:
+ 	void logout(Fn<void()> done);
+ 
+ 	void setUpdatesHandler(Fn<void(const Response&)> handler);
++	void setRequestFilter(RequestFilter filter);
+ 	void setGlobalFailHandler(
+ 		Fn<void(const Error&, const Response&)> handler);
+ 	void setStateChangedHandler(
+diff --git a/Telegram/SourceFiles/mtproto/mtproto_request_filter.h b/Telegram/SourceFiles/mtproto/mtproto_request_filter.h
+new file mode 100644
+index 0000000..5e394d8
+--- /dev/null
++++ b/Telegram/SourceFiles/mtproto/mtproto_request_filter.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include "base/basic_types.h"
++#include "mtproto/core_types.h"
++
++namespace MTP {
++
++struct RequestFilterInfo {
++	mtpRequestId requestId = 0;
++	mtpTypeId type = 0;
++};
++
++enum class RequestFilterResult {
++	Pass,
++	Drop,
++};
++
++using RequestFilter = Fn<RequestFilterResult(const RequestFilterInfo&)>;
++
++} // namespace MTP
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..9a1548a
+index 0000000..546b03d
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,302 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -272,6 +608,64 @@ index 0000000..9a1548a
 +			Exteraless::Config::Instance().setAddCommaAfterMention(value);
 +		}, addComma->lifetime());
 +	}
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/ghost"_q,
++		.title = rpl::single(u"Ghost Mode"_q),
++	});
++
++	const auto addGhostToggle = [&](
++			QString id,
++			rpl::producer<QString> title,
++			QStringList keywords,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto toggle = builder.addButton({
++			.id = std::move(id),
++			.title = std::move(title),
++			.st = &st::settingsButtonNoIcon,
++			.toggled = rpl::single(current),
++			.keywords = std::move(keywords),
++		});
++		if (toggle) {
++			toggle->toggledChanges(
++			) | rpl::on_next([=](bool value) {
++				setter(value);
++			}, toggle->lifetime());
++		}
++	};
++	addGhostToggle(
++		u"exteraless/ghost/read"_q,
++		rpl::single(u"Don't send read receipts"_q),
++		{ u"ghost"_q, u"read"_q, u"receipts"_q },
++		Exteraless::Config::Instance().ghostSendReadPackets(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendReadPackets(value);
++		});
++	addGhostToggle(
++		u"exteraless/ghost/stories"_q,
++		rpl::single(u"Don't send story views"_q),
++		{ u"ghost"_q, u"stories"_q },
++		Exteraless::Config::Instance().ghostSendReadStories(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendReadStories(value);
++		});
++	addGhostToggle(
++		u"exteraless/ghost/online"_q,
++		rpl::single(u"Don't send online status"_q),
++		{ u"ghost"_q, u"online"_q },
++		Exteraless::Config::Instance().ghostSendOnline(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendOnline(value);
++		});
++	addGhostToggle(
++		u"exteraless/ghost/typing"_q,
++		rpl::single(u"Don't send typing status"_q),
++		{ u"ghost"_q, u"typing"_q },
++		Exteraless::Config::Instance().ghostSendUploadProgress(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendUploadProgress(value);
++		});
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/proxy"_q,
@@ -473,18 +867,69 @@ index 62e91ea..29e649e 100644
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
-index 56d2e56..0707ef8 100644
+index 56d2e56..e583a28 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
-@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -15,6 +15,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "boxes/star_gift_box.h"
  #include "chat_helpers/compose/compose_show.h"
  #include "chat_helpers/message_field.h"
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages.h"
++#include "boxes/deleted_messages_box.h"
  #include "chat_helpers/share_message_phrase_factory.h"
  #include "ui/basic_click_handlers.h"
  #include "ui/controls/userpic_button.h"
-@@ -4446,7 +4447,11 @@ void FillSenderUserpicMenu(
+@@ -314,6 +317,7 @@ private:
+ 	void addToggleUnreadMark();
+ 	void addToggleArchive();
+ 	void addClearHistory();
++	void addDeletedMessages();
+ 	void addDeleteChat();
+ 	void addLeaveChat();
+ 	void addJoinChat();
+@@ -859,8 +863,22 @@ void Filler::addToggleArchive() {
+ 	SetActionText(archiveAction, std::move(actionText));
+ }
+ 
+-void Filler::addClearHistory() {
+-	if (_topic || _peer->isMonoforum()) {
++void Filler::addDeletedMessages() {
++	if (!_peer) {
++		return;
++	}
++	const auto count = Exteraless::DeletedMessages::Instance().count(
++		_peer->id);
++	if (!count) {
++		return;
++	}
++	_addAction(
++		u"Deleted messages (%1)"_q.arg(count),
++		[=] { Exteraless::ShowDeletedMessagesBox(_controller.get(), _peer); },
++		&st::menuIconDelete);
++}
++
++void Filler::addClearHistory() {	if (_topic || _peer->isMonoforum()) {
+ 		return;
+ 	}
+ 	const auto channel = _peer->asChannel();
+@@ -1928,6 +1946,7 @@ void Filler::fillContextMenuActions() {
+ 		}
+ 	}
+ 	addBanFromChannel();
++	addDeletedMessages();
+ 	addClearHistory();
+ 	addDeleteChat();
+ 	addLeaveChat();
+@@ -1952,6 +1971,7 @@ void Filler::fillHistoryActions() {
+ 	addExportChat();
+ 	addTranslate();
+ 	addReport();
++	addDeletedMessages();
+ 	addClearHistory();
+ 	addDeleteChat();
+ 	addLeaveChat();
+@@ -4446,7 +4466,11 @@ void FillSenderUserpicMenu(
  	if (const auto guard = mention ? fieldForMention : nullptr) {
  		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
  			if (!username.isEmpty()) {
@@ -1037,6 +1482,284 @@ index 0000000..0a8318c
 +};
 +
 +} // namespace Exteraless
+diff --git a/exteraless/deleted_messages.cpp b/exteraless/deleted_messages.cpp
+new file mode 100644
+index 0000000..47c09f0
+--- /dev/null
++++ b/exteraless/deleted_messages.cpp
+@@ -0,0 +1,216 @@
++#include "exteraless/deleted_messages.h"
++
++#include "data/data_peer.h"
++#include "data/data_session.h"
++#include "history/history.h"
++#include "history/history_item.h"
++#include "main/main_session.h"
++#include "storage/storage_account.h"
++
++#include <QDir>
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QSaveFile>
++
++#include <algorithm>
++#include <rpl/rpl.h>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kVersion = 1;
++
++[[nodiscard]] QString IdString(qint64 value) {
++	return QString::number(value);
++}
++
++[[nodiscard]] qint64 IdValue(const QJsonObject &object, const char *key) {
++	return object.value(key).toString().toLongLong();
++}
++
++[[nodiscard]] bool ShouldSave(not_null<HistoryItem*> item) {
++	return item->isRegular()
++		&& !item->isService()
++		&& !item->isScheduled()
++		&& !item->isEphemeral()
++		&& !item->isBusinessShortcut()
++		&& !item->isAdminLogEntry()
++		&& !item->isSending()
++		&& !item->hasFailed()
++		&& !item->ttlDestroyAt();
++}
++
++} // namespace
++
++DeletedMessages &DeletedMessages::Instance() {
++	static auto instance = DeletedMessages();
++	return instance;
++}
++
++void DeletedMessages::attach(Main::Session *session) {
++	if (!session) {
++		return;
++	}
++	const auto path = QFileInfo(
++		session->local().cachePath()).absolutePath()
++		+ u"/exteraless/deleted_messages.json"_q;
++	if (_path == path) {
++		return;
++	}
++
++	save();
++	_path = path;
++	_entries.clear();
++	load();
++
++	session->data().itemsAboutToBeDestroyed(
++	) | rpl::on_next([=](
++			std::vector<not_null<HistoryItem*>> items) {
++		onItemsDestroyed(items);
++	}, session->lifetime());
++}
++
++int DeletedMessages::count(PeerId peerId) const {
++	const auto key = IdString(peerId.value);
++	auto result = 0;
++	for (const auto &entry : _entries) {
++		if (IdString(entry.peerId) == key) {
++			++result;
++		}
++	}
++	return result;
++}
++
++std::vector<DeletedMessages::Entry> DeletedMessages::list(
++		PeerId peerId) const {
++	const auto key = IdString(peerId.value);
++	auto result = std::vector<Entry>();
++	for (const auto &entry : _entries) {
++		if (IdString(entry.peerId) == key) {
++			result.push_back(entry);
++		}
++	}
++	return result;
++}
++
++void DeletedMessages::clear(PeerId peerId) {
++	const auto key = IdString(peerId.value);
++	std::erase_if(_entries, [&](const Entry &entry) {
++		return IdString(entry.peerId) == key;
++	});
++	save();
++}
++
++void DeletedMessages::onItemsDestroyed(
++		const std::vector<not_null<HistoryItem*>> &items) {
++	auto changed = false;
++	for (const auto &item : items) {
++		if (!ShouldSave(item)) {
++			continue;
++		}
++		const auto fullId = item->fullId();
++		const auto peerId = qint64(fullId.peer.value);
++		const auto msgId = qint64(fullId.msg.bare);
++		const auto duplicate = std::any_of(
++			_entries.begin(),
++			_entries.end(),
++			[&](const Entry &entry) {
++				return entry.peerId == peerId && entry.msgId == msgId;
++			});
++		if (duplicate) {
++			continue;
++		}
++
++		auto entry = Entry();
++		entry.peerId = peerId;
++		entry.peerName = item->history()->peer->name();
++		entry.msgId = msgId;
++		entry.fromId = item->from()
++			? qint64(item->from()->id.value)
++			: 0;
++		entry.fromName = item->from() ? item->from()->name() : QString();
++		entry.date = item->date();
++		entry.text = item->originalText().text;
++		entry.media = item->media() ? u"media"_q : QString();
++		entry.out = item->out();
++		_entries.push_back(std::move(entry));
++		changed = true;
++	}
++	if (changed) {
++		save();
++	}
++}
++
++void DeletedMessages::load() {
++	if (_path.isEmpty()) {
++		return;
++	}
++	auto file = QFile(_path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return;
++	}
++	auto error = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(file.readAll(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return;
++	}
++	const auto messages = document.object().value("messages").toArray();
++	for (const auto &value : messages) {
++		const auto object = value.toObject();
++		auto entry = Entry();
++		entry.peerId = IdValue(object, "peerId");
++		entry.peerName = object.value("peerName").toString();
++		entry.msgId = IdValue(object, "msgId");
++		entry.fromId = IdValue(object, "fromId");
++		entry.fromName = object.value("fromName").toString();
++		entry.date = qint64(object.value("date").toDouble());
++		entry.text = object.value("text").toString();
++		entry.media = object.value("media").toString();
++		entry.out = object.value("out").toBool();
++		if (entry.peerId && entry.msgId) {
++			_entries.push_back(std::move(entry));
++		}
++	}
++}
++
++void DeletedMessages::save() {
++	if (_path.isEmpty()) {
++		return;
++	}
++	const auto directory = QFileInfo(_path).absolutePath();
++	if (!QDir().mkpath(directory)) {
++		return;
++	}
++
++	auto messages = QJsonArray();
++	for (const auto &entry : _entries) {
++		auto object = QJsonObject();
++		object["peerId"] = IdString(entry.peerId);
++		object["peerName"] = entry.peerName;
++		object["msgId"] = IdString(entry.msgId);
++		object["fromId"] = IdString(entry.fromId);
++		object["fromName"] = entry.fromName;
++		object["date"] = double(entry.date);
++		object["text"] = entry.text;
++		object["media"] = entry.media;
++		object["out"] = entry.out;
++		messages.append(object);
++	}
++
++	auto root = QJsonObject();
++	root["version"] = kVersion;
++	root["messages"] = messages;
++
++	auto file = QSaveFile(_path);
++	if (!file.open(QIODevice::WriteOnly)) {
++		return;
++	}
++	file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
++	file.commit();
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/deleted_messages.h b/exteraless/deleted_messages.h
+new file mode 100644
+index 0000000..380e262
+--- /dev/null
++++ b/exteraless/deleted_messages.h
+@@ -0,0 +1,50 @@
++#pragma once
++
++#include "base/basic_types.h"
++#include "data/data_peer_id.h"
++
++#include <QString>
++#include <vector>
++
++class HistoryItem;
++
++namespace Main {
++class Session;
++} // namespace Main
++
++namespace Exteraless {
++
++class DeletedMessages final {
++public:
++	struct Entry {
++		qint64 peerId = 0;
++		QString peerName;
++		qint64 msgId = 0;
++		qint64 fromId = 0;
++		QString fromName;
++		qint64 date = 0;
++		QString text;
++		QString media;
++		bool out = false;
++	};
++
++	static DeletedMessages &Instance();
++
++	void attach(Main::Session *session);
++
++	[[nodiscard]] int count(PeerId peerId) const;
++	[[nodiscard]] std::vector<Entry> list(PeerId peerId) const;
++	void clear(PeerId peerId);
++
++private:
++	DeletedMessages() = default;
++
++	void onItemsDestroyed(const std::vector<not_null<HistoryItem*>> &items);
++	void load();
++	void save();
++
++	QString _path;
++	std::vector<Entry> _entries;
++};
++
++} // namespace Exteraless
 diff --git a/exteraless/exteraless.cpp b/exteraless/exteraless.cpp
 new file mode 100644
 index 0000000..fb61c3f
@@ -1075,6 +1798,130 @@ index 0000000..b88f272
 +[[nodiscard]] QString Name();
 +[[nodiscard]] QString AppFileName();
 +[[nodiscard]] QString Version();
++
++} // namespace Exteraless
+diff --git a/exteraless/ghost_mode.cpp b/exteraless/ghost_mode.cpp
+new file mode 100644
+index 0000000..f264fc4
+--- /dev/null
++++ b/exteraless/ghost_mode.cpp
+@@ -0,0 +1,90 @@
++#include "exteraless/ghost_mode.h"
++
++#include "exteraless/config.h"
++#include "mtproto/mtp_instance.h"
++
++#include <crl/crl.h>
++
++#include <atomic>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kAllowanceTtl = crl::time(5000);
++
++constexpr auto kReadHistory = mtpTypeId(0x0e306d3a);
++constexpr auto kChannelsReadHistory = mtpTypeId(0xcc104937);
++constexpr auto kReadContents = mtpTypeId(0x36a73f77);
++constexpr auto kChannelsReadContents = mtpTypeId(0xeab5dc38);
++constexpr auto kSetTyping = mtpTypeId(0x58943ee2);
++constexpr auto kReadStories = mtpTypeId(0xa556dac8);
++constexpr auto kIncrementStoryViews = mtpTypeId(0xb2028afb);
++constexpr auto kReadDiscussion = mtpTypeId(0xf731a9f4);
++constexpr auto kReadSavedHistory = mtpTypeId(0xba4a3b5b);
++
++std::atomic<int> Allowance = 0;
++std::atomic<crl::time> AllowanceUntil = 0;
++
++[[nodiscard]] bool IsReadRequest(mtpTypeId type) {
++	switch (type) {
++	case kReadHistory:
++	case kChannelsReadHistory:
++	case kReadContents:
++	case kChannelsReadContents:
++	case kReadDiscussion:
++	case kReadSavedHistory:
++		return true;
++	default:
++		return false;
++	}
++}
++
++} // namespace
++
++MTP::RequestFilterResult GhostMode::Filter(
++		const MTP::RequestFilterInfo &info) {
++	if (!info.type) {
++		return MTP::RequestFilterResult::Pass;
++	}
++
++	auto &config = Config::Instance();
++	if (IsReadRequest(info.type)) {
++		if (ConsumeReadAllowance()) {
++			return MTP::RequestFilterResult::Pass;
++		}
++		return config.ghostSendReadPackets()
++			? MTP::RequestFilterResult::Pass
++			: MTP::RequestFilterResult::Drop;
++	}
++	switch (info.type) {
++	case kSetTyping:
++		return config.ghostSendUploadProgress()
++			? MTP::RequestFilterResult::Pass
++			: MTP::RequestFilterResult::Drop;
++	case kReadStories:
++	case kIncrementStoryViews:
++		return config.ghostSendReadStories()
++			? MTP::RequestFilterResult::Pass
++			: MTP::RequestFilterResult::Drop;
++	default:
++		return MTP::RequestFilterResult::Pass;
++	}
++}
++
++void GhostMode::AllowReadPackets(int count) {
++	Allowance.store(count);
++	AllowanceUntil.store(crl::now() + kAllowanceTtl);
++}
++
++bool GhostMode::ConsumeReadAllowance() {
++	if (Allowance.load() <= 0 || crl::now() > AllowanceUntil.load()) {
++		return false;
++	}
++	return Allowance.fetch_sub(1) > 0;
++}
++
++void InstallGhostMode(MTP::Instance &instance) {
++	instance.setRequestFilter(&GhostMode::Filter);
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/ghost_mode.h b/exteraless/ghost_mode.h
+new file mode 100644
+index 0000000..3a0f2c6
+--- /dev/null
++++ b/exteraless/ghost_mode.h
+@@ -0,0 +1,22 @@
++#pragma once
++
++#include "mtproto/mtproto_request_filter.h"
++
++namespace MTP {
++class Instance;
++} // namespace MTP
++
++namespace Exteraless {
++
++class GhostMode final {
++public:
++	static MTP::RequestFilterResult Filter(const MTP::RequestFilterInfo &info);
++	static void AllowReadPackets(int count = 1);
++
++private:
++	static bool ConsumeReadAllowance();
++};
++
++void InstallGhostMode(MTP::Instance &instance);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp

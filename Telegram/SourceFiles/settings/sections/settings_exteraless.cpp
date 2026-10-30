@@ -85,6 +85,64 @@ const auto kMeta = Builder::BuildHelper({
 	}
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/ghost"_q,
+		.title = rpl::single(u"Ghost Mode"_q),
+	});
+
+	const auto addGhostToggle = [&](
+			QString id,
+			rpl::producer<QString> title,
+			QStringList keywords,
+			bool current,
+			Fn<void(bool)> setter) {
+		const auto toggle = builder.addButton({
+			.id = std::move(id),
+			.title = std::move(title),
+			.st = &st::settingsButtonNoIcon,
+			.toggled = rpl::single(current),
+			.keywords = std::move(keywords),
+		});
+		if (toggle) {
+			toggle->toggledChanges(
+			) | rpl::on_next([=](bool value) {
+				setter(value);
+			}, toggle->lifetime());
+		}
+	};
+	addGhostToggle(
+		u"exteraless/ghost/read"_q,
+		rpl::single(u"Don't send read receipts"_q),
+		{ u"ghost"_q, u"read"_q, u"receipts"_q },
+		Exteraless::Config::Instance().ghostSendReadPackets(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendReadPackets(value);
+		});
+	addGhostToggle(
+		u"exteraless/ghost/stories"_q,
+		rpl::single(u"Don't send story views"_q),
+		{ u"ghost"_q, u"stories"_q },
+		Exteraless::Config::Instance().ghostSendReadStories(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendReadStories(value);
+		});
+	addGhostToggle(
+		u"exteraless/ghost/online"_q,
+		rpl::single(u"Don't send online status"_q),
+		{ u"ghost"_q, u"online"_q },
+		Exteraless::Config::Instance().ghostSendOnline(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendOnline(value);
+		});
+	addGhostToggle(
+		u"exteraless/ghost/typing"_q,
+		rpl::single(u"Don't send typing status"_q),
+		{ u"ghost"_q, u"typing"_q },
+		Exteraless::Config::Instance().ghostSendUploadProgress(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendUploadProgress(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/proxy"_q,
 		.title = tr::lng_settings_exteraless_proxy(),
 	});

@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "apiwrap.h"
 
+#include "exteraless/config.h"
+#include "exteraless/ghost_mode.h"
+
 #include "api/api_authorizations.h"
 #include "api/api_attached_stickers.h"
 #include "api/api_blocked_peers.h"
@@ -3847,6 +3850,9 @@ void ApiWrap::sendAction(const SendAction &action) {
 		const auto sublist = monoforumPeerId
 			? action.history->peer->monoforumSublistFor(monoforumPeerId)
 			: nullptr;
+		if (!Exteraless::Config::Instance().ghostSendReadPackets()) {
+			Exteraless::GhostMode::AllowReadPackets(1);
+		}
 		if (topic) {
 			topic->readTillEnd();
 		} else if (sublist && sublist->parentChat()) {

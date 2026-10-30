@@ -71,8 +71,14 @@ endif()
 set_target_properties(Telegram PROPERTIES AUTOMOC ON)
 
 target_sources(Telegram PRIVATE
+    ../exteraless/deleted_messages.cpp
+    ../exteraless/deleted_messages.h
+    ../exteraless/ghost_mode.cpp
+    ../exteraless/ghost_mode.h
     ../exteraless/proxy_rules.cpp
     ../exteraless/proxy_rules.h
+    SourceFiles/boxes/deleted_messages_box.cpp
+    SourceFiles/boxes/deleted_messages_box.h
 )
 
 target_link_libraries(Telegram
@@ -1686,6 +1692,7 @@ PRIVATE
     mtproto/facade.h
     mtproto/mtp_instance.cpp
     mtproto/mtp_instance.h
+    mtproto/mtproto_request_filter.h
     mtproto/proxy_check.cpp
     mtproto/proxy_check.h
     mtproto/sender.h
@@ -2538,6 +2545,10 @@ else()
     generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
     generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
     generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
+    target_compile_options(Telegram_XdpBackground_dbus PRIVATE -g0)
+    target_compile_options(Telegram_FlatpakPortal_dbus PRIVATE -g0)
+    target_compile_options(Telegram_XdgNotifications_dbus PRIVATE -g0)
+    target_compile_options(Telegram_Logind_dbus PRIVATE -g0)
 endif()
 
 if (build_macstore)
