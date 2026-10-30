@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/sticker_set_box.h"
 #include "chat_helpers/compose/compose_show.h"
 #include "chat_helpers/message_field.h" // PrepareMentionTag.
+#include "exteraless/config.h"
 #include "chat_helpers/stickers_lottie.h"
 #include "chat_helpers/tabbed_selector.h" // ChatHelpers::FileChosen.
 #include "core/application.h"
@@ -2012,7 +2013,11 @@ void InitFieldAutocomplete(
 				user->firstName.isEmpty() ? user->name() : user->firstName,
 				PrepareMentionTag(user));
 		} else {
-			field->insertTag('@' + data.mention);
+			auto mention = '@' + data.mention;
+			if (Exteraless::Config::Instance().addCommaAfterMention()) {
+				mention += ',';
+			}
+			field->insertTag(mention);
 		}
 	}, raw->lifetime());
 

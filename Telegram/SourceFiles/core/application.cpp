@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/application.h"
+#include "exteraless/proxy_rules.h"
 
 #include "data/data_abstract_structure.h"
 #include "data/data_channel.h"
@@ -559,6 +560,7 @@ void Application::startSettingsAndBackground() {
 	checkSystemDarkMode();
 	Ui::SetScreenReaderModeDisabled(
 		settings().readPref<bool>(kScreenReaderModeDisabledKey));
+	Exteraless::StartProxyRulesWatcher();
 }
 
 void Application::checkSystemDarkMode() {

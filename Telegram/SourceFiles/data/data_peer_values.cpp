@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_peer_values.h"
 
+#include "exteraless/config.h"
+
 #include "lang/lang_keys.h"
 #include "data/data_channel.h"
 #include "data/data_chat.h"
@@ -521,9 +523,13 @@ QString OnlineText(Data::LastseenStatus status, TimeId now) {
 	return tr::lng_status_lastseen_date(tr::now, lt_date, date);
 }
 
+QString OnlineTextFull(not_null<UserData*> user, TimeId now);
+
 QString OnlineText(not_null<UserData*> user, TimeId now) {
 	if (const auto special = OnlineTextSpecial(user)) {
 		return *special;
+	} else if (!Exteraless::Config::Instance().relativeLastSeen()) {
+		return OnlineTextFull(user, now);
 	}
 	return OnlineText(user->lastseen(), now);
 }

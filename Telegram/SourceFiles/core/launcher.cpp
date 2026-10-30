@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/update_checker.h"
 #include "core/sandbox.h"
 #include "core/version.h"
+#include "exteraless/exteraless.h"
 #include "base/concurrent_timer.h"
 #include "base/options.h"
 
@@ -340,7 +341,7 @@ void Launcher::init() {
 	prepareSettings();
 	initQtMessageLogging();
 
-	QApplication::setApplicationName(u"TelegramDesktop"_q);
+	QApplication::setApplicationName(Exteraless::AppFileName());
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 	// fallback session management is useless for tdesktop since it doesn't have

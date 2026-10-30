@@ -1,0 +1,1161 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e762a3c..2ad057e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -63,4 +63,5 @@ set(desktop_app_skip_libs
+ )
+ 
+ add_subdirectory(cmake)
++add_subdirectory(exteraless)
+ add_subdirectory(Telegram)
+diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
+index 811707d..c5ccbab 100644
+--- a/Telegram/CMakeLists.txt
++++ b/Telegram/CMakeLists.txt
+@@ -70,6 +70,11 @@ endif()
+ 
+ set_target_properties(Telegram PROPERTIES AUTOMOC ON)
+ 
++target_sources(Telegram PRIVATE
++    ../exteraless/proxy_rules.cpp
++    ../exteraless/proxy_rules.h
++)
++
+ target_link_libraries(Telegram
+ PRIVATE
+     tdesktop::lib_fido2
+@@ -109,6 +114,7 @@ PRIVATE
+     desktop-app::external_openal
+     desktop-app::external_wallet_engine
+     desktop-app::external_xxhash
++    exteraless
+ )
+ 
+ if (NOT DESKTOP_APP_DISABLE_SWIFT6)
+@@ -1897,6 +1903,8 @@ PRIVATE
+     settings/sections/settings_advanced.h
+     settings/sections/settings_chat.cpp
+     settings/sections/settings_chat.h
++    settings/sections/settings_exteraless.cpp
++    settings/sections/settings_exteraless.h
+     settings/sections/settings_blocked_peers.cpp
+     settings/sections/settings_blocked_peers.h
+     settings/sections/settings_business.cpp
+diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
+index ffc8ec9..de9aee6 100644
+--- a/Telegram/Resources/langs/lang.strings
++++ b/Telegram/Resources/langs/lang.strings
+@@ -9182,4 +9182,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
+ "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
+ 
++"lng_settings_exteraless" = "Exteraless";
++"lng_settings_exteraless_general" = "General";
++"lng_settings_exteraless_relative_last_seen" = "Relative last seen";
++"lng_settings_exteraless_add_comma" = "Comma after mention";
++"lng_settings_exteraless_proxy" = "Proxy auto-disable";
++"lng_settings_exteraless_proxy_vpn" = "Disable proxy on VPN";
++"lng_settings_exteraless_proxy_mobile" = "Disable proxy on mobile data";
++"lng_settings_exteraless_proxy_wifi" = "Disable proxy on Wi-Fi";
++"lng_settings_exteraless_backup" = "Backup and restore";
++"lng_settings_exteraless_export" = "Export settings";
++"lng_settings_exteraless_import" = "Import settings";
++
+ // Keys finished
+diff --git a/Telegram/SourceFiles/boxes/about_box.cpp b/Telegram/SourceFiles/boxes/about_box.cpp
+index 31c60aa..7f7abc1 100644
+--- a/Telegram/SourceFiles/boxes/about_box.cpp
++++ b/Telegram/SourceFiles/boxes/about_box.cpp
+@@ -65,7 +65,7 @@ rpl::producer<TextWithEntities> Text3() {
+ } // namespace
+ 
+ void AboutBox(not_null<Ui::GenericBox*> box) {
+-	box->setTitle(u"Telegram Desktop"_q);
++	box->setTitle(AppName.utf16());
+ 
+ 	auto layout = box->verticalLayout();
+ 
+diff --git a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp b/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
+index d2f8a9f..e573e5b 100644
+--- a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
++++ b/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
+@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "boxes/sticker_set_box.h"
+ #include "chat_helpers/compose/compose_show.h"
+ #include "chat_helpers/message_field.h" // PrepareMentionTag.
++#include "exteraless/config.h"
+ #include "chat_helpers/stickers_lottie.h"
+ #include "chat_helpers/tabbed_selector.h" // ChatHelpers::FileChosen.
+ #include "core/application.h"
+@@ -2012,7 +2013,11 @@ void InitFieldAutocomplete(
+ 				user->firstName.isEmpty() ? user->name() : user->firstName,
+ 				PrepareMentionTag(user));
+ 		} else {
+-			field->insertTag('@' + data.mention);
++			auto mention = '@' + data.mention;
++			if (Exteraless::Config::Instance().addCommaAfterMention()) {
++				mention += ',';
++			}
++			field->insertTag(mention);
+ 		}
+ 	}, raw->lifetime());
+ 
+diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
+index 7a309ac..6c3fa80 100644
+--- a/Telegram/SourceFiles/core/application.cpp
++++ b/Telegram/SourceFiles/core/application.cpp
+@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
+ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "core/application.h"
++#include "exteraless/proxy_rules.h"
+ 
+ #include "data/data_abstract_structure.h"
+ #include "data/data_channel.h"
+@@ -559,6 +560,7 @@ void Application::startSettingsAndBackground() {
+ 	checkSystemDarkMode();
+ 	Ui::SetScreenReaderModeDisabled(
+ 		settings().readPref<bool>(kScreenReaderModeDisabledKey));
++	Exteraless::StartProxyRulesWatcher();
+ }
+ 
+ void Application::checkSystemDarkMode() {
+diff --git a/Telegram/SourceFiles/core/launcher.cpp b/Telegram/SourceFiles/core/launcher.cpp
+index b3b76e0..69e17e0 100644
+--- a/Telegram/SourceFiles/core/launcher.cpp
++++ b/Telegram/SourceFiles/core/launcher.cpp
+@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "core/update_checker.h"
+ #include "core/sandbox.h"
+ #include "core/version.h"
++#include "exteraless/exteraless.h"
+ #include "base/concurrent_timer.h"
+ #include "base/options.h"
+ 
+@@ -340,7 +341,7 @@ void Launcher::init() {
+ 	prepareSettings();
+ 	initQtMessageLogging();
+ 
+-	QApplication::setApplicationName(u"TelegramDesktop"_q);
++	QApplication::setApplicationName(Exteraless::AppFileName());
+ 
+ #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+ 	// fallback session management is useless for tdesktop since it doesn't have
+diff --git a/Telegram/SourceFiles/core/version.h b/Telegram/SourceFiles/core/version.h
+index 2de2881..50a19fb 100644
+--- a/Telegram/SourceFiles/core/version.h
++++ b/Telegram/SourceFiles/core/version.h
+@@ -20,7 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ // used in Updater.cpp and Setup.iss for Windows
+ constexpr auto AppId = "{53F49750-6209-4FBF-9CA8-7A333C87D1ED}"_cs;
+ constexpr auto AppNameOld = "Telegram Win (Unofficial)"_cs;
+-constexpr auto AppName = "Telegram Desktop"_cs;
++constexpr auto AppName = "Exteraless Desktop"_cs;
+ constexpr auto AppFile = "Telegram"_cs;
+ constexpr auto AppVersion = 7003001;
+ constexpr auto AppVersionStr = "7.3.1";
+diff --git a/Telegram/SourceFiles/data/data_peer_values.cpp b/Telegram/SourceFiles/data/data_peer_values.cpp
+index edd65ef..51a1d56 100644
+--- a/Telegram/SourceFiles/data/data_peer_values.cpp
++++ b/Telegram/SourceFiles/data/data_peer_values.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "data/data_peer_values.h"
+ 
++#include "exteraless/config.h"
++
+ #include "lang/lang_keys.h"
+ #include "data/data_channel.h"
+ #include "data/data_chat.h"
+@@ -521,9 +523,13 @@ QString OnlineText(Data::LastseenStatus status, TimeId now) {
+ 	return tr::lng_status_lastseen_date(tr::now, lt_date, date);
+ }
+ 
++QString OnlineTextFull(not_null<UserData*> user, TimeId now);
++
+ QString OnlineText(not_null<UserData*> user, TimeId now) {
+ 	if (const auto special = OnlineTextSpecial(user)) {
+ 		return *special;
++	} else if (!Exteraless::Config::Instance().relativeLastSeen()) {
++		return OnlineTextFull(user, now);
+ 	}
+ 	return OnlineText(user->lastseen(), now);
+ }
+diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
+new file mode 100644
+index 0000000..9a1548a
+--- /dev/null
++++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
+@@ -0,0 +1,244 @@
++#include "settings/sections/settings_exteraless.h"
++
++#include "settings/settings_common_session.h"
++
++#include "exteraless/backup.h"
++#include "exteraless/config.h"
++#include "exteraless/proxy_rules.h"
++#include "core/file_utilities.h"
++#include "lang/lang_keys.h"
++#include "settings/settings_builder.h"
++#include "settings/sections/settings_main.h"
++#include "ui/boxes/confirm_box.h"
++#include "ui/rp_widget.h"
++#include "ui/ui_utility.h"
++#include "ui/widgets/buttons.h"
++#include "ui/widgets/checkbox.h"
++#include "ui/wrap/vertical_layout.h"
++#include "window/window_session_controller.h"
++#include "styles/style_menu_icons.h"
++#include "styles/style_settings.h"
++
++#include <QFile>
++#include <QSaveFile>
++
++namespace Settings {
++namespace {
++
++class ExteralessSection final : public Section<ExteralessSection> {
++public:
++	ExteralessSection(
++		QWidget *parent,
++		not_null<Window::SessionController*> controller);
++
++	[[nodiscard]] rpl::producer<QString> title() override;
++
++private:
++	void setupContent();
++};
++
++const auto kMeta = Builder::BuildHelper({
++	.id = ExteralessSection::Id(),
++	.parentId = MainId(),
++	.title = &tr::lng_settings_exteraless,
++	.icon = &st::menuIconSettings,
++}, [](Builder::SectionBuilder &builder) {
++	builder.addSubsectionTitle({
++		.id = u"exteraless/general"_q,
++		.title = tr::lng_settings_exteraless_general(),
++	});
++
++	const auto relativeLastSeen = builder.addButton({
++		.id = u"exteraless/relative-last-seen"_q,
++		.title = tr::lng_settings_exteraless_relative_last_seen(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().relativeLastSeen()),
++		.keywords = { u"last seen"_q, u"relative"_q },
++	});
++	if (relativeLastSeen) {
++		relativeLastSeen->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().relativeLastSeen());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setRelativeLastSeen(value);
++		}, relativeLastSeen->lifetime());
++	}
++
++	const auto addComma = builder.addButton({
++		.id = u"exteraless/add-comma-after-mention"_q,
++		.title = tr::lng_settings_exteraless_add_comma(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().addCommaAfterMention()),
++		.keywords = { u"mention"_q, u"comma"_q },
++	});
++	if (addComma) {
++		addComma->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().addCommaAfterMention());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setAddCommaAfterMention(value);
++		}, addComma->lifetime());
++	}
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/proxy"_q,
++		.title = tr::lng_settings_exteraless_proxy(),
++	});
++
++	const auto addProxyCondition = [&](
++			int flag,
++			QString id,
++			rpl::producer<QString> title,
++			QStringList keywords) {
++		const auto checkbox = builder.addCheckbox({
++			.id = std::move(id),
++			.title = std::move(title),
++			.checked = (Exteraless::Config::Instance()
++				.proxyDisableConditions() & flag) != 0,
++			.keywords = std::move(keywords),
++		});
++		if (checkbox) {
++			checkbox->checkedChanges(
++			) | rpl::on_next([=](bool checked) {
++				auto mask = Exteraless::Config::Instance()
++					.proxyDisableConditions();
++				if (checked) {
++					mask |= flag;
++				} else {
++					mask &= ~flag;
++				}
++				Exteraless::Config::Instance()
++					.setProxyDisableConditions(mask);
++				Exteraless::ApplyProxyRules();
++			}, checkbox->lifetime());
++		}
++	};
++	addProxyCondition(
++		1,
++		u"exteraless/proxy/vpn"_q,
++		tr::lng_settings_exteraless_proxy_vpn(),
++		{ u"vpn"_q, u"proxy"_q });
++	addProxyCondition(
++		2,
++		u"exteraless/proxy/mobile"_q,
++		tr::lng_settings_exteraless_proxy_mobile(),
++		{ u"mobile"_q, u"cellular"_q, u"proxy"_q });
++	addProxyCondition(
++		4,
++		u"exteraless/proxy/wifi"_q,
++		tr::lng_settings_exteraless_proxy_wifi(),
++		{ u"wifi"_q, u"proxy"_q });
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/backup"_q,
++		.title = tr::lng_settings_exteraless_backup(),
++	});
++
++	const auto controller = builder.controller();
++
++	builder.addButton({
++		.id = u"exteraless/backup/export"_q,
++		.title = tr::lng_settings_exteraless_export(),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			if (!controller) {
++				return;
++			}
++			FileDialog::GetWritePath(
++				nullptr,
++				tr::lng_settings_exteraless_export(tr::now),
++				u"Exteraless backup (*.extera)"_q,
++				u"exteraless.extera"_q,
++				[=](QString &&path) {
++					if (path.isEmpty()) {
++						return;
++					}
++					auto file = QSaveFile(path);
++					if (!file.open(QIODevice::WriteOnly)
++						|| !file.write(
++							Exteraless::BuildBackup().toUtf8())
++						|| !file.commit()) {
++						controller->show(Ui::MakeInformBox(
++							"Could not export settings."));
++						return;
++					}
++					controller->show(Ui::MakeInformBox(
++						"Settings exported."));
++				});
++		},
++		.keywords = { u"backup"_q, u"export"_q },
++	});
++
++	builder.addButton({
++		.id = u"exteraless/backup/import"_q,
++		.title = tr::lng_settings_exteraless_import(),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			if (!controller) {
++				return;
++			}
++			FileDialog::GetOpenPath(
++				nullptr,
++				tr::lng_settings_exteraless_import(tr::now),
++				u"Exteraless backup (*.extera)"_q,
++				[=](FileDialog::OpenResult &&result) {
++					if (result.paths.isEmpty()) {
++						return;
++					}
++					auto file = QFile(result.paths.front());
++					if (!file.open(QIODevice::ReadOnly)) {
++						controller->show(Ui::MakeInformBox(
++							"Could not read the backup."));
++						return;
++					}
++					const auto applied = Exteraless::ApplyBackup(
++						QString::fromUtf8(file.readAll()));
++					if (!applied.ok) {
++						controller->show(Ui::MakeInformBox(
++							u"Could not import settings: %1"_q
++								.arg(applied.error)));
++						return;
++					}
++					auto text = u"Settings imported: %1."_q
++						.arg(applied.applied);
++					if (!applied.unknown.isEmpty()) {
++						text += u"\nUnknown keys: %1"_q
++							.arg(applied.unknown.join(", "));
++					}
++					controller->show(Ui::MakeInformBox(text));
++				});
++		},
++		.keywords = { u"backup"_q, u"import"_q },
++	});
++});
++
++const auto kBuild = kMeta.build;
++
++ExteralessSection::ExteralessSection(
++	QWidget *parent,
++	not_null<Window::SessionController*> controller)
++: Section(parent, controller) {
++	setupContent();
++}
++
++rpl::producer<QString> ExteralessSection::title() {
++	return tr::lng_settings_exteraless();
++}
++
++void ExteralessSection::setupContent() {
++	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
++	build(content, kBuild);
++	Ui::ResizeFitChild(this, content);
++}
++
++} // namespace
++
++Type ExteralessSectionId() {
++	return ExteralessSection::Id();
++}
++
++} // namespace Settings
+diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.h b/Telegram/SourceFiles/settings/sections/settings_exteraless.h
+new file mode 100644
+index 0000000..4fb3099
+--- /dev/null
++++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.h
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include "settings/settings_type.h"
++
++namespace Settings {
++
++[[nodiscard]] Type ExteralessSectionId();
++
++} // namespace Settings
+diff --git a/Telegram/SourceFiles/settings/sections/settings_main.cpp b/Telegram/SourceFiles/settings/sections/settings_main.cpp
+index 62e91ea..29e649e 100644
+--- a/Telegram/SourceFiles/settings/sections/settings_main.cpp
++++ b/Telegram/SourceFiles/settings/sections/settings_main.cpp
+@@ -51,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "settings/sections/settings_business.h"
+ #include "settings/sections/settings_calls.h"
+ #include "settings/sections/settings_chat.h"
++#include "settings/sections/settings_exteraless.h"
+ #include "settings/settings_codes.h"
+ #include "settings/settings_faq_suggestions.h"
+ #include "settings/sections/settings_credits.h"
+@@ -400,6 +401,13 @@ void BuildSectionButtons(SectionBuilder &builder) {
+ 		.keywords = { u"themes"_q, u"appearance"_q, u"stickers"_q },
+ 	});
+ 
++	builder.addSectionButton({
++		.title = tr::lng_settings_exteraless(),
++		.targetSection = ExteralessSectionId(),
++		.icon = { &st::menuIconSettings },
++		.keywords = { u"exteraless"_q, u"ghost"_q, u"proxy"_q, u"backup"_q },
++	});
++
+ 	{ // Folders
+ 		const auto preload = [=] {
+ 			session->data().chatsFilters().requestSuggested();
+diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
+index 56d2e56..0707ef8 100644
+--- a/Telegram/SourceFiles/window/window_peer_menu.cpp
++++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
+@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "boxes/star_gift_box.h"
+ #include "chat_helpers/compose/compose_show.h"
+ #include "chat_helpers/message_field.h"
++#include "exteraless/config.h"
+ #include "chat_helpers/share_message_phrase_factory.h"
+ #include "ui/basic_click_handlers.h"
+ #include "ui/controls/userpic_button.h"
+@@ -4446,7 +4447,11 @@ void FillSenderUserpicMenu(
+ 	if (const auto guard = mention ? fieldForMention : nullptr) {
+ 		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
+ 			if (!username.isEmpty()) {
+-				fieldForMention->insertTag('@' + username);
++				auto mention = '@' + username;
++				if (Exteraless::Config::Instance().addCommaAfterMention()) {
++					mention += ',';
++				}
++				fieldForMention->insertTag(mention);
+ 			} else {
+ 				fieldForMention->insertTag(
+ 					peer->shortName(),
+diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
+new file mode 100644
+index 0000000..0ba502b
+--- /dev/null
++++ b/exteraless/CMakeLists.txt
+@@ -0,0 +1,22 @@
++add_library(exteraless STATIC
++    backup.cpp
++    backup.h
++    config.cpp
++    config.h
++    exteraless.cpp
++    exteraless.h
++    network.cpp
++    network.h
++)
++
++target_link_libraries(exteraless
++PUBLIC
++    desktop-app::common_options
++    Qt::Core
++    Qt::Network
++)
++
++target_include_directories(exteraless
++PUBLIC
++    ${CMAKE_CURRENT_SOURCE_DIR}/..
++)
+diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
+new file mode 100644
+index 0000000..bbfd88f
+--- /dev/null
++++ b/exteraless/backup.cpp
+@@ -0,0 +1,140 @@
++#include "exteraless/backup.h"
++
++#include "exteraless/config.h"
++
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QJsonValue>
++
++namespace Exteraless {
++namespace {
++
++const auto kPrefix = QString(QChar(0x2001)) + QChar(0x2002);
++const auto kSeparator = QChar(0x2000);
++const auto kAlphabet = QString::fromUtf16(
++	u"\u200a\u200b\u200c\u200f\u202f\u206a\u206b\u206c\u206d\u206e\u206f");
++constexpr auto kVersion = 1;
++
++constexpr auto kRelativeLastSeen = "relativeLastSeen";
++constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
++constexpr auto kDoNotUseProxy = "doNotUseProxy";
++
++[[nodiscard]] QString ToBase11(int value) {
++	auto result = QString();
++	while (value > 0) {
++		result.prepend(kAlphabet[value % 11]);
++		value /= 11;
++	}
++	return result;
++}
++
++[[nodiscard]] int FromBase11(const QString &text, bool *ok) {
++	auto value = 0;
++	for (const auto ch : text) {
++		const auto digit = kAlphabet.indexOf(ch);
++		if (digit < 0) {
++			*ok = false;
++			return 0;
++		}
++		value = value * 11 + digit;
++	}
++	*ok = true;
++	return value;
++}
++
++[[nodiscard]] QJsonObject ExteraSection(const QJsonObject &root) {
++	const auto section = root.value("exteraconfig");
++	return section.isObject() ? section.toObject() : root;
++}
++
++} // namespace
++
++QString EncodeInvisible(const QByteArray &json) {
++	auto result = QString(kPrefix);
++	const auto bytes = json;
++	for (auto i = 0; i != bytes.size(); ++i) {
++		if (i > 0) {
++			result += kSeparator;
++		}
++		result += ToBase11(static_cast<unsigned char>(bytes[i]));
++	}
++	return result;
++}
++
++QByteArray DecodeInvisible(const QString &text) {
++	auto body = text;
++	if (body.startsWith(kPrefix)) {
++		body.remove(0, 2);
++	} else {
++		return text.toUtf8();
++	}
++
++	auto bytes = QByteArray();
++	const auto parts = body.split(kSeparator);
++	for (const auto &part : parts) {
++		auto ok = false;
++		const auto value = FromBase11(part, &ok);
++		if (!ok || value < 0 || value > 255) {
++			return {};
++		}
++		bytes.append(static_cast<char>(value));
++	}
++	return bytes;
++}
++
++QString BuildBackup() {
++	auto extera = QJsonObject();
++	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
++	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
++	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
++
++	auto root = QJsonObject();
++	root["version"] = kVersion;
++	root["exteraconfig"] = extera;
++
++	return EncodeInvisible(QJsonDocument(root).toJson(QJsonDocument::Compact));
++}
++
++BackupImportResult ApplyBackup(const QString &text) {
++	auto result = BackupImportResult();
++	const auto json = DecodeInvisible(text);
++	if (json.isEmpty()) {
++		result.error = "Cannot decode backup.";
++		return result;
++	}
++
++	auto error = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(json, &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		result.error = "Backup is not a JSON object.";
++		return result;
++	}
++
++	const auto section = ExteraSection(document.object());
++	auto &config = Config::Instance();
++	for (auto i = section.begin(); i != section.end(); ++i) {
++		const auto key = i.key();
++		const auto value = i.value();
++		if (key == kRelativeLastSeen && value.isBool()) {
++			config.setRelativeLastSeen(value.toBool());
++			++result.applied;
++		} else if (key == kAddCommaAfterMention && value.isBool()) {
++			config.setAddCommaAfterMention(value.toBool());
++			++result.applied;
++		} else if (key == kDoNotUseProxy
++			&& value.isDouble()
++			&& value.toInt() >= 0
++			&& value.toInt() <= 7) {
++			config.setProxyDisableConditions(value.toInt());
++			++result.applied;
++		} else {
++			result.unknown.push_back(key);
++		}
++	}
++
++	result.ok = true;
++	return result;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/backup.h b/exteraless/backup.h
+new file mode 100644
+index 0000000..7551af5
+--- /dev/null
++++ b/exteraless/backup.h
+@@ -0,0 +1,22 @@
++#pragma once
++
++#include <QByteArray>
++#include <QString>
++#include <QStringList>
++
++namespace Exteraless {
++
++struct BackupImportResult {
++	bool ok = false;
++	QString error;
++	QStringList unknown;
++	int applied = 0;
++};
++
++[[nodiscard]] QString EncodeInvisible(const QByteArray &json);
++[[nodiscard]] QByteArray DecodeInvisible(const QString &text);
++
++[[nodiscard]] QString BuildBackup();
++[[nodiscard]] BackupImportResult ApplyBackup(const QString &text);
++
++} // namespace Exteraless
+diff --git a/exteraless/config.cpp b/exteraless/config.cpp
+new file mode 100644
+index 0000000..b2ce865
+--- /dev/null
++++ b/exteraless/config.cpp
+@@ -0,0 +1,162 @@
++#include "exteraless/config.h"
++
++#include <QDir>
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonDocument>
++#include <QJsonParseError>
++#include <QJsonValue>
++#include <QSaveFile>
++#include <QStandardPaths>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kVersion = 1;
++constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
++constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
++constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
++constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
++
++[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
++	const auto values = root.value("exteraconfig");
++	return values.isObject() ? values.toObject() : root;
++}
++
++} // namespace
++
++Config &Config::Instance() {
++	static auto instance = Config();
++	return instance;
++}
++
++void Config::load() {
++	ensureLoaded();
++}
++
++void Config::save() {
++	ensureLoaded();
++
++	auto root = QJsonObject();
++	root["version"] = kVersion;
++	root["exteraconfig"] = _values;
++
++	const auto directory = QDir(QFileInfo(_path).absolutePath());
++	if (!directory.exists() && !directory.mkpath(".")) {
++		return;
++	}
++
++	auto file = QSaveFile(_path);
++	if (!file.open(QIODevice::WriteOnly)) {
++		return;
++	}
++	file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
++	file.commit();
++}
++
++bool Config::relativeLastSeen() const {
++	return boolValue(kRelativeLastSeen, false);
++}
++
++void Config::setRelativeLastSeen(bool value) {
++	setValue(kRelativeLastSeen, value);
++}
++
++bool Config::addCommaAfterMention() const {
++	return boolValue(kAddCommaAfterMention, true);
++}
++
++void Config::setAddCommaAfterMention(bool value) {
++	setValue(kAddCommaAfterMention, value);
++}
++
++int Config::proxyDisableConditions() const {
++	return intValue(kProxyDisableConditions, 0);
++}
++
++void Config::setProxyDisableConditions(int value) {
++	setValue(kProxyDisableConditions, value);
++}
++
++bool Config::proxyAutoDisabled() const {
++	return boolValue(kProxyAutoDisabled, false);
++}
++
++void Config::setProxyAutoDisabled(bool value) {
++	setValue(kProxyAutoDisabled, value);
++}
++
++QJsonObject Config::toJson() const {
++	ensureLoaded();
++	auto root = QJsonObject();
++	root["version"] = kVersion;
++	root["exteraconfig"] = _values;
++	return root;
++}
++
++bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
++	ensureLoaded();
++
++	const auto values = Unwrap(root);
++	auto accepted = QJsonObject();
++	for (auto i = values.begin(); i != values.end(); ++i) {
++		const auto key = i.key();
++		if (key == kRelativeLastSeen
++			|| key == kAddCommaAfterMention
++			|| key == kProxyDisableConditions
++			|| key == kProxyAutoDisabled) {
++			accepted.insert(key, i.value());
++		} else if (unknown) {
++			unknown->push_back(key);
++		}
++	}
++	if (accepted.isEmpty()) {
++		return false;
++	}
++	_values = accepted;
++	save();
++	return true;
++}
++
++void Config::ensureLoaded() const {
++	if (_loaded) {
++		return;
++	}
++	_loaded = true;
++	_path = QStandardPaths::writableLocation(
++		QStandardPaths::AppLocalDataLocation) + "/tdata/exteraless.json";
++
++	auto file = QFile(_path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return;
++	}
++	auto error = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(file.readAll(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return;
++	}
++	_values = Unwrap(document.object());
++}
++
++bool Config::boolValue(const char *key, bool fallback) const {
++	ensureLoaded();
++	const auto value = _values.value(key);
++	return value.isBool() ? value.toBool() : fallback;
++}
++
++int Config::intValue(const char *key, int fallback) const {
++	ensureLoaded();
++	const auto value = _values.value(key);
++	return value.isDouble() ? value.toInt() : fallback;
++}
++
++void Config::setValue(const char *key, const QJsonValue &value) {
++	ensureLoaded();
++	if (_values.value(key) == value) {
++		return;
++	}
++	_values[key] = value;
++	save();
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/config.h b/exteraless/config.h
+new file mode 100644
+index 0000000..e2c36bc
+--- /dev/null
++++ b/exteraless/config.h
+@@ -0,0 +1,45 @@
++#pragma once
++
++#include <QJsonObject>
++#include <QJsonValue>
++#include <QString>
++#include <QStringList>
++
++namespace Exteraless {
++
++class Config final {
++public:
++	static Config &Instance();
++
++	void load();
++	void save();
++
++	[[nodiscard]] bool relativeLastSeen() const;
++	void setRelativeLastSeen(bool value);
++
++	[[nodiscard]] bool addCommaAfterMention() const;
++	void setAddCommaAfterMention(bool value);
++
++	[[nodiscard]] int proxyDisableConditions() const;
++	void setProxyDisableConditions(int value);
++
++	[[nodiscard]] bool proxyAutoDisabled() const;
++	void setProxyAutoDisabled(bool value);
++
++	[[nodiscard]] QJsonObject toJson() const;
++	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
++
++private:
++	Config() = default;
++
++	void ensureLoaded() const;
++	[[nodiscard]] bool boolValue(const char *key, bool fallback) const;
++	[[nodiscard]] int intValue(const char *key, int fallback) const;
++	void setValue(const char *key, const QJsonValue &value);
++
++	mutable QJsonObject _values;
++	mutable QString _path;
++	mutable bool _loaded = false;
++};
++
++} // namespace Exteraless
+diff --git a/exteraless/exteraless.cpp b/exteraless/exteraless.cpp
+new file mode 100644
+index 0000000..fb61c3f
+--- /dev/null
++++ b/exteraless/exteraless.cpp
+@@ -0,0 +1,17 @@
++#include "exteraless/exteraless.h"
++
++namespace Exteraless {
++
++QString Name() {
++	return QString::fromUtf8("Exteraless Desktop");
++}
++
++QString AppFileName() {
++	return QString::fromUtf8("ExteralessDesktop");
++}
++
++QString Version() {
++	return QString::fromUtf8("0.1.0-dev");
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/exteraless.h b/exteraless/exteraless.h
+new file mode 100644
+index 0000000..b88f272
+--- /dev/null
++++ b/exteraless/exteraless.h
+@@ -0,0 +1,11 @@
++#pragma once
++
++#include <QString>
++
++namespace Exteraless {
++
++[[nodiscard]] QString Name();
++[[nodiscard]] QString AppFileName();
++[[nodiscard]] QString Version();
++
++} // namespace Exteraless
+diff --git a/exteraless/network.cpp b/exteraless/network.cpp
+new file mode 100644
+index 0000000..63d9e95
+--- /dev/null
++++ b/exteraless/network.cpp
+@@ -0,0 +1,83 @@
++#include "exteraless/network.h"
++
++#include <QNetworkInformation>
++#include <QNetworkInterface>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] bool HasVpnInterface() {
++	const auto interfaces = QNetworkInterface::allInterfaces();
++	for (const auto &interface : interfaces) {
++		if (!interface.flags().testFlag(QNetworkInterface::IsUp)) {
++			continue;
++		}
++		const auto name = interface.name().toLower();
++		if (name.startsWith("tun")
++			|| name.startsWith("tap")
++			|| name.startsWith("wg")
++			|| name.startsWith("ppp")
++			|| name.startsWith("utun")) {
++			return true;
++		}
++	}
++	return false;
++}
++
++[[nodiscard]] Transport FromInterfaceNames() {
++	const auto interfaces = QNetworkInterface::allInterfaces();
++	for (const auto &interface : interfaces) {
++		if (!interface.flags().testFlag(QNetworkInterface::IsUp)) {
++			continue;
++		}
++		const auto name = interface.name().toLower();
++		if (name.startsWith("wlan")
++			|| name.startsWith("wlp")
++			|| name.startsWith("wifi")) {
++			return Transport::WiFi;
++		} else if (name.startsWith("wwan")
++			|| name.startsWith("rmnet")
++			|| name.startsWith("cdc")) {
++			return Transport::Cellular;
++		}
++	}
++	for (const auto &interface : interfaces) {
++		if (!interface.flags().testFlag(QNetworkInterface::IsUp)) {
++			continue;
++		}
++		const auto name = interface.name().toLower();
++		if (name.startsWith("en")
++			|| name.startsWith("eth")) {
++			return Transport::Ethernet;
++		}
++	}
++	return Transport::Unknown;
++}
++
++} // namespace
++
++Transport CurrentTransport() {
++	if (HasVpnInterface()) {
++		return Transport::VPN;
++	}
++	static const auto backendLoaded = QNetworkInformation::loadDefaultBackend();
++	if (!backendLoaded) {
++		return FromInterfaceNames();
++	}
++	const auto info = QNetworkInformation::instance();
++	if (!info) {
++		return FromInterfaceNames();
++	}
++	switch (info->transportMedium()) {
++	case QNetworkInformation::TransportMedium::Ethernet:
++		return Transport::Ethernet;
++	case QNetworkInformation::TransportMedium::WiFi:
++		return Transport::WiFi;
++	case QNetworkInformation::TransportMedium::Cellular:
++		return Transport::Cellular;
++	default:
++		return FromInterfaceNames();
++	}
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/network.h b/exteraless/network.h
+new file mode 100644
+index 0000000..0679761
+--- /dev/null
++++ b/exteraless/network.h
+@@ -0,0 +1,15 @@
++#pragma once
++
++namespace Exteraless {
++
++enum class Transport {
++	Unknown,
++	Ethernet,
++	WiFi,
++	Cellular,
++	VPN,
++};
++
++[[nodiscard]] Transport CurrentTransport();
++
++} // namespace Exteraless
+diff --git a/exteraless/proxy_rules.cpp b/exteraless/proxy_rules.cpp
+new file mode 100644
+index 0000000..9292708
+--- /dev/null
++++ b/exteraless/proxy_rules.cpp
+@@ -0,0 +1,71 @@
++#include "exteraless/proxy_rules.h"
++
++#include "core/application.h"
++#include "core/core_settings.h"
++#include "exteraless/config.h"
++#include "exteraless/network.h"
++#include "mtproto/mtproto_proxy_data.h"
++
++#include <QTimer>
++#include <memory>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kVpn = 1;
++constexpr auto kMobile = 2;
++constexpr auto kWiFi = 4;
++
++[[nodiscard]] int ConditionFor(Transport transport) {
++	switch (transport) {
++	case Transport::VPN: return kVpn;
++	case Transport::Cellular: return kMobile;
++	case Transport::WiFi: return kWiFi;
++	default: return 0;
++	}
++}
++
++} // namespace
++
++void ApplyProxyRules() {
++	auto &config = Config::Instance();
++	const auto condition = ConditionFor(CurrentTransport());
++	const auto shouldDisable = (condition != 0)
++		&& ((config.proxyDisableConditions() & condition) != 0);
++	auto &proxy = Core::App().settings().proxy();
++
++	if (shouldDisable) {
++		if (!proxy.isEnabled()) {
++			return;
++		}
++		config.setProxyAutoDisabled(true);
++		Core::App().setCurrentProxy(
++			proxy.selected(),
++			MTP::ProxyData::Settings::Disabled);
++		Core::App().saveSettingsDelayed();
++	} else if (config.proxyAutoDisabled()) {
++		config.setProxyAutoDisabled(false);
++		if (proxy.settings() == MTP::ProxyData::Settings::Disabled) {
++			Core::App().setCurrentProxy(
++				proxy.selected(),
++				MTP::ProxyData::Settings::Enabled);
++			Core::App().saveSettingsDelayed();
++		}
++	}
++}
++
++void StartProxyRulesWatcher() {
++	static const auto timer = [] {
++		auto result = std::make_unique<QTimer>();
++		result->setInterval(2000);
++		QObject::connect(
++			result.get(),
++			&QTimer::timeout,
++			&Core::App(),
++			[] { ApplyProxyRules(); });
++		result->start();
++		return result;
++	}();
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/proxy_rules.h b/exteraless/proxy_rules.h
+new file mode 100644
+index 0000000..34ae612
+--- /dev/null
++++ b/exteraless/proxy_rules.h
+@@ -0,0 +1,8 @@
++#pragma once
++
++namespace Exteraless {
++
++void StartProxyRulesWatcher();
++void ApplyProxyRules();
++
++} // namespace Exteraless

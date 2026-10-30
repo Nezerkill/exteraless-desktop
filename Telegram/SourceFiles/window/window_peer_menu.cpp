@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/star_gift_box.h"
 #include "chat_helpers/compose/compose_show.h"
 #include "chat_helpers/message_field.h"
+#include "exteraless/config.h"
 #include "chat_helpers/share_message_phrase_factory.h"
 #include "ui/basic_click_handlers.h"
 #include "ui/controls/userpic_button.h"
@@ -4446,7 +4447,11 @@ void FillSenderUserpicMenu(
 	if (const auto guard = mention ? fieldForMention : nullptr) {
 		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
 			if (!username.isEmpty()) {
-				fieldForMention->insertTag('@' + username);
+				auto mention = '@' + username;
+				if (Exteraless::Config::Instance().addCommaAfterMention()) {
+					mention += ',';
+				}
+				fieldForMention->insertTag(mention);
 			} else {
 				fieldForMention->insertTag(
 					peer->shortName(),

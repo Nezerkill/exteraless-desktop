@@ -70,6 +70,11 @@ endif()
 
 set_target_properties(Telegram PROPERTIES AUTOMOC ON)
 
+target_sources(Telegram PRIVATE
+    ../exteraless/proxy_rules.cpp
+    ../exteraless/proxy_rules.h
+)
+
 target_link_libraries(Telegram
 PRIVATE
     tdesktop::lib_fido2
@@ -109,6 +114,7 @@ PRIVATE
     desktop-app::external_openal
     desktop-app::external_wallet_engine
     desktop-app::external_xxhash
+    exteraless
 )
 
 if (NOT DESKTOP_APP_DISABLE_SWIFT6)
@@ -1897,6 +1903,8 @@ PRIVATE
     settings/sections/settings_advanced.h
     settings/sections/settings_chat.cpp
     settings/sections/settings_chat.h
+    settings/sections/settings_exteraless.cpp
+    settings/sections/settings_exteraless.h
     settings/sections/settings_blocked_peers.cpp
     settings/sections/settings_blocked_peers.h
     settings/sections/settings_business.cpp

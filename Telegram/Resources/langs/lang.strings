@@ -9182,4 +9182,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
 "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
 
+"lng_settings_exteraless" = "Exteraless";
+"lng_settings_exteraless_general" = "General";
+"lng_settings_exteraless_relative_last_seen" = "Relative last seen";
+"lng_settings_exteraless_add_comma" = "Comma after mention";
+"lng_settings_exteraless_proxy" = "Proxy auto-disable";
+"lng_settings_exteraless_proxy_vpn" = "Disable proxy on VPN";
+"lng_settings_exteraless_proxy_mobile" = "Disable proxy on mobile data";
+"lng_settings_exteraless_proxy_wifi" = "Disable proxy on Wi-Fi";
+"lng_settings_exteraless_backup" = "Backup and restore";
+"lng_settings_exteraless_export" = "Export settings";
+"lng_settings_exteraless_import" = "Import settings";
+
 // Keys finished

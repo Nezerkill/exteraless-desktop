@@ -63,4 +63,5 @@ set(desktop_app_skip_libs
 )
 
 add_subdirectory(cmake)
+add_subdirectory(exteraless)
 add_subdirectory(Telegram)

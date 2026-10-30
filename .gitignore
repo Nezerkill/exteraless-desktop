@@ -58,6 +58,10 @@ __pycache__/
 cmake-build-debug/
 *.qsb
 
+/out/
+/result
+/result-*
+
 # Local configuration files
 settings.local.json
 *.local.json
@@ -74,3 +78,7 @@ settings.local.json
 
 # Generated changelog page (built by CI, deployed to GitHub Pages)
 /docs/changelog/
+
+.smoke/
+
+.smoke/
