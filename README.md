@@ -1,7 +1,7 @@
 # Exteraless Desktop
 
-Linux-клиент Telegram на базе [Telegram Desktop](https://github.com/telegramdesktop/tdesktop),
-в который переносятся возможности Android-клиента
+Linux-клиент Telegram — форк [Telegram Desktop](https://github.com/telegramdesktop/tdesktop).
+Возможности переносятся из Android-клиента
 [exteraless](https://github.com/exteraless/exteraless).
 
 Сейчас это ранний каркас: сборка, брендинг и Nix-упаковка. Функции exteraless
@@ -98,7 +98,27 @@ git diff --binary -- CMakeLists.txt Telegram exteraless > nix/patches/exteraless
 
 Патч должен применяться к чистому исходнику tdesktop той же версии.
 
+## Благодарности
+
+Exteraless Desktop — форк [Telegram Desktop](https://github.com/telegramdesktop/tdesktop).
+Функции переносятся из Android-клиента
+[exteraless](https://github.com/exteraless/exteraless).
+Полный список проектов, происхождение цепочки форков, дизайн-кредиты и
+примечания о сторонних компонентах — в [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
+
+Кратко: Telegram Desktop — десктопная основа; exteraless — источник
+переносимых функций; NagramX — непосредственная база Android-клиента
+exteraless (не всей цепочки); exteraGram — источник функций и оформления
+этого Android-клиента. Дизайнер [@the8055u](https://t.me/the8055u) и студия
+[@BlueprintDsgn](https://t.me/BlueprintDsgn) — авторы иконок и оформления
+Android-клиента exteraless, которые унаследованы от exteraGram; права
+принадлежат им.
+
 ## Лицензия
 
-GPL-3.0. Оригинальный tdesktop распространяется под GPL-3.0 с исключением
-OpenSSL; см. `LICENSE` и `LEGAL`.
+Exteraless Desktop распространяется под GNU GPL v3.0 — как и Android-клиент
+[exteraless](https://github.com/exteraless/exteraless). Дополнительно
+сохранено исключение OpenSSL из upstream Telegram Desktop (`LICENSE`, `LEGAL`):
+как и в Telegram Desktop, оно разрешает линковку с OpenSSL в рамках GPLv3.
+
+Полный текст лицензии — `LICENSE`, уведомление upstream — `LEGAL`.

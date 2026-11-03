@@ -2,6 +2,16 @@
 
 ## 2026-11-03
 
+- Добавлены `ACKNOWLEDGEMENTS.md` и раздел «Благодарности» в `README.md`:
+  все девять проектов из списка exteraless, происхождение цепочки форков
+  Android-клиента (включая Telegram-FOSS), дизайн-кредиты Android-клиента и
+  примечание о сторонних компонентах.
+- В `README.md` уточнено происхождение: Exteraless Desktop — форк Telegram
+  Desktop, функции переносятся из Android-клиента exteraless; указана
+  GPL-3.0, как у exteraless; дополнительно сохранено исключение OpenSSL
+  из upstream Telegram Desktop (`LICENSE`, `LEGAL`).
+- В `.gitignore` добавлены локальные артефакты: `HANDOFF.md`, smoke-прогоны,
+  `exteraless.json`, логи и `DebugLogs/`.
 - Drawer: порядок пунктов Exteraless в главном меню через `OEMainMenuOrder`
   (по умолчанию `exteraless,ghost,pillstack,proxy,storage`), перетаскивание
   сохраняет новый порядок в конфиг.

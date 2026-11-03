@@ -79,6 +79,9 @@ settings.local.json
 # Generated changelog page (built by CI, deployed to GitHub Pages)
 /docs/changelog/
 
-.smoke/
-
-.smoke/
+# Local smoke-test runs and handoff notes
+.smoke*/
+/HANDOFF.md
+/exteraless.json
+*.log
+/DebugLogs/
