@@ -1896,7 +1896,7 @@ index 62e91ea..29e649e 100644
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
-index db8dcec..d149330 100644
+index db8dcec..0e50fdc 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_main_menu.cpp
 @@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1918,7 +1918,54 @@ index db8dcec..d149330 100644
  #include "storage/localstorage.h"
  #include "storage/storage_account.h"
  #include "support/support_templates.h"
-@@ -774,6 +778,50 @@ void MainMenu::setupMenu() {
+@@ -65,6 +69,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "ui/widgets/scroll_area.h"
+ #include "ui/widgets/shadow.h"
+ #include "ui/wrap/slide_wrap.h"
++#include "ui/wrap/vertical_layout_reorder.h"
+ #include "wallet/wallet_panel.h"
+ #include "window/themes/window_theme.h"
+ #include "window/window_controller.h"
+@@ -84,6 +89,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include <QtGui/QGuiApplication>
+ #include <QtGui/QClipboard>
+ 
++#include <array>
++
+ namespace Window {
+ namespace {
+ 
+@@ -121,6 +128,29 @@ constexpr auto kPlayStatusLimit = 2;
+ 	}) | rpl::flatten_latest();
+ }
+ 
++[[nodiscard]] QStringList ParseMainMenuOrder(QString value) {
++	static const auto kKnown = std::array{
++		u"exteraless"_q,
++		u"ghost"_q,
++		u"pillstack"_q,
++		u"proxy"_q,
++		u"storage"_q,
++	};
++	auto result = QStringList();
++	for (const auto &part : value.split(',', Qt::SkipEmptyParts)) {
++		const auto id = part.trimmed();
++		if (ranges::contains(kKnown, id) && !result.contains(id)) {
++			result.push_back(id);
++		}
++	}
++	for (const auto &id : kKnown) {
++		if (!result.contains(id)) {
++			result.push_back(id);
++		}
++	}
++	return result;
++}
++
+ } // namespace
+ 
+ class MainMenu::ToggleAccountsButton final : public Ui::AbstractButton {
+@@ -774,6 +804,132 @@ void MainMenu::setupMenu() {
  		controller->showSettings();
  	});
  
@@ -1926,45 +1973,127 @@ index db8dcec..d149330 100644
 +		object_ptr<Ui::PlainShadow>(_menu),
 +		{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
 +
-+	addAction(
-+		rpl::single(u"Exteraless"_q),
-+		{ &st::menuIconSettings }
-+	)->setClickedCallback([=] {
-+		controller->showSettings(Settings::ExteralessSectionId());
-+	});
-+
-+	const auto ghost = addAction(
-+		rpl::single(u"Ghost Mode"_q),
-+		{ &st::menuIconStealth });
-+	ghost->toggleOn(rpl::single(Exteraless::IsGhostActive()));
-+	ghost->toggledChanges(
-+	) | rpl::on_next([=](bool enabled) {
-+		Exteraless::SetGhostActive(enabled);
-+	}, ghost->lifetime());
-+
-+	const auto pills = addAction(
-+		rpl::single(u"Pill Stack"_q),
-+		{ &st::menuIconPowerUsage });
-+	pills->toggleOn(rpl::single(
-+		Exteraless::Config::Instance().pillStackEnabled()));
-+	pills->toggledChanges(
-+	) | rpl::on_next([=](bool enabled) {
-+		Exteraless::Config::Instance().setPillStackEnabled(enabled);
-+	}, pills->lifetime());
-+
-+	addAction(
-+		rpl::single(u"Proxy settings"_q),
-+		{ &st::menuIconNetwork }
-+	)->setClickedCallback([=] {
-+		controller->showSettings(Settings::AdvancedId());
-+	});
-+
-+	addAction(
-+		rpl::single(u"Storage and cache"_q),
-+		{ &st::menuIconStorage }
-+	)->setClickedCallback([=] {
-+		controller->showSettings(Settings::LocalStorageId());
-+	});
++	const auto exteralessMenu = _menu->add(
++		object_ptr<Ui::VerticalLayout>(_menu));
++	const auto reordering = exteralessMenu->lifetime().make_state<int>(0);
++	const auto addExteralessAction = [&](
++			rpl::producer<QString> text,
++			IconDescriptor &&descriptor) {
++		return AddButtonWithIcon(
++			exteralessMenu,
++			std::move(text),
++			st::mainMenuButton,
++			std::move(descriptor));
++	};
++	auto entries = std::vector<std::pair<QString, Ui::RpWidget*>>();
++	const auto addEntry = [&](
++			const QString &id,
++			not_null<Settings::Button*> button) {
++		entries.emplace_back(id, button.get());
++	};
++	for (const auto &id : ParseMainMenuOrder(
++			Exteraless::Config::Instance().mainMenuOrder())) {
++		if (id == u"exteraless"_q) {
++			const auto button = addExteralessAction(
++				rpl::single(u"Exteraless"_q),
++				{ &st::menuIconSettings });
++			button->setClickedCallback([=] {
++				if (*reordering) {
++					return;
++				}
++				controller->showSettings(Settings::ExteralessSectionId());
++			});
++			addEntry(id, button);
++		} else if (id == u"ghost"_q) {
++			const auto button = addExteralessAction(
++				rpl::single(u"Ghost Mode"_q),
++				{ &st::menuIconStealth });
++			const auto enabled = button->lifetime().make_state<
++				rpl::variable<bool>>(Exteraless::IsGhostActive());
++			button->toggleOn(enabled->value(), true);
++			enabled->changes(
++			) | rpl::on_next([=](bool value) {
++				Exteraless::SetGhostActive(value);
++			}, button->lifetime());
++			button->setClickedCallback([=] {
++				if (*reordering) {
++					return;
++				}
++				enabled->force_assign(!button->toggled());
++			});
++			addEntry(id, button);
++		} else if (id == u"pillstack"_q) {
++			const auto button = addExteralessAction(
++				rpl::single(u"Pill Stack"_q),
++				{ &st::menuIconPowerUsage });
++			const auto enabled = button->lifetime().make_state<
++				rpl::variable<bool>>(
++					Exteraless::Config::Instance().pillStackEnabled());
++			button->toggleOn(enabled->value(), true);
++			enabled->changes(
++			) | rpl::on_next([=](bool value) {
++				Exteraless::Config::Instance().setPillStackEnabled(value);
++			}, button->lifetime());
++			button->setClickedCallback([=] {
++				if (*reordering) {
++					return;
++				}
++				enabled->force_assign(!button->toggled());
++			});
++			addEntry(id, button);
++		} else if (id == u"proxy"_q) {
++			const auto button = addExteralessAction(
++				rpl::single(u"Proxy settings"_q),
++				{ &st::menuIconNetwork });
++			button->setClickedCallback([=] {
++				if (*reordering) {
++					return;
++				}
++				controller->showSettings(Settings::AdvancedId());
++			});
++			addEntry(id, button);
++		} else if (id == u"storage"_q) {
++			const auto button = addExteralessAction(
++				rpl::single(u"Storage and cache"_q),
++				{ &st::menuIconStorage });
++			button->setClickedCallback([=] {
++				if (*reordering) {
++					return;
++				}
++				controller->showSettings(Settings::LocalStorageId());
++			});
++			addEntry(id, button);
++		}
++	}
++	const auto reorder = exteralessMenu->lifetime().make_state<
++		Ui::VerticalLayoutReorder>(exteralessMenu);
++	reorder->start();
++	reorder->updates(
++	) | rpl::on_next([=](Ui::VerticalLayoutReorder::Single data) {
++		using State = Ui::VerticalLayoutReorder::State;
++		if (data.state == State::Started) {
++			++*reordering;
++		} else {
++			Ui::PostponeCall(exteralessMenu, [=] {
++				--*reordering;
++			});
++		}
++		if (data.state != State::Applied) {
++			return;
++		}
++		auto order = QStringList();
++		for (auto i = 0; i != exteralessMenu->count(); ++i) {
++			const auto widget = exteralessMenu->widgetAt(i);
++			for (const auto &[id, pointer] : entries) {
++				if (pointer == widget) {
++					order.push_back(id);
++					break;
++				}
++			}
++		}
++		Exteraless::Config::Instance().setMainMenuOrder(
++			order.join(','));
++	}, exteralessMenu->lifetime());
 +
  	_nightThemeToggle = addAction(
  		tr::lng_menu_night_mode(),
@@ -2296,10 +2425,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..f90b9a8
+index 0000000..a275d03
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,303 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -2329,6 +2458,10 @@ index 0000000..f90b9a8
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
++constexpr auto kMainMenuOrder = "OEMainMenuOrder";
++
++const auto kDefaultMainMenuOrder = QStringLiteral(
++	"exteraless,ghost,pillstack,proxy,storage");
 +
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
@@ -2498,6 +2631,14 @@ index 0000000..f90b9a8
 +	setValue(kPillStackPills, value);
 +}
 +
++QString Config::mainMenuOrder() const {
++	return stringValue(kMainMenuOrder, kDefaultMainMenuOrder);
++}
++
++void Config::setMainMenuOrder(const QString &value) {
++	setValue(kMainMenuOrder, value);
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -2526,7 +2667,8 @@ index 0000000..f90b9a8
 +			|| key == kGhostTypingExclusions
 +			|| key == kSaveDeletedMessages
 +			|| key == kPillStackEnabled
-+			|| key == kPillStackPills) {
++			|| key == kPillStackPills
++			|| key == kMainMenuOrder) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -2572,6 +2714,14 @@ index 0000000..f90b9a8
 +	return value.isDouble() ? value.toInt() : fallback;
 +}
 +
++QString Config::stringValue(
++		const char *key,
++		const QString &fallback) const {
++	ensureLoaded();
++	const auto value = _values.value(key);
++	return value.isString() ? value.toString() : fallback;
++}
++
 +void Config::setValue(const char *key, const QJsonValue &value) {
 +	ensureLoaded();
 +	if (_values.value(key) == value) {
@@ -2584,10 +2734,10 @@ index 0000000..f90b9a8
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..32d04ed
+index 0000000..3cd0bef
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,104 @@
 +#pragma once
 +
 +#include <QJsonObject>
@@ -2669,6 +2819,9 @@ index 0000000..32d04ed
 +	[[nodiscard]] int pillStackPills() const;
 +	void setPillStackPills(int value);
 +
++	[[nodiscard]] QString mainMenuOrder() const;
++	void setMainMenuOrder(const QString &value);
++
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 +
@@ -2678,6 +2831,9 @@ index 0000000..32d04ed
 +	void ensureLoaded() const;
 +	[[nodiscard]] bool boolValue(const char *key, bool fallback) const;
 +	[[nodiscard]] int intValue(const char *key, int fallback) const;
++	[[nodiscard]] QString stringValue(
++		const char *key,
++		const QString &fallback) const;
 +	void setValue(const char *key, const QJsonValue &value);
 +
 +	mutable QJsonObject _values;

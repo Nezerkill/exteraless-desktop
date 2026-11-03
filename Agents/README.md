@@ -25,6 +25,9 @@
 - Per-chat Ghost exclusions хранятся в `OEGhostReadExclusions` и
   `OEGhostTypingExclusions`; меню — «Ghost Mode exclusions» в контекстном
   меню чата.
+- Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
+  по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
+  сохраняет новый порядок в конфиг.
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.

@@ -79,6 +79,9 @@ public:
 	[[nodiscard]] int pillStackPills() const;
 	void setPillStackPills(int value);
 
+	[[nodiscard]] QString mainMenuOrder() const;
+	void setMainMenuOrder(const QString &value);
+
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 
@@ -88,6 +91,9 @@ private:
 	void ensureLoaded() const;
 	[[nodiscard]] bool boolValue(const char *key, bool fallback) const;
 	[[nodiscard]] int intValue(const char *key, int fallback) const;
+	[[nodiscard]] QString stringValue(
+		const char *key,
+		const QString &fallback) const;
 	void setValue(const char *key, const QJsonValue &value);
 
 	mutable QJsonObject _values;

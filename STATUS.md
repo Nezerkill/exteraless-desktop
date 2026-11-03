@@ -1,6 +1,6 @@
 # Статус порта Exteraless Desktop
 
-Обновлено: 2026-10-31.
+Обновлено: 2026-11-03.
 
 ## Готово
 
@@ -31,12 +31,13 @@
 - Pill Stack smoke-тест: `out/bin/Telegram` и `result/bin/Telegram` с `OEPillStackEnabled=true` под Xvfb, скриншот 1280x1024.
 - Pill Stack selection: с `OEPillStackPills=3` показываются только CPU и RAM.
 - Per-chat Ghost exclusions: подменю и запись в `OEGhostReadExclusions` проверены под Xvfb; сетевой эффект отдельно не измерялся.
+- Drawer order: под Xvfb задан порядок `ghost,exteraless,pillstack,proxy,storage`, drag даёт `exteraless,pillstack,proxy,ghost,storage`; запись в `exteraless.json` и сохранение после перезапуска подтверждены.
 - `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
 
 ### Артефакты
 
 - Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`, `9840aca`, `09df61a`.
-- Nix-пакет не пересобран после per-chat Ghost exclusions и выбора пилюль.
+- Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль и drawer order.
 - Nix-пакет: `/nix/store/2gc06m1d5hw55w5rw6q6hf299rwpskxp-exteraless-desktop-7.3.1-exteraless.0.1`
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
@@ -49,7 +50,8 @@
 - [x] Per-chat исключения Ghost Mode: read receipts и typing через контекстное меню.
 - [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen; выбор видимых пилюль.
 - [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
-- [ ] Drawer: аккаунты, unread-бейджи, порядок пунктов.
+- [x] Drawer: порядок пунктов в главном меню (`OEMainMenuOrder`, drag-and-drop).
+- [ ] Drawer: аккаунты и unread-бейджи.
 
 ### MVP3
 

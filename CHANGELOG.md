@@ -2,6 +2,9 @@
 
 ## 2026-11-03
 
+- Drawer: порядок пунктов Exteraless в главном меню через `OEMainMenuOrder`
+  (по умолчанию `exteraless,ghost,pillstack,proxy,storage`), перетаскивание
+  сохраняет новый порядок в конфиг.
 - Pill Stack: выбор видимых пилюль через `OEPillStackPills` и чекбоксы в
   настройках Exteraless.
 - Per-chat исключения Ghost Mode: подменю в контекстном меню чата

@@ -27,6 +27,10 @@ constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
+constexpr auto kMainMenuOrder = "OEMainMenuOrder";
+
+const auto kDefaultMainMenuOrder = QStringLiteral(
+	"exteraless,ghost,pillstack,proxy,storage");
 
 [[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 	const auto values = root.value("exteraconfig");
@@ -196,6 +200,14 @@ void Config::setPillStackPills(int value) {
 	setValue(kPillStackPills, value);
 }
 
+QString Config::mainMenuOrder() const {
+	return stringValue(kMainMenuOrder, kDefaultMainMenuOrder);
+}
+
+void Config::setMainMenuOrder(const QString &value) {
+	setValue(kMainMenuOrder, value);
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -224,7 +236,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGhostTypingExclusions
 			|| key == kSaveDeletedMessages
 			|| key == kPillStackEnabled
-			|| key == kPillStackPills) {
+			|| key == kPillStackPills
+			|| key == kMainMenuOrder) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -268,6 +281,14 @@ int Config::intValue(const char *key, int fallback) const {
 	ensureLoaded();
 	const auto value = _values.value(key);
 	return value.isDouble() ? value.toInt() : fallback;
+}
+
+QString Config::stringValue(
+		const char *key,
+		const QString &fallback) const {
+	ensureLoaded();
+	const auto value = _values.value(key);
+	return value.isString() ? value.toString() : fallback;
 }
 
 void Config::setValue(const char *key, const QJsonValue &value) {

@@ -69,6 +69,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/widgets/scroll_area.h"
 #include "ui/widgets/shadow.h"
 #include "ui/wrap/slide_wrap.h"
+#include "ui/wrap/vertical_layout_reorder.h"
 #include "wallet/wallet_panel.h"
 #include "window/themes/window_theme.h"
 #include "window/window_controller.h"
@@ -87,6 +88,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
+
+#include <array>
 
 namespace Window {
 namespace {
@@ -123,6 +126,29 @@ constexpr auto kPlayStatusLimit = 2;
 			? tr::lng_menu_change_status
 			: tr::lng_menu_set_status)(makeLink);
 	}) | rpl::flatten_latest();
+}
+
+[[nodiscard]] QStringList ParseMainMenuOrder(QString value) {
+	static const auto kKnown = std::array{
+		u"exteraless"_q,
+		u"ghost"_q,
+		u"pillstack"_q,
+		u"proxy"_q,
+		u"storage"_q,
+	};
+	auto result = QStringList();
+	for (const auto &part : value.split(',', Qt::SkipEmptyParts)) {
+		const auto id = part.trimmed();
+		if (ranges::contains(kKnown, id) && !result.contains(id)) {
+			result.push_back(id);
+		}
+	}
+	for (const auto &id : kKnown) {
+		if (!result.contains(id)) {
+			result.push_back(id);
+		}
+	}
+	return result;
 }
 
 } // namespace
@@ -782,45 +808,127 @@ void MainMenu::setupMenu() {
 		object_ptr<Ui::PlainShadow>(_menu),
 		{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
 
-	addAction(
-		rpl::single(u"Exteraless"_q),
-		{ &st::menuIconSettings }
-	)->setClickedCallback([=] {
-		controller->showSettings(Settings::ExteralessSectionId());
-	});
-
-	const auto ghost = addAction(
-		rpl::single(u"Ghost Mode"_q),
-		{ &st::menuIconStealth });
-	ghost->toggleOn(rpl::single(Exteraless::IsGhostActive()));
-	ghost->toggledChanges(
-	) | rpl::on_next([=](bool enabled) {
-		Exteraless::SetGhostActive(enabled);
-	}, ghost->lifetime());
-
-	const auto pills = addAction(
-		rpl::single(u"Pill Stack"_q),
-		{ &st::menuIconPowerUsage });
-	pills->toggleOn(rpl::single(
-		Exteraless::Config::Instance().pillStackEnabled()));
-	pills->toggledChanges(
-	) | rpl::on_next([=](bool enabled) {
-		Exteraless::Config::Instance().setPillStackEnabled(enabled);
-	}, pills->lifetime());
-
-	addAction(
-		rpl::single(u"Proxy settings"_q),
-		{ &st::menuIconNetwork }
-	)->setClickedCallback([=] {
-		controller->showSettings(Settings::AdvancedId());
-	});
-
-	addAction(
-		rpl::single(u"Storage and cache"_q),
-		{ &st::menuIconStorage }
-	)->setClickedCallback([=] {
-		controller->showSettings(Settings::LocalStorageId());
-	});
+	const auto exteralessMenu = _menu->add(
+		object_ptr<Ui::VerticalLayout>(_menu));
+	const auto reordering = exteralessMenu->lifetime().make_state<int>(0);
+	const auto addExteralessAction = [&](
+			rpl::producer<QString> text,
+			IconDescriptor &&descriptor) {
+		return AddButtonWithIcon(
+			exteralessMenu,
+			std::move(text),
+			st::mainMenuButton,
+			std::move(descriptor));
+	};
+	auto entries = std::vector<std::pair<QString, Ui::RpWidget*>>();
+	const auto addEntry = [&](
+			const QString &id,
+			not_null<Settings::Button*> button) {
+		entries.emplace_back(id, button.get());
+	};
+	for (const auto &id : ParseMainMenuOrder(
+			Exteraless::Config::Instance().mainMenuOrder())) {
+		if (id == u"exteraless"_q) {
+			const auto button = addExteralessAction(
+				rpl::single(u"Exteraless"_q),
+				{ &st::menuIconSettings });
+			button->setClickedCallback([=] {
+				if (*reordering) {
+					return;
+				}
+				controller->showSettings(Settings::ExteralessSectionId());
+			});
+			addEntry(id, button);
+		} else if (id == u"ghost"_q) {
+			const auto button = addExteralessAction(
+				rpl::single(u"Ghost Mode"_q),
+				{ &st::menuIconStealth });
+			const auto enabled = button->lifetime().make_state<
+				rpl::variable<bool>>(Exteraless::IsGhostActive());
+			button->toggleOn(enabled->value(), true);
+			enabled->changes(
+			) | rpl::on_next([=](bool value) {
+				Exteraless::SetGhostActive(value);
+			}, button->lifetime());
+			button->setClickedCallback([=] {
+				if (*reordering) {
+					return;
+				}
+				enabled->force_assign(!button->toggled());
+			});
+			addEntry(id, button);
+		} else if (id == u"pillstack"_q) {
+			const auto button = addExteralessAction(
+				rpl::single(u"Pill Stack"_q),
+				{ &st::menuIconPowerUsage });
+			const auto enabled = button->lifetime().make_state<
+				rpl::variable<bool>>(
+					Exteraless::Config::Instance().pillStackEnabled());
+			button->toggleOn(enabled->value(), true);
+			enabled->changes(
+			) | rpl::on_next([=](bool value) {
+				Exteraless::Config::Instance().setPillStackEnabled(value);
+			}, button->lifetime());
+			button->setClickedCallback([=] {
+				if (*reordering) {
+					return;
+				}
+				enabled->force_assign(!button->toggled());
+			});
+			addEntry(id, button);
+		} else if (id == u"proxy"_q) {
+			const auto button = addExteralessAction(
+				rpl::single(u"Proxy settings"_q),
+				{ &st::menuIconNetwork });
+			button->setClickedCallback([=] {
+				if (*reordering) {
+					return;
+				}
+				controller->showSettings(Settings::AdvancedId());
+			});
+			addEntry(id, button);
+		} else if (id == u"storage"_q) {
+			const auto button = addExteralessAction(
+				rpl::single(u"Storage and cache"_q),
+				{ &st::menuIconStorage });
+			button->setClickedCallback([=] {
+				if (*reordering) {
+					return;
+				}
+				controller->showSettings(Settings::LocalStorageId());
+			});
+			addEntry(id, button);
+		}
+	}
+	const auto reorder = exteralessMenu->lifetime().make_state<
+		Ui::VerticalLayoutReorder>(exteralessMenu);
+	reorder->start();
+	reorder->updates(
+	) | rpl::on_next([=](Ui::VerticalLayoutReorder::Single data) {
+		using State = Ui::VerticalLayoutReorder::State;
+		if (data.state == State::Started) {
+			++*reordering;
+		} else {
+			Ui::PostponeCall(exteralessMenu, [=] {
+				--*reordering;
+			});
+		}
+		if (data.state != State::Applied) {
+			return;
+		}
+		auto order = QStringList();
+		for (auto i = 0; i != exteralessMenu->count(); ++i) {
+			const auto widget = exteralessMenu->widgetAt(i);
+			for (const auto &[id, pointer] : entries) {
+				if (pointer == widget) {
+					order.push_back(id);
+					break;
+				}
+			}
+		}
+		Exteraless::Config::Instance().setMainMenuOrder(
+			order.join(','));
+	}, exteralessMenu->lifetime());
 
 	_nightThemeToggle = addAction(
 		tr::lng_menu_night_mode(),
