@@ -6,7 +6,7 @@
 
 ### M0. База
 
-- Форк `telegramdesktop/tdesktop` 7.3.1 в `/home/nezerkill/exteraless-desktop`.
+- Форк `telegramdesktop/tdesktop` 7.3.1 в `~/exteraless-desktop`.
 - Брендинг: `Exteraless Desktop`, отдельное имя приложения и data-каталог.
 - Сборка под Linux (Debug и Release).
 - Smoke-тест под Xvfb: окно, QRhi/OpenGL, подключение к DC.
@@ -38,7 +38,7 @@
 
 - Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`, `9840aca`, `09df61a`.
 - Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль и drawer order.
-- Nix-пакет: `/nix/store/2gc06m1d5hw55w5rw6q6hf299rwpskxp-exteraless-desktop-7.3.1-exteraless.0.1`
+- Nix-пакет: локальная сборка flake (`./result`), store-путь не фиксируется.
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
 ## В работе / дальше

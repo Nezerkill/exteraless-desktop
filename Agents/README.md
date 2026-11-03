@@ -1,8 +1,8 @@
 # Exteraless Desktop — карта проекта для агентов
 
 `exteraless-desktop` — форк Telegram Desktop 7.3.1, в который переносятся
-функции Android-клиента exteraless. Android-репозиторий лежит отдельно:
-`/home/nezerkill/exteraless`.
+функции Android-клиента exteraless. Android-репозиторий лежит рядом, отдельным
+sibling-чекаутом: `../exteraless`.
 
 ## Структура
 

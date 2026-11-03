@@ -61,7 +61,7 @@ nix build .#exteraless-desktop
 
 ```nix
 {
-  inputs.exteraless-desktop.url = "github:exteraless/exteraless-desktop";
+  inputs.exteraless-desktop.url = "github:Nezerkill/exteraless-desktop";
 
   outputs = { self, nixpkgs, exteraless-desktop, ... }: {
     nixosConfigurations.host = nixpkgs.lib.nixosSystem {
