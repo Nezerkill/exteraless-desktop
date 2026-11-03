@@ -45,6 +45,9 @@ public:
 	[[nodiscard]] bool saveDeletedMessages() const;
 	void setSaveDeletedMessages(bool value);
 
+	[[nodiscard]] bool pillStackEnabled() const;
+	void setPillStackEnabled(bool value);
+
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 

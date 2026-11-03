@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_top_bar_suggestion.h"
 #include "dialogs/dialogs_quick_action.h"
 #include "dialogs/dialogs_key.h"
+#include "exteraless/pill_stack.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/view/history_view_chat_section.h"
@@ -465,6 +466,16 @@ Widget::Widget(
 	}, _innerList->lifetime());
 	_scrollToTop->raise();
 	_lockUnlock->toggle(false, anim::type::instant);
+
+	_pillStack = std::make_unique<Exteraless::PillStack>(this, controller);
+	_pillStack->visibilityChanges(
+	) | rpl::on_next([=] {
+		updateControlsGeometry();
+	}, lifetime());
+	_pillStack->heightValue(
+	) | rpl::on_next([=] {
+		updateControlsGeometry();
+	}, lifetime());
 
 	_inner->updated(
 	) | rpl::on_next([=] {
@@ -4601,7 +4612,17 @@ void Widget::updateControlsGeometry() {
 	_chooseFromUser->moveToLeft(right, _search->y());
 
 	const auto barw = width();
-	const auto expandedStoriesTop = filterAreaTop + filterAreaHeight;
+	const auto pillHeight = (_pillStack && _pillStack->enabled())
+		? _pillStack->height()
+		: 0;
+	if (_pillStack) {
+		_pillStack->setGeometry(
+			0,
+			filterAreaHeight,
+			ratiow,
+			_pillStack->height());
+	}
+	const auto expandedStoriesTop = filterAreaTop + filterAreaHeight + pillHeight;
 	const auto storiesHeight = 2 * st::dialogsStories.photoTop
 		+ st::dialogsStories.photo;
 	const auto added = (st::dialogsFilter.heightMin - storiesHeight) / 2;

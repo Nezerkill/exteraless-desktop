@@ -25,6 +25,7 @@ constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
+constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 
 [[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 	const auto values = root.value("exteraconfig");
@@ -178,6 +179,14 @@ void Config::setSaveDeletedMessages(bool value) {
 	setValue(kSaveDeletedMessages, value);
 }
 
+bool Config::pillStackEnabled() const {
+	return boolValue(kPillStackEnabled, false);
+}
+
+void Config::setPillStackEnabled(bool value) {
+	setValue(kPillStackEnabled, value);
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -204,7 +213,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGhostSendOfflineAfterOnline
 			|| key == kGhostReadExclusions
 			|| key == kGhostTypingExclusions
-			|| key == kSaveDeletedMessages) {
+			|| key == kSaveDeletedMessages
+			|| key == kPillStackEnabled) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

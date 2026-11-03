@@ -83,6 +83,22 @@ bool GhostMode::ConsumeReadAllowance() {
 	return Allowance.fetch_sub(1) > 0;
 }
 
+bool IsGhostActive() {
+	const auto &config = Config::Instance();
+	return !config.ghostSendReadPackets()
+		|| !config.ghostSendReadStories()
+		|| !config.ghostSendOnline()
+		|| !config.ghostSendUploadProgress();
+}
+
+void SetGhostActive(bool active) {
+	auto &config = Config::Instance();
+	config.setGhostSendReadPackets(!active);
+	config.setGhostSendReadStories(!active);
+	config.setGhostSendOnline(!active);
+	config.setGhostSendUploadProgress(!active);
+}
+
 void InstallGhostMode(MTP::Instance &instance) {
 	instance.setRequestFilter(&GhostMode::Filter);
 }

@@ -175,6 +175,7 @@ public:
 	void cancel(mtpRequestId requestId, mtpMsgId msgId);
 	int requestState(mtpRequestId requestId) const;
 	int getState() const;
+	crl::time pingTime() const;
 	QString transport() const;
 
 	void tryToReceive();

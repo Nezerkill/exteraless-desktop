@@ -14,9 +14,13 @@
   - `deleted_messages.*` — JSON-sidecar удалённых сообщений;
   - `backup.*` — формат `.extera`;
   - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам.
+- `Telegram/SourceFiles/exteraless/pill_stack.*` — полоса Pill Stack в списке чатов.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
+- `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
+- Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
+  настройках Exteraless или в главном меню.
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.

@@ -1,6 +1,6 @@
 # Статус порта Exteraless Desktop
 
-Обновлено: 2026-10-30.
+Обновлено: 2026-10-31.
 
 ## Готово
 
@@ -25,25 +25,29 @@
 ### Проверки
 
 - `nix flake check --no-build` — проходит.
-- `nix build .#exteraless-desktop` — собрано.
+- `nix build .#exteraless-desktop` — собрано, включая Pill Stack.
 - Release smoke-тест: `result/bin/Telegram` запускается под Xvfb.
 - Debug smoke-тест: `out/bin/Telegram` запускается под Xvfb.
+- Pill Stack smoke-тест: `out/bin/Telegram` и `result/bin/Telegram` с `OEPillStackEnabled=true` под Xvfb, скриншот 1280x1024.
+- `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
 
 ### Артефакты
 
-- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`.
-- Nix-пакет: `/nix/store/pxcrrn79wmvgv61yxbab2pxayzgdshaz-exteraless-desktop-7.3.1-exteraless.0.1`
+- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`.
+- Pill Stack: изменения в рабочем дереве, коммит не создан.
+- Nix-пакет: `/nix/store/2gc06m1d5hw55w5rw6q6hf299rwpskxp-exteraless-desktop-7.3.1-exteraless.0.1`
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
 ## В работе / дальше
 
 ### MVP2
 
-- [x] Ghost Mode: read receipts, stories, online/offline, typing/upload progress — код готов, идёт сборка/проверка.
-- [x] Сохранение удалённых сообщений: JSON-sidecar, контекстное меню и бокс — код готов, идёт сборка/проверка.
+- [x] Ghost Mode: read receipts, stories, online/offline, typing/upload progress.
+- [x] Сохранение удалённых сообщений: JSON-sidecar, контекстное меню и бокс.
 - [ ] Per-chat исключения Ghost Mode (ключи конфига уже есть).
-- [ ] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen — исследование готово.
-- [ ] Drawer: аккаунты, меню, unread-бейджи, порядок пунктов — исследование готово.
+- [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen.
+- [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
+- [ ] Drawer: аккаунты, unread-бейджи, порядок пунктов.
 
 ### MVP3
 
@@ -66,7 +70,6 @@
 - `exteraless.json` сейчас привязан к `QStandardPaths::AppLocalDataLocation`
   и не учитывает `-workdir`.
 - Плагины Android-версии несовместимы: нужен новый desktop API.
-- Ghost Mode и удалённые сообщения ещё не реализованы.
 
 ## Сборка с ограничением ОЗУ
 

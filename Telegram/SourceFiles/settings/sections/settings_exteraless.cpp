@@ -143,6 +143,26 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/pill-stack"_q,
+		.title = rpl::single(u"Pill Stack"_q),
+	});
+
+	const auto pillStack = builder.addButton({
+		.id = u"exteraless/pill-stack/enabled"_q,
+		.title = rpl::single(u"Show pills above the chat list"_q),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().pillStackEnabled()),
+		.keywords = { u"pill"_q, u"stack"_q, u"cpu"_q, u"ram"_q },
+	});
+	if (pillStack) {
+		pillStack->toggledChanges(
+		) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setPillStackEnabled(value);
+		}, pillStack->lifetime());
+	}
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/proxy"_q,
 		.title = tr::lng_settings_exteraless_proxy(),
 	});

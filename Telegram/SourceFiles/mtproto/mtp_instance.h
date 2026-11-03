@@ -94,6 +94,7 @@ public:
 	void restart(ShiftedDcId shiftedDcId);
 	int32 dcstate(ShiftedDcId shiftedDcId = 0);
 	QString dctransport(ShiftedDcId shiftedDcId = 0);
+	crl::time pingTime(ShiftedDcId shiftedDcId = 0);
 	void ping();
 	void cancel(mtpRequestId requestId);
 	int32 state(mtpRequestId requestId); // < 0 means waiting for such count of ms

@@ -420,6 +420,10 @@ QString Session::transport() const {
 	return _private ? _private->transport() : QString();
 }
 
+crl::time Session::pingTime() const {
+	return _private ? _private->pingTime() : 0;
+}
+
 void Session::sendPrepared(
 		const SerializedRequest &request,
 		crl::time msCanWait) {

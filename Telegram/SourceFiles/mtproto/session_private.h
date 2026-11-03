@@ -43,6 +43,7 @@ public:
 	void cdnConfigChanged();
 
 	[[nodiscard]] int32 getState() const;
+	[[nodiscard]] crl::time pingTime() const;
 	[[nodiscard]] QString transport() const;
 
 	void updateAuthKey();

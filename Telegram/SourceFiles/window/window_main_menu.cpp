@@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_stories.h"
 #include "data/data_user.h"
+#include "exteraless/config.h"
+#include "exteraless/ghost_mode.h"
 #include "info/info_memento.h"
 #include "info/profile/info_profile_badge.h"
 #include "settings/settings_common.h"
@@ -41,7 +43,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mtproto/mtproto_config.h"
 #include "settings/sections/settings_advanced.h"
 #include "settings/sections/settings_calls.h"
+#include "settings/sections/settings_exteraless.h"
 #include "settings/sections/settings_information.h"
+#include "settings/sections/settings_local_storage.h"
 #include "storage/localstorage.h"
 #include "storage/storage_account.h"
 #include "support/support_templates.h"
@@ -772,6 +776,50 @@ void MainMenu::setupMenu() {
 		{ &st::menuIconSettings }
 	)->setClickedCallback([=] {
 		controller->showSettings();
+	});
+
+	_menu->add(
+		object_ptr<Ui::PlainShadow>(_menu),
+		{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
+
+	addAction(
+		rpl::single(u"Exteraless"_q),
+		{ &st::menuIconSettings }
+	)->setClickedCallback([=] {
+		controller->showSettings(Settings::ExteralessSectionId());
+	});
+
+	const auto ghost = addAction(
+		rpl::single(u"Ghost Mode"_q),
+		{ &st::menuIconStealth });
+	ghost->toggleOn(rpl::single(Exteraless::IsGhostActive()));
+	ghost->toggledChanges(
+	) | rpl::on_next([=](bool enabled) {
+		Exteraless::SetGhostActive(enabled);
+	}, ghost->lifetime());
+
+	const auto pills = addAction(
+		rpl::single(u"Pill Stack"_q),
+		{ &st::menuIconPowerUsage });
+	pills->toggleOn(rpl::single(
+		Exteraless::Config::Instance().pillStackEnabled()));
+	pills->toggledChanges(
+	) | rpl::on_next([=](bool enabled) {
+		Exteraless::Config::Instance().setPillStackEnabled(enabled);
+	}, pills->lifetime());
+
+	addAction(
+		rpl::single(u"Proxy settings"_q),
+		{ &st::menuIconNetwork }
+	)->setClickedCallback([=] {
+		controller->showSettings(Settings::AdvancedId());
+	});
+
+	addAction(
+		rpl::single(u"Storage and cache"_q),
+		{ &st::menuIconStorage }
+	)->setClickedCallback([=] {
+		controller->showSettings(Settings::LocalStorageId());
 	});
 
 	_nightThemeToggle = addAction(

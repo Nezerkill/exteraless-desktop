@@ -107,6 +107,7 @@ public:
 	void restart(ShiftedDcId shiftedDcId);
 	[[nodiscard]] int32 dcstate(ShiftedDcId shiftedDcId = 0);
 	[[nodiscard]] QString dctransport(ShiftedDcId shiftedDcId = 0);
+	[[nodiscard]] crl::time pingTime(ShiftedDcId shiftedDcId = 0);
 	void ping();
 	void cancel(mtpRequestId requestId);
 	[[nodiscard]] int32 state(mtpRequestId requestId); // < 0 means waiting for such count of ms
@@ -659,6 +660,22 @@ QString Instance::Private::dctransport(ShiftedDcId shiftedDcId) {
 		return session->transport();
 	}
 	return QString();
+}
+
+crl::time Instance::Private::pingTime(ShiftedDcId shiftedDcId) {
+	if (!shiftedDcId) {
+		Assert(_mainSession != nullptr);
+		return _mainSession->pingTime();
+	}
+	if (!BareDcId(shiftedDcId)) {
+		Assert(_mainSession != nullptr);
+		shiftedDcId += BareDcId(_mainSession->getDcWithShift());
+	}
+
+	if (const auto session = findSession(shiftedDcId)) {
+		return session->pingTime();
+	}
+	return 0;
 }
 
 void Instance::Private::ping() {
@@ -2077,6 +2094,10 @@ int32 Instance::dcstate(ShiftedDcId shiftedDcId) {
 
 QString Instance::dctransport(ShiftedDcId shiftedDcId) {
 	return _private->dctransport(shiftedDcId);
+}
+
+crl::time Instance::pingTime(ShiftedDcId shiftedDcId) {
+	return _private->pingTime(shiftedDcId);
 }
 
 void Instance::ping() {

@@ -381,6 +381,14 @@ QString SessionPrivate::transport() const {
 	return _connection->transport();
 }
 
+crl::time SessionPrivate::pingTime() const {
+	QReadLocker lock(&_stateMutex);
+	if (!_connection || (_state != ConnectedState)) {
+		return 0;
+	}
+	return _connection->pingTime();
+}
+
 bool SessionPrivate::setState(int state, int ifState) {
 	if (ifState != kUpdateStateAlways) {
 		QReadLocker lock(&_stateMutex);

@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..2dd3aaf 100644
+index 811707d..8290603 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,17 @@ endif()
+@@ -70,6 +70,19 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -25,12 +25,14 @@ index 811707d..2dd3aaf 100644
 +    ../exteraless/proxy_rules.h
 +    SourceFiles/boxes/deleted_messages_box.cpp
 +    SourceFiles/boxes/deleted_messages_box.h
++    SourceFiles/exteraless/pill_stack.cpp
++    SourceFiles/exteraless/pill_stack.h
 +)
 +
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +120,7 @@ PRIVATE
+@@ -109,6 +122,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -38,7 +40,7 @@ index 811707d..2dd3aaf 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1692,7 @@ PRIVATE
+@@ -1680,6 +1694,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -46,7 +48,7 @@ index 811707d..2dd3aaf 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1910,8 @@ PRIVATE
+@@ -1897,6 +1912,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -55,7 +57,7 @@ index 811707d..2dd3aaf 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2545,10 @@ else()
+@@ -2530,6 +2547,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -378,6 +380,619 @@ index edd65ef..51a1d56 100644
  	}
  	return OnlineText(user->lastseen(), now);
  }
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
+index 3f79e39..2543ae9 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
++++ b/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
+@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "dialogs/dialogs_top_bar_suggestion.h"
+ #include "dialogs/dialogs_quick_action.h"
+ #include "dialogs/dialogs_key.h"
++#include "exteraless/pill_stack.h"
+ #include "history/history.h"
+ #include "history/history_item.h"
+ #include "history/view/history_view_chat_section.h"
+@@ -466,6 +467,16 @@ Widget::Widget(
+ 	_scrollToTop->raise();
+ 	_lockUnlock->toggle(false, anim::type::instant);
+ 
++	_pillStack = std::make_unique<Exteraless::PillStack>(this, controller);
++	_pillStack->visibilityChanges(
++	) | rpl::on_next([=] {
++		updateControlsGeometry();
++	}, lifetime());
++	_pillStack->heightValue(
++	) | rpl::on_next([=] {
++		updateControlsGeometry();
++	}, lifetime());
++
+ 	_inner->updated(
+ 	) | rpl::on_next([=] {
+ 		listScrollUpdated();
+@@ -4601,7 +4612,17 @@ void Widget::updateControlsGeometry() {
+ 	_chooseFromUser->moveToLeft(right, _search->y());
+ 
+ 	const auto barw = width();
+-	const auto expandedStoriesTop = filterAreaTop + filterAreaHeight;
++	const auto pillHeight = (_pillStack && _pillStack->enabled())
++		? _pillStack->height()
++		: 0;
++	if (_pillStack) {
++		_pillStack->setGeometry(
++			0,
++			filterAreaHeight,
++			ratiow,
++			_pillStack->height());
++	}
++	const auto expandedStoriesTop = filterAreaTop + filterAreaHeight + pillHeight;
+ 	const auto storiesHeight = 2 * st::dialogsStories.photoTop
+ 		+ st::dialogsStories.photo;
+ 	const auto added = (st::dialogsFilter.heightMin - storiesHeight) / 2;
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_widget.h b/Telegram/SourceFiles/dialogs/dialogs_widget.h
+index ee8bff7..8274456 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs_widget.h
++++ b/Telegram/SourceFiles/dialogs/dialogs_widget.h
+@@ -68,6 +68,10 @@ struct SectionShow;
+ struct SeparateId;
+ } // namespace Window
+ 
++namespace Exteraless {
++class PillStack;
++} // namespace Exteraless
++
+ namespace Dialogs::Stories {
+ class List;
+ struct Content;
+@@ -333,6 +337,7 @@ private:
+ 	std::unique_ptr<Ui::AbstractButton> _frozenAccountBar;
+ 
+ 	object_ptr<Ui::RpWidget> _searchControls;
++	std::unique_ptr<Exteraless::PillStack> _pillStack;
+ 	object_ptr<HistoryView::TopBarWidget> _subsectionTopBar = { nullptr };
+ 	struct {
+ 		object_ptr<Ui::IconButton> toggle;
+diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
+new file mode 100644
+index 0000000..ca90683
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/pill_stack.cpp
+@@ -0,0 +1,450 @@
++#include "exteraless/pill_stack.h"
++
++#include "base/unixtime.h"
++#include "core/application.h"
++#include "core/core_settings.h"
++#include "data/data_session.h"
++#include "data/data_user.h"
++#include "exteraless/config.h"
++#include "exteraless/ghost_mode.h"
++#include "main/main_session.h"
++#include "mtproto/facade.h"
++#include "mtproto/mtp_instance.h"
++#include "settings/sections/settings_advanced.h"
++#include "settings/sections/settings_local_storage.h"
++#include "storage/cache/storage_cache_database.h"
++#include "styles/style_basic.h"
++#include "styles/style_dialogs.h"
++#include "ui/painter.h"
++#include "ui/text/format_values.h"
++#include "window/window_session_controller.h"
++
++#include <QtCore/QFile>
++#include <QtCore/QtGlobal>
++#include <QtGui/QMouseEvent>
++
++#include <algorithm>
++#include <optional>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kTimerInterval = crl::time(2000);
++constexpr auto kPillPadding = 4;
++constexpr auto kPillGap = 4;
++constexpr auto kMaxPillTextWidth = 120;
++
++struct CpuSample {
++	qint64 idle = 0;
++	qint64 total = 0;
++};
++
++struct NetSample {
++	qint64 rx = 0;
++	qint64 tx = 0;
++};
++
++[[nodiscard]] std::optional<CpuSample> ReadCpuSample() {
++	auto file = QFile(u"/proc/stat"_q);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	const auto line = file.readLine().simplified();
++	if (!line.startsWith("cpu ")) {
++		return std::nullopt;
++	}
++	const auto parts = QString::fromLatin1(line).split(
++		' ',
++		Qt::SkipEmptyParts);
++	if (parts.size() < 8) {
++		return std::nullopt;
++	}
++	auto total = qint64(0);
++	for (auto i = 1; i != parts.size() && i <= 8; ++i) {
++		total += parts[i].toLongLong();
++	}
++	const auto idle = parts[4].toLongLong() + parts[5].toLongLong();
++	return CpuSample{ idle, total };
++}
++
++[[nodiscard]] std::optional<int> ReadMemoryUsage() {
++	auto file = QFile(u"/proc/meminfo"_q);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	auto total = qint64(0);
++	auto available = qint64(0);
++	while (true) {
++		const auto line = file.readLine();
++		if (line.isEmpty()) {
++			break;
++		}
++		if (line.startsWith("MemTotal:")) {
++			total = line.mid(9).trimmed().split(' ').front().toLongLong();
++		} else if (line.startsWith("MemAvailable:")) {
++			available = line.mid(13).trimmed().split(' ').front().toLongLong();
++		}
++	}
++	if (total <= 0) {
++		return std::nullopt;
++	}
++	return int(qBound(
++		qint64(0),
++		(total - available) * 100 / total,
++		qint64(100)));
++}
++
++[[nodiscard]] std::optional<NetSample> ReadNetSample() {
++	auto file = QFile(u"/proc/net/dev"_q);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	auto rx = qint64(0);
++	auto tx = qint64(0);
++	auto lineIndex = 0;
++	while (true) {
++		const auto line = file.readLine();
++		if (line.isEmpty()) {
++			break;
++		}
++		if (++lineIndex <= 2) {
++			continue;
++		}
++		const auto colon = line.indexOf(':');
++		if (colon < 0) {
++			continue;
++		}
++		const auto name = line.left(colon).trimmed();
++		if (name == "lo") {
++			continue;
++		}
++		const auto fields = line.mid(colon + 1).simplified().split(' ');
++		if (fields.size() < 9) {
++			continue;
++		}
++		rx += fields[0].toLongLong();
++		tx += fields[8].toLongLong();
++	}
++	return NetSample{ rx, tx };
++}
++
++[[nodiscard]] QString DcStateText(int32 state) {
++	if (state == MTP::ConnectedState) {
++		return u"online"_q;
++	} else if (state == MTP::ConnectingState) {
++		return u"connecting"_q;
++	}
++	return u"offline"_q;
++}
++
++[[nodiscard]] QString LastSeenText(not_null<UserData*> user) {
++	const auto now = base::unixtime::now();
++	const auto status = user->lastseen();
++	if (status.isOnline(now)) {
++		return u"online"_q;
++	} else if (const auto till = status.onlineTill()) {
++		const auto seconds = std::max(0, now - till);
++		if (seconds < 60) {
++			return u"now"_q;
++		} else if (seconds < 3600) {
++			return u"%1m"_q.arg(seconds / 60);
++		} else if (seconds < 86400) {
++			return u"%1h"_q.arg(seconds / 3600);
++		}
++		return u"%1d"_q.arg(seconds / 86400);
++	} else if (status.isRecently()) {
++		return u"recently"_q;
++	} else if (status.isWithinWeek()) {
++		return u"week"_q;
++	} else if (status.isWithinMonth()) {
++		return u"month"_q;
++	} else if (status.isLongAgo()) {
++		return u"long ago"_q;
++	}
++	return u"—"_q;
++}
++
++} // namespace
++
++PillStack::PillStack(
++	QWidget *parent,
++	not_null<Window::SessionController*> controller)
++: RpWidget(parent)
++, _controller(controller)
++, _timer([=] { tick(); }) {
++	_pills = {
++		{ Kind::Cpu, u"CPU …"_q },
++		{ Kind::Ram, u"RAM …"_q },
++		{ Kind::Net, u"Net …"_q },
++		{ Kind::Dc, u"DC …"_q },
++		{ Kind::Proxy, u"Proxy …"_q },
++		{ Kind::Cache, u"Cache …"_q },
++		{ Kind::Ghost, u"Ghost …"_q },
++		{ Kind::LastSeen, u"Seen …"_q },
++	};
++	setMouseTracking(true);
++	setCursor(Qt::PointingHandCursor);
++	setFixedHeight(st::dialogsFilter.heightMin);
++
++	_netTimer.start();
++	_enabled = Config::Instance().pillStackEnabled();
++	setVisible(_enabled);
++
++	_controller->session().data().cache().statsOnMain(
++	) | rpl::on_next([=](Storage::Cache::Database::Stats stats) {
++		_cacheBytes = stats.full.totalSize;
++		updatePills();
++	}, lifetime());
++	_controller->session().data().cacheBigFile().statsOnMain(
++	) | rpl::on_next([=](Storage::Cache::Database::Stats stats) {
++		_cacheBigBytes = stats.full.totalSize;
++		updatePills();
++	}, lifetime());
++
++	_timer.callEach(kTimerInterval);
++	updatePills();
++}
++
++rpl::producer<> PillStack::visibilityChanges() const {
++	return _visibilityChanges.events();
++}
++
++void PillStack::tick() {
++	const auto enabled = Config::Instance().pillStackEnabled();
++	if (enabled != _enabled) {
++		_enabled = enabled;
++		setVisible(enabled);
++		_visibilityChanges.fire({});
++	}
++	if (enabled) {
++		updatePills();
++	}
++}
++
++void PillStack::updatePills() {
++	auto changed = false;
++	const auto setText = [&](Kind kind, QString text, bool active = false) {
++		const auto i = ranges::find(_pills, kind, &Pill::kind);
++		if (i == _pills.end()) {
++			return;
++		}
++		if (i->text != text || i->active != active) {
++			i->text = std::move(text);
++			i->active = active;
++			changed = true;
++		}
++	};
++
++	if (const auto sample = ReadCpuSample()) {
++		if (_cpuValid) {
++			const auto total = sample->total - _previousCpuTotal;
++			const auto idle = sample->idle - _previousCpuIdle;
++			if (total > 0) {
++				const auto percent = qBound(
++					qint64(0),
++					(total - idle) * 100 / total,
++					qint64(100));
++				setText(Kind::Cpu, u"CPU %1%"_q.arg(percent));
++			}
++		}
++		_previousCpuIdle = sample->idle;
++		_previousCpuTotal = sample->total;
++		_cpuValid = true;
++	} else {
++		_cpuValid = false;
++	}
++
++	if (const auto memory = ReadMemoryUsage()) {
++		setText(Kind::Ram, u"RAM %1%"_q.arg(*memory));
++	}
++
++	if (const auto sample = ReadNetSample()) {
++		const auto now = _netTimer.elapsed();
++		if (_netValid) {
++			const auto elapsed = now - _previousNetAt;
++			if (elapsed > 0) {
++				const auto rx = std::max(
++					qint64(0),
++					(sample->rx - _previousRx) * 1000 / elapsed);
++				const auto tx = std::max(
++					qint64(0),
++					(sample->tx - _previousTx) * 1000 / elapsed);
++				const auto speed = std::max(rx, tx);
++				const auto arrow = (rx >= tx) ? u"↓"_q : u"↑"_q;
++				setText(
++					Kind::Net,
++					arrow + Ui::FormatSizeText(speed) + u"/s"_q);
++			}
++		}
++		_previousRx = sample->rx;
++		_previousTx = sample->tx;
++		_previousNetAt = now;
++		_netValid = true;
++	} else {
++		_netValid = false;
++	}
++
++	auto &mtp = _controller->session().mtp();
++	const auto dc = u"DC%1"_q.arg(mtp.mainDcId());
++	const auto ping = mtp.pingTime();
++	if (ping > 0) {
++		setText(Kind::Dc, dc + u" · %1 ms"_q.arg(ping));
++	} else {
++		setText(Kind::Dc, dc + u" · "_q + DcStateText(mtp.dcstate()));
++	}
++
++	const auto &proxy = Core::App().settings().proxy();
++	const auto proxyEnabled = proxy.isEnabled();
++	setText(
++		Kind::Proxy,
++		proxyEnabled
++			? u"Proxy on"_q
++			: (proxy.isSystem() ? u"Proxy system"_q : u"Proxy off"_q),
++		proxyEnabled);
++
++	setText(Kind::Cache, u"Cache %1"_q.arg(Ui::FormatSizeText(
++		_cacheBytes + _cacheBigBytes)));
++
++	const auto ghost = IsGhostActive();
++	setText(
++		Kind::Ghost,
++		ghost ? u"Ghost on"_q : u"Ghost off"_q,
++		ghost);
++
++	const auto user = _controller->session().user();
++	setText(Kind::LastSeen, u"Seen %1"_q.arg(LastSeenText(user)));
++
++	if (changed) {
++		updateLayout();
++		update();
++	}
++}
++
++void PillStack::updateLayout() {
++	const auto pillHeight = st::dialogsFilter.heightMin - 14;
++	const auto rowHeight = pillHeight + 6;
++	const auto leftPadding = st::dialogsFilterPadding.x();
++	const auto right = width() - leftPadding;
++	auto left = leftPadding;
++	auto top = 4;
++	auto rowBottom = top + pillHeight;
++	for (auto &pill : _pills) {
++		const auto textWidth = std::min(
++			st::semiboldFont->width(pill.text),
++			kMaxPillTextWidth);
++		const auto width = textWidth + 2 * kPillPadding;
++		if (left + width > right && left > leftPadding) {
++			left = leftPadding;
++			top += rowHeight;
++			rowBottom = top + pillHeight;
++		}
++		if (left + width > right) {
++			pill.rect = QRect();
++			continue;
++		}
++		pill.rect = QRect(left, top, width, pillHeight);
++		left += width + kPillGap;
++	}
++	const auto desiredHeight = std::max(
++		st::dialogsFilter.heightMin,
++		rowBottom + 4);
++	if (height() != desiredHeight) {
++		setFixedHeight(desiredHeight);
++	}
++}
++
++void PillStack::paintEvent(QPaintEvent *e) {
++	auto p = QPainter(this);
++	auto hq = PainterHighQualityEnabler(p);
++	p.setFont(st::semiboldFont);
++
++	for (auto i = 0; i != int(_pills.size()); ++i) {
++		const auto &pill = _pills[i];
++		if (pill.rect.isEmpty()) {
++			continue;
++		}
++		const auto radius = pill.rect.height() / 2.;
++		const auto over = (_hovered == i) || (_pressed == i);
++		p.setPen(Qt::NoPen);
++		p.setBrush(pill.active
++			? st::windowActiveTextFg->c
++			: (over ? st::windowBgActive->c : st::windowBgOver->c));
++		p.drawRoundedRect(pill.rect, radius, radius);
++		p.setPen(pill.active ? st::windowBg->c : st::windowFg->c);
++		p.drawText(
++			pill.rect,
++			Qt::AlignCenter,
++			st::semiboldFont->elided(
++				pill.text,
++				pill.rect.width() - 2 * kPillPadding));
++	}
++}
++
++void PillStack::resizeEvent(QResizeEvent *e) {
++	RpWidget::resizeEvent(e);
++	updateLayout();
++}
++
++void PillStack::mousePressEvent(QMouseEvent *e) {
++	if (e->button() != Qt::LeftButton) {
++		return;
++	}
++	_pressed = indexAt(e->pos());
++	update();
++}
++
++void PillStack::mouseReleaseEvent(QMouseEvent *e) {
++	const auto index = indexAt(e->pos());
++	if (e->button() == Qt::LeftButton
++		&& index >= 0
++		&& index == _pressed) {
++		activate(_pills[index].kind);
++	}
++	_pressed = -1;
++	update();
++}
++
++void PillStack::mouseMoveEvent(QMouseEvent *e) {
++	const auto index = indexAt(e->pos());
++	if (index != _hovered) {
++		_hovered = index;
++		update();
++	}
++}
++
++void PillStack::leaveEventHook(QEvent *e) {
++	_hovered = -1;
++	_pressed = -1;
++	update();
++}
++
++void PillStack::activate(Kind kind) {
++	switch (kind) {
++	case Kind::Ghost:
++		SetGhostActive(!IsGhostActive());
++		updatePills();
++		break;
++	case Kind::Proxy:
++		_controller->showSettings(Settings::AdvancedId());
++		break;
++	case Kind::Cache:
++		_controller->showSettings(Settings::LocalStorageId());
++		break;
++	case Kind::LastSeen:
++		updatePills();
++		break;
++	default:
++		break;
++	}
++}
++
++int PillStack::indexAt(QPoint position) const {
++	for (auto i = 0; i != int(_pills.size()); ++i) {
++		if (_pills[i].rect.contains(position)) {
++			return i;
++		}
++	}
++	return -1;
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/pill_stack.h b/Telegram/SourceFiles/exteraless/pill_stack.h
+new file mode 100644
+index 0000000..8f123e8
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/pill_stack.h
+@@ -0,0 +1,80 @@
++#pragma once
++
++#include "base/timer.h"
++#include "ui/rp_widget.h"
++
++#include <QElapsedTimer>
++#include <rpl/event_stream.h>
++
++#include <vector>
++
++namespace Window {
++class SessionController;
++} // namespace Window
++
++namespace Exteraless {
++
++class PillStack final : public Ui::RpWidget {
++public:
++	PillStack(
++		QWidget *parent,
++		not_null<Window::SessionController*> controller);
++
++	[[nodiscard]] rpl::producer<> visibilityChanges() const;
++	[[nodiscard]] bool enabled() const {
++		return _enabled;
++	}
++
++protected:
++	void paintEvent(QPaintEvent *e) override;
++	void resizeEvent(QResizeEvent *e) override;
++	void mousePressEvent(QMouseEvent *e) override;
++	void mouseReleaseEvent(QMouseEvent *e) override;
++	void mouseMoveEvent(QMouseEvent *e) override;
++	void leaveEventHook(QEvent *e) override;
++
++private:
++	enum class Kind {
++		Cpu,
++		Ram,
++		Net,
++		Dc,
++		Proxy,
++		Cache,
++		Ghost,
++		LastSeen,
++	};
++
++	struct Pill {
++		Kind kind = Kind::Cpu;
++		QString text;
++		bool active = false;
++		QRect rect;
++	};
++
++	void tick();
++	void updatePills();
++	void updateLayout();
++	void activate(Kind kind);
++	[[nodiscard]] int indexAt(QPoint position) const;
++
++	const not_null<Window::SessionController*> _controller;
++	std::vector<Pill> _pills;
++	base::Timer _timer;
++	QElapsedTimer _netTimer;
++	qint64 _cacheBytes = 0;
++	qint64 _cacheBigBytes = 0;
++	qint64 _previousCpuIdle = 0;
++	qint64 _previousCpuTotal = 0;
++	qint64 _previousRx = 0;
++	qint64 _previousTx = 0;
++	qint64 _previousNetAt = 0;
++	int _pressed = -1;
++	int _hovered = -1;
++	bool _cpuValid = false;
++	bool _netValid = false;
++	bool _enabled = false;
++	rpl::event_stream<> _visibilityChanges;
++};
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
 index 2721c7a..6bfa900 100644
 --- a/Telegram/SourceFiles/main/main_account.cpp
@@ -400,10 +1015,18 @@ index 2721c7a..6bfa900 100644
  	_mtp->writeKeysRequests(
  	) | rpl::filter([=] {
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
-index d25fe3b..a0feff8 100644
+index d25fe3b..59d169d 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 +++ b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
-@@ -157,6 +157,7 @@ public:
+@@ -107,6 +107,7 @@ public:
+ 	void restart(ShiftedDcId shiftedDcId);
+ 	[[nodiscard]] int32 dcstate(ShiftedDcId shiftedDcId = 0);
+ 	[[nodiscard]] QString dctransport(ShiftedDcId shiftedDcId = 0);
++	[[nodiscard]] crl::time pingTime(ShiftedDcId shiftedDcId = 0);
+ 	void ping();
+ 	void cancel(mtpRequestId requestId);
+ 	[[nodiscard]] int32 state(mtpRequestId requestId); // < 0 means waiting for such count of ms
+@@ -157,6 +158,7 @@ public:
  	}
  
  	void setUpdatesHandler(Fn<void(const Response&)> handler);
@@ -411,7 +1034,7 @@ index d25fe3b..a0feff8 100644
  	void setGlobalFailHandler(
  		Fn<void(const Error&, const Response&)> handler);
  	void setStateChangedHandler(Fn<void(ShiftedDcId shiftedDcId, int32 state)> handler);
-@@ -289,6 +290,7 @@ private:
+@@ -289,6 +291,7 @@ private:
  	std::map<DcId, std::vector<mtpRequestId>> _authWaiters;
  
  	Fn<void(const Response&)> _updatesHandler;
@@ -419,7 +1042,30 @@ index d25fe3b..a0feff8 100644
  	Fn<void(const Error&, const Response&)> _globalFailHandler;
  	Fn<void(ShiftedDcId shiftedDcId, int32 state)> _stateChangedHandler;
  	Fn<void(ShiftedDcId shiftedDcId)> _sessionResetHandler;
-@@ -1028,6 +1030,29 @@ void Instance::Private::sendRequest(
+@@ -659,6 +662,22 @@ QString Instance::Private::dctransport(ShiftedDcId shiftedDcId) {
+ 	return QString();
+ }
+ 
++crl::time Instance::Private::pingTime(ShiftedDcId shiftedDcId) {
++	if (!shiftedDcId) {
++		Assert(_mainSession != nullptr);
++		return _mainSession->pingTime();
++	}
++	if (!BareDcId(shiftedDcId)) {
++		Assert(_mainSession != nullptr);
++		shiftedDcId += BareDcId(_mainSession->getDcWithShift());
++	}
++
++	if (const auto session = findSession(shiftedDcId)) {
++		return session->pingTime();
++	}
++	return 0;
++}
++
+ void Instance::Private::ping() {
+ 	getSession(0)->ping();
+ }
+@@ -1028,6 +1047,29 @@ void Instance::Private::sendRequest(
  		mtpRequestId afterRequestId) {
  	const auto session = getSession(shiftedDcId);
  
@@ -449,7 +1095,7 @@ index d25fe3b..a0feff8 100644
  	request->requestId = requestId;
  	storeRequest(requestId, request, std::move(callbacks));
  
-@@ -1893,6 +1918,10 @@ void Instance::Private::setUpdatesHandler(
+@@ -1893,6 +1935,10 @@ void Instance::Private::setUpdatesHandler(
  	_updatesHandler = std::move(handler);
  }
  
@@ -460,7 +1106,18 @@ index d25fe3b..a0feff8 100644
  void Instance::Private::setGlobalFailHandler(
  		Fn<void(const Error&, const Response&)> handler) {
  	_globalFailHandler = std::move(handler);
-@@ -2137,6 +2166,10 @@ void Instance::setGlobalFailHandler(
+@@ -2050,6 +2096,10 @@ QString Instance::dctransport(ShiftedDcId shiftedDcId) {
+ 	return _private->dctransport(shiftedDcId);
+ }
+ 
++crl::time Instance::pingTime(ShiftedDcId shiftedDcId) {
++	return _private->pingTime(shiftedDcId);
++}
++
+ void Instance::ping() {
+ 	_private->ping();
+ }
+@@ -2137,6 +2187,10 @@ void Instance::setGlobalFailHandler(
  	_private->setGlobalFailHandler(std::move(handler));
  }
  
@@ -472,7 +1129,7 @@ index d25fe3b..a0feff8 100644
  		Fn<void(ShiftedDcId shiftedDcId, int32 state)> handler) {
  	_private->setStateChangedHandler(std::move(handler));
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.h b/Telegram/SourceFiles/mtproto/mtp_instance.h
-index eeb56d2..27565b6 100644
+index eeb56d2..ca3859b 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.h
 +++ b/Telegram/SourceFiles/mtproto/mtp_instance.h
 @@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -483,7 +1140,15 @@ index eeb56d2..27565b6 100644
  #include "mtproto/mtproto_response.h"
  
  namespace MTP {
-@@ -104,6 +105,7 @@ public:
+@@ -93,6 +94,7 @@ public:
+ 	void restart(ShiftedDcId shiftedDcId);
+ 	int32 dcstate(ShiftedDcId shiftedDcId = 0);
+ 	QString dctransport(ShiftedDcId shiftedDcId = 0);
++	crl::time pingTime(ShiftedDcId shiftedDcId = 0);
+ 	void ping();
+ 	void cancel(mtpRequestId requestId);
+ 	int32 state(mtpRequestId requestId); // < 0 means waiting for such count of ms
+@@ -104,6 +106,7 @@ public:
  	void logout(Fn<void()> done);
  
  	void setUpdatesHandler(Fn<void(const Response&)> handler);
@@ -517,12 +1182,70 @@ index 0000000..5e394d8
 +using RequestFilter = Fn<RequestFilterResult(const RequestFilterInfo&)>;
 +
 +} // namespace MTP
+diff --git a/Telegram/SourceFiles/mtproto/session.cpp b/Telegram/SourceFiles/mtproto/session.cpp
+index 40d7048..2b4edbb 100644
+--- a/Telegram/SourceFiles/mtproto/session.cpp
++++ b/Telegram/SourceFiles/mtproto/session.cpp
+@@ -420,6 +420,10 @@ QString Session::transport() const {
+ 	return _private ? _private->transport() : QString();
+ }
+ 
++crl::time Session::pingTime() const {
++	return _private ? _private->pingTime() : 0;
++}
++
+ void Session::sendPrepared(
+ 		const SerializedRequest &request,
+ 		crl::time msCanWait) {
+diff --git a/Telegram/SourceFiles/mtproto/session.h b/Telegram/SourceFiles/mtproto/session.h
+index d6f197d..1b4283c 100644
+--- a/Telegram/SourceFiles/mtproto/session.h
++++ b/Telegram/SourceFiles/mtproto/session.h
+@@ -175,6 +175,7 @@ public:
+ 	void cancel(mtpRequestId requestId, mtpMsgId msgId);
+ 	int requestState(mtpRequestId requestId) const;
+ 	int getState() const;
++	crl::time pingTime() const;
+ 	QString transport() const;
+ 
+ 	void tryToReceive();
+diff --git a/Telegram/SourceFiles/mtproto/session_private.cpp b/Telegram/SourceFiles/mtproto/session_private.cpp
+index b8be9bb..7b648ec 100644
+--- a/Telegram/SourceFiles/mtproto/session_private.cpp
++++ b/Telegram/SourceFiles/mtproto/session_private.cpp
+@@ -381,6 +381,14 @@ QString SessionPrivate::transport() const {
+ 	return _connection->transport();
+ }
+ 
++crl::time SessionPrivate::pingTime() const {
++	QReadLocker lock(&_stateMutex);
++	if (!_connection || (_state != ConnectedState)) {
++		return 0;
++	}
++	return _connection->pingTime();
++}
++
+ bool SessionPrivate::setState(int state, int ifState) {
+ 	if (ifState != kUpdateStateAlways) {
+ 		QReadLocker lock(&_stateMutex);
+diff --git a/Telegram/SourceFiles/mtproto/session_private.h b/Telegram/SourceFiles/mtproto/session_private.h
+index 62b01e3..d51fd07 100644
+--- a/Telegram/SourceFiles/mtproto/session_private.h
++++ b/Telegram/SourceFiles/mtproto/session_private.h
+@@ -43,6 +43,7 @@ public:
+ 	void cdnConfigChanged();
+ 
+ 	[[nodiscard]] int32 getState() const;
++	[[nodiscard]] crl::time pingTime() const;
+ 	[[nodiscard]] QString transport() const;
+ 
+ 	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..2eabec5
+index 0000000..cd3afcf
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,320 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -666,6 +1389,26 @@ index 0000000..2eabec5
 +		[](bool value) {
 +			Exteraless::Config::Instance().setGhostSendUploadProgress(value);
 +		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/pill-stack"_q,
++		.title = rpl::single(u"Pill Stack"_q),
++	});
++
++	const auto pillStack = builder.addButton({
++		.id = u"exteraless/pill-stack/enabled"_q,
++		.title = rpl::single(u"Show pills above the chat list"_q),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().pillStackEnabled()),
++		.keywords = { u"pill"_q, u"stack"_q, u"cpu"_q, u"ram"_q },
++	});
++	if (pillStack) {
++		pillStack->toggledChanges(
++		) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setPillStackEnabled(value);
++		}, pillStack->lifetime());
++	}
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/proxy"_q,
@@ -864,6 +1607,80 @@ index 62e91ea..29e649e 100644
  	{ // Folders
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
+diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
+index db8dcec..d149330 100644
+--- a/Telegram/SourceFiles/window/window_main_menu.cpp
++++ b/Telegram/SourceFiles/window/window_main_menu.cpp
+@@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_session.h"
+ #include "data/data_stories.h"
+ #include "data/data_user.h"
++#include "exteraless/config.h"
++#include "exteraless/ghost_mode.h"
+ #include "info/info_memento.h"
+ #include "info/profile/info_profile_badge.h"
+ #include "settings/settings_common.h"
+@@ -41,7 +43,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "mtproto/mtproto_config.h"
+ #include "settings/sections/settings_advanced.h"
+ #include "settings/sections/settings_calls.h"
++#include "settings/sections/settings_exteraless.h"
+ #include "settings/sections/settings_information.h"
++#include "settings/sections/settings_local_storage.h"
+ #include "storage/localstorage.h"
+ #include "storage/storage_account.h"
+ #include "support/support_templates.h"
+@@ -774,6 +778,50 @@ void MainMenu::setupMenu() {
+ 		controller->showSettings();
+ 	});
+ 
++	_menu->add(
++		object_ptr<Ui::PlainShadow>(_menu),
++		{ 0, st::mainMenuSkip, 0, st::mainMenuSkip });
++
++	addAction(
++		rpl::single(u"Exteraless"_q),
++		{ &st::menuIconSettings }
++	)->setClickedCallback([=] {
++		controller->showSettings(Settings::ExteralessSectionId());
++	});
++
++	const auto ghost = addAction(
++		rpl::single(u"Ghost Mode"_q),
++		{ &st::menuIconStealth });
++	ghost->toggleOn(rpl::single(Exteraless::IsGhostActive()));
++	ghost->toggledChanges(
++	) | rpl::on_next([=](bool enabled) {
++		Exteraless::SetGhostActive(enabled);
++	}, ghost->lifetime());
++
++	const auto pills = addAction(
++		rpl::single(u"Pill Stack"_q),
++		{ &st::menuIconPowerUsage });
++	pills->toggleOn(rpl::single(
++		Exteraless::Config::Instance().pillStackEnabled()));
++	pills->toggledChanges(
++	) | rpl::on_next([=](bool enabled) {
++		Exteraless::Config::Instance().setPillStackEnabled(enabled);
++	}, pills->lifetime());
++
++	addAction(
++		rpl::single(u"Proxy settings"_q),
++		{ &st::menuIconNetwork }
++	)->setClickedCallback([=] {
++		controller->showSettings(Settings::AdvancedId());
++	});
++
++	addAction(
++		rpl::single(u"Storage and cache"_q),
++		{ &st::menuIconStorage }
++	)->setClickedCallback([=] {
++		controller->showSettings(Settings::LocalStorageId());
++	});
++
+ 	_nightThemeToggle = addAction(
+ 		tr::lng_menu_night_mode(),
+ 		{ &st::menuIconNightMode }
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
 index 56d2e56..e583a28 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
@@ -1144,10 +1961,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..67d1c57
+index 0000000..13af548
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,272 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -1175,6 +1992,7 @@ index 0000000..67d1c57
 +constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 +constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
++constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
@@ -1328,6 +2146,14 @@ index 0000000..67d1c57
 +	setValue(kSaveDeletedMessages, value);
 +}
 +
++bool Config::pillStackEnabled() const {
++	return boolValue(kPillStackEnabled, false);
++}
++
++void Config::setPillStackEnabled(bool value) {
++	setValue(kPillStackEnabled, value);
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -1354,7 +2180,8 @@ index 0000000..67d1c57
 +			|| key == kGhostSendOfflineAfterOnline
 +			|| key == kGhostReadExclusions
 +			|| key == kGhostTypingExclusions
-+			|| key == kSaveDeletedMessages) {
++			|| key == kSaveDeletedMessages
++			|| key == kPillStackEnabled) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -1412,10 +2239,10 @@ index 0000000..67d1c57
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..0a8318c
+index 0000000..7e647db
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,67 @@
 +#pragma once
 +
 +#include <QJsonObject>
@@ -1462,6 +2289,9 @@ index 0000000..0a8318c
 +
 +	[[nodiscard]] bool saveDeletedMessages() const;
 +	void setSaveDeletedMessages(bool value);
++
++	[[nodiscard]] bool pillStackEnabled() const;
++	void setPillStackEnabled(bool value);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
@@ -1800,10 +2630,10 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.cpp b/exteraless/ghost_mode.cpp
 new file mode 100644
-index 0000000..f264fc4
+index 0000000..94032c9
 --- /dev/null
 +++ b/exteraless/ghost_mode.cpp
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,106 @@
 +#include "exteraless/ghost_mode.h"
 +
 +#include "exteraless/config.h"
@@ -1889,6 +2719,22 @@ index 0000000..f264fc4
 +	return Allowance.fetch_sub(1) > 0;
 +}
 +
++bool IsGhostActive() {
++	const auto &config = Config::Instance();
++	return !config.ghostSendReadPackets()
++		|| !config.ghostSendReadStories()
++		|| !config.ghostSendOnline()
++		|| !config.ghostSendUploadProgress();
++}
++
++void SetGhostActive(bool active) {
++	auto &config = Config::Instance();
++	config.setGhostSendReadPackets(!active);
++	config.setGhostSendReadStories(!active);
++	config.setGhostSendOnline(!active);
++	config.setGhostSendUploadProgress(!active);
++}
++
 +void InstallGhostMode(MTP::Instance &instance) {
 +	instance.setRequestFilter(&GhostMode::Filter);
 +}
@@ -1896,10 +2742,10 @@ index 0000000..f264fc4
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.h b/exteraless/ghost_mode.h
 new file mode 100644
-index 0000000..3a0f2c6
+index 0000000..1f552df
 --- /dev/null
 +++ b/exteraless/ghost_mode.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,25 @@
 +#pragma once
 +
 +#include "mtproto/mtproto_request_filter.h"
@@ -1920,6 +2766,9 @@ index 0000000..3a0f2c6
 +};
 +
 +void InstallGhostMode(MTP::Instance &instance);
++
++[[nodiscard]] bool IsGhostActive();
++void SetGhostActive(bool active);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp

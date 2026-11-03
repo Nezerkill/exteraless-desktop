@@ -68,6 +68,10 @@ struct SectionShow;
 struct SeparateId;
 } // namespace Window
 
+namespace Exteraless {
+class PillStack;
+} // namespace Exteraless
+
 namespace Dialogs::Stories {
 class List;
 struct Content;
@@ -333,6 +337,7 @@ private:
 	std::unique_ptr<Ui::AbstractButton> _frozenAccountBar;
 
 	object_ptr<Ui::RpWidget> _searchControls;
+	std::unique_ptr<Exteraless::PillStack> _pillStack;
 	object_ptr<HistoryView::TopBarWidget> _subsectionTopBar = { nullptr };
 	struct {
 		object_ptr<Ui::IconButton> toggle;
