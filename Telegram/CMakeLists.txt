@@ -81,6 +81,8 @@ target_sources(Telegram PRIVATE
     SourceFiles/boxes/deleted_messages_box.h
     SourceFiles/exteraless/pill_stack.cpp
     SourceFiles/exteraless/pill_stack.h
+    SourceFiles/exteraless/plugins_box.cpp
+    SourceFiles/exteraless/plugins_box.h
 )
 
 target_link_libraries(Telegram

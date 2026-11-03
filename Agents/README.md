@@ -13,12 +13,21 @@ sibling-чекаутом: `../exteraless`.
   - `ghost_mode.*` — фильтр исходящих MTProto-запросов;
   - `deleted_messages.*` — JSON-sidecar удалённых сообщений;
   - `backup.*` — формат `.extera`;
-  - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам.
+  - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам;
+  - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов.
 - `Telegram/SourceFiles/exteraless/pill_stack.*` — полоса Pill Stack в списке чатов.
+- `Telegram/SourceFiles/exteraless/plugins_box.*` — бокс «Plugins» со списком,
+  ошибками и пустым состоянием.
+- `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan`, фикстуры и
+  regression runner; в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
+- Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты
+  `.plugin`/`.py`, `.elyx`/`.eaf` показываются как unsupported. Сканер
+  читает метаданные через AST и не исполняет код плагина; установки,
+  включения и запуска на этом этапе нет.
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
   настройках Exteraless или в главном меню. Состав пилюль — `OEPillStackPills`
   (битовая маска, по умолчанию все).

@@ -1,0 +1,9 @@
+__id__ = "demo_plugin"
+__name__ = "Demo Plugin"
+__description__ = "Shows a greeting."
+__author__ = "Exteraless"
+__version__ = "1.0.0"
+__permissions__ = ["ui", "messages.read"]
+
+def greet():
+    return "hello"

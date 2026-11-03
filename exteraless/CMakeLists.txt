@@ -7,6 +7,8 @@ add_library(exteraless STATIC
     exteraless.h
     network.cpp
     network.h
+    plugins/scanner.cpp
+    plugins/scanner.h
 )
 
 target_link_libraries(exteraless
@@ -20,3 +22,5 @@ target_include_directories(exteraless
 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
+
+add_subdirectory(tests/plugins)

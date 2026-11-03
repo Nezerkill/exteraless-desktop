@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..8290603 100644
+index 811707d..0543e04 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,19 @@ endif()
+@@ -70,6 +70,21 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -27,12 +27,14 @@ index 811707d..8290603 100644
 +    SourceFiles/boxes/deleted_messages_box.h
 +    SourceFiles/exteraless/pill_stack.cpp
 +    SourceFiles/exteraless/pill_stack.h
++    SourceFiles/exteraless/plugins_box.cpp
++    SourceFiles/exteraless/plugins_box.h
 +)
 +
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +122,7 @@ PRIVATE
+@@ -109,6 +124,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -40,7 +42,7 @@ index 811707d..8290603 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1694,7 @@ PRIVATE
+@@ -1680,6 +1696,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -48,7 +50,7 @@ index 811707d..8290603 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1912,8 @@ PRIVATE
+@@ -1897,6 +1914,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -57,7 +59,7 @@ index 811707d..8290603 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2547,10 @@ else()
+@@ -2530,6 +2549,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -1191,6 +1193,116 @@ index 0000000..faafca7
 +};
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/plugins_box.cpp b/Telegram/SourceFiles/exteraless/plugins_box.cpp
+new file mode 100644
+index 0000000..036d39e
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/plugins_box.cpp
+@@ -0,0 +1,85 @@
++#include "exteraless/plugins_box.h"
++
++#include "exteraless/plugins/scanner.h"
++#include "core/file_utilities.h"
++#include "settings.h"
++#include "lang/lang_keys.h"
++#include "ui/layers/generic_box.h"
++#include "ui/widgets/labels.h"
++#include "ui/wrap/vertical_layout.h"
++#include "window/window_session_controller.h"
++#include "styles/style_boxes.h"
++#include "styles/style_layers.h"
++
++#include <QDir>
++#include <rpl/rpl.h>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] QString PluginsDirectory() {
++	return cWorkingDir() + u"tdata/plugins"_q;
++}
++
++[[nodiscard]] QString RowText(const Plugins::Entry &entry) {
++	auto text = entry.name.isEmpty() ? entry.file : entry.name;
++	if (!entry.version.isEmpty()) {
++		text += u" "_q + entry.version;
++	}
++	if (!entry.author.isEmpty()) {
++		text += u"\n"_q + entry.author;
++	}
++	text += u"\npermissions: "_q
++		+ (entry.permissions.isEmpty()
++			? u"none"_q
++			: entry.permissions.join(u", "_q));
++	if (!entry.error.isEmpty()) {
++		text += u"\nerror: "_q + entry.error;
++	}
++	return text;
++}
++
++} // namespace
++
++void ShowPluginsBox(not_null<Window::SessionController*> controller) {
++	const auto directory = PluginsDirectory();
++	QDir().mkpath(directory);
++	const auto result = Plugins::ScanPlugins(directory);
++	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++		box->setTitle(u"Plugins (%1)"_q.arg(int(result.entries.size())));
++		const auto layout = box->verticalLayout();
++		if (!result.error.isEmpty()) {
++			layout->add(
++				object_ptr<Ui::FlatLabel>(
++					box,
++					rpl::single(result.error),
++					st::boxLabel),
++				st::boxRowPadding);
++		} else if (result.entries.empty()) {
++			layout->add(
++				object_ptr<Ui::FlatLabel>(
++					box,
++					rpl::single(
++						u"No plugins in "_q + directory + u"."_q),
++					st::boxLabel),
++				st::boxRowPadding);
++		} else {
++			for (const auto &entry : result.entries) {
++				layout->add(
++					object_ptr<Ui::FlatLabel>(
++						box,
++						rpl::single(RowText(entry)),
++						st::boxLabel),
++					st::boxRowPadding);
++			}
++		}
++
++		box->addLeftButton(rpl::single(u"Open folder"_q), [=] {
++			QDir().mkpath(directory);
++			File::Launch(directory);
++		});
++		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
++	}));
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/plugins_box.h b/Telegram/SourceFiles/exteraless/plugins_box.h
+new file mode 100644
+index 0000000..e93ade8
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/plugins_box.h
+@@ -0,0 +1,13 @@
++#pragma once
++
++#include "base/basic_types.h"
++
++namespace Window {
++class SessionController;
++} // namespace Window
++
++namespace Exteraless {
++
++void ShowPluginsBox(not_null<Window::SessionController*> controller);
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/history/history_streamed_drafts.cpp b/Telegram/SourceFiles/history/history_streamed_drafts.cpp
 index dcb902d..5b28a1d 100644
 --- a/Telegram/SourceFiles/history/history_streamed_drafts.cpp
@@ -1460,16 +1572,17 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..46630c0
+index 0000000..1dce8ca
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,390 @@
+@@ -0,0 +1,409 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
 +
 +#include "exteraless/backup.h"
 +#include "exteraless/config.h"
++#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
 +#include "core/file_utilities.h"
 +#include "lang/lang_keys.h"
@@ -1825,6 +1938,24 @@ index 0000000..46630c0
 +				});
 +		},
 +		.keywords = { u"backup"_q, u"import"_q },
++	});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/plugins"_q,
++		.title = rpl::single(u"Plugins"_q),
++	});
++
++	builder.addButton({
++		.id = u"exteraless/plugins/open"_q,
++		.title = rpl::single(u"Plugins"_q),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			if (!controller) {
++				return;
++			}
++			Exteraless::ShowPluginsBox(controller);
++		},
++		.keywords = { u"plugins"_q, u"plugin"_q },
 +	});
 +});
 +
@@ -2438,10 +2569,10 @@ index 56d2e56..47c8b5e 100644
  					peer->shortName(),
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..0ba502b
+index 0000000..7bee2af
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,26 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -2451,6 +2582,8 @@ index 0000000..0ba502b
 +    exteraless.h
 +    network.cpp
 +    network.h
++    plugins/scanner.cpp
++    plugins/scanner.h
 +)
 +
 +target_link_libraries(exteraless
@@ -2464,6 +2597,8 @@ index 0000000..0ba502b
 +PUBLIC
 +    ${CMAKE_CURRENT_SOURCE_DIR}/..
 +)
++
++add_subdirectory(tests/plugins)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
 index 0000000..bbfd88f
@@ -3706,6 +3841,333 @@ index 0000000..0679761
 +[[nodiscard]] Transport CurrentTransport();
 +
 +} // namespace Exteraless
+diff --git a/exteraless/plugins/scanner.cpp b/exteraless/plugins/scanner.cpp
+new file mode 100644
+index 0000000..29539cb
+--- /dev/null
++++ b/exteraless/plugins/scanner.cpp
+@@ -0,0 +1,287 @@
++#include "exteraless/plugins/scanner.h"
++
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QProcess>
++#include <QStandardPaths>
++#include <QStringList>
++
++namespace Exteraless::Plugins {
++namespace {
++
++constexpr auto kStartTimeout = 5000;
++constexpr auto kScanTimeout = 10000;
++constexpr auto kKillTimeout = 1000;
++
++constexpr auto kScanScript = R"PY(import ast
++import json
++import os
++import re
++import stat
++import sys
++
++ID_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
++KNOWN = {
++    'ui', 'messages.read', 'messages.send', 'network', 'files',
++    'intents', 'settings', 'hooks', 'native',
++}
++MAX_BYTES = 2 * 1024 * 1024
++SUPPORTED = ('.plugin', '.py')
++UNSUPPORTED = ('.elyx', '.eaf')
++STRINGS = {
++    '__id__': 'id',
++    '__name__': 'name',
++    '__description__': 'description',
++    '__author__': 'author',
++    '__version__': 'version',
++}
++
++
++def empty(name):
++    return {
++        'file': name,
++        'id': '',
++        'name': '',
++        'description': '',
++        'author': '',
++        'version': '',
++        'permissions': [],
++        'error': '',
++    }
++
++
++def failed(name, error):
++    result = empty(name)
++    result['error'] = error
++    return result
++
++
++def scan(path, name):
++    flags = (os.O_RDONLY
++             | getattr(os, 'O_NOFOLLOW', 0)
++             | getattr(os, 'O_BINARY', 0))
++    try:
++        descriptor = os.open(path, flags)
++    except OSError as error:
++        return failed(name, 'Could not open file: %s' % error)
++    try:
++        info = os.fstat(descriptor)
++        if not stat.S_ISREG(info.st_mode):
++            return failed(name, 'Not a regular file.')
++        if info.st_size > MAX_BYTES:
++            return failed(name, 'File is larger than 2 MiB.')
++        with os.fdopen(descriptor, 'rb') as source:
++            descriptor = -1
++            data = source.read(MAX_BYTES + 1)
++    except OSError as error:
++        return failed(name, 'Could not read file: %s' % error)
++    finally:
++        if descriptor >= 0:
++            os.close(descriptor)
++    if len(data) > MAX_BYTES:
++        return failed(name, 'File is larger than 2 MiB.')
++    try:
++        text = data.decode('utf-8')
++    except UnicodeDecodeError as error:
++        return failed(name, 'Could not read file: %s' % error)
++    try:
++        tree = ast.parse(text, filename=name)
++    except SyntaxError as error:
++        return failed(name, 'Syntax error: %s' % (error.msg,))
++    except ValueError as error:
++        return failed(name, 'Syntax error: %s' % error)
++    except RecursionError:
++        return failed(name, 'File is nested too deeply to scan.')
++    except MemoryError:
++        return failed(name, 'File is too large to parse.')
++
++    values = {}
++    permissions = None
++    for node in tree.body:
++        if isinstance(node, ast.Assign) and len(node.targets) == 1:
++            target = node.targets[0]
++        elif isinstance(node, ast.AnnAssign):
++            target = node.target
++        else:
++            continue
++        if not isinstance(target, ast.Name):
++            continue
++        key = target.id
++        if key not in STRINGS and key != '__permissions__':
++            continue
++        try:
++            value = ast.literal_eval(node.value)
++        except (ValueError, TypeError, SyntaxError, RecursionError):
++            return failed(name, 'Metadata %s is not a literal.' % key)
++        if key == '__permissions__':
++            permissions = value
++        else:
++            values[STRINGS[key]] = value
++
++    if 'id' not in values:
++        return failed(name, 'Missing literal __id__.')
++    if not isinstance(values['id'], str):
++        return failed(name, 'Metadata __id__ is not a string.')
++    if not ID_RE.match(values['id']):
++        return failed(name, 'Invalid id: %s.' % values['id'])
++    if 'name' not in values:
++        return failed(name, 'Missing literal __name__.')
++    if not isinstance(values['name'], str) or not values['name']:
++        return failed(name, 'Metadata __name__ is not a non-empty string.')
++    for key in ('description', 'author', 'version'):
++        if not isinstance(values.get(key, ''), str):
++            return failed(name, 'Metadata %s is not a string.' % key)
++    if permissions is None:
++        permissions = []
++    if not isinstance(permissions, (list, tuple)):
++        return failed(name, '__permissions__ is not a list of strings.')
++    cleaned = []
++    for permission in permissions:
++        if not isinstance(permission, str):
++            return failed(name, '__permissions__ is not a list of strings.')
++        if permission not in KNOWN:
++            return failed(name, 'Unknown permission: %s.' % permission)
++        cleaned.append(permission)
++
++    result = empty(name)
++    result['id'] = values['id']
++    result['name'] = values['name']
++    result['description'] = values.get('description', '')
++    result['author'] = values.get('author', '')
++    result['version'] = values.get('version', '')
++    result['permissions'] = cleaned
++    return result
++
++
++def main():
++    directory = sys.argv[1]
++    try:
++        with os.scandir(directory) as iterator:
++            names = []
++            for entry in iterator:
++                try:
++                    info = entry.stat(follow_symlinks=False)
++                except OSError:
++                    continue
++                if stat.S_ISREG(info.st_mode):
++                    names.append(entry.name)
++            names.sort()
++    except OSError as error:
++        print('Could not read directory: %s' % error, file=sys.stderr)
++        sys.exit(1)
++
++    results = []
++    for name in names:
++        lower = name.lower()
++        if lower.endswith(UNSUPPORTED):
++            results.append(failed(
++                name,
++                'Unsupported plugin format: %s.' % os.path.splitext(name)[1]))
++        elif lower.endswith(SUPPORTED):
++            results.append(scan(os.path.join(directory, name), name))
++    print(json.dumps(results))
++
++
++main()
++)PY";
++
++[[nodiscard]] bool ReadString(
++		const QJsonObject &object,
++		const char *key,
++		QString *value) {
++	if (!object.value(QLatin1String(key)).isString()) {
++		return false;
++	}
++	*value = object.value(QLatin1String(key)).toString();
++	return true;
++}
++
++[[nodiscard]] bool ParseEntry(const QJsonValue &value, Entry *entry) {
++	if (!value.isObject()) {
++		return false;
++	}
++	const auto object = value.toObject();
++	if (!ReadString(object, "file", &entry->file)
++		|| !ReadString(object, "id", &entry->id)
++		|| !ReadString(object, "name", &entry->name)
++		|| !ReadString(object, "description", &entry->description)
++		|| !ReadString(object, "author", &entry->author)
++		|| !ReadString(object, "version", &entry->version)
++		|| !ReadString(object, "error", &entry->error)) {
++		return false;
++	}
++	const auto permissions = object.value(QLatin1String("permissions"));
++	if (!permissions.isArray()) {
++		return false;
++	}
++	for (const auto &permission : permissions.toArray()) {
++		if (!permission.isString()) {
++			return false;
++		}
++		entry->permissions.push_back(permission.toString());
++	}
++	return true;
++}
++
++} // namespace
++
++ScanResult ScanPlugins(const QString &directory) {
++	auto result = ScanResult();
++	const auto python = QStandardPaths::findExecutable(
++		QStringLiteral("python3"));
++	if (python.isEmpty()) {
++		result.error = QStringLiteral("Python 3 was not found.");
++		return result;
++	}
++	auto process = QProcess();
++	process.start(python, {
++		QStringLiteral("-I"),
++		QStringLiteral("-B"),
++		QStringLiteral("-c"),
++		QString::fromUtf8(kScanScript),
++		directory,
++	});
++	if (!process.waitForStarted(kStartTimeout)) {
++		result.error = QStringLiteral("Plugin scan failed to start.");
++		return result;
++	}
++	if (!process.waitForFinished(kScanTimeout)) {
++		process.kill();
++		process.waitForFinished(kKillTimeout);
++		result.error = QStringLiteral("Plugin scan timed out.");
++		return result;
++	}
++	const auto output = process.readAllStandardOutput();
++	if (process.exitStatus() != QProcess::NormalExit
++		|| process.exitCode() != 0) {
++		const auto error = QString::fromUtf8(
++			process.readAllStandardError()).trimmed();
++		result.error = error.isEmpty()
++			? QStringLiteral("Plugin scan failed.")
++			: QStringLiteral("Plugin scan failed: %1").arg(error);
++		return result;
++	}
++	auto parseError = QJsonParseError();
++	const auto document = QJsonDocument::fromJson(output, &parseError);
++	if (parseError.error != QJsonParseError::NoError || !document.isArray()) {
++		result.error = QStringLiteral("Plugin scan returned invalid output.");
++		return result;
++	}
++	const auto array = document.array();
++	result.entries.reserve(array.size());
++	for (const auto &value : array) {
++		auto entry = Entry();
++		if (!ParseEntry(value, &entry)) {
++			result.entries.clear();
++			result.error = QStringLiteral(
++				"Plugin scan returned invalid output.");
++			return result;
++		}
++		result.entries.push_back(std::move(entry));
++	}
++	return result;
++}
++
++} // namespace Exteraless::Plugins
+diff --git a/exteraless/plugins/scanner.h b/exteraless/plugins/scanner.h
+new file mode 100644
+index 0000000..bafbeca
+--- /dev/null
++++ b/exteraless/plugins/scanner.h
+@@ -0,0 +1,28 @@
++#pragma once
++
++#include <QString>
++#include <QStringList>
++
++#include <vector>
++
++namespace Exteraless::Plugins {
++
++struct Entry {
++	QString file;
++	QString id;
++	QString name;
++	QString description;
++	QString author;
++	QString version;
++	QStringList permissions;
++	QString error;
++};
++
++struct ScanResult {
++	std::vector<Entry> entries;
++	QString error;
++};
++
++[[nodiscard]] ScanResult ScanPlugins(const QString &directory);
++
++} // namespace Exteraless::Plugins
 diff --git a/exteraless/proxy_rules.cpp b/exteraless/proxy_rules.cpp
 new file mode 100644
 index 0000000..c45177b
@@ -3823,3 +4285,458 @@ index 0000000..204b97a
 +void ApplyProxyRules();
 +
 +} // namespace Exteraless
+diff --git a/exteraless/tests/plugins/CMakeLists.txt b/exteraless/tests/plugins/CMakeLists.txt
+new file mode 100644
+index 0000000..9f86274
+--- /dev/null
++++ b/exteraless/tests/plugins/CMakeLists.txt
+@@ -0,0 +1,6 @@
++add_executable(exteraless-plugins-scan EXCLUDE_FROM_ALL scan_cli.cpp)
++
++target_link_libraries(exteraless-plugins-scan
++PRIVATE
++    exteraless
++)
+diff --git a/exteraless/tests/plugins/fixtures/broken.plugin b/exteraless/tests/plugins/fixtures/broken.plugin
+new file mode 100644
+index 0000000..0faaf7c
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/broken.plugin
+@@ -0,0 +1,3 @@
++__id__ = "broken"
++__name__ = "Broken"
++def broken(:
+diff --git a/exteraless/tests/plugins/fixtures/dynamic.plugin b/exteraless/tests/plugins/fixtures/dynamic.plugin
+new file mode 100644
+index 0000000..0ff2341
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/dynamic.plugin
+@@ -0,0 +1,3 @@
++__id__ = "dynamic_plugin"
++__name__ = "Dynamic " + "Plugin"
++__version__ = "1.0.0"
+diff --git a/exteraless/tests/plugins/fixtures/invalid-id.plugin b/exteraless/tests/plugins/fixtures/invalid-id.plugin
+new file mode 100644
+index 0000000..1ea4d39
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/invalid-id.plugin
+@@ -0,0 +1,2 @@
++__id__ = "1bad"
++__name__ = "Invalid Id"
+diff --git a/exteraless/tests/plugins/fixtures/legacy.elyx b/exteraless/tests/plugins/fixtures/legacy.elyx
+new file mode 100644
+index 0000000..77b22de
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/legacy.elyx
+@@ -0,0 +1 @@
++__id__ = "legacy"
+diff --git a/exteraless/tests/plugins/fixtures/notes.txt b/exteraless/tests/plugins/fixtures/notes.txt
+new file mode 100644
+index 0000000..84a0bca
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/notes.txt
+@@ -0,0 +1 @@
++Plain notes are not plugins and must be ignored by the scanner.
+diff --git a/exteraless/tests/plugins/fixtures/unknown-permission.plugin b/exteraless/tests/plugins/fixtures/unknown-permission.plugin
+new file mode 100644
+index 0000000..3ad7661
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/unknown-permission.plugin
+@@ -0,0 +1,3 @@
++__id__ = "bad_permission"
++__name__ = "Bad Permission"
++__permissions__ = ["ui", "root"]
+diff --git a/exteraless/tests/plugins/fixtures/valid.plugin b/exteraless/tests/plugins/fixtures/valid.plugin
+new file mode 100644
+index 0000000..7bdb96b
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/valid.plugin
+@@ -0,0 +1,9 @@
++__id__ = "demo_plugin"
++__name__ = "Demo Plugin"
++__description__ = "Shows a greeting."
++__author__ = "Exteraless"
++__version__ = "1.0.0"
++__permissions__ = ["ui", "messages.read"]
++
++def greet():
++    return "hello"
+diff --git a/exteraless/tests/plugins/run_checks.py b/exteraless/tests/plugins/run_checks.py
+new file mode 100755
+index 0000000..159435e
+--- /dev/null
++++ b/exteraless/tests/plugins/run_checks.py
+@@ -0,0 +1,314 @@
++#!/usr/bin/env python3
++"""Backend regression checks for the Exteraless plugin scanner CLI."""
++
++import json
++import os
++import shutil
++import subprocess
++import sys
++import tempfile
++import time
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[3]
++DEFAULT_CLI = (
++    ROOT / "out" / "exteraless" / "tests" / "plugins"
++    / "exteraless-plugins-scan")
++FIXTURES = Path(__file__).resolve().parent / "fixtures"
++RUN_TIMEOUT = 60
++HUGE_TERMS = 200000
++MIB = 1024 * 1024
++RECURSION_ERRORS = (
++    "File is nested too deeply to scan.",
++    "File is too large to parse.",
++)
++
++
++class Ledger:
++    def __init__(self):
++        self.checks = 0
++        self.failures = []
++
++    def check(self, name, condition, detail=""):
++        self.checks += 1
++        if condition:
++            print(f"PASS {name}")
++        else:
++            suffix = f": {detail}" if detail else ""
++            print(f"FAIL {name}{suffix}")
++            self.failures.append(name)
++
++
++def scan(cli, directory, env=None):
++    result = subprocess.run(
++        [str(cli), str(directory)],
++        capture_output=True,
++        text=True,
++        env=env,
++        timeout=RUN_TIMEOUT)
++    if result.returncode != 0:
++        raise RuntimeError(
++            f"CLI exited {result.returncode} for {directory}: "
++            f"{result.stderr.strip()}")
++    return json.loads(result.stdout)
++
++
++def entries_of(data):
++    return {entry["file"]: entry for entry in data["entries"]}
++
++
++def fake_python(root, name, body):
++    folder = root / name / "bin"
++    folder.mkdir(parents=True)
++    script = folder / "python3"
++    script.write_text(body)
++    script.chmod(0o755)
++    return folder
++
++
++def env_with_path(folder):
++    env = dict(os.environ)
++    env["PATH"] = str(folder) + os.pathsep + env.get("PATH", "")
++    return env
++
++
++def check_fixtures(ledger, cli):
++    data = scan(cli, FIXTURES)
++    ledger.check("fixtures: no global error", data["error"] == "", data["error"])
++    entries = entries_of(data)
++    ledger.check(
++        "fixtures: expected files",
++        set(entries) == {
++            "valid.plugin",
++            "dynamic.plugin",
++            "unknown-permission.plugin",
++            "broken.plugin",
++            "invalid-id.plugin",
++            "legacy.elyx",
++        },
++        sorted(entries))
++    ledger.check("fixtures: notes.txt ignored", "notes.txt" not in entries)
++    valid = entries.get("valid.plugin", {})
++    ledger.check(
++        "fixtures: valid metadata",
++        (valid.get("id") == "demo_plugin"
++         and valid.get("name") == "Demo Plugin"
++         and valid.get("version") == "1.0.0"
++         and valid.get("author") == "Exteraless"
++         and valid.get("permissions") == ["ui", "messages.read"]
++         and valid.get("error") == ""),
++        valid)
++    expected = {
++        "dynamic.plugin": "Metadata __name__ is not a literal.",
++        "unknown-permission.plugin": "Unknown permission: root.",
++        "invalid-id.plugin": "Invalid id: 1bad.",
++        "legacy.elyx": "Unsupported plugin format: .elyx.",
++    }
++    for name, message in expected.items():
++        ledger.check(
++            f"fixtures: {name} error",
++            entries.get(name, {}).get("error") == message,
++            entries.get(name, {}).get("error"))
++    broken = entries.get("broken.plugin", {}).get("error", "")
++    ledger.check(
++        "fixtures: broken.plugin syntax error",
++        broken.startswith("Syntax error:"),
++        broken)
++
++
++def check_recursion(ledger, cli, work):
++    folder = work / "recursion"
++    folder.mkdir()
++    (folder / "ok.plugin").write_text(
++        '__id__ = "ok_plugin"\n__name__ = "OK Plugin"\n')
++    (folder / "huge.plugin").write_text(
++        "x = " + "+".join(["1"] * HUGE_TERMS) + "\n")
++    data = scan(cli, folder)
++    entries = entries_of(data)
++    ledger.check("recursion: no global error", data["error"] == "", data["error"])
++    ledger.check(
++        "recursion: both entries kept",
++        set(entries) == {"ok.plugin", "huge.plugin"},
++        sorted(entries))
++    ledger.check(
++        "recursion: ok.plugin intact",
++        entries.get("ok.plugin", {}).get("id") == "ok_plugin",
++        entries.get("ok.plugin"))
++    huge_error = entries.get("huge.plugin", {}).get("error", "")
++    ledger.check(
++        "recursion: huge.plugin per-file error",
++        huge_error in RECURSION_ERRORS,
++        huge_error)
++
++
++def check_size_limit(ledger, cli, work):
++    folder = work / "oversize"
++    folder.mkdir()
++    header = '__id__ = "too_big"\n__name__ = "Too Big"\n'
++    (folder / "too-big.plugin").write_text(header + "#" * (2 * MIB))
++    data = scan(cli, folder)
++    entry = entries_of(data).get("too-big.plugin", {})
++    ledger.check(
++        "oversize: per-file error",
++        entry.get("error") == "File is larger than 2 MiB.",
++        entry)
++    ledger.check("oversize: no global error", data["error"] == "", data["error"])
++
++    boundary = work / "at-limit"
++    boundary.mkdir()
++    at_limit = "__id__ = \"at_limit\"\n__name__ = \"At Limit\"\n"
++    filler = (2 * MIB) - len(at_limit.encode("utf-8"))
++    (boundary / "at-limit.plugin").write_text(at_limit + "#" * filler)
++    data = scan(cli, boundary)
++    entry = entries_of(data).get("at-limit.plugin", {})
++    ledger.check(
++        "2 MiB exactly: accepted",
++        entry.get("error") == "" and entry.get("id") == "at_limit",
++        entry)
++
++
++def check_missing_python(ledger, cli, work):
++    empty = work / "empty-bin"
++    empty.mkdir()
++    env = dict(os.environ)
++    env["PATH"] = str(empty)
++    data = scan(cli, FIXTURES, env=env)
++    ledger.check(
++        "missing python: global error",
++        "not found" in data["error"],
++        data["error"])
++    ledger.check(
++        "missing python: no entries",
++        data["entries"] == [],
++        data["entries"])
++
++
++def check_process_failures(ledger, cli, work):
++    bad = fake_python(work, "bad-json", '#!/bin/sh\nprintf "not json"\n')
++    data = scan(cli, FIXTURES, env=env_with_path(bad))
++    ledger.check(
++        "bad json: invalid output",
++        data["error"] == "Plugin scan returned invalid output.",
++        data["error"])
++
++    nonzero = fake_python(
++        work, "nonzero", "#!/bin/sh\necho boom >&2\nexit 1\n")
++    data = scan(cli, FIXTURES, env=env_with_path(nonzero))
++    ledger.check(
++        "nonzero exit: stderr in global error",
++        "boom" in data["error"],
++        data["error"])
++    ledger.check(
++        "nonzero exit: no entries",
++        data["entries"] == [],
++        data["entries"])
++
++
++def check_timeout(ledger, cli, work):
++    slow = fake_python(work, "timeout", "#!/bin/sh\nsleep 30\n")
++    started = time.monotonic()
++    data = scan(cli, FIXTURES, env=env_with_path(slow))
++    elapsed = time.monotonic() - started
++    ledger.check(
++        "timeout: global error",
++        data["error"] == "Plugin scan timed out.",
++        data["error"])
++    ledger.check(
++        "timeout: elapsed about 10s",
++        8 <= elapsed <= 25,
++        f"{elapsed:.1f}s")
++    ledger.check(
++        "timeout: no entries",
++        data["entries"] == [],
++        data["entries"])
++
++
++def check_single_process(ledger, cli, work):
++    folder = work / "single-process"
++    folder.mkdir()
++    counter = work / "invocations"
++    script = fake_python(
++        work,
++        "count",
++        f"#!/bin/sh\nprintf x >> '{counter}'\nprintf '[]'\n")
++    data = scan(cli, folder, env=env_with_path(script))
++    count = counter.read_text().count("x") if counter.exists() else 0
++    ledger.check("one python process per directory", count == 1, count)
++    ledger.check(
++        "one process: empty result",
++        data["error"] == "",
++        data["error"])
++
++
++def check_no_execution(ledger, cli, work):
++    folder = work / "no-execution"
++    folder.mkdir()
++    marker = work / "plugin-executed"
++    (folder / "exec-check.plugin").write_text(
++        '__id__ = "exec_check"\n'
++        '__name__ = "Exec Check"\n'
++        f'open("{marker}", "w").write("bad")\n')
++    data = scan(cli, folder)
++    entry = entries_of(data).get("exec-check.plugin", {})
++    ledger.check("plugin code not executed", not marker.exists())
++    ledger.check(
++        "exec-check: metadata scanned cleanly",
++        entry.get("error") == "" and entry.get("name") == "Exec Check",
++        entry)
++
++
++def check_skipped_files(ledger, cli, work):
++    folder = work / "skipped"
++    folder.mkdir()
++    (folder / "valid.plugin").write_text(
++        (FIXTURES / "valid.plugin").read_text())
++    (folder / "notes.txt").write_text("ignored\n")
++    (folder / "folder.py").mkdir()
++    try:
++        os.symlink(folder / "valid.plugin", folder / "linked.plugin")
++    except (OSError, NotImplementedError):
++        pass
++    data = scan(cli, folder)
++    entries = entries_of(data)
++    ledger.check(
++        "skipped: only regular plugins listed",
++        set(entries) == {"valid.plugin"},
++        sorted(entries))
++    ledger.check("skipped: symlink not read", "linked.plugin" not in entries)
++    ledger.check("skipped: directory not read", "folder.py" not in entries)
++    ledger.check("skipped: txt not read", "notes.txt" not in entries)
++
++
++def main():
++    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
++    if not cli.is_file():
++        print(f"FAIL scanner CLI is missing at {cli}")
++        return 2
++    ledger = Ledger()
++    work = Path(tempfile.mkdtemp(prefix="exteraless-plugins-checks-"))
++    try:
++        check_fixtures(ledger, cli)
++        check_recursion(ledger, cli, work)
++        check_size_limit(ledger, cli, work)
++        check_missing_python(ledger, cli, work)
++        check_process_failures(ledger, cli, work)
++        check_timeout(ledger, cli, work)
++        check_single_process(ledger, cli, work)
++        check_no_execution(ledger, cli, work)
++        check_skipped_files(ledger, cli, work)
++    finally:
++        shutil.rmtree(work, ignore_errors=True)
++    print()
++    if ledger.failures:
++        print(
++            f"RESULT: FAIL ({len(ledger.failures)} of "
++            f"{ledger.checks} checks)")
++        for name in ledger.failures:
++            print(f"  - {name}")
++        return 1
++    print(f"RESULT: PASS ({ledger.checks} checks)")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/exteraless/tests/plugins/scan_cli.cpp b/exteraless/tests/plugins/scan_cli.cpp
+new file mode 100644
+index 0000000..24700f6
+--- /dev/null
++++ b/exteraless/tests/plugins/scan_cli.cpp
+@@ -0,0 +1,53 @@
++#include "exteraless/plugins/scanner.h"
++
++#include <QCoreApplication>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QStringList>
++
++#include <iostream>
++
++namespace {
++
++[[nodiscard]] QJsonObject EntryToJson(const Exteraless::Plugins::Entry &entry) {
++	auto permissions = QJsonArray();
++	for (const auto &permission : entry.permissions) {
++		permissions.append(permission);
++	}
++	return QJsonObject{
++		{ QStringLiteral("file"), entry.file },
++		{ QStringLiteral("id"), entry.id },
++		{ QStringLiteral("name"), entry.name },
++		{ QStringLiteral("description"), entry.description },
++		{ QStringLiteral("author"), entry.author },
++		{ QStringLiteral("version"), entry.version },
++		{ QStringLiteral("permissions"), permissions },
++		{ QStringLiteral("error"), entry.error },
++	};
++}
++
++} // namespace
++
++int main(int argc, char *argv[]) {
++	QCoreApplication app(argc, argv);
++	const auto arguments = app.arguments();
++	if (arguments.size() != 2) {
++		std::cerr << "Usage: exteraless-plugins-scan <directory>\n";
++		return 2;
++	}
++	const auto result = Exteraless::Plugins::ScanPlugins(arguments[1]);
++	auto entries = QJsonArray();
++	for (const auto &entry : result.entries) {
++		entries.append(EntryToJson(entry));
++	}
++	const auto root = QJsonObject{
++		{ QStringLiteral("error"), result.error },
++		{ QStringLiteral("entries"), entries },
++	};
++	const auto output = QJsonDocument(root).toJson(QJsonDocument::Compact);
++	std::cout.write(output.constData(), output.size());
++	std::cout << '\n';
++	std::cout.flush();
++	return 0;
++}

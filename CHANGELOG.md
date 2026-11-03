@@ -2,6 +2,16 @@
 
 ## 2026-11-04
 
+- Плагины, этап 1: каталог `tdata/plugins`, сканер манифестов `.plugin`/`.py`
+  одним процессом `python3 -I -B` через `ast.parse`/`ast.literal_eval` без
+  исполнения кода плагина, лимит файла 2 MiB, whitelist разрешений (`ui`,
+  `messages.read`, `messages.send`, `network`, `files`, `intents`,
+  `settings`, `hooks`, `native`), `.elyx`/`.eaf` показываются как unsupported.
+- Настройки Exteraless: подсекция и кнопка «Plugins», бокс со списком
+  плагинов, per-file ошибками и пустым состоянием; установки, включения и
+  запуска плагинов нет, кнопки только «Open folder» и «Close».
+- Тестовый harness плагинов: CLI `exteraless-plugins-scan`, фикстуры и
+  regression runner (`exteraless/tests/plugins/run_checks.py`, 32 проверки).
 - Drawer-аккаунты подтверждены на итоговом бинарнике: Debug-сборка и Xvfb
   smoke прошли, `nix flake check --no-build` проходит.
 

@@ -1,0 +1,3 @@
+__id__ = "bad_permission"
+__name__ = "Bad Permission"
+__permissions__ = ["ui", "root"]

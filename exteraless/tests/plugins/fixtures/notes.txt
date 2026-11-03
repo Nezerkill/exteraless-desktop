@@ -1,0 +1,1 @@
+Plain notes are not plugins and must be ignored by the scanner.

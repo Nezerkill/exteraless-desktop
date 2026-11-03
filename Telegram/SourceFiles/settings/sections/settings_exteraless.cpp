@@ -4,6 +4,7 @@
 
 #include "exteraless/backup.h"
 #include "exteraless/config.h"
+#include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
 #include "core/file_utilities.h"
 #include "lang/lang_keys.h"
@@ -359,6 +360,24 @@ const auto kMeta = Builder::BuildHelper({
 				});
 		},
 		.keywords = { u"backup"_q, u"import"_q },
+	});
+
+	builder.addSubsectionTitle({
+		.id = u"exteraless/plugins"_q,
+		.title = rpl::single(u"Plugins"_q),
+	});
+
+	builder.addButton({
+		.id = u"exteraless/plugins/open"_q,
+		.title = rpl::single(u"Plugins"_q),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			if (!controller) {
+				return;
+			}
+			Exteraless::ShowPluginsBox(controller);
+		},
+		.keywords = { u"plugins"_q, u"plugin"_q },
 	});
 });
 

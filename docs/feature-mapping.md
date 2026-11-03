@@ -130,7 +130,30 @@ and jank tooling. Desktop equivalents are separate tasks.
 
 ## Plugins
 
-Post-MVP. A separate Python host process with a manifest, permission grants,
-audit journal and OS sandbox. Android plugins that use `from java import ...`
-or Xposed hooks are not compatible; the shared Python code (`base_plugin.py`,
-metadata/capability scan, audit policy) is reused where possible.
+Stage 1 (MVP3): manifest and inspection only.
+
+- Plugins live in `tdata/plugins` (`cWorkingDir() + "tdata/plugins"`).
+- Recognized manifests: `.plugin` and `.py`. `.elyx` and `.eaf` are listed
+  with an `Unsupported plugin format` error; other extensions and directories
+  are ignored. Symlinks are not followed.
+- One `python3 -I -B` process per directory parses each file with `ast.parse`
+  and reads metadata with `ast.literal_eval`; plugin code is never imported or
+  executed.
+- Required metadata: `__id__` (validated as `^[A-Za-z][A-Za-z0-9_-]{1,31}$`,
+  2–32 characters) and `__name__`; `__description__`, `__author__`,
+  `__version__` and `__permissions__` are optional.
+- Known permissions: `ui`, `messages.read`, `messages.send`, `network`,
+  `files`, `intents`, `settings`, `hooks`, `native`. An unknown permission is
+  an error for that entry only.
+- Files larger than 2 MiB are rejected per file; process failures (no
+  `python3`, timeout, invalid JSON, non-zero exit) become one global error.
+- UI: a `Plugins` subsection in the Exteraless settings opens a box with the
+  plugin count, metadata, per-file errors or an empty-state message. The box
+  has only `Open folder` and `Close`.
+
+Out of scope for stage 1: the separate Python host process, install/uninstall
+and enable/disable, IPC between the app and plugins, audit journal, OS
+sandbox, the Android compatibility shim, and any `.elyx`/`.eaf` runtime.
+Android plugins that use `from java import ...` or Xposed hooks stay
+incompatible; the shared Python code (`base_plugin.py`, metadata/capability
+scan, audit policy) is reused only when the host process is designed.
