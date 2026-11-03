@@ -29,13 +29,14 @@
 - Release smoke-тест: `result/bin/Telegram` запускается под Xvfb.
 - Debug smoke-тест: `out/bin/Telegram` запускается под Xvfb.
 - Pill Stack smoke-тест: `out/bin/Telegram` и `result/bin/Telegram` с `OEPillStackEnabled=true` под Xvfb, скриншот 1280x1024.
+- Pill Stack selection: с `OEPillStackPills=3` показываются только CPU и RAM.
 - Per-chat Ghost exclusions: подменю и запись в `OEGhostReadExclusions` проверены под Xvfb; сетевой эффект отдельно не измерялся.
 - `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
 
 ### Артефакты
 
-- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`.
-- Per-chat Ghost exclusions: изменения в рабочем дереве, Nix-пакет ещё не пересобран.
+- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`, `9840aca`, `09df61a`.
+- Nix-пакет не пересобран после per-chat Ghost exclusions и выбора пилюль.
 - Nix-пакет: `/nix/store/2gc06m1d5hw55w5rw6q6hf299rwpskxp-exteraless-desktop-7.3.1-exteraless.0.1`
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
