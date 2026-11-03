@@ -318,6 +318,7 @@ private:
 	void addToggleArchive();
 	void addClearHistory();
 	void addDeletedMessages();
+	void addGhostModeExclusions();
 	void addDeleteChat();
 	void addLeaveChat();
 	void addJoinChat();
@@ -876,6 +877,50 @@ void Filler::addDeletedMessages() {
 		u"Deleted messages (%1)"_q.arg(count),
 		[=] { Exteraless::ShowDeletedMessagesBox(_controller.get(), _peer); },
 		&st::menuIconDelete);
+}
+
+void Filler::addGhostModeExclusions() {
+	if (!_peer) {
+		return;
+	}
+	const auto peerId = qint64(_peer->id.value);
+	const auto readExcluded = Exteraless::Config::Instance()
+		.ghostReadExcluded(peerId);
+	const auto typingExcluded = Exteraless::Config::Instance()
+		.ghostTypingExcluded(peerId);
+	_addAction(PeerMenuCallback::Args{
+		.text = u"Ghost Mode exclusions"_q,
+		.handler = nullptr,
+		.icon = &st::menuIconStealth,
+		.fillSubmenu = [=](not_null<Ui::PopupMenu*> menu) {
+			const auto add = Ui::Menu::CreateAddActionCallback(menu);
+			add(u"Default"_q, [=] {
+				auto &config = Exteraless::Config::Instance();
+				config.setGhostReadExcluded(peerId, false);
+				config.setGhostTypingExcluded(peerId, false);
+			}, nullptr);
+			add(
+				readExcluded
+					? u"Include read receipts"_q
+					: u"Exclude read receipts"_q,
+				[=] {
+					Exteraless::Config::Instance().setGhostReadExcluded(
+						peerId,
+						!readExcluded);
+				},
+				nullptr);
+			add(
+				typingExcluded
+					? u"Include typing"_q
+					: u"Exclude typing"_q,
+				[=] {
+					Exteraless::Config::Instance().setGhostTypingExcluded(
+						peerId,
+						!typingExcluded);
+				},
+				nullptr);
+		},
+	});
 }
 
 void Filler::addClearHistory() {	if (_topic || _peer->isMonoforum()) {
@@ -1947,6 +1992,7 @@ void Filler::fillContextMenuActions() {
 	}
 	addBanFromChannel();
 	addDeletedMessages();
+	addGhostModeExclusions();
 	addClearHistory();
 	addDeleteChat();
 	addLeaveChat();
@@ -1972,6 +2018,7 @@ void Filler::fillHistoryActions() {
 	addTranslate();
 	addReport();
 	addDeletedMessages();
+	addGhostModeExclusions();
 	addClearHistory();
 	addDeleteChat();
 	addLeaveChat();

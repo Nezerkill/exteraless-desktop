@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_histories.h"
 #include "data/data_session.h"
 #include "data/data_changes.h"
+#include "exteraless/ghost_mode.h"
 #include "data/data_channel.h"
 #include "data/data_messages.h"
 #include "data/data_forum.h"
@@ -1005,6 +1006,7 @@ void RepliesList::sendReadTillRequest() {
 	const auto api = &_history->session().api();
 	api->request(base::take(_readRequestId)).cancel();
 
+	Exteraless::GhostMode::AllowReadPacketsFor(_history->peer->id);
 	_readRequestId = api->request(MTPmessages_ReadDiscussion(
 		_history->peer->input(),
 		MTP_int(_rootId),

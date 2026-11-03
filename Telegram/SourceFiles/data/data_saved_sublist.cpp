@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_drafts.h"
 #include "data/data_histories.h"
+#include "exteraless/ghost_mode.h"
 #include "data/data_messages.h"
 #include "data/data_peer.h"
 #include "data/data_saved_messages.h"
@@ -708,6 +709,7 @@ void SavedSublist::sendReadTillRequest() {
 	api->request(base::take(_readRequestId)).cancel();
 
 	_sentReadTill = computeInboxReadTillFull();
+	Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
 	_readRequestId = api->request(MTPmessages_ReadSavedHistory(
 		parentChat->input(),
 		sublistPeer()->input(),

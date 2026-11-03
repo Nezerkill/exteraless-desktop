@@ -89,6 +89,26 @@ index ffc8ec9..de9aee6 100644
 +"lng_settings_exteraless_import" = "Import settings";
 +
  // Keys finished
+diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
+index 206520e..23a71b4 100644
+--- a/Telegram/SourceFiles/api/api_send_progress.cpp
++++ b/Telegram/SourceFiles/api/api_send_progress.cpp
+@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "base/unixtime.h"
+ #include "data/data_peer_values.h"
+ #include "apiwrap.h"
++#include "exteraless/ghost_mode.h"
+ 
+ namespace Api {
+ namespace {
+@@ -133,6 +134,7 @@ void SendProgressManager::send(const Key &key, int progress) {
+ 		default: return MTP_sendMessageTypingAction();
+ 		}
+ 	}();
++	Exteraless::GhostMode::AllowTypingPacketsFor(key.history->peer->id);
+ 	const auto requestId = _session->api().request(MTPmessages_SetTyping(
+ 		MTP_flags(key.topMsgId
+ 			? MTPmessages_SetTyping::Flag::f_top_msg_id
 diff --git a/Telegram/SourceFiles/api/api_updates.cpp b/Telegram/SourceFiles/api/api_updates.cpp
 index 4fbafd1..f3172d8 100644
 --- a/Telegram/SourceFiles/api/api_updates.cpp
@@ -135,7 +155,7 @@ index 6e6ac4d..868b820 100644
  				const MTPmessages_MessageViews &result,
  				mtpRequestId requestId) {
 diff --git a/Telegram/SourceFiles/apiwrap.cpp b/Telegram/SourceFiles/apiwrap.cpp
-index 23afed5..ef5ecb6 100644
+index 23afed5..0847a1f 100644
 --- a/Telegram/SourceFiles/apiwrap.cpp
 +++ b/Telegram/SourceFiles/apiwrap.cpp
 @@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -148,7 +168,33 @@ index 23afed5..ef5ecb6 100644
  #include "api/api_authorizations.h"
  #include "api/api_attached_stickers.h"
  #include "api/api_blocked_peers.h"
-@@ -3847,6 +3850,9 @@ void ApiWrap::sendAction(const SendAction &action) {
+@@ -1448,6 +1451,8 @@ void ApiWrap::markContentsRead(
+ 		if (const auto channel = item->history()->peer->asChannel()) {
+ 			channelMarkedIds[channel].push_back(MTP_int(item->id));
+ 		} else {
++			Exteraless::GhostMode::AllowReadPacketsFor(
++				item->history()->peer->id);
+ 			markedIds.push_back(MTP_int(item->id));
+ 		}
+ 	}
+@@ -1459,6 +1464,8 @@ void ApiWrap::markContentsRead(
+ 		}).send();
+ 	}
+ 	for (const auto &channelIds : channelMarkedIds) {
++		Exteraless::GhostMode::AllowReadPacketsFor(
++			channelIds.first->id);
+ 		request(MTPchannels_ReadMessageContents(
+ 			channelIds.first->inputChannel(),
+ 			MTP_vector<MTPint>(channelIds.second)
+@@ -1471,6 +1478,7 @@ void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
+ 		return;
+ 	}
+ 	const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
++	Exteraless::GhostMode::AllowReadPacketsFor(item->history()->peer->id);
+ 	if (const auto channel = item->history()->peer->asChannel()) {
+ 		request(MTPchannels_ReadMessageContents(
+ 			channel->inputChannel(),
+@@ -3847,6 +3855,9 @@ void ApiWrap::sendAction(const SendAction &action) {
  		const auto sublist = monoforumPeerId
  			? action.history->peer->monoforumSublistFor(monoforumPeerId)
  			: nullptr;
@@ -263,6 +309,34 @@ index 0000000..84f48fa
 +	PeerData *peer);
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp b/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
+index df4816a..20dcf64 100644
+--- a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
++++ b/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
+@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "ui/emoji_config.h"
+ #include "base/random.h"
+ #include "apiwrap.h"
++#include "exteraless/ghost_mode.h"
+ 
+ #include <QtCore/QJsonDocument>
+ #include <QtCore/QJsonArray>
+@@ -320,6 +321,7 @@ void EmojiInteractions::sendAccumulatedOutgoing(
+ 	}
+ 	const auto peer = item->history()->peer;
+ 	const auto emoji = from->emoji;
++	Exteraless::GhostMode::AllowTypingPacketsFor(peer->id);
+ 	const auto requestId = _session->api().request(MTPmessages_SetTyping(
+ 		MTP_flags(0),
+ 		peer->input(),
+@@ -477,6 +479,7 @@ void EmojiInteractions::playStarted(not_null<PeerData*> peer, QString emoji) {
+ 	if (i != end(map) && now - i->second < kAccumulateSeenRequests) {
+ 		return;
+ 	}
++	Exteraless::GhostMode::AllowTypingPacketsFor(peer->id);
+ 	_session->api().request(MTPmessages_SetTyping(
+ 		MTP_flags(0),
+ 		peer->input(),
 diff --git a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp b/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
 index d2f8a9f..e573e5b 100644
 --- a/Telegram/SourceFiles/chat_helpers/field_autocomplete.cpp
@@ -353,6 +427,26 @@ index 2de2881..50a19fb 100644
  constexpr auto AppFile = "Telegram"_cs;
  constexpr auto AppVersion = 7003001;
  constexpr auto AppVersionStr = "7.3.1";
+diff --git a/Telegram/SourceFiles/data/data_histories.cpp b/Telegram/SourceFiles/data/data_histories.cpp
+index b499715..75945d9 100644
+--- a/Telegram/SourceFiles/data/data_histories.cpp
++++ b/Telegram/SourceFiles/data/data_histories.cpp
+@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/business/data_shortcut_messages.h"
+ #include "data/components/ephemeral_messages.h"
+ #include "data/components/scheduled_messages.h"
++#include "exteraless/ghost_mode.h"
+ #include "data/components/welcome_messages.h"
+ #include "data/notify/data_notify_settings.h"
+ #include "data/data_channel.h"
+@@ -763,6 +764,7 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
+ 			sendReadRequests();
+ 			finish();
+ 		};
++		Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
+ 		if (const auto channel = history->peer->asChannel()) {
+ 			return session().api().request(MTPchannels_ReadHistory(
+ 				channel->inputChannel(),
 diff --git a/Telegram/SourceFiles/data/data_peer_values.cpp b/Telegram/SourceFiles/data/data_peer_values.cpp
 index edd65ef..51a1d56 100644
 --- a/Telegram/SourceFiles/data/data_peer_values.cpp
@@ -380,6 +474,78 @@ index edd65ef..51a1d56 100644
  	}
  	return OnlineText(user->lastseen(), now);
  }
+diff --git a/Telegram/SourceFiles/data/data_replies_list.cpp b/Telegram/SourceFiles/data/data_replies_list.cpp
+index 7ddd752..5cc03d6 100644
+--- a/Telegram/SourceFiles/data/data_replies_list.cpp
++++ b/Telegram/SourceFiles/data/data_replies_list.cpp
+@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_histories.h"
+ #include "data/data_session.h"
+ #include "data/data_changes.h"
++#include "exteraless/ghost_mode.h"
+ #include "data/data_channel.h"
+ #include "data/data_messages.h"
+ #include "data/data_forum.h"
+@@ -1005,6 +1006,7 @@ void RepliesList::sendReadTillRequest() {
+ 	const auto api = &_history->session().api();
+ 	api->request(base::take(_readRequestId)).cancel();
+ 
++	Exteraless::GhostMode::AllowReadPacketsFor(_history->peer->id);
+ 	_readRequestId = api->request(MTPmessages_ReadDiscussion(
+ 		_history->peer->input(),
+ 		MTP_int(_rootId),
+diff --git a/Telegram/SourceFiles/data/data_saved_sublist.cpp b/Telegram/SourceFiles/data/data_saved_sublist.cpp
+index 68290f4..cfe0e9e 100644
+--- a/Telegram/SourceFiles/data/data_saved_sublist.cpp
++++ b/Telegram/SourceFiles/data/data_saved_sublist.cpp
+@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_channel.h"
+ #include "data/data_drafts.h"
+ #include "data/data_histories.h"
++#include "exteraless/ghost_mode.h"
+ #include "data/data_messages.h"
+ #include "data/data_peer.h"
+ #include "data/data_saved_messages.h"
+@@ -708,6 +709,7 @@ void SavedSublist::sendReadTillRequest() {
+ 	api->request(base::take(_readRequestId)).cancel();
+ 
+ 	_sentReadTill = computeInboxReadTillFull();
++	Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
+ 	_readRequestId = api->request(MTPmessages_ReadSavedHistory(
+ 		parentChat->input(),
+ 		sublistPeer()->input(),
+diff --git a/Telegram/SourceFiles/data/data_stories.cpp b/Telegram/SourceFiles/data/data_stories.cpp
+index a1d5d89..033ded5 100644
+--- a/Telegram/SourceFiles/data/data_stories.cpp
++++ b/Telegram/SourceFiles/data/data_stories.cpp
+@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_changes.h"
+ #include "data/data_channel.h"
+ #include "data/data_document.h"
++#include "exteraless/ghost_mode.h"
+ #include "data/data_group_call.h"
+ #include "data/data_folder.h"
+ #include "data/data_photo.h"
+@@ -1406,6 +1407,7 @@ void Stories::sendMarkAsReadRequest(
+ 	};
+ 
+ 	const auto api = &_owner->session().api();
++	Exteraless::GhostMode::AllowStoryPacketsFor(peer->id);
+ 	api->request(MTPstories_ReadStories(
+ 		peer->input(),
+ 		MTP_int(tillId)
+@@ -1467,8 +1469,10 @@ void Stories::sendIncrementViewsRequests() {
+ 			}
+ 			checkQuitPreventFinished();
+ 		};
++		const auto storyPeer = _owner->peer(peer);
++		Exteraless::GhostMode::AllowStoryPacketsFor(storyPeer->id);
+ 		api->request(MTPstories_IncrementStoryViews(
+-			_owner->peer(peer)->input(),
++			storyPeer->input(),
+ 			MTP_vector<MTPint>(std::move(ids))
+ 		)).done(finish).fail(finish).send();
+ 		_incrementViewsPending.remove(peer);
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
 index 3f79e39..2543ae9 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
@@ -993,6 +1159,26 @@ index 0000000..8f123e8
 +};
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/history/history_streamed_drafts.cpp b/Telegram/SourceFiles/history/history_streamed_drafts.cpp
+index dcb902d..5b28a1d 100644
+--- a/Telegram/SourceFiles/history/history_streamed_drafts.cpp
++++ b/Telegram/SourceFiles/history/history_streamed_drafts.cpp
+@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "history/history_item_helpers.h"
+ #include "iv/iv_rich_page.h"
+ #include "main/main_session.h"
++#include "exteraless/ghost_mode.h"
+ 
+ namespace {
+ 
+@@ -339,6 +340,7 @@ void HistoryStreamedDrafts::requestStop(MsgId rootId) {
+ 		return;
+ 	}
+ 	const auto topMsgId = _drafts.find(*randomId)->second.topMsgId;
++	Exteraless::GhostMode::AllowTypingPacketsFor(_history->peer->id);
+ 	_history->session().api().request(MTPmessages_SetTyping(
+ 		MTP_flags(topMsgId
+ 			? MTPmessages_SetTyping::Flag::f_top_msg_id
 diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
 index 2721c7a..6bfa900 100644
 --- a/Telegram/SourceFiles/main/main_account.cpp
@@ -1682,7 +1868,7 @@ index db8dcec..d149330 100644
  		tr::lng_menu_night_mode(),
  		{ &st::menuIconNightMode }
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
-index 56d2e56..e583a28 100644
+index 56d2e56..47c8b5e 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
 @@ -15,6 +15,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1695,15 +1881,16 @@ index 56d2e56..e583a28 100644
  #include "chat_helpers/share_message_phrase_factory.h"
  #include "ui/basic_click_handlers.h"
  #include "ui/controls/userpic_button.h"
-@@ -314,6 +317,7 @@ private:
+@@ -314,6 +317,8 @@ private:
  	void addToggleUnreadMark();
  	void addToggleArchive();
  	void addClearHistory();
 +	void addDeletedMessages();
++	void addGhostModeExclusions();
  	void addDeleteChat();
  	void addLeaveChat();
  	void addJoinChat();
-@@ -859,8 +863,22 @@ void Filler::addToggleArchive() {
+@@ -859,8 +864,66 @@ void Filler::addToggleArchive() {
  	SetActionText(archiveAction, std::move(actionText));
  }
  
@@ -1724,27 +1911,73 @@ index 56d2e56..e583a28 100644
 +		&st::menuIconDelete);
 +}
 +
++void Filler::addGhostModeExclusions() {
++	if (!_peer) {
++		return;
++	}
++	const auto peerId = qint64(_peer->id.value);
++	const auto readExcluded = Exteraless::Config::Instance()
++		.ghostReadExcluded(peerId);
++	const auto typingExcluded = Exteraless::Config::Instance()
++		.ghostTypingExcluded(peerId);
++	_addAction(PeerMenuCallback::Args{
++		.text = u"Ghost Mode exclusions"_q,
++		.handler = nullptr,
++		.icon = &st::menuIconStealth,
++		.fillSubmenu = [=](not_null<Ui::PopupMenu*> menu) {
++			const auto add = Ui::Menu::CreateAddActionCallback(menu);
++			add(u"Default"_q, [=] {
++				auto &config = Exteraless::Config::Instance();
++				config.setGhostReadExcluded(peerId, false);
++				config.setGhostTypingExcluded(peerId, false);
++			}, nullptr);
++			add(
++				readExcluded
++					? u"Include read receipts"_q
++					: u"Exclude read receipts"_q,
++				[=] {
++					Exteraless::Config::Instance().setGhostReadExcluded(
++						peerId,
++						!readExcluded);
++				},
++				nullptr);
++			add(
++				typingExcluded
++					? u"Include typing"_q
++					: u"Exclude typing"_q,
++				[=] {
++					Exteraless::Config::Instance().setGhostTypingExcluded(
++						peerId,
++						!typingExcluded);
++				},
++				nullptr);
++		},
++	});
++}
++
 +void Filler::addClearHistory() {	if (_topic || _peer->isMonoforum()) {
  		return;
  	}
  	const auto channel = _peer->asChannel();
-@@ -1928,6 +1946,7 @@ void Filler::fillContextMenuActions() {
+@@ -1928,6 +1991,8 @@ void Filler::fillContextMenuActions() {
  		}
  	}
  	addBanFromChannel();
 +	addDeletedMessages();
++	addGhostModeExclusions();
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -1952,6 +1971,7 @@ void Filler::fillHistoryActions() {
+@@ -1952,6 +2017,8 @@ void Filler::fillHistoryActions() {
  	addExportChat();
  	addTranslate();
  	addReport();
 +	addDeletedMessages();
++	addGhostModeExclusions();
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -4446,7 +4466,11 @@ void FillSenderUserpicMenu(
+@@ -4446,7 +4513,11 @@ void FillSenderUserpicMenu(
  	if (const auto guard = mention ? fieldForMention : nullptr) {
  		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
  			if (!username.isEmpty()) {
@@ -2630,10 +2863,10 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.cpp b/exteraless/ghost_mode.cpp
 new file mode 100644
-index 0000000..94032c9
+index 0000000..61d0586
 --- /dev/null
 +++ b/exteraless/ghost_mode.cpp
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,162 @@
 +#include "exteraless/ghost_mode.h"
 +
 +#include "exteraless/config.h"
@@ -2660,6 +2893,14 @@ index 0000000..94032c9
 +
 +std::atomic<int> Allowance = 0;
 +std::atomic<crl::time> AllowanceUntil = 0;
++std::atomic<int> TypingAllowance = 0;
++std::atomic<crl::time> TypingAllowanceUntil = 0;
++std::atomic<int> StoryAllowance = 0;
++std::atomic<crl::time> StoryAllowanceUntil = 0;
++
++[[nodiscard]] qint64 PeerKey(PeerId peerId) {
++	return qint64(peerId.value);
++}
 +
 +[[nodiscard]] bool IsReadRequest(mtpTypeId type) {
 +	switch (type) {
@@ -2694,11 +2935,17 @@ index 0000000..94032c9
 +	}
 +	switch (info.type) {
 +	case kSetTyping:
++		if (ConsumeTypingAllowance()) {
++			return MTP::RequestFilterResult::Pass;
++		}
 +		return config.ghostSendUploadProgress()
 +			? MTP::RequestFilterResult::Pass
 +			: MTP::RequestFilterResult::Drop;
 +	case kReadStories:
 +	case kIncrementStoryViews:
++		if (ConsumeStoryAllowance()) {
++			return MTP::RequestFilterResult::Pass;
++		}
 +		return config.ghostSendReadStories()
 +			? MTP::RequestFilterResult::Pass
 +			: MTP::RequestFilterResult::Drop;
@@ -2712,11 +2959,53 @@ index 0000000..94032c9
 +	AllowanceUntil.store(crl::now() + kAllowanceTtl);
 +}
 +
++void GhostMode::AllowReadPacketsFor(PeerId peerId) {
++	if (Config::Instance().ghostReadExcluded(PeerKey(peerId))) {
++		AllowReadPackets(1);
++	}
++}
++
++void GhostMode::AllowTypingPacketsFor(PeerId peerId) {
++	if (Config::Instance().ghostTypingExcluded(PeerKey(peerId))) {
++		AllowTypingPackets(1);
++	}
++}
++
++void GhostMode::AllowStoryPacketsFor(PeerId peerId) {
++	if (Config::Instance().ghostReadExcluded(PeerKey(peerId))) {
++		AllowStoryPackets(1);
++	}
++}
++
++void GhostMode::AllowTypingPackets(int count) {
++	TypingAllowance.store(count);
++	TypingAllowanceUntil.store(crl::now() + kAllowanceTtl);
++}
++
++void GhostMode::AllowStoryPackets(int count) {
++	StoryAllowance.store(count);
++	StoryAllowanceUntil.store(crl::now() + kAllowanceTtl);
++}
++
 +bool GhostMode::ConsumeReadAllowance() {
 +	if (Allowance.load() <= 0 || crl::now() > AllowanceUntil.load()) {
 +		return false;
 +	}
 +	return Allowance.fetch_sub(1) > 0;
++}
++
++bool GhostMode::ConsumeTypingAllowance() {
++	if (TypingAllowance.load() <= 0 || crl::now() > TypingAllowanceUntil.load()) {
++		return false;
++	}
++	return TypingAllowance.fetch_sub(1) > 0;
++}
++
++bool GhostMode::ConsumeStoryAllowance() {
++	if (StoryAllowance.load() <= 0 || crl::now() > StoryAllowanceUntil.load()) {
++		return false;
++	}
++	return StoryAllowance.fetch_sub(1) > 0;
 +}
 +
 +bool IsGhostActive() {
@@ -2742,13 +3031,15 @@ index 0000000..94032c9
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.h b/exteraless/ghost_mode.h
 new file mode 100644
-index 0000000..1f552df
+index 0000000..6b6e337
 --- /dev/null
 +++ b/exteraless/ghost_mode.h
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,34 @@
 +#pragma once
 +
 +#include "mtproto/mtproto_request_filter.h"
++
++#include "data/data_peer_id.h"
 +
 +namespace MTP {
 +class Instance;
@@ -2760,9 +3051,16 @@ index 0000000..1f552df
 +public:
 +	static MTP::RequestFilterResult Filter(const MTP::RequestFilterInfo &info);
 +	static void AllowReadPackets(int count = 1);
++	static void AllowReadPacketsFor(PeerId peerId);
++	static void AllowTypingPacketsFor(PeerId peerId);
++	static void AllowStoryPacketsFor(PeerId peerId);
 +
 +private:
 +	static bool ConsumeReadAllowance();
++	static bool ConsumeTypingAllowance();
++	static bool ConsumeStoryAllowance();
++	static void AllowTypingPackets(int count);
++	static void AllowStoryPackets(int count);
 +};
 +
 +void InstallGhostMode(MTP::Instance &instance);

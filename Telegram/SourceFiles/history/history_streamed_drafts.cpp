@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_helpers.h"
 #include "iv/iv_rich_page.h"
 #include "main/main_session.h"
+#include "exteraless/ghost_mode.h"
 
 namespace {
 
@@ -339,6 +340,7 @@ void HistoryStreamedDrafts::requestStop(MsgId rootId) {
 		return;
 	}
 	const auto topMsgId = _drafts.find(*randomId)->second.topMsgId;
+	Exteraless::GhostMode::AllowTypingPacketsFor(_history->peer->id);
 	_history->session().api().request(MTPmessages_SetTyping(
 		MTP_flags(topMsgId
 			? MTPmessages_SetTyping::Flag::f_top_msg_id

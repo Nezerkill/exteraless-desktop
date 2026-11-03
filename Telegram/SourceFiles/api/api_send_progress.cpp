@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/unixtime.h"
 #include "data/data_peer_values.h"
 #include "apiwrap.h"
+#include "exteraless/ghost_mode.h"
 
 namespace Api {
 namespace {
@@ -133,6 +134,7 @@ void SendProgressManager::send(const Key &key, int progress) {
 		default: return MTP_sendMessageTypingAction();
 		}
 	}();
+	Exteraless::GhostMode::AllowTypingPacketsFor(key.history->peer->id);
 	const auto requestId = _session->api().request(MTPmessages_SetTyping(
 		MTP_flags(key.topMsgId
 			? MTPmessages_SetTyping::Flag::f_top_msg_id

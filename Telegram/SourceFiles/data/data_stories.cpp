@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_changes.h"
 #include "data/data_channel.h"
 #include "data/data_document.h"
+#include "exteraless/ghost_mode.h"
 #include "data/data_group_call.h"
 #include "data/data_folder.h"
 #include "data/data_photo.h"
@@ -1406,6 +1407,7 @@ void Stories::sendMarkAsReadRequest(
 	};
 
 	const auto api = &_owner->session().api();
+	Exteraless::GhostMode::AllowStoryPacketsFor(peer->id);
 	api->request(MTPstories_ReadStories(
 		peer->input(),
 		MTP_int(tillId)
@@ -1467,8 +1469,10 @@ void Stories::sendIncrementViewsRequests() {
 			}
 			checkQuitPreventFinished();
 		};
+		const auto storyPeer = _owner->peer(peer);
+		Exteraless::GhostMode::AllowStoryPacketsFor(storyPeer->id);
 		api->request(MTPstories_IncrementStoryViews(
-			_owner->peer(peer)->input(),
+			storyPeer->input(),
 			MTP_vector<MTPint>(std::move(ids))
 		)).done(finish).fail(finish).send();
 		_incrementViewsPending.remove(peer);

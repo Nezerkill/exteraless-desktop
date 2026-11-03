@@ -21,6 +21,9 @@
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
   настройках Exteraless или в главном меню.
+- Per-chat Ghost exclusions хранятся в `OEGhostReadExclusions` и
+  `OEGhostTypingExclusions`; меню — «Ghost Mode exclusions» в контекстном
+  меню чата.
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.

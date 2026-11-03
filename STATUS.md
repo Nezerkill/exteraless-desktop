@@ -29,12 +29,13 @@
 - Release smoke-тест: `result/bin/Telegram` запускается под Xvfb.
 - Debug smoke-тест: `out/bin/Telegram` запускается под Xvfb.
 - Pill Stack smoke-тест: `out/bin/Telegram` и `result/bin/Telegram` с `OEPillStackEnabled=true` под Xvfb, скриншот 1280x1024.
+- Per-chat Ghost exclusions: подменю и запись в `OEGhostReadExclusions` проверены под Xvfb; сетевой эффект отдельно не измерялся.
 - `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
 
 ### Артефакты
 
-- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`.
-- Pill Stack: изменения в рабочем дереве, коммит не создан.
+- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`.
+- Per-chat Ghost exclusions: изменения в рабочем дереве, Nix-пакет ещё не пересобран.
 - Nix-пакет: `/nix/store/2gc06m1d5hw55w5rw6q6hf299rwpskxp-exteraless-desktop-7.3.1-exteraless.0.1`
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
@@ -44,7 +45,7 @@
 
 - [x] Ghost Mode: read receipts, stories, online/offline, typing/upload progress.
 - [x] Сохранение удалённых сообщений: JSON-sidecar, контекстное меню и бокс.
-- [ ] Per-chat исключения Ghost Mode (ключи конфига уже есть).
+- [x] Per-chat исключения Ghost Mode: read receipts и typing через контекстное меню.
 - [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen.
 - [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
 - [ ] Drawer: аккаунты, unread-бейджи, порядок пунктов.

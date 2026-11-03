@@ -24,6 +24,14 @@ constexpr auto kReadSavedHistory = mtpTypeId(0xba4a3b5b);
 
 std::atomic<int> Allowance = 0;
 std::atomic<crl::time> AllowanceUntil = 0;
+std::atomic<int> TypingAllowance = 0;
+std::atomic<crl::time> TypingAllowanceUntil = 0;
+std::atomic<int> StoryAllowance = 0;
+std::atomic<crl::time> StoryAllowanceUntil = 0;
+
+[[nodiscard]] qint64 PeerKey(PeerId peerId) {
+	return qint64(peerId.value);
+}
 
 [[nodiscard]] bool IsReadRequest(mtpTypeId type) {
 	switch (type) {
@@ -58,11 +66,17 @@ MTP::RequestFilterResult GhostMode::Filter(
 	}
 	switch (info.type) {
 	case kSetTyping:
+		if (ConsumeTypingAllowance()) {
+			return MTP::RequestFilterResult::Pass;
+		}
 		return config.ghostSendUploadProgress()
 			? MTP::RequestFilterResult::Pass
 			: MTP::RequestFilterResult::Drop;
 	case kReadStories:
 	case kIncrementStoryViews:
+		if (ConsumeStoryAllowance()) {
+			return MTP::RequestFilterResult::Pass;
+		}
 		return config.ghostSendReadStories()
 			? MTP::RequestFilterResult::Pass
 			: MTP::RequestFilterResult::Drop;
@@ -76,11 +90,53 @@ void GhostMode::AllowReadPackets(int count) {
 	AllowanceUntil.store(crl::now() + kAllowanceTtl);
 }
 
+void GhostMode::AllowReadPacketsFor(PeerId peerId) {
+	if (Config::Instance().ghostReadExcluded(PeerKey(peerId))) {
+		AllowReadPackets(1);
+	}
+}
+
+void GhostMode::AllowTypingPacketsFor(PeerId peerId) {
+	if (Config::Instance().ghostTypingExcluded(PeerKey(peerId))) {
+		AllowTypingPackets(1);
+	}
+}
+
+void GhostMode::AllowStoryPacketsFor(PeerId peerId) {
+	if (Config::Instance().ghostReadExcluded(PeerKey(peerId))) {
+		AllowStoryPackets(1);
+	}
+}
+
+void GhostMode::AllowTypingPackets(int count) {
+	TypingAllowance.store(count);
+	TypingAllowanceUntil.store(crl::now() + kAllowanceTtl);
+}
+
+void GhostMode::AllowStoryPackets(int count) {
+	StoryAllowance.store(count);
+	StoryAllowanceUntil.store(crl::now() + kAllowanceTtl);
+}
+
 bool GhostMode::ConsumeReadAllowance() {
 	if (Allowance.load() <= 0 || crl::now() > AllowanceUntil.load()) {
 		return false;
 	}
 	return Allowance.fetch_sub(1) > 0;
+}
+
+bool GhostMode::ConsumeTypingAllowance() {
+	if (TypingAllowance.load() <= 0 || crl::now() > TypingAllowanceUntil.load()) {
+		return false;
+	}
+	return TypingAllowance.fetch_sub(1) > 0;
+}
+
+bool GhostMode::ConsumeStoryAllowance() {
+	if (StoryAllowance.load() <= 0 || crl::now() > StoryAllowanceUntil.load()) {
+		return false;
+	}
+	return StoryAllowance.fetch_sub(1) > 0;
 }
 
 bool IsGhostActive() {

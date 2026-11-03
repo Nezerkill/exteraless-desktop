@@ -1451,6 +1451,8 @@ void ApiWrap::markContentsRead(
 		if (const auto channel = item->history()->peer->asChannel()) {
 			channelMarkedIds[channel].push_back(MTP_int(item->id));
 		} else {
+			Exteraless::GhostMode::AllowReadPacketsFor(
+				item->history()->peer->id);
 			markedIds.push_back(MTP_int(item->id));
 		}
 	}
@@ -1462,6 +1464,8 @@ void ApiWrap::markContentsRead(
 		}).send();
 	}
 	for (const auto &channelIds : channelMarkedIds) {
+		Exteraless::GhostMode::AllowReadPacketsFor(
+			channelIds.first->id);
 		request(MTPchannels_ReadMessageContents(
 			channelIds.first->inputChannel(),
 			MTP_vector<MTPint>(channelIds.second)
@@ -1474,6 +1478,7 @@ void ApiWrap::markContentsRead(not_null<HistoryItem*> item) {
 		return;
 	}
 	const auto ids = MTP_vector<MTPint>(1, MTP_int(item->id));
+	Exteraless::GhostMode::AllowReadPacketsFor(item->history()->peer->id);
 	if (const auto channel = item->history()->peer->asChannel()) {
 		request(MTPchannels_ReadMessageContents(
 			channel->inputChannel(),

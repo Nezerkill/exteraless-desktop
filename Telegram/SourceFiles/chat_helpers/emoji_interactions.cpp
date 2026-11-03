@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/emoji_config.h"
 #include "base/random.h"
 #include "apiwrap.h"
+#include "exteraless/ghost_mode.h"
 
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonArray>
@@ -320,6 +321,7 @@ void EmojiInteractions::sendAccumulatedOutgoing(
 	}
 	const auto peer = item->history()->peer;
 	const auto emoji = from->emoji;
+	Exteraless::GhostMode::AllowTypingPacketsFor(peer->id);
 	const auto requestId = _session->api().request(MTPmessages_SetTyping(
 		MTP_flags(0),
 		peer->input(),
@@ -477,6 +479,7 @@ void EmojiInteractions::playStarted(not_null<PeerData*> peer, QString emoji) {
 	if (i != end(map) && now - i->second < kAccumulateSeenRequests) {
 		return;
 	}
+	Exteraless::GhostMode::AllowTypingPacketsFor(peer->id);
 	_session->api().request(MTPmessages_SetTyping(
 		MTP_flags(0),
 		peer->input(),

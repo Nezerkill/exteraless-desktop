@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/business/data_shortcut_messages.h"
 #include "data/components/ephemeral_messages.h"
 #include "data/components/scheduled_messages.h"
+#include "exteraless/ghost_mode.h"
 #include "data/components/welcome_messages.h"
 #include "data/notify/data_notify_settings.h"
 #include "data/data_channel.h"
@@ -763,6 +764,7 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
 			sendReadRequests();
 			finish();
 		};
+		Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
 		if (const auto channel = history->peer->asChannel()) {
 			return session().api().request(MTPchannels_ReadHistory(
 				channel->inputChannel(),

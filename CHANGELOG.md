@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-03
+
+- Per-chat исключения Ghost Mode: подменю в контекстном меню чата
+  (Default / Exclude read receipts / Exclude typing), отдельные ключи
+  `OEGhostReadExclusions` и `OEGhostTypingExclusions`.
+- Исключения применяются к read history, read contents, discussion,
+  saved history, stories и typing через короткоживущие allowance-флаги.
+
 ## 2026-11-01
 
 - Проверен Pill Stack в Debug-сборке под Xvfb: CPU, RAM, сеть, DC ping,
