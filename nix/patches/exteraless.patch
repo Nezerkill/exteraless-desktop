@@ -619,10 +619,10 @@ index ee8bff7..8274456 100644
  		object_ptr<Ui::IconButton> toggle;
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
 new file mode 100644
-index 0000000..ca90683
+index 0000000..bf4db60
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.cpp
-@@ -0,0 +1,450 @@
+@@ -0,0 +1,480 @@
 +#include "exteraless/pill_stack.h"
 +
 +#include "base/unixtime.h"
@@ -813,6 +813,7 @@ index 0000000..ca90683
 +
 +	_netTimer.start();
 +	_enabled = Config::Instance().pillStackEnabled();
++	_pillsMask = Config::Instance().pillStackPills();
 +	setVisible(_enabled);
 +
 +	_controller->session().data().cache().statsOnMain(
@@ -939,6 +940,12 @@ index 0000000..ca90683
 +	const auto user = _controller->session().user();
 +	setText(Kind::LastSeen, u"Seen %1"_q.arg(LastSeenText(user)));
 +
++	const auto mask = Config::Instance().pillStackPills();
++	if (mask != _pillsMask) {
++		_pillsMask = mask;
++		changed = true;
++	}
++
 +	if (changed) {
 +		updateLayout();
 +		update();
@@ -953,7 +960,12 @@ index 0000000..ca90683
 +	auto left = leftPadding;
 +	auto top = 4;
 +	auto rowBottom = top + pillHeight;
++	auto anyPlaced = false;
 +	for (auto &pill : _pills) {
++		if (!isPillEnabled(pill.kind)) {
++			pill.rect = QRect();
++			continue;
++		}
 +		const auto textWidth = std::min(
 +			st::semiboldFont->width(pill.text),
 +			kMaxPillTextWidth);
@@ -968,11 +980,12 @@ index 0000000..ca90683
 +			continue;
 +		}
 +		pill.rect = QRect(left, top, width, pillHeight);
++		anyPlaced = true;
 +		left += width + kPillGap;
 +	}
-+	const auto desiredHeight = std::max(
-+		st::dialogsFilter.heightMin,
-+		rowBottom + 4);
++	const auto desiredHeight = anyPlaced
++		? std::max(st::dialogsFilter.heightMin, rowBottom + 4)
++		: 0;
 +	if (height() != desiredHeight) {
 +		setFixedHeight(desiredHeight);
 +	}
@@ -1072,13 +1085,30 @@ index 0000000..ca90683
 +	return -1;
 +}
 +
++bool PillStack::isPillEnabled(Kind kind) const {
++	const auto pill = [&] {
++		switch (kind) {
++		case Kind::Cpu: return PillStackPill::Cpu;
++		case Kind::Ram: return PillStackPill::Ram;
++		case Kind::Net: return PillStackPill::Net;
++		case Kind::Dc: return PillStackPill::Dc;
++		case Kind::Proxy: return PillStackPill::Proxy;
++		case Kind::Cache: return PillStackPill::Cache;
++		case Kind::Ghost: return PillStackPill::Ghost;
++		case Kind::LastSeen: return PillStackPill::LastSeen;
++		}
++		return PillStackPill::Cpu;
++	}();
++	return HasPillStackPill(Config::Instance().pillStackPills(), pill);
++}
++
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.h b/Telegram/SourceFiles/exteraless/pill_stack.h
 new file mode 100644
-index 0000000..8f123e8
+index 0000000..faafca7
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.h
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,82 @@
 +#pragma once
 +
 +#include "base/timer.h"
@@ -1138,6 +1168,7 @@ index 0000000..8f123e8
 +	void updateLayout();
 +	void activate(Kind kind);
 +	[[nodiscard]] int indexAt(QPoint position) const;
++	[[nodiscard]] bool isPillEnabled(Kind kind) const;
 +
 +	const not_null<Window::SessionController*> _controller;
 +	std::vector<Pill> _pills;
@@ -1145,6 +1176,7 @@ index 0000000..8f123e8
 +	QElapsedTimer _netTimer;
 +	qint64 _cacheBytes = 0;
 +	qint64 _cacheBigBytes = 0;
++	int _pillsMask = 0;
 +	qint64 _previousCpuIdle = 0;
 +	qint64 _previousCpuTotal = 0;
 +	qint64 _previousRx = 0;
@@ -1428,10 +1460,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..cd3afcf
+index 0000000..46630c0
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,320 @@
+@@ -0,0 +1,390 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -1595,6 +1627,76 @@ index 0000000..cd3afcf
 +			Exteraless::Config::Instance().setPillStackEnabled(value);
 +		}, pillStack->lifetime());
 +	}
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/pill-stack/pills"_q,
++		.title = rpl::single(u"Visible pills"_q),
++	});
++
++	const auto addPillToggle = [&](
++			Exteraless::PillStackPill pill,
++			QString id,
++			QString title,
++			QStringList keywords) {
++		const auto checkbox = builder.addCheckbox({
++			.id = std::move(id),
++			.title = rpl::single(std::move(title)),
++			.checked = Exteraless::HasPillStackPill(
++				Exteraless::Config::Instance().pillStackPills(),
++				pill),
++			.keywords = std::move(keywords),
++		});
++		if (checkbox) {
++			checkbox->checkedChanges(
++			) | rpl::on_next([=](bool checked) {
++				const auto mask = Exteraless::WithPillStackPill(
++					Exteraless::Config::Instance().pillStackPills(),
++					pill,
++					checked);
++				Exteraless::Config::Instance().setPillStackPills(mask);
++			}, checkbox->lifetime());
++		}
++	};
++	addPillToggle(
++		Exteraless::PillStackPill::Cpu,
++		u"exteraless/pill-stack/cpu"_q,
++		u"CPU"_q,
++		{ u"cpu"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Ram,
++		u"exteraless/pill-stack/ram"_q,
++		u"RAM"_q,
++		{ u"ram"_q, u"memory"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Net,
++		u"exteraless/pill-stack/net"_q,
++		u"Network speed"_q,
++		{ u"network"_q, u"speed"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Dc,
++		u"exteraless/pill-stack/dc"_q,
++		u"DC ping"_q,
++		{ u"dc"_q, u"ping"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Proxy,
++		u"exteraless/pill-stack/proxy"_q,
++		u"Proxy"_q,
++		{ u"proxy"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Cache,
++		u"exteraless/pill-stack/cache"_q,
++		u"Cache"_q,
++		{ u"cache"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Ghost,
++		u"exteraless/pill-stack/ghost"_q,
++		u"Ghost Mode"_q,
++		{ u"ghost"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::LastSeen,
++		u"exteraless/pill-stack/last-seen"_q,
++		u"Last seen"_q,
++		{ u"last seen"_q, u"pill"_q });
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/proxy"_q,
@@ -2194,10 +2296,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..13af548
+index 0000000..f90b9a8
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,272 @@
+@@ -0,0 +1,282 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -2226,6 +2328,7 @@ index 0000000..13af548
 +constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
++constexpr auto kPillStackPills = "OEPillStackPills";
 +
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
@@ -2387,6 +2490,14 @@ index 0000000..13af548
 +	setValue(kPillStackEnabled, value);
 +}
 +
++int Config::pillStackPills() const {
++	return intValue(kPillStackPills, kPillStackAllPills);
++}
++
++void Config::setPillStackPills(int value) {
++	setValue(kPillStackPills, value);
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -2414,7 +2525,8 @@ index 0000000..13af548
 +			|| key == kGhostReadExclusions
 +			|| key == kGhostTypingExclusions
 +			|| key == kSaveDeletedMessages
-+			|| key == kPillStackEnabled) {
++			|| key == kPillStackEnabled
++			|| key == kPillStackPills) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -2472,10 +2584,10 @@ index 0000000..13af548
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..7e647db
+index 0000000..32d04ed
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,98 @@
 +#pragma once
 +
 +#include <QJsonObject>
@@ -2484,6 +2596,34 @@ index 0000000..7e647db
 +#include <QStringList>
 +
 +namespace Exteraless {
++
++enum class PillStackPill : int {
++	Cpu = 1,
++	Ram = 2,
++	Net = 4,
++	Dc = 8,
++	Proxy = 16,
++	Cache = 32,
++	Ghost = 64,
++	LastSeen = 128,
++};
++
++constexpr auto kPillStackAllPills = 0xFF;
++
++[[nodiscard]] constexpr bool HasPillStackPill(
++		int mask,
++		PillStackPill pill) {
++	return (mask & int(pill)) != 0;
++}
++
++[[nodiscard]] constexpr int WithPillStackPill(
++		int mask,
++		PillStackPill pill,
++		bool enabled) {
++	return enabled
++		? (mask | int(pill))
++		: (mask & ~int(pill));
++}
 +
 +class Config final {
 +public:
@@ -2525,6 +2665,9 @@ index 0000000..7e647db
 +
 +	[[nodiscard]] bool pillStackEnabled() const;
 +	void setPillStackEnabled(bool value);
++
++	[[nodiscard]] int pillStackPills() const;
++	void setPillStackPills(int value);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);

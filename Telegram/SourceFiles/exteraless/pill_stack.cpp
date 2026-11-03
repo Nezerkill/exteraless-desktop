@@ -188,6 +188,7 @@ PillStack::PillStack(
 
 	_netTimer.start();
 	_enabled = Config::Instance().pillStackEnabled();
+	_pillsMask = Config::Instance().pillStackPills();
 	setVisible(_enabled);
 
 	_controller->session().data().cache().statsOnMain(
@@ -314,6 +315,12 @@ void PillStack::updatePills() {
 	const auto user = _controller->session().user();
 	setText(Kind::LastSeen, u"Seen %1"_q.arg(LastSeenText(user)));
 
+	const auto mask = Config::Instance().pillStackPills();
+	if (mask != _pillsMask) {
+		_pillsMask = mask;
+		changed = true;
+	}
+
 	if (changed) {
 		updateLayout();
 		update();
@@ -328,7 +335,12 @@ void PillStack::updateLayout() {
 	auto left = leftPadding;
 	auto top = 4;
 	auto rowBottom = top + pillHeight;
+	auto anyPlaced = false;
 	for (auto &pill : _pills) {
+		if (!isPillEnabled(pill.kind)) {
+			pill.rect = QRect();
+			continue;
+		}
 		const auto textWidth = std::min(
 			st::semiboldFont->width(pill.text),
 			kMaxPillTextWidth);
@@ -343,11 +355,12 @@ void PillStack::updateLayout() {
 			continue;
 		}
 		pill.rect = QRect(left, top, width, pillHeight);
+		anyPlaced = true;
 		left += width + kPillGap;
 	}
-	const auto desiredHeight = std::max(
-		st::dialogsFilter.heightMin,
-		rowBottom + 4);
+	const auto desiredHeight = anyPlaced
+		? std::max(st::dialogsFilter.heightMin, rowBottom + 4)
+		: 0;
 	if (height() != desiredHeight) {
 		setFixedHeight(desiredHeight);
 	}
@@ -445,6 +458,23 @@ int PillStack::indexAt(QPoint position) const {
 		}
 	}
 	return -1;
+}
+
+bool PillStack::isPillEnabled(Kind kind) const {
+	const auto pill = [&] {
+		switch (kind) {
+		case Kind::Cpu: return PillStackPill::Cpu;
+		case Kind::Ram: return PillStackPill::Ram;
+		case Kind::Net: return PillStackPill::Net;
+		case Kind::Dc: return PillStackPill::Dc;
+		case Kind::Proxy: return PillStackPill::Proxy;
+		case Kind::Cache: return PillStackPill::Cache;
+		case Kind::Ghost: return PillStackPill::Ghost;
+		case Kind::LastSeen: return PillStackPill::LastSeen;
+		}
+		return PillStackPill::Cpu;
+	}();
+	return HasPillStackPill(Config::Instance().pillStackPills(), pill);
 }
 
 } // namespace Exteraless

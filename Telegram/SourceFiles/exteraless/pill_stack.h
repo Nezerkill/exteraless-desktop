@@ -57,6 +57,7 @@ private:
 	void updateLayout();
 	void activate(Kind kind);
 	[[nodiscard]] int indexAt(QPoint position) const;
+	[[nodiscard]] bool isPillEnabled(Kind kind) const;
 
 	const not_null<Window::SessionController*> _controller;
 	std::vector<Pill> _pills;
@@ -64,6 +65,7 @@ private:
 	QElapsedTimer _netTimer;
 	qint64 _cacheBytes = 0;
 	qint64 _cacheBigBytes = 0;
+	int _pillsMask = 0;
 	qint64 _previousCpuIdle = 0;
 	qint64 _previousCpuTotal = 0;
 	qint64 _previousRx = 0;

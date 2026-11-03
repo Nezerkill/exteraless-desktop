@@ -46,7 +46,7 @@
 - [x] Ghost Mode: read receipts, stories, online/offline, typing/upload progress.
 - [x] Сохранение удалённых сообщений: JSON-sidecar, контекстное меню и бокс.
 - [x] Per-chat исключения Ghost Mode: read receipts и typing через контекстное меню.
-- [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen.
+- [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen; выбор видимых пилюль.
 - [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
 - [ ] Drawer: аккаунты, unread-бейджи, порядок пунктов.
 

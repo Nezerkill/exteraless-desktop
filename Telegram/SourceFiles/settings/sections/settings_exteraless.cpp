@@ -163,6 +163,76 @@ const auto kMeta = Builder::BuildHelper({
 	}
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/pill-stack/pills"_q,
+		.title = rpl::single(u"Visible pills"_q),
+	});
+
+	const auto addPillToggle = [&](
+			Exteraless::PillStackPill pill,
+			QString id,
+			QString title,
+			QStringList keywords) {
+		const auto checkbox = builder.addCheckbox({
+			.id = std::move(id),
+			.title = rpl::single(std::move(title)),
+			.checked = Exteraless::HasPillStackPill(
+				Exteraless::Config::Instance().pillStackPills(),
+				pill),
+			.keywords = std::move(keywords),
+		});
+		if (checkbox) {
+			checkbox->checkedChanges(
+			) | rpl::on_next([=](bool checked) {
+				const auto mask = Exteraless::WithPillStackPill(
+					Exteraless::Config::Instance().pillStackPills(),
+					pill,
+					checked);
+				Exteraless::Config::Instance().setPillStackPills(mask);
+			}, checkbox->lifetime());
+		}
+	};
+	addPillToggle(
+		Exteraless::PillStackPill::Cpu,
+		u"exteraless/pill-stack/cpu"_q,
+		u"CPU"_q,
+		{ u"cpu"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Ram,
+		u"exteraless/pill-stack/ram"_q,
+		u"RAM"_q,
+		{ u"ram"_q, u"memory"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Net,
+		u"exteraless/pill-stack/net"_q,
+		u"Network speed"_q,
+		{ u"network"_q, u"speed"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Dc,
+		u"exteraless/pill-stack/dc"_q,
+		u"DC ping"_q,
+		{ u"dc"_q, u"ping"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Proxy,
+		u"exteraless/pill-stack/proxy"_q,
+		u"Proxy"_q,
+		{ u"proxy"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Cache,
+		u"exteraless/pill-stack/cache"_q,
+		u"Cache"_q,
+		{ u"cache"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Ghost,
+		u"exteraless/pill-stack/ghost"_q,
+		u"Ghost Mode"_q,
+		{ u"ghost"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::LastSeen,
+		u"exteraless/pill-stack/last-seen"_q,
+		u"Last seen"_q,
+		{ u"last seen"_q, u"pill"_q });
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/proxy"_q,
 		.title = tr::lng_settings_exteraless_proxy(),
 	});

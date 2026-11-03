@@ -20,7 +20,8 @@
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
-  настройках Exteraless или в главном меню.
+  настройках Exteraless или в главном меню. Состав пилюль — `OEPillStackPills`
+  (битовая маска, по умолчанию все).
 - Per-chat Ghost exclusions хранятся в `OEGhostReadExclusions` и
   `OEGhostTypingExclusions`; меню — «Ghost Mode exclusions» в контекстном
   меню чата.

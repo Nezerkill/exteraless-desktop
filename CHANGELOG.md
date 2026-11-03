@@ -2,6 +2,8 @@
 
 ## 2026-11-03
 
+- Pill Stack: выбор видимых пилюль через `OEPillStackPills` и чекбоксы в
+  настройках Exteraless.
 - Per-chat исключения Ghost Mode: подменю в контекстном меню чата
   (Default / Exclude read receipts / Exclude typing), отдельные ключи
   `OEGhostReadExclusions` и `OEGhostTypingExclusions`.

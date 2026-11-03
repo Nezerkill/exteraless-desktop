@@ -7,6 +7,34 @@
 
 namespace Exteraless {
 
+enum class PillStackPill : int {
+	Cpu = 1,
+	Ram = 2,
+	Net = 4,
+	Dc = 8,
+	Proxy = 16,
+	Cache = 32,
+	Ghost = 64,
+	LastSeen = 128,
+};
+
+constexpr auto kPillStackAllPills = 0xFF;
+
+[[nodiscard]] constexpr bool HasPillStackPill(
+		int mask,
+		PillStackPill pill) {
+	return (mask & int(pill)) != 0;
+}
+
+[[nodiscard]] constexpr int WithPillStackPill(
+		int mask,
+		PillStackPill pill,
+		bool enabled) {
+	return enabled
+		? (mask | int(pill))
+		: (mask & ~int(pill));
+}
+
 class Config final {
 public:
 	static Config &Instance();
@@ -47,6 +75,9 @@ public:
 
 	[[nodiscard]] bool pillStackEnabled() const;
 	void setPillStackEnabled(bool value);
+
+	[[nodiscard]] int pillStackPills() const;
+	void setPillStackPills(int value);
 
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
