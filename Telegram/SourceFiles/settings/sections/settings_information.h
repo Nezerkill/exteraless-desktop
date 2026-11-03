@@ -30,13 +30,19 @@ namespace Settings {
 
 [[nodiscard]] Type InformationId();
 
+struct AccountsOptions {
+	bool showSingle = false;
+	bool badgeActive = false;
+};
+
 struct AccountsEvents {
 	rpl::producer<> closeRequests;
 	QPointer<Ui::RpWidget> addAccountButton;
 };
 AccountsEvents SetupAccounts(
 	not_null<Ui::VerticalLayout*> container,
-	not_null<Window::SessionController*> controller);
+	not_null<Window::SessionController*> controller,
+	AccountsOptions options = {});
 
 void UpdatePhotoLocally(not_null<UserData*> user, const QImage &image);
 

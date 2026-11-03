@@ -91,6 +91,7 @@ private:
 	object_ptr<Ui::UserpicButton> _userpicButton;
 	Ui::Text::String _name;
 	int _nameVersion = 0;
+	rpl::variable<bool> _accountsExpanded;
 	object_ptr<ToggleAccountsButton> _toggleAccounts;
 	object_ptr<Ui::FlatLabel> _setEmojiStatus;
 	std::unique_ptr<Info::Profile::EmojiStatusPanel> _emojiStatusPanel;

@@ -4,7 +4,7 @@ Linux-клиент Telegram — форк [Telegram Desktop](https://github.com/t
 Возможности переносятся из Android-клиента
 [exteraless](https://github.com/exteraless/exteraless).
 
-Сейчас это ранний каркас: сборка, брендинг и Nix-упаковка. Функции exteraless
+Сейчас это ранний этап: база, брендинг и Nix-упаковка готовы, функции exteraless
 добавляются поэтапно.
 
 Текущий статус и список готового: [STATUS.md](STATUS.md).
@@ -19,9 +19,12 @@ Linux-клиент Telegram — форк [Telegram Desktop](https://github.com/t
 - [x] Запятая после упоминания
 - [x] Авто-отключение прокси по типу сети
 - [x] Импорт/экспорт `.extera`
-- [ ] Ghost Mode и сохранение удалённых сообщений
-- [ ] Pill Stack и drawer
+- [x] Ghost Mode и сохранение удалённых сообщений
+- [x] Pill Stack и drawer: аккаунты и unread-бейджи
 - [ ] Движок Python-плагинов с моделью разрешений
+
+Drawer-аккаунты проверены на итоговом бинарнике под Xvfb; подробности —
+в [STATUS.md](STATUS.md).
 
 ## Сборка
 
@@ -35,7 +38,7 @@ cmake -S . -B out -G Ninja \
   -DTDESKTOP_API_ID=YOUR_API_ID \
   -DTDESKTOP_API_HASH=YOUR_API_HASH
 cmake --build out --target Telegram -j"$(nproc)"
-./out/Telegram
+out/bin/Telegram
 ```
 
 Debug-сборка занимает меньше времени, чем Release. Для локальной проверки можно

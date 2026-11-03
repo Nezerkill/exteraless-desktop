@@ -1869,6 +1869,126 @@ index 0000000..4fb3099
 +[[nodiscard]] Type ExteralessSectionId();
 +
 +} // namespace Settings
+diff --git a/Telegram/SourceFiles/settings/sections/settings_information.cpp b/Telegram/SourceFiles/settings/sections/settings_information.cpp
+index 8982b51..dcb20f7 100644
+--- a/Telegram/SourceFiles/settings/sections/settings_information.cpp
++++ b/Telegram/SourceFiles/settings/sections/settings_information.cpp
+@@ -212,7 +212,8 @@ class AccountsList final {
+ public:
+ 	AccountsList(
+ 		not_null<Ui::VerticalLayout*> container,
+-		not_null<Window::SessionController*> controller);
++		not_null<Window::SessionController*> controller,
++		AccountsOptions options);
+ 
+ 	[[nodiscard]] rpl::producer<> closeRequests() const;
+ 	[[nodiscard]] Ui::RpWidget *addAccountButton() const;
+@@ -224,6 +225,7 @@ private:
+ 	void rebuild();
+ 
+ 	const not_null<Window::SessionController*> _controller;
++	const AccountsOptions _options;
+ 	const not_null<Ui::VerticalLayout*> _outer;
+ 	int _outerIndex = 0;
+ 
+@@ -805,7 +807,8 @@ void SetupAccountsWrap(
+ 		not_null<Window::SessionController*> window,
+ 		not_null<::Main::Account*> account,
+ 		Fn<void(Qt::KeyboardModifiers)> callback,
+-		bool locked) {
++		bool locked,
++		bool hasUnread) {
+ 	const auto active = (account == &window->session().account());
+ 	const auto session = &account->session();
+ 	const auto user = session->user();
+@@ -830,7 +833,7 @@ void SetupAccountsWrap(
+ 			raw,
+ 			session,
+ 			std::move(text),
+-			!active,
++			hasUnread,
+ 			[=] { return window->isGifPausedAtLeastFor(
+ 				Window::GifPauseReason::Layer); });
+ 		composedBadge->sizeValue(
+@@ -950,8 +953,10 @@ void SetupAccountsWrap(
+ 
+ AccountsList::AccountsList(
+ 	not_null<Ui::VerticalLayout*> container,
+-	not_null<Window::SessionController*> controller)
++	not_null<Window::SessionController*> controller,
++	AccountsOptions options)
+ : _controller(controller)
++, _options(options)
+ , _outer(container)
+ , _outerIndex(container->count()) {
+ 	setup();
+@@ -1118,7 +1123,8 @@ void AccountsList::rebuild() {
+ 		Assert(i != _watched.end());
+ 
+ 		auto &button = i->second;
+-		if (!account->sessionExists() || list.size() == 1) {
++		if (!account->sessionExists()
++			|| (list.size() == 1 && !_options.showSingle)) {
+ 			button = nullptr;
+ 		} else if (!button) {
+ 			const auto nextIsLocked = (inner->count() >= premiumLimit);
+@@ -1152,12 +1158,15 @@ void AccountsList::rebuild() {
+ 						std::move(activate));
+ 				}
+ 			};
++			const auto active = (account == &_controller->session().account());
++			const auto hasUnread = _options.badgeActive || !active;
+ 			button.reset(inner->add(MakeAccountButton(
+ 				inner,
+ 				_controller,
+ 				account,
+ 				std::move(callback),
+-				nextIsLocked)));
++				nextIsLocked,
++				hasUnread)));
+ 		}
+ 	}
+ 	inner->resizeToWidth(_outer->width());
+@@ -1447,10 +1456,12 @@ Type InformationId() {
+ 
+ AccountsEvents SetupAccounts(
+ 		not_null<Ui::VerticalLayout*> container,
+-		not_null<Window::SessionController*> controller) {
++		not_null<Window::SessionController*> controller,
++		AccountsOptions options) {
+ 	const auto list = container->lifetime().make_state<AccountsList>(
+ 		container,
+-		controller);
++		controller,
++		options);
+ 	return {
+ 		.closeRequests = list->closeRequests(),
+ 		.addAccountButton = list->addAccountButton(),
+diff --git a/Telegram/SourceFiles/settings/sections/settings_information.h b/Telegram/SourceFiles/settings/sections/settings_information.h
+index 54435fa..a67f08b 100644
+--- a/Telegram/SourceFiles/settings/sections/settings_information.h
++++ b/Telegram/SourceFiles/settings/sections/settings_information.h
+@@ -30,13 +30,19 @@ namespace Settings {
+ 
+ [[nodiscard]] Type InformationId();
+ 
++struct AccountsOptions {
++	bool showSingle = false;
++	bool badgeActive = false;
++};
++
+ struct AccountsEvents {
+ 	rpl::producer<> closeRequests;
+ 	QPointer<Ui::RpWidget> addAccountButton;
+ };
+ AccountsEvents SetupAccounts(
+ 	not_null<Ui::VerticalLayout*> container,
+-	not_null<Window::SessionController*> controller);
++	not_null<Window::SessionController*> controller,
++	AccountsOptions options = {});
+ 
+ void UpdatePhotoLocally(not_null<UserData*> user, const QImage &image);
+ 
 diff --git a/Telegram/SourceFiles/settings/sections/settings_main.cpp b/Telegram/SourceFiles/settings/sections/settings_main.cpp
 index 62e91ea..29e649e 100644
 --- a/Telegram/SourceFiles/settings/sections/settings_main.cpp
@@ -1896,7 +2016,7 @@ index 62e91ea..29e649e 100644
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
-index db8dcec..0e50fdc 100644
+index db8dcec..bdd82a3 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_main_menu.cpp
 @@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1935,7 +2055,7 @@ index db8dcec..0e50fdc 100644
  namespace Window {
  namespace {
  
-@@ -121,6 +128,29 @@ constexpr auto kPlayStatusLimit = 2;
+@@ -121,11 +128,37 @@ constexpr auto kPlayStatusLimit = 2;
  	}) | rpl::flatten_latest();
  }
  
@@ -1965,7 +2085,90 @@ index db8dcec..0e50fdc 100644
  } // namespace
  
  class MainMenu::ToggleAccountsButton final : public Ui::AbstractButton {
-@@ -774,6 +804,132 @@ void MainMenu::setupMenu() {
+ public:
+-	ToggleAccountsButton(QWidget *parent, not_null<Main::Account*> current);
++	ToggleAccountsButton(
++		QWidget *parent,
++		not_null<Main::Account*> current,
++		rpl::producer<bool> expanded);
+ 
+ 	[[nodiscard]] int rightSkip() const {
+ 		return _rightSkip.current();
+@@ -164,7 +197,8 @@ protected:
+ 
+ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
+ 	QWidget *parent,
+-	not_null<Main::Account*> current)
++	not_null<Main::Account*> current,
++	rpl::producer<bool> expanded)
+ : AbstractButton(parent)
+ , _current(current) {
+ 	rpl::single(rpl::empty) | rpl::then(
+@@ -177,13 +211,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
+ 		}
+ 	}, lifetime());
+ 
+-	auto &settings = Core::App().settings();
+-	if (Core::App().domain().accounts().size() < 2
+-		&& settings.mainMenuAccountsShown()) {
+-		settings.setMainMenuAccountsShown(false);
+-	}
+-	settings.mainMenuAccountsShownValue(
+-	) | rpl::filter([=](bool value) {
++	std::move(expanded) | rpl::filter([=](bool value) {
+ 		return (_toggled != value);
+ 	}) | rpl::on_next([=](bool value) {
+ 		_toggled = value;
+@@ -316,7 +344,12 @@ MainMenu::MainMenu(
+ 	this,
+ 	_controller->session().user(),
+ 	st::mainMenuUserpic)
+-, _toggleAccounts(this, &controller->session().account())
++, _accountsExpanded(
++	Exteraless::Config::Instance().drawerAccountsExpanded())
++, _toggleAccounts(
++	this,
++	&controller->session().account(),
++	_accountsExpanded.value())
+ , _setEmojiStatus(this, SetStatusLabel(&controller->session()))
+ , _emojiStatusPanel(std::make_unique<Info::Profile::EmojiStatusPanel>())
+ , _badge(std::make_unique<Info::Profile::Badge>(
+@@ -597,9 +630,10 @@ void MainMenu::setupUserpicButton() {
+ }
+ 
+ void MainMenu::toggleAccounts() {
+-	auto &settings = Core::App().settings();
+-	const auto shown = !settings.mainMenuAccountsShown();
+-	settings.setMainMenuAccountsShown(shown);
++	const auto shown = !_accountsExpanded.current();
++	_accountsExpanded = shown;
++	Exteraless::Config::Instance().setDrawerAccountsExpanded(shown);
++	Core::App().settings().setMainMenuAccountsShown(shown);
+ 	Core::App().saveSettingsDelayed();
+ }
+ 
+@@ -607,7 +641,10 @@ void MainMenu::setupAccounts() {
+ 	const auto inner = _accounts->entity();
+ 
+ 	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
+-	auto events = Settings::SetupAccounts(inner, _controller);
++	auto events = Settings::SetupAccounts(
++		inner,
++		_controller,
++		{ .showSingle = true, .badgeActive = true });
+ 	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
+ 
+ 	std::move(
+@@ -616,7 +653,7 @@ void MainMenu::setupAccounts() {
+ 		closeLayer();
+ 	}, inner->lifetime());
+ 
+-	_accounts->toggleOn(Core::App().settings().mainMenuAccountsShownValue());
++	_accounts->toggleOn(_accountsExpanded.value());
+ 	_accounts->finishAnimating();
+ 
+ 	_shadow->setDuration(0)->toggleOn(_accounts->shownValue());
+@@ -774,6 +811,132 @@ void MainMenu::setupMenu() {
  		controller->showSettings();
  	});
  
@@ -2098,6 +2301,18 @@ index db8dcec..0e50fdc 100644
  	_nightThemeToggle = addAction(
  		tr::lng_menu_night_mode(),
  		{ &st::menuIconNightMode }
+diff --git a/Telegram/SourceFiles/window/window_main_menu.h b/Telegram/SourceFiles/window/window_main_menu.h
+index 5975e0e..6ee9b2c 100644
+--- a/Telegram/SourceFiles/window/window_main_menu.h
++++ b/Telegram/SourceFiles/window/window_main_menu.h
+@@ -91,6 +91,7 @@ private:
+ 	object_ptr<Ui::UserpicButton> _userpicButton;
+ 	Ui::Text::String _name;
+ 	int _nameVersion = 0;
++	rpl::variable<bool> _accountsExpanded;
+ 	object_ptr<ToggleAccountsButton> _toggleAccounts;
+ 	object_ptr<Ui::FlatLabel> _setEmojiStatus;
+ 	std::unique_ptr<Info::Profile::EmojiStatusPanel> _emojiStatusPanel;
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
 index 56d2e56..47c8b5e 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
@@ -2425,10 +2640,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..a275d03
+index 0000000..77d6c0c
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,313 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -2459,6 +2674,7 @@ index 0000000..a275d03
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
 +constexpr auto kMainMenuOrder = "OEMainMenuOrder";
++constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -2639,6 +2855,14 @@ index 0000000..a275d03
 +	setValue(kMainMenuOrder, value);
 +}
 +
++bool Config::drawerAccountsExpanded() const {
++	return boolValue(kDrawerAccountsExpanded, true);
++}
++
++void Config::setDrawerAccountsExpanded(bool value) {
++	setValue(kDrawerAccountsExpanded, value);
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -2668,7 +2892,8 @@ index 0000000..a275d03
 +			|| key == kSaveDeletedMessages
 +			|| key == kPillStackEnabled
 +			|| key == kPillStackPills
-+			|| key == kMainMenuOrder) {
++			|| key == kMainMenuOrder
++			|| key == kDrawerAccountsExpanded) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -2734,10 +2959,10 @@ index 0000000..a275d03
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..3cd0bef
+index 0000000..6271eae
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,107 @@
 +#pragma once
 +
 +#include <QJsonObject>
@@ -2821,6 +3046,9 @@ index 0000000..3cd0bef
 +
 +	[[nodiscard]] QString mainMenuOrder() const;
 +	void setMainMenuOrder(const QString &value);
++
++	[[nodiscard]] bool drawerAccountsExpanded() const;
++	void setDrawerAccountsExpanded(bool value);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);

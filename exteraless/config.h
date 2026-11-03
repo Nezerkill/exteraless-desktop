@@ -82,6 +82,9 @@ public:
 	[[nodiscard]] QString mainMenuOrder() const;
 	void setMainMenuOrder(const QString &value);
 
+	[[nodiscard]] bool drawerAccountsExpanded() const;
+	void setDrawerAccountsExpanded(bool value);
+
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 

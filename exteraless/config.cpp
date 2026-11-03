@@ -28,6 +28,7 @@ constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
 constexpr auto kMainMenuOrder = "OEMainMenuOrder";
+constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -208,6 +209,14 @@ void Config::setMainMenuOrder(const QString &value) {
 	setValue(kMainMenuOrder, value);
 }
 
+bool Config::drawerAccountsExpanded() const {
+	return boolValue(kDrawerAccountsExpanded, true);
+}
+
+void Config::setDrawerAccountsExpanded(bool value) {
+	setValue(kDrawerAccountsExpanded, value);
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -237,7 +246,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kSaveDeletedMessages
 			|| key == kPillStackEnabled
 			|| key == kPillStackPills
-			|| key == kMainMenuOrder) {
+			|| key == kMainMenuOrder
+			|| key == kDrawerAccountsExpanded) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

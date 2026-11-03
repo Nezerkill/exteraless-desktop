@@ -1,6 +1,6 @@
 # Статус порта Exteraless Desktop
 
-Обновлено: 2026-11-03.
+Обновлено: 2026-11-04.
 
 ## Готово
 
@@ -32,12 +32,25 @@
 - Pill Stack selection: с `OEPillStackPills=3` показываются только CPU и RAM.
 - Per-chat Ghost exclusions: подменю и запись в `OEGhostReadExclusions` проверены под Xvfb; сетевой эффект отдельно не измерялся.
 - Drawer order: под Xvfb задан порядок `ghost,exteraless,pillstack,proxy,storage`, drag даёт `exteraless,pillstack,proxy,ghost,storage`; запись в `exteraless.json` и сохранение после перезапуска подтверждены.
+- Drawer accounts — проверено под Xvfb на итоговом бинарнике:
+  - свежий профиль без ключа: секция стартует раскрытой, строка единственного
+    аккаунта видна, активный аккаунт получает короткий unread badge `128.4K`;
+  - Settings Information при одном аккаунте строку не показывает и бейдж
+    активного аккаунта не включает;
+  - collapse/expand пишет в `exteraless.json` `false`/`true` и переживает
+    restart.
+- Финальная полная Ninja-сборка завершила компиляцию, финальный линк выполнен
+  LLD из-за debug-info overflow у GNU ld; `nix flake check --no-build`
+  проходит.
+- Drawer accounts, поведение по коду (в профиле smoke один аккаунт): бейджи
+  неактивных аккаунтов сохраняются — `badgeActive` лишь добавляет бейдж
+  активному и не снимает остальные.
 - `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
 
 ### Артефакты
 
-- Коммиты: `4d4d258`, `86ef5c7`, `509c211`, `fa63bf1`, `f36b906`, `f715a1e`, `9840aca`, `09df61a`.
-- Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль и drawer order.
+- История разработки — в git репозитория.
+- Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль, drawer order и drawer accounts.
 - Nix-пакет: локальная сборка flake (`./result`), store-путь не фиксируется.
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
@@ -51,7 +64,7 @@
 - [x] Pill Stack: CPU/RAM, сеть, DC ping, proxy, cache, ghost, last seen; выбор видимых пилюль.
 - [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
 - [x] Drawer: порядок пунктов в главном меню (`OEMainMenuOrder`, drag-and-drop).
-- [ ] Drawer: аккаунты и unread-бейджи.
+- [x] Drawer: аккаунты и unread-бейджи.
 
 ### MVP3
 

@@ -212,7 +212,8 @@ class AccountsList final {
 public:
 	AccountsList(
 		not_null<Ui::VerticalLayout*> container,
-		not_null<Window::SessionController*> controller);
+		not_null<Window::SessionController*> controller,
+		AccountsOptions options);
 
 	[[nodiscard]] rpl::producer<> closeRequests() const;
 	[[nodiscard]] Ui::RpWidget *addAccountButton() const;
@@ -224,6 +225,7 @@ private:
 	void rebuild();
 
 	const not_null<Window::SessionController*> _controller;
+	const AccountsOptions _options;
 	const not_null<Ui::VerticalLayout*> _outer;
 	int _outerIndex = 0;
 
@@ -805,7 +807,8 @@ void SetupAccountsWrap(
 		not_null<Window::SessionController*> window,
 		not_null<::Main::Account*> account,
 		Fn<void(Qt::KeyboardModifiers)> callback,
-		bool locked) {
+		bool locked,
+		bool hasUnread) {
 	const auto active = (account == &window->session().account());
 	const auto session = &account->session();
 	const auto user = session->user();
@@ -830,7 +833,7 @@ void SetupAccountsWrap(
 			raw,
 			session,
 			std::move(text),
-			!active,
+			hasUnread,
 			[=] { return window->isGifPausedAtLeastFor(
 				Window::GifPauseReason::Layer); });
 		composedBadge->sizeValue(
@@ -950,8 +953,10 @@ void SetupAccountsWrap(
 
 AccountsList::AccountsList(
 	not_null<Ui::VerticalLayout*> container,
-	not_null<Window::SessionController*> controller)
+	not_null<Window::SessionController*> controller,
+	AccountsOptions options)
 : _controller(controller)
+, _options(options)
 , _outer(container)
 , _outerIndex(container->count()) {
 	setup();
@@ -1118,7 +1123,8 @@ void AccountsList::rebuild() {
 		Assert(i != _watched.end());
 
 		auto &button = i->second;
-		if (!account->sessionExists() || list.size() == 1) {
+		if (!account->sessionExists()
+			|| (list.size() == 1 && !_options.showSingle)) {
 			button = nullptr;
 		} else if (!button) {
 			const auto nextIsLocked = (inner->count() >= premiumLimit);
@@ -1152,12 +1158,15 @@ void AccountsList::rebuild() {
 						std::move(activate));
 				}
 			};
+			const auto active = (account == &_controller->session().account());
+			const auto hasUnread = _options.badgeActive || !active;
 			button.reset(inner->add(MakeAccountButton(
 				inner,
 				_controller,
 				account,
 				std::move(callback),
-				nextIsLocked)));
+				nextIsLocked,
+				hasUnread)));
 		}
 	}
 	inner->resizeToWidth(_outer->width());
@@ -1447,10 +1456,12 @@ Type InformationId() {
 
 AccountsEvents SetupAccounts(
 		not_null<Ui::VerticalLayout*> container,
-		not_null<Window::SessionController*> controller) {
+		not_null<Window::SessionController*> controller,
+		AccountsOptions options) {
 	const auto list = container->lifetime().make_state<AccountsList>(
 		container,
-		controller);
+		controller,
+		options);
 	return {
 		.closeRequests = list->closeRequests(),
 		.addAccountButton = list->addAccountButton(),

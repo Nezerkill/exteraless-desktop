@@ -26,7 +26,9 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - square FAB (`OEAppearanceSquareFab`, default `true`);
   - section radius (`OEAppearanceSectionRadius`);
   - separate headers (`OEAppearanceSeparateHeaders`);
-  - navigation drawer (`OEAppearanceNavigationDrawer`).
+  - navigation drawer — not implemented as a setting: tdesktop's main menu is
+    the drawer itself (see Drawer below), there is no
+    `OEAppearanceNavigationDrawer` key.
 - **Chats**
   - wide channel posts (`OEChatsWideChannelPosts`, default `false`);
   - remove message tail (`OEChatsRemoveMessageTail`, default `true`);
@@ -105,9 +107,21 @@ in the search row; data providers are independent of the widget.
 
 ### Drawer
 
-Account switcher, menu items, unread badges and custom order. tdesktop already
-has a main menu and account switching; the port adds an overlay drawer and a
-serialized `MainMenuLayout` equivalent.
+tdesktop's own main menu is the drawer; the port does not add a separate
+overlay. Accounts and unread badges live in that menu: a single account is
+listed as well, and the active account gets a short unread badge
+(`unreadWithMentionsBadge`). `Settings::SetupAccounts` exposes this through
+`AccountsOptions` (`showSingle`, `badgeActive`); Settings Information keeps the
+defaults, so it still hides a single account and shows no active badge.
+
+The accounts section starts expanded by default (after a saved collapse it
+starts collapsed), and its state is stored in `OEDrawerAccountsExpanded`
+(default `true`), the drawer's actual source of truth. Upstream
+`mainMenuAccountsShown` is written both from the main menu and by
+`Main::Domain::add` when a second account is added. Known limitation: that
+upstream auto-expand and the synchronization of already open main menus are not
+reflected in the drawer yet. Menu item order is `OEMainMenuOrder`. Account
+order, login, logout and the account switcher stay upstream.
 
 ## Not ported
 

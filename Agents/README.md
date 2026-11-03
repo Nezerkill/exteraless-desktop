@@ -28,6 +28,15 @@ sibling-чекаутом: `../exteraless`.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
   сохраняет новый порядок в конфиг.
+- Drawer — это главное меню tdesktop: единственный аккаунт в нём тоже виден,
+  активный аккаунт получает короткий unread badge
+  (`unreadWithMentionsBadge`); раскрытие секции аккаунтов хранится в
+  `OEDrawerAccountsExpanded` (default `true`) — это фактический источник
+  состояния для drawer. Upstream `mainMenuAccountsShown` пишется и из
+  главного меню, и из `Main::Domain::add` при добавлении второго аккаунта;
+  известное ограничение: upstream auto-expand и синхронизация уже открытых
+  главных меню в drawer пока не отражаются. Settings Information использует
+  дефолтные `AccountsOptions`.
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.

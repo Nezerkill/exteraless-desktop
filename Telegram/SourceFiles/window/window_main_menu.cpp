@@ -155,7 +155,10 @@ constexpr auto kPlayStatusLimit = 2;
 
 class MainMenu::ToggleAccountsButton final : public Ui::AbstractButton {
 public:
-	ToggleAccountsButton(QWidget *parent, not_null<Main::Account*> current);
+	ToggleAccountsButton(
+		QWidget *parent,
+		not_null<Main::Account*> current,
+		rpl::producer<bool> expanded);
 
 	[[nodiscard]] int rightSkip() const {
 		return _rightSkip.current();
@@ -194,7 +197,8 @@ protected:
 
 MainMenu::ToggleAccountsButton::ToggleAccountsButton(
 	QWidget *parent,
-	not_null<Main::Account*> current)
+	not_null<Main::Account*> current,
+	rpl::producer<bool> expanded)
 : AbstractButton(parent)
 , _current(current) {
 	rpl::single(rpl::empty) | rpl::then(
@@ -207,13 +211,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
 		}
 	}, lifetime());
 
-	auto &settings = Core::App().settings();
-	if (Core::App().domain().accounts().size() < 2
-		&& settings.mainMenuAccountsShown()) {
-		settings.setMainMenuAccountsShown(false);
-	}
-	settings.mainMenuAccountsShownValue(
-	) | rpl::filter([=](bool value) {
+	std::move(expanded) | rpl::filter([=](bool value) {
 		return (_toggled != value);
 	}) | rpl::on_next([=](bool value) {
 		_toggled = value;
@@ -346,7 +344,12 @@ MainMenu::MainMenu(
 	this,
 	_controller->session().user(),
 	st::mainMenuUserpic)
-, _toggleAccounts(this, &controller->session().account())
+, _accountsExpanded(
+	Exteraless::Config::Instance().drawerAccountsExpanded())
+, _toggleAccounts(
+	this,
+	&controller->session().account(),
+	_accountsExpanded.value())
 , _setEmojiStatus(this, SetStatusLabel(&controller->session()))
 , _emojiStatusPanel(std::make_unique<Info::Profile::EmojiStatusPanel>())
 , _badge(std::make_unique<Info::Profile::Badge>(
@@ -627,9 +630,10 @@ void MainMenu::setupUserpicButton() {
 }
 
 void MainMenu::toggleAccounts() {
-	auto &settings = Core::App().settings();
-	const auto shown = !settings.mainMenuAccountsShown();
-	settings.setMainMenuAccountsShown(shown);
+	const auto shown = !_accountsExpanded.current();
+	_accountsExpanded = shown;
+	Exteraless::Config::Instance().setDrawerAccountsExpanded(shown);
+	Core::App().settings().setMainMenuAccountsShown(shown);
 	Core::App().saveSettingsDelayed();
 }
 
@@ -637,7 +641,10 @@ void MainMenu::setupAccounts() {
 	const auto inner = _accounts->entity();
 
 	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
-	auto events = Settings::SetupAccounts(inner, _controller);
+	auto events = Settings::SetupAccounts(
+		inner,
+		_controller,
+		{ .showSingle = true, .badgeActive = true });
 	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
 
 	std::move(
@@ -646,7 +653,7 @@ void MainMenu::setupAccounts() {
 		closeLayer();
 	}, inner->lifetime());
 
-	_accounts->toggleOn(Core::App().settings().mainMenuAccountsShownValue());
+	_accounts->toggleOn(_accountsExpanded.value());
 	_accounts->finishAnimating();
 
 	_shadow->setDuration(0)->toggleOn(_accounts->shownValue());
