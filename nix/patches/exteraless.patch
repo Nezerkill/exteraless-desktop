@@ -137,7 +137,7 @@ index 4fbafd1..f3172d8 100644
  	if (isOnline != _lastWasOnline
  		|| (isOnline && _lastSetOnline + config.onlineUpdatePeriod <= ms)
 diff --git a/Telegram/SourceFiles/api/api_views.cpp b/Telegram/SourceFiles/api/api_views.cpp
-index 6e6ac4d..868b820 100644
+index 6e6ac4d..252bb45 100644
 --- a/Telegram/SourceFiles/api/api_views.cpp
 +++ b/Telegram/SourceFiles/api/api_views.cpp
 @@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -154,7 +154,7 @@ index 6e6ac4d..868b820 100644
  			i->first->input(),
  			MTP_vector<MTPint>(ids),
 -			MTP_bool(true)
-+			MTP_bool(!Exteraless::Config::Instance().ghostSendReadPackets())
++			MTP_bool(Exteraless::Config::Instance().ghostSendReadPackets())
  		)).done([=](
  				const MTPmessages_MessageViews &result,
  				mtpRequestId requestId) {
@@ -3383,7 +3383,7 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..2795b2b
+index 0000000..c965d96
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 @@ -0,0 +1,514 @@
@@ -3521,33 +3521,33 @@ index 0000000..2795b2b
 +		u"exteraless/ghost/read"_q,
 +		rpl::single(u"Don't send read receipts"_q),
 +		{ u"ghost"_q, u"read"_q, u"receipts"_q },
-+		Exteraless::Config::Instance().ghostSendReadPackets(),
++		!Exteraless::Config::Instance().ghostSendReadPackets(),
 +		[](bool value) {
-+			Exteraless::Config::Instance().setGhostSendReadPackets(value);
++			Exteraless::Config::Instance().setGhostSendReadPackets(!value);
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/stories"_q,
 +		rpl::single(u"Don't send story views"_q),
 +		{ u"ghost"_q, u"stories"_q },
-+		Exteraless::Config::Instance().ghostSendReadStories(),
++		!Exteraless::Config::Instance().ghostSendReadStories(),
 +		[](bool value) {
-+			Exteraless::Config::Instance().setGhostSendReadStories(value);
++			Exteraless::Config::Instance().setGhostSendReadStories(!value);
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/online"_q,
 +		rpl::single(u"Don't send online status"_q),
 +		{ u"ghost"_q, u"online"_q },
-+		Exteraless::Config::Instance().ghostSendOnline(),
++		!Exteraless::Config::Instance().ghostSendOnline(),
 +		[](bool value) {
-+			Exteraless::Config::Instance().setGhostSendOnline(value);
++			Exteraless::Config::Instance().setGhostSendOnline(!value);
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/typing"_q,
 +		rpl::single(u"Don't send typing status"_q),
 +		{ u"ghost"_q, u"typing"_q },
-+		Exteraless::Config::Instance().ghostSendUploadProgress(),
++		!Exteraless::Config::Instance().ghostSendUploadProgress(),
 +		[](bool value) {
-+			Exteraless::Config::Instance().setGhostSendUploadProgress(value);
++			Exteraless::Config::Instance().setGhostSendUploadProgress(!value);
 +		});
 +
 +	builder.addSubsectionTitle({
