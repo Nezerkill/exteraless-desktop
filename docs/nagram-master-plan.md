@@ -1,0 +1,149 @@
+# Master plan: перенос функций NagramX/exteraless в desktop
+
+Дата: 2026-11-05.
+Статус: активен. Это краткая точка входа; полные детали лежат в
+`docs/nagram-feature-audit.md` и `docs/nagram-porting-backlog.md`.
+
+## 1. Цель и границы
+
+Цель — перенести **все функции Android-клиента exteraless/NagramX, у которых
+есть осмысленный desktop-аналог**. Не являются целью Android-only вещи
+(CameraX, FCM, Monet, нижние табы, XML-иконки лаунчера), Java/Xposed-хуки,
+APK-обновления и plugin-only API. Полный список исключений — в бэклоге,
+раздел «Android-only, plugin/Xposed и не переносить».
+
+Правило: не копировать Android UI буквально. Переносить поведение, настройки
+и дефолты в существующие Qt-компоненты tdesktop.
+
+## 2. Текущая база
+
+- Desktop: форк tdesktop 7.3.1, ветка `main`, remote
+  `git@github.com:Nezerkill/exteraless-desktop.git`.
+- Последние опорные коммиты: `cfbe72c` (аудит и бэклог), `123a29f`
+  (P0 Ghost view/toggles), `27b1591` (paste stripping), `2434eb3`
+  (unread capsule).
+- Реализовано 18 групп: General, Ghost 4/5, deleted messages (частично),
+  Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
+  drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 8
+  ключей, брендинг, WEB proxy.
+- Проверки: chats **93**, plugin manifest **32**, plugin host **213**, все
+  PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
+- `result/` устарел; полная Nix-сборка после последних изменений не
+  завершена. Это отдельный P1-долг, не повод менять уже проверенный
+  Debug-бинарник.
+
+## 3. Источники истины
+
+1. `docs/nagram-porting-backlog.md` — 90 задач `NB-01…NB-90`, P0/P1/P2.
+2. `docs/nagram-feature-audit.md` — полная карта семейств, ключей, статусов и
+   ограничений.
+3. `docs/feature-mapping.md` — краткое описание уже перенесённого.
+4. `STATUS.md` — состояние сборки и проверок.
+
+При конфликте: код и фактические тесты важнее отчёта; аудит правится вместе
+с бэклогом, а не отдельно.
+
+## 4. Рабочий цикл одной задачи
+
+1. Взять верхнюю открытую задачу из бэклога (P0 → P1 → P2).
+2. Прочитать её строку и соответствующий раздел аудита; проверить файлы в
+   текущем дереве.
+3. Реализовать минимальное изменение. Не трогать `Telegram/lib_ui/**`: патч
+   Nix собирается только по `CMakeLists.txt`, `Telegram/` и `exteraless/`.
+4. Добавить/обновить чистый helper и CLI-тест, если поведение можно проверить
+   без GUI; иначе Xvfb smoke.
+5. Собрать затронутые TU, обновить `libexteraless.a`, выполнить LLD-релинк
+   при известном GNU ld overflow (см. раздел 6).
+6. Прогнать все три раннера, `nix flake check --no-build`, обновить патч и
+   проверить его на чистом v7.3.1.
+7. Обновить `CHANGELOG.md`, `STATUS.md`, `Agents/README.md` и соответствующие
+   строки бэклога/аудита.
+8. Сделать отдельный commit и push в `origin/main`. Сообщение — по стилю
+   репозитория, без `[ai]` и без трейлеров. В бэклоге отметить `NB-XX` как
+   ✅/🟡 с датой и коммитом.
+9. Перейти к следующей задаче без остановки, если нет compile-ожидания.
+
+## 5. Ближайший batch
+
+### Шаг 0 — данные и приватность
+
+- `NB-02`: читать `OESaveDeletedMessages`, добавить гейт, лимит и ротацию
+  sidecar. Сейчас запись идёт всегда, ключ мёртв, файл растёт без предела.
+- `NB-04`: полный `.extera` export/import всех 25 ключей, отчёт unknown.
+- `NB-05`: сброс настроек Exteraless с подтверждением.
+- `NB-06`: путь `exteraless.json` через `cWorkingDir()`, совместимый с
+  `-workdir`, с миграцией старого профиля.
+- `NB-03`: локализовать захардкоженные подписи Exteraless через
+  `lang.strings`.
+
+### Шаг 1 — безопасный UX batch
+
+- `NB-11`: видимость пунктов меню сообщения (`OEChatsMenu*`) через новый
+  `exteraless/message_menu.{h,cpp}` + `history/view/history_view_context_menu.cpp`
+  и `window/window_peer_menu.cpp`; CLI для дефолтов/fromJson, Xvfb для меню.
+- `NB-07`: `OEGeneralShowSeconds`, чистая функция форматирования времени +
+  вызовы в bottom info и списке чатов.
+- `NB-37`: `OEGeneralHidePhone`, скрытие телефона в профиле; при выключенном
+  флаге поведение upstream не меняется.
+
+### После batch
+
+`NB-12` (double tap), `NB-14` (sticker time), `NB-16` (pill drag), `NB-17`
+(Ghost batch/status), `NB-18` (Ghost locked), затем P1 из бэклога.
+`NB-13` (wide posts), `NB-15` (sort unread), feed, AI, player, Vosk и
+regex-фильтры — отдельными архитектурными этапами после стабилизации P0/P1.
+
+## 6. Сборка и проверка
+
+```bash
+# конфигурация
+nix develop --command cmake -S . -B out
+
+# точечная компиляция TU через out/compile_commands.json
+nix develop --command python3 /tmp/opencode/compile_tus.py '<substring>.cpp'
+
+# обновление статической библиотеки, если менялся exteraless/*
+ar rcs out/exteraless/libexteraless.a out/exteraless/CMakeFiles/exteraless.dir/*.o
+
+# финальный линк (GNU ld падает на debug-info overflow)
+/tmp/opencode/relink-lld-run.sh
+cp -p /tmp/opencode/Telegram-lld-test out/bin/Telegram
+
+python3 exteraless/tests/chats/run_checks.py
+python3 exteraless/tests/plugins/run_checks.py
+python3 exteraless/tests/plugins/run_host_checks.py
+nix flake check --no-build
+```
+
+Перед коммитом обновить `nix/patches/exteraless.patch` через
+`./nix/update-patch.sh` и проверить `patch -p1 --dry-run` на чистом v7.3.1.
+Полную Nix-сборку выполнять только когда дерево стабильно; она долгая и
+может конкурировать за память с Debug-сборкой.
+
+## 7. Ограничения и принятые решения
+
+- `exteraless.json` сейчас использует `QStandardPaths::AppLocalDataLocation`,
+  а не `-workdir`; исправление — `NB-06`, до него тесты изолируются через
+  `XDG_DATA_HOME`.
+- Ghost: 4 из 5 функций; `OEGhostSendOfflineAfterOnline` мёртв (NB-38).
+  Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
+- Deleted messages: sidecar с 9 полями, нет реакций/ответов/правок; ключ
+  всегда включён. Сначала NB-02, затем расширение схемы NB-19.
+- Плагины: bwrap + Python host, разрешения заявленные и не применяются как
+  capability; stage 3 (меню/настройки/intents) — NB-79.
+- WEB proxy уже есть в коде и Nix-сборке, но не описан в feature-mapping и не
+  имеет развёрнутого relay; задача NB-90.
+- `.extera` сейчас 8 из 25 ключей; расширение — NB-04.
+- Android-only и `lib_ui`-зависимые пункты не добавлять в код без отдельного
+  решения по упаковке.
+
+## 8. Точка возобновления после сжатия контекста
+
+1. Прочитать этот файл.
+2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
+   (сейчас `NB-02`, затем `NB-04`, `NB-05`, `NB-06`, `NB-03`, `NB-11`,
+   `NB-07`, `NB-37`).
+3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
+4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
+   коммитом.
+5. Обновить статус задачи в бэклоге в том же коммите.
