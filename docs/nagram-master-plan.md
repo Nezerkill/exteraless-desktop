@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 8
   ключей, брендинг, WEB proxy.
-- Проверки: chats **93**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **121**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -67,8 +67,8 @@ APK-обновления и plugin-only API. Полный список искл�
 
 ### Шаг 0 — данные и приватность
 
-- `NB-02`: читать `OESaveDeletedMessages`, добавить гейт, лимит и ротацию
-  sidecar. Сейчас запись идёт всегда, ключ мёртв, файл растёт без предела.
+- `NB-02` — ✅ закрыто 2026-11-05: гейт `OESaveDeletedMessages`, лимит
+  1000/100 и ротация sidecar, тумблер в Chats.
 - `NB-04`: полный `.extera` export/import всех 25 ключей, отчёт unknown.
 - `NB-05`: сброс настроек Exteraless с подтверждением.
 - `NB-06`: путь `exteraless.json` через `cWorkingDir()`, совместимый с
@@ -127,8 +127,9 @@ nix flake check --no-build
   `XDG_DATA_HOME`.
 - Ghost: 4 из 5 функций; `OEGhostSendOfflineAfterOnline` мёртв (NB-38).
   Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
-- Deleted messages: sidecar с 9 полями, нет реакций/ответов/правок; ключ
-  всегда включён. Сначала NB-02, затем расширение схемы NB-19.
+- Deleted messages: sidecar с 9 полями, нет реакций/ответов/правок. Гейт,
+  лимит и ротация закрыты в NB-02; расширение схемы — NB-19, метка в чате —
+  NB-20.
 - Плагины: bwrap + Python host, разрешения заявленные и не применяются как
   capability; stage 3 (меню/настройки/intents) — NB-79.
 - WEB proxy уже есть в коде и Nix-сборке, но не описан в feature-mapping и не
@@ -141,7 +142,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-02`, затем `NB-04`, `NB-05`, `NB-06`, `NB-03`, `NB-11`,
+   (сейчас `NB-04`, затем `NB-05`, `NB-06`, `NB-03`, `NB-11`,
    `NB-07`, `NB-37`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным

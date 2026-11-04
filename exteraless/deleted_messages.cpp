@@ -1,5 +1,8 @@
 #include "exteraless/deleted_messages.h"
 
+#include "exteraless/config.h"
+#include "exteraless/deleted_messages_trim.h"
+
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "history/history.h"
@@ -107,6 +110,9 @@ void DeletedMessages::clear(PeerId peerId) {
 
 void DeletedMessages::onItemsDestroyed(
 		const std::vector<not_null<HistoryItem*>> &items) {
+	if (!Config::Instance().saveDeletedMessages()) {
+		return;
+	}
 	auto changed = false;
 	for (const auto &item : items) {
 		if (!ShouldSave(item)) {
@@ -141,6 +147,9 @@ void DeletedMessages::onItemsDestroyed(
 		changed = true;
 	}
 	if (changed) {
+		TrimDeletedEntries(
+			&_entries,
+			[](const Entry &entry) { return entry.peerId; });
 		save();
 	}
 }
@@ -173,6 +182,15 @@ void DeletedMessages::load() {
 		entry.out = object.value("out").toBool();
 		if (entry.peerId && entry.msgId) {
 			_entries.push_back(std::move(entry));
+		}
+	}
+	const auto loaded = _entries.size();
+	if (Config::Instance().saveDeletedMessages()) {
+		TrimDeletedEntries(
+			&_entries,
+			[](const Entry &entry) { return entry.peerId; });
+		if (_entries.size() != loaded) {
+			save();
 		}
 	}
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-05
+
+- Chats/Deleted messages: `OESaveDeletedMessages` (default `false`) теперь
+  гейтит запись удалённых сообщений, sidecar ограничен 1000 записями и 100
+  на чат с ротацией при добавлении и загрузке; тумблер «Save deleted
+  messages» добавлен в подсекцию Chats, CLI-тесты — `deleted`,
+  `deleted-set`, `deleted-trim`.
+
 ## 2026-11-04
 
 - Docs: добавлены `docs/nagram-feature-audit.md` (обзор функций

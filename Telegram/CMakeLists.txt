@@ -73,6 +73,7 @@ set_target_properties(Telegram PROPERTIES AUTOMOC ON)
 target_sources(Telegram PRIVATE
     ../exteraless/deleted_messages.cpp
     ../exteraless/deleted_messages.h
+    ../exteraless/deleted_messages_trim.h
     ../exteraless/ghost_mode.cpp
     ../exteraless/ghost_mode.h
     ../exteraless/proxy_rules.cpp

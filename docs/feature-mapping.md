@@ -38,7 +38,8 @@ New `Exteraless` section in tdesktop Settings with subsections:
     default `false`);
   - strip tracking on open (`OEChatsStripTrackingOnOpen`, default `true`);
   - strip tracking on paste (`OEChatsStripTrackingOnPaste`, default `true`);
-  - compact unread messages label (`OEChatsUnreadCapsule`, default `false`).
+  - compact unread messages label (`OEChatsUnreadCapsule`, default `false`);
+  - save deleted messages (`OESaveDeletedMessages`, default `false`).
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`.
 
@@ -78,7 +79,7 @@ Desktop behavior of the Chats keys:
   `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 93 checks, the plugin manifest runner 32
+- Verification: the chats runner has 121 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -134,10 +135,13 @@ non-Ghost requests.
 
 AyuGram stores deleted messages in a separate local database
 (`DeletedMessage`, `DeletedMessageFull`, `DeletedMessageDao`). Desktop keeps a
-separate SQLite table keyed by account, peer and message id. On
-`UpdateDeleteMessages`, the message is saved before the local history is
-cleared. UI: a deleted-message mark in the chat and a per-peer list. Import of
-the old Android database is not part of MVP2.
+per-account JSON sidecar in the cache path keyed by peer and message id.
+Recording is off by default (`OESaveDeletedMessages`, toggle in
+Exteraless → Chats), capped at 1000 entries with 100 per peer, and rotated on
+add and load. On item destruction the message is saved before the local
+history is cleared. UI: a per-peer list from the chat context menu; a
+deleted-message mark in the chat is not implemented yet. Import of the old
+Android database is not part of MVP2.
 
 ### Pill Stack
 

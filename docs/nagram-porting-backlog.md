@@ -60,7 +60,7 @@
 | Ghost: read / stories / online / typing | `OEGhostSendReadPackets`, `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress` | `exteraless/ghost_mode.cpp`, `mtproto/mtproto_request_filter.h`, `apiwrap.cpp`, `api/api_views.cpp`, `api/api_updates.cpp`, `api/api_send_progress.cpp`, `data/data_stories.cpp` | 🟡 4 из 5; ключ offline мёртв |
 | Ghost: просмотры и подписи тумблеров | `OEGhostSendReadPackets` | `api/api_views.cpp` (`ViewsManager::viewsIncrement`), `settings/sections/settings_exteraless.cpp` | 🔧 исправлено в `123a29f` |
 | Ghost per-chat exclusions | `OEGhostReadExclusions`, `OEGhostTypingExclusions` | `exteraless/config.cpp`, подменю в `window/window_peer_menu.cpp` | 🟡 UI и запись есть, сетевой эффект не измерялся |
-| Deleted messages | `OESaveDeletedMessages` (не читается) | `exteraless/deleted_messages.cpp`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | 🟡 9 полей схемы, всегда включено, без лимита |
+| Deleted messages | `OESaveDeletedMessages` | `exteraless/deleted_messages.cpp`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | 🟡 9 полей схемы; гейт, лимит и ротация закрыты в NB-02 |
 | Remove message tail | `OEChatsRemoveMessageTail` | `history/view/history_view_message.cpp` (`skipTail`) | ✅ |
 | Hide reactions (channel/group/private) + hover-кнопка | `OEChatsHideReactionsChannels/Groups/Private` | `exteraless/chats.cpp`, `history/view/history_view_element.cpp`, `history_view_message.cpp` | ✅ |
 | Strip tracking on open | `OEChatsStripTrackingOnOpen` | `exteraless/links.cpp`, `core/ui_integration.cpp` | ✅ |
@@ -76,17 +76,17 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | 🟡 11 ключей `lng_settings_exteraless*`, остальные подписи захардкожены |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(93 проверки: strip, reactions, cli, config, general, backup),
+(121 проверка: strip, reactions, cli, config, general, deleted, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
-timeout, state). Все три прогнаны вторым отчётом со статусом PASS.
+timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
 
 ## 3. P0 — корректность, данные, дешёвые настройки
 
 | ID | Задача | Android key(s) | Desktop point | Размер · риск | Smoke | Статус | Источник |
 |---|---|---|---|---|---|---|---|
 | NB-01 | Ghost: инверсия счётчика просмотров и подписей тумблеров | `sendReadMessagePackets`, `messages.getMessagesViews` | `api/api_views.cpp` (`ViewsManager::viewsIncrement`), `settings/sections/settings_exteraless.cpp`, патч `nix/patches/exteraless.patch` | S · низкий | дефолтный конфиг: просмотры канала уходят; Xvfb: подписи «Don't send …» соответствуют состоянию | 🔧 исправлено в `123a29f` | R2 M1 |
-| NB-02 | Deleted messages: читать `OESaveDeletedMessages`, добавить лимит и ротацию файла | `enableSaveDeletedMessages` | `exteraless/deleted_messages.cpp`, `exteraless/config.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · средний (данные, приватность, рост файла) | CLI: при выключенном ключе ничего не пишется; cap ротации; Xvfb: тумблер | ⬜ | R2 M2 |
+| NB-02 | Deleted messages: читать `OESaveDeletedMessages`, добавить лимит и ротацию файла | `enableSaveDeletedMessages` | `exteraless/deleted_messages.cpp`, `exteraless/deleted_messages_trim.h`, `exteraless/config.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · средний (данные, приватность, рост файла) | CLI: при выключенном ключе ничего не пишется; cap ротации; Xvfb: тумблер | ✅ 2026-11-05: гейт default `false`, лимит 1000/100, ротация при add/load (load только при включённом ключе), тумблер Chats, CLI `deleted*` (27 проверок); Xvfb: тумблер включается/выключается и пишет ключ | R2 M2 |
 | NB-03 | Локализовать секцию Exteraless: захардкоженные подписи → `lang.strings` | `strings_oe*.xml` | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | S · низкий | Xvfb на ru/en: нет английских подписей; поиск по настройкам не падает | ⬜ | R1 P0-1, R2 M9 |
 | NB-04 | Полный экспорт/импорт `.extera` для всех 25 ключей с отчётом о неизвестных | `EtgBackup`, `InvisibleEncryptor` | `exteraless/backup.cpp` | S · низкий | `exteraless/tests/chats/run_checks.py` + CLI-импорт файла с новыми ключами | 🟡 8 из 25 | R1 P0-2 |
 | NB-05 | Сброс настроек Exteraless (кнопка + подтверждение) | `resetSettings` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` | S · низкий | сброс → дефолты, `exteraless.json` без OE-ключей | ⬜ | R1 P0-3 |
@@ -219,11 +219,14 @@ timeout, state). Все три прогнаны вторым отчётом со
 
 ### 7.1 Шаг 0 — закрыть P0 по данным
 
-**NB-02 (deleted messages: гейт, лимит, ротация).** Причина: сейчас запись
-идёт всегда, ключ не читается, файл растёт без ограничения, и это
-приватность пользователя. Правки локальные: `exteraless/deleted_messages.cpp`,
-`exteraless/config.cpp`, `settings/sections/settings_exteraless.cpp`; схема
-файла не меняется, поэтому это дешёвая и обратимая правка.
+**NB-02 (deleted messages: гейт, лимит, ротация) — закрыто 2026-11-05.**
+`OESaveDeletedMessages` (default `false`) читается перед записью, sidecar
+ограничен 1000 записями и 100 на чат, ротация выполняется при добавлении и
+при загрузке, тумблер добавлен в Chats. Схема файла не менялась; расширение
+полей — отдельная задача NB-19.
+
+Следующие шаги того же этапа: NB-04 (полный `.extera`), NB-05 (сброс),
+NB-06 (`-workdir`), NB-03 (локализация).
 
 ### 7.2 Шаг 1 — batch из трёх функций
 
@@ -263,7 +266,7 @@ NB-09 в этом же батче. Безопасность: не влияет �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 93 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 121 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

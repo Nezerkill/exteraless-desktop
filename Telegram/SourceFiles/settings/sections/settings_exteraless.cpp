@@ -247,6 +247,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setChatsUnreadCapsule(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/save-deleted"_q,
+		u"Save deleted messages"_q,
+		{ u"chat"_q, u"deleted"_q, u"history"_q, u"ayu"_q },
+		Exteraless::Config::Instance().saveDeletedMessages(),
+		[](bool value) {
+			Exteraless::Config::Instance().setSaveDeletedMessages(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,

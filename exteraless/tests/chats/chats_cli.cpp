@@ -1,6 +1,7 @@
 #include "exteraless/backup.h"
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages_trim.h"
 #include "exteraless/links.h"
 
 #include <QByteArray>
@@ -12,6 +13,7 @@
 
 #include <array>
 #include <iostream>
+#include <vector>
 
 namespace {
 
@@ -32,6 +34,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1>\n"
+		<< "  exteraless-chats-cli deleted\n"
+		<< "  exteraless-chats-cli deleted-set <0|1>\n"
+		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
+		<< "<json>\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -92,6 +98,13 @@ void PrintGeneral() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("disableNumberRounding"),
 			Exteraless::Config::Instance().disableNumberRounding() },
+	});
+}
+
+void PrintDeleted() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("saveDeletedMessages"),
+			Exteraless::Config::Instance().saveDeletedMessages() },
 	});
 }
 
@@ -202,6 +215,79 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setDisableNumberRounding(value);
 		PrintGeneral();
+		return 0;
+	}
+	if (mode == QStringLiteral("deleted")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintDeleted();
+		return 0;
+	}
+	if (mode == QStringLiteral("deleted-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSaveDeletedMessages(value);
+		PrintDeleted();
+		return 0;
+	}
+	if (mode == QStringLiteral("deleted-trim")) {
+		if (arguments.size() != 3 && arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto maxEntries = int(Exteraless::kDeletedMessagesMaxEntries);
+		auto maxPerPeer = int(Exteraless::kDeletedMessagesMaxPerPeer);
+		if (arguments.size() == 5) {
+			auto ok = false;
+			maxEntries = arguments[2].toInt(&ok);
+			if (!ok) {
+				return PrintUsage();
+			}
+			maxPerPeer = arguments[3].toInt(&ok);
+			if (!ok) {
+				return PrintUsage();
+			}
+		}
+		const auto document = QJsonDocument::fromJson(
+			arguments[arguments.size() - 1].toUtf8());
+		if (!document.isArray()) {
+			return PrintUsage();
+		}
+		struct TrimEntry {
+			qint64 peerId = 0;
+			qint64 msgId = 0;
+		};
+		auto entries = std::vector<TrimEntry>();
+		for (const auto &value : document.array()) {
+			const auto pair = value.toArray();
+			if (pair.size() != 2) {
+				return PrintUsage();
+			}
+			entries.push_back({
+				qint64(pair[0].toDouble()),
+				qint64(pair[1].toDouble()),
+			});
+		}
+		Exteraless::TrimDeletedEntries(
+			&entries,
+			[](const TrimEntry &entry) { return entry.peerId; },
+			maxEntries,
+			maxPerPeer);
+		auto result = QJsonArray();
+		for (const auto &entry : entries) {
+			result.append(QJsonArray{
+				double(entry.peerId),
+				double(entry.msgId) });
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("count"), int(result.size()) },
+			{ QStringLiteral("entries"), result },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("config-set")) {

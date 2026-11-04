@@ -9,16 +9,17 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..098fe7c 100644
+index 811707d..72af6b7 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,23 @@ endif()
+@@ -70,6 +70,24 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
 +target_sources(Telegram PRIVATE
 +    ../exteraless/deleted_messages.cpp
 +    ../exteraless/deleted_messages.h
++    ../exteraless/deleted_messages_trim.h
 +    ../exteraless/ghost_mode.cpp
 +    ../exteraless/ghost_mode.h
 +    ../exteraless/proxy_rules.cpp
@@ -36,7 +37,7 @@ index 811707d..098fe7c 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +126,7 @@ PRIVATE
+@@ -109,6 +127,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -44,7 +45,7 @@ index 811707d..098fe7c 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1698,7 @@ PRIVATE
+@@ -1680,6 +1699,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -52,7 +53,7 @@ index 811707d..098fe7c 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1916,8 @@ PRIVATE
+@@ -1897,6 +1917,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -61,7 +62,7 @@ index 811707d..098fe7c 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2551,10 @@ else()
+@@ -2530,6 +2552,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -3383,10 +3384,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..c965d96
+index 0000000..8ad5061
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,514 @@
+@@ -0,0 +1,522 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3635,6 +3636,14 @@ index 0000000..c965d96
 +		Exteraless::Config::Instance().chatsSettings().unreadCapsule,
 +		[](bool value) {
 +			Exteraless::Config::Instance().setChatsUnreadCapsule(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/save-deleted"_q,
++		u"Save deleted messages"_q,
++		{ u"chat"_q, u"deleted"_q, u"history"_q, u"ayu"_q },
++		Exteraless::Config::Instance().saveDeletedMessages(),
++		[](bool value) {
++			Exteraless::Config::Instance().setSaveDeletedMessages(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -5415,11 +5424,14 @@ index 0000000..5c6c791
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.cpp b/exteraless/deleted_messages.cpp
 new file mode 100644
-index 0000000..47c09f0
+index 0000000..75ea458
 --- /dev/null
 +++ b/exteraless/deleted_messages.cpp
-@@ -0,0 +1,216 @@
+@@ -0,0 +1,234 @@
 +#include "exteraless/deleted_messages.h"
++
++#include "exteraless/config.h"
++#include "exteraless/deleted_messages_trim.h"
 +
 +#include "data/data_peer.h"
 +#include "data/data_session.h"
@@ -5528,6 +5540,9 @@ index 0000000..47c09f0
 +
 +void DeletedMessages::onItemsDestroyed(
 +		const std::vector<not_null<HistoryItem*>> &items) {
++	if (!Config::Instance().saveDeletedMessages()) {
++		return;
++	}
 +	auto changed = false;
 +	for (const auto &item : items) {
 +		if (!ShouldSave(item)) {
@@ -5562,6 +5577,9 @@ index 0000000..47c09f0
 +		changed = true;
 +	}
 +	if (changed) {
++		TrimDeletedEntries(
++			&_entries,
++			[](const Entry &entry) { return entry.peerId; });
 +		save();
 +	}
 +}
@@ -5594,6 +5612,15 @@ index 0000000..47c09f0
 +		entry.out = object.value("out").toBool();
 +		if (entry.peerId && entry.msgId) {
 +			_entries.push_back(std::move(entry));
++		}
++	}
++	const auto loaded = _entries.size();
++	if (Config::Instance().saveDeletedMessages()) {
++		TrimDeletedEntries(
++			&_entries,
++			[](const Entry &entry) { return entry.peerId; });
++		if (_entries.size() != loaded) {
++			save();
 +		}
 +	}
 +}
@@ -5689,6 +5716,61 @@ index 0000000..380e262
 +	QString _path;
 +	std::vector<Entry> _entries;
 +};
++
++} // namespace Exteraless
+diff --git a/exteraless/deleted_messages_trim.h b/exteraless/deleted_messages_trim.h
+new file mode 100644
+index 0000000..d928e0d
+--- /dev/null
++++ b/exteraless/deleted_messages_trim.h
+@@ -0,0 +1,49 @@
++#pragma once
++
++#include <QtGlobal>
++
++#include <unordered_map>
++#include <vector>
++
++namespace Exteraless {
++
++inline constexpr auto kDeletedMessagesMaxEntries = 1000;
++inline constexpr auto kDeletedMessagesMaxPerPeer = 100;
++
++template <typename Entry, typename PeerIdFn>
++void TrimDeletedEntries(
++		std::vector<Entry> *entries,
++		PeerIdFn peerId,
++		int maxEntries = kDeletedMessagesMaxEntries,
++		int maxPerPeer = kDeletedMessagesMaxPerPeer) {
++	if (maxEntries <= 0 || maxPerPeer <= 0) {
++		entries->clear();
++		return;
++	}
++	auto perPeer = std::unordered_map<qint64, int>();
++	auto keep = std::vector<bool>(entries->size(), false);
++	auto kept = 0;
++	for (auto i = int(entries->size()); i != 0;) {
++		--i;
++		auto &seen = perPeer[peerId((*entries)[i])];
++		if (seen >= maxPerPeer || kept >= maxEntries) {
++			continue;
++		}
++		++seen;
++		++kept;
++		keep[i] = true;
++	}
++	if (kept == int(entries->size())) {
++		return;
++	}
++	auto result = std::vector<Entry>();
++	result.reserve(kept);
++	for (auto i = 0; i != int(entries->size()); ++i) {
++		if (keep[i]) {
++			result.push_back(std::move((*entries)[i]));
++		}
++	}
++	*entries = std::move(result);
++}
 +
 +} // namespace Exteraless
 diff --git a/exteraless/exteraless.cpp b/exteraless/exteraless.cpp
@@ -6668,13 +6750,14 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..8a5698d
+index 0000000..ac258bb
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,368 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages_trim.h"
 +#include "exteraless/links.h"
 +
 +#include <QByteArray>
@@ -6686,6 +6769,7 @@ index 0000000..8a5698d
 +
 +#include <array>
 +#include <iostream>
++#include <vector>
 +
 +namespace {
 +
@@ -6706,6 +6790,10 @@ index 0000000..8a5698d
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1>\n"
++		<< "  exteraless-chats-cli deleted\n"
++		<< "  exteraless-chats-cli deleted-set <0|1>\n"
++		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
++		<< "<json>\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -6766,6 +6854,13 @@ index 0000000..8a5698d
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("disableNumberRounding"),
 +			Exteraless::Config::Instance().disableNumberRounding() },
++	});
++}
++
++void PrintDeleted() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("saveDeletedMessages"),
++			Exteraless::Config::Instance().saveDeletedMessages() },
 +	});
 +}
 +
@@ -6876,6 +6971,79 @@ index 0000000..8a5698d
 +		}
 +		Exteraless::Config::Instance().setDisableNumberRounding(value);
 +		PrintGeneral();
++		return 0;
++	}
++	if (mode == QStringLiteral("deleted")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintDeleted();
++		return 0;
++	}
++	if (mode == QStringLiteral("deleted-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSaveDeletedMessages(value);
++		PrintDeleted();
++		return 0;
++	}
++	if (mode == QStringLiteral("deleted-trim")) {
++		if (arguments.size() != 3 && arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto maxEntries = int(Exteraless::kDeletedMessagesMaxEntries);
++		auto maxPerPeer = int(Exteraless::kDeletedMessagesMaxPerPeer);
++		if (arguments.size() == 5) {
++			auto ok = false;
++			maxEntries = arguments[2].toInt(&ok);
++			if (!ok) {
++				return PrintUsage();
++			}
++			maxPerPeer = arguments[3].toInt(&ok);
++			if (!ok) {
++				return PrintUsage();
++			}
++		}
++		const auto document = QJsonDocument::fromJson(
++			arguments[arguments.size() - 1].toUtf8());
++		if (!document.isArray()) {
++			return PrintUsage();
++		}
++		struct TrimEntry {
++			qint64 peerId = 0;
++			qint64 msgId = 0;
++		};
++		auto entries = std::vector<TrimEntry>();
++		for (const auto &value : document.array()) {
++			const auto pair = value.toArray();
++			if (pair.size() != 2) {
++				return PrintUsage();
++			}
++			entries.push_back({
++				qint64(pair[0].toDouble()),
++				qint64(pair[1].toDouble()),
++			});
++		}
++		Exteraless::TrimDeletedEntries(
++			&entries,
++			[](const TrimEntry &entry) { return entry.peerId; },
++			maxEntries,
++			maxPerPeer);
++		auto result = QJsonArray();
++		for (const auto &entry : entries) {
++			result.append(QJsonArray{
++				double(entry.peerId),
++				double(entry.msgId) });
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("count"), int(result.size()) },
++			{ QStringLiteral("entries"), result },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("config-set")) {
@@ -7018,10 +7186,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..e293d03
+index 0000000..8dd1729
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,484 @@
+@@ -0,0 +1,591 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -7170,6 +7338,7 @@ index 0000000..e293d03
 +        ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
 +        ("config-set with five values",
 +         ["config-set", "0", "1", "0", "1", "0"]),
++        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -7474,6 +7643,110 @@ index 0000000..e293d03
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_deleted(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "deleted-default")
++    data = json_call(ledger, cli, ["deleted"], env, "deleted default")
++    if data is not None:
++        ledger.check(
++            "deleted default off",
++            data.get("saveDeletedMessages") is False,
++            data)
++
++    env = make_env(work / "deleted-set")
++    data = json_call(ledger, cli, ["deleted-set", "1"], env, "deleted setter")
++    if data is not None:
++        ledger.check(
++            "deleted setter",
++            data.get("saveDeletedMessages") is True,
++            data)
++    data = json_call(ledger, cli, ["deleted"], env, "deleted reload")
++    if data is not None:
++        ledger.check(
++            "deleted persisted",
++            data.get("saveDeletedMessages") is True,
++            data)
++
++    data = json_call(ledger, cli, ["deleted-set", "0"], env, "deleted disable")
++    if data is not None:
++        ledger.check(
++            "deleted disable",
++            data.get("saveDeletedMessages") is False,
++            data)
++    data = json_call(ledger, cli, ["deleted"], env, "deleted disable reload")
++    if data is not None:
++        ledger.check(
++            "deleted disable persisted",
++            data.get("saveDeletedMessages") is False,
++            data)
++
++    env = make_env(work / "deleted-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {"OESaveDeletedMessages": True},
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "deleted fromJson")
++    if data is not None:
++        ledger.check(
++            "deleted fromJson accepted",
++            data.get("accepted") is True,
++            data)
++        data = json_call(ledger, cli, ["deleted"], env, "deleted fromJson read")
++        if data is not None:
++            ledger.check(
++                "deleted fromJson value",
++                data.get("saveDeletedMessages") is True,
++                data)
++
++    cases = [
++        ("trim under limits", 10, 10,
++         [[1, 1], [1, 2], [2, 1]],
++         [[1, 1], [1, 2], [2, 1]]),
++        ("trim global cap", 3, 10,
++         [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]],
++         [[1, 3], [1, 4], [1, 5]]),
++        ("trim per peer cap", 10, 2,
++         [[1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3]],
++         [[1, 2], [1, 3], [2, 2], [2, 3]]),
++        ("trim combined caps", 3, 2,
++         [[1, 1], [2, 1], [1, 2], [2, 2], [1, 3]],
++         [[1, 2], [2, 2], [1, 3]]),
++        ("trim zero global cap", 0, 10, [[1, 1]], []),
++        ("trim zero per peer cap", 10, 0, [[1, 1]], []),
++        ("trim negative cap", -1, 10, [[1, 1]], []),
++        ("trim empty", 10, 10, [], []),
++        ("trim default per peer cap", None, None,
++         [[1, msg] for msg in range(1, 102)],
++         [[1, msg] for msg in range(2, 102)]),
++        ("trim default global cap", None, None,
++         [[peer, peer] for peer in range(1, 1002)],
++         [[peer, peer] for peer in range(2, 1002)]),
++    ]
++    for name, max_entries, max_per_peer, given, expected in cases:
++        arguments = ["deleted-trim"]
++        if max_entries is not None:
++            arguments += [str(max_entries), str(max_per_peer)]
++        arguments.append(json.dumps(given))
++        data = json_call(ledger, cli, arguments, env, name)
++        if data is not None:
++            ledger.check(
++                f"{name} entries",
++                data.get("entries") == expected,
++                data.get("entries"))
++            ledger.check(
++                f"{name} count",
++                data.get("count") == len(expected),
++                data.get("count"))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -7488,12 +7761,14 @@ index 0000000..e293d03
 +        work = Path(temp)
 +        config = check_config(ledger, cli, work)
 +        general = check_general(ledger, cli, work)
++        deleted = check_deleted(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
 +    print(f"cli: {cli_args[0] - cli_args[1]} passed")
 +    print(f"config: {config[0] - config[1]} passed")
 +    print(f"general: {general[0] - general[1]} passed")
++    print(f"deleted: {deleted[0] - deleted[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

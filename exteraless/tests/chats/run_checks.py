@@ -146,6 +146,7 @@ def check_cli_args(ledger, cli):
         ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
         ("config-set with five values",
          ["config-set", "0", "1", "0", "1", "0"]),
+        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -450,6 +451,110 @@ def check_backup(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_deleted(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "deleted-default")
+    data = json_call(ledger, cli, ["deleted"], env, "deleted default")
+    if data is not None:
+        ledger.check(
+            "deleted default off",
+            data.get("saveDeletedMessages") is False,
+            data)
+
+    env = make_env(work / "deleted-set")
+    data = json_call(ledger, cli, ["deleted-set", "1"], env, "deleted setter")
+    if data is not None:
+        ledger.check(
+            "deleted setter",
+            data.get("saveDeletedMessages") is True,
+            data)
+    data = json_call(ledger, cli, ["deleted"], env, "deleted reload")
+    if data is not None:
+        ledger.check(
+            "deleted persisted",
+            data.get("saveDeletedMessages") is True,
+            data)
+
+    data = json_call(ledger, cli, ["deleted-set", "0"], env, "deleted disable")
+    if data is not None:
+        ledger.check(
+            "deleted disable",
+            data.get("saveDeletedMessages") is False,
+            data)
+    data = json_call(ledger, cli, ["deleted"], env, "deleted disable reload")
+    if data is not None:
+        ledger.check(
+            "deleted disable persisted",
+            data.get("saveDeletedMessages") is False,
+            data)
+
+    env = make_env(work / "deleted-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {"OESaveDeletedMessages": True},
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "deleted fromJson")
+    if data is not None:
+        ledger.check(
+            "deleted fromJson accepted",
+            data.get("accepted") is True,
+            data)
+        data = json_call(ledger, cli, ["deleted"], env, "deleted fromJson read")
+        if data is not None:
+            ledger.check(
+                "deleted fromJson value",
+                data.get("saveDeletedMessages") is True,
+                data)
+
+    cases = [
+        ("trim under limits", 10, 10,
+         [[1, 1], [1, 2], [2, 1]],
+         [[1, 1], [1, 2], [2, 1]]),
+        ("trim global cap", 3, 10,
+         [[1, 1], [1, 2], [1, 3], [1, 4], [1, 5]],
+         [[1, 3], [1, 4], [1, 5]]),
+        ("trim per peer cap", 10, 2,
+         [[1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3]],
+         [[1, 2], [1, 3], [2, 2], [2, 3]]),
+        ("trim combined caps", 3, 2,
+         [[1, 1], [2, 1], [1, 2], [2, 2], [1, 3]],
+         [[1, 2], [2, 2], [1, 3]]),
+        ("trim zero global cap", 0, 10, [[1, 1]], []),
+        ("trim zero per peer cap", 10, 0, [[1, 1]], []),
+        ("trim negative cap", -1, 10, [[1, 1]], []),
+        ("trim empty", 10, 10, [], []),
+        ("trim default per peer cap", None, None,
+         [[1, msg] for msg in range(1, 102)],
+         [[1, msg] for msg in range(2, 102)]),
+        ("trim default global cap", None, None,
+         [[peer, peer] for peer in range(1, 1002)],
+         [[peer, peer] for peer in range(2, 1002)]),
+    ]
+    for name, max_entries, max_per_peer, given, expected in cases:
+        arguments = ["deleted-trim"]
+        if max_entries is not None:
+            arguments += [str(max_entries), str(max_per_peer)]
+        arguments.append(json.dumps(given))
+        data = json_call(ledger, cli, arguments, env, name)
+        if data is not None:
+            ledger.check(
+                f"{name} entries",
+                data.get("entries") == expected,
+                data.get("entries"))
+            ledger.check(
+                f"{name} count",
+                data.get("count") == len(expected),
+                data.get("count"))
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -464,12 +569,14 @@ def main():
         work = Path(temp)
         config = check_config(ledger, cli, work)
         general = check_general(ledger, cli, work)
+        deleted = check_deleted(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
     print(f"cli: {cli_args[0] - cli_args[1]} passed")
     print(f"config: {config[0] - config[1]} passed")
     print(f"general: {general[0] - general[1]} passed")
+    print(f"deleted: {deleted[0] - deleted[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(
