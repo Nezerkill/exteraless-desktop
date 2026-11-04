@@ -2,6 +2,10 @@
 
 ## 2026-11-04
 
+- Docs: добавлены `docs/nagram-feature-audit.md` (обзор функций
+  exteraless/NagramX, покрытие desktop, Android-only, расхождения docs и
+  кода) и `docs/nagram-porting-backlog.md` (приоритизированный бэклог
+  P0/P1/P2 с точками интеграции и smoke-проверками).
 - Ghost Mode: исправлена инверсия `messages.getMessagesViews` (просмотры
   каналов больше не блокируются при обычном режиме) и инвертированные
   подписи четырёх тумблеров «Don't send …» в настройках Exteraless.

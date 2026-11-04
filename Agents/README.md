@@ -89,6 +89,10 @@ sibling-чекаутом: `../exteraless`.
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.
+- `docs/nagram-feature-audit.md` — полная карта функций exteraless/NagramX и
+  степени их переноса.
+- `docs/nagram-porting-backlog.md` — приоритизированный P0/P1/P2 бэклог
+  переноса.
 - `ACKNOWLEDGEMENTS.md` — происхождение цепочки форков, благодарности и границы заимствований.
 
 ## Сборка

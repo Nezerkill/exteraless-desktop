@@ -2,7 +2,8 @@
 
 This document fixes what "port" means for the MVP. Android UI is not copied
 literally; the behavior and the settings schema are reproduced in tdesktop's
-Qt interface.
+Qt interface. The full inventory and prioritized backlog live in
+`docs/nagram-feature-audit.md` and `docs/nagram-porting-backlog.md`.
 
 ## MVP1: base, settings, proxy, backup
 
