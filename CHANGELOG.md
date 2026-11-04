@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Localization: все подписи секции Exteraless (Ghost, Chats, Pill Stack,
+  Reset, Plugins, диалоги экспорта/импорта бэкапа и подтверждения сброса)
+  переведены на ключи `tr::lng_settings_exteraless_*`; в `lang.strings`
+  добавлено 30 ключей (всего 41).
 - Config: `exteraless.json` теперь лежит в `<workdir>/tdata` и следует
   `-workdir`; при первом запуске с другим workdir старый файл из app data
   копируется, если нового ещё нет.

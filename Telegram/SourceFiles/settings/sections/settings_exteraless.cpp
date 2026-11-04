@@ -87,7 +87,7 @@ const auto kMeta = Builder::BuildHelper({
 
 	const auto disableRounding = builder.addButton({
 		.id = u"exteraless/disable-number-rounding"_q,
-		.title = rpl::single(u"Show exact counters (1.23K → 1234)"_q),
+		.title = tr::lng_settings_exteraless_exact_counters(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(
 			Exteraless::Config::Instance().disableNumberRounding()),
@@ -105,7 +105,7 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
-		.title = rpl::single(u"Ghost Mode"_q),
+		.title = tr::lng_settings_exteraless_ghost(),
 	});
 
 	const auto addGhostToggle = [&](
@@ -130,7 +130,7 @@ const auto kMeta = Builder::BuildHelper({
 	};
 	addGhostToggle(
 		u"exteraless/ghost/read"_q,
-		rpl::single(u"Don't send read receipts"_q),
+		tr::lng_settings_exteraless_ghost_read(),
 		{ u"ghost"_q, u"read"_q, u"receipts"_q },
 		!Exteraless::Config::Instance().ghostSendReadPackets(),
 		[](bool value) {
@@ -138,7 +138,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addGhostToggle(
 		u"exteraless/ghost/stories"_q,
-		rpl::single(u"Don't send story views"_q),
+		tr::lng_settings_exteraless_ghost_stories(),
 		{ u"ghost"_q, u"stories"_q },
 		!Exteraless::Config::Instance().ghostSendReadStories(),
 		[](bool value) {
@@ -146,7 +146,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addGhostToggle(
 		u"exteraless/ghost/online"_q,
-		rpl::single(u"Don't send online status"_q),
+		tr::lng_settings_exteraless_ghost_online(),
 		{ u"ghost"_q, u"online"_q },
 		!Exteraless::Config::Instance().ghostSendOnline(),
 		[](bool value) {
@@ -154,7 +154,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addGhostToggle(
 		u"exteraless/ghost/typing"_q,
-		rpl::single(u"Don't send typing status"_q),
+		tr::lng_settings_exteraless_ghost_typing(),
 		{ u"ghost"_q, u"typing"_q },
 		!Exteraless::Config::Instance().ghostSendUploadProgress(),
 		[](bool value) {
@@ -163,18 +163,18 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats"_q,
-		.title = rpl::single(u"Chats"_q),
+		.title = tr::lng_settings_exteraless_chats(),
 	});
 
 	const auto addChatsToggle = [&](
 			QString id,
-			QString title,
+			rpl::producer<QString> title,
 			QStringList keywords,
 			bool current,
 			Fn<void(bool)> setter) {
 		const auto toggle = builder.addButton({
 			.id = std::move(id),
-			.title = rpl::single(std::move(title)),
+			.title = std::move(title),
 			.st = &st::settingsButtonNoIcon,
 			.toggled = rpl::single(current),
 			.keywords = std::move(keywords),
@@ -188,7 +188,7 @@ const auto kMeta = Builder::BuildHelper({
 	};
 	addChatsToggle(
 		u"exteraless/chats/remove-tail"_q,
-		u"Remove message tail"_q,
+		tr::lng_settings_exteraless_chats_remove_tail(),
 		{ u"chat"_q, u"tail"_q, u"bubble"_q },
 		Exteraless::Config::Instance().chatsSettings().removeMessageTail,
 		[](bool value) {
@@ -196,7 +196,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/hide-reactions-channels"_q,
-		u"Hide reactions in channels"_q,
+		tr::lng_settings_exteraless_chats_hide_reactions_channels(),
 		{ u"chat"_q, u"reactions"_q, u"channel"_q },
 		Exteraless::Config::Instance().chatsSettings().hideReactionsChannels,
 		[](bool value) {
@@ -205,7 +205,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/hide-reactions-groups"_q,
-		u"Hide reactions in groups"_q,
+		tr::lng_settings_exteraless_chats_hide_reactions_groups(),
 		{ u"chat"_q, u"reactions"_q, u"group"_q },
 		Exteraless::Config::Instance().chatsSettings().hideReactionsGroups,
 		[](bool value) {
@@ -214,7 +214,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/hide-reactions-private"_q,
-		u"Hide reactions in private chats"_q,
+		tr::lng_settings_exteraless_chats_hide_reactions_private(),
 		{ u"chat"_q, u"reactions"_q, u"private"_q },
 		Exteraless::Config::Instance().chatsSettings().hideReactionsPrivate,
 		[](bool value) {
@@ -223,7 +223,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/strip-tracking"_q,
-		u"Strip tracking parameters from links"_q,
+		tr::lng_settings_exteraless_chats_strip_links(),
 		{ u"chat"_q, u"links"_q, u"tracking"_q, u"utm"_q },
 		Exteraless::Config::Instance().chatsSettings().stripTrackingOnOpen,
 		[](bool value) {
@@ -232,7 +232,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/strip-tracking-paste"_q,
-		u"Strip tracking parameters from pasted text"_q,
+		tr::lng_settings_exteraless_chats_strip_paste(),
 		{ u"chat"_q, u"paste"_q, u"tracking"_q, u"utm"_q },
 		Exteraless::Config::Instance().chatsSettings().stripTrackingOnPaste,
 		[](bool value) {
@@ -241,7 +241,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/unread-capsule"_q,
-		u"Compact unread messages label"_q,
+		tr::lng_settings_exteraless_chats_unread_capsule(),
 		{ u"chat"_q, u"unread"_q, u"capsule"_q, u"label"_q },
 		Exteraless::Config::Instance().chatsSettings().unreadCapsule,
 		[](bool value) {
@@ -249,7 +249,7 @@ const auto kMeta = Builder::BuildHelper({
 		});
 	addChatsToggle(
 		u"exteraless/chats/save-deleted"_q,
-		u"Save deleted messages"_q,
+		tr::lng_settings_exteraless_chats_save_deleted(),
 		{ u"chat"_q, u"deleted"_q, u"history"_q, u"ayu"_q },
 		Exteraless::Config::Instance().saveDeletedMessages(),
 		[](bool value) {
@@ -258,12 +258,12 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,
-		.title = rpl::single(u"Pill Stack"_q),
+		.title = tr::lng_settings_exteraless_pill_stack(),
 	});
 
 	const auto pillStack = builder.addButton({
 		.id = u"exteraless/pill-stack/enabled"_q,
-		.title = rpl::single(u"Show pills above the chat list"_q),
+		.title = tr::lng_settings_exteraless_pill_stack_enabled(),
 		.st = &st::settingsButtonNoIcon,
 		.toggled = rpl::single(
 			Exteraless::Config::Instance().pillStackEnabled()),
@@ -278,17 +278,17 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack/pills"_q,
-		.title = rpl::single(u"Visible pills"_q),
+		.title = tr::lng_settings_exteraless_pill_stack_visible(),
 	});
 
 	const auto addPillToggle = [&](
 			Exteraless::PillStackPill pill,
 			QString id,
-			QString title,
+			rpl::producer<QString> title,
 			QStringList keywords) {
 		const auto checkbox = builder.addCheckbox({
 			.id = std::move(id),
-			.title = rpl::single(std::move(title)),
+			.title = std::move(title),
 			.checked = Exteraless::HasPillStackPill(
 				Exteraless::Config::Instance().pillStackPills(),
 				pill),
@@ -308,42 +308,42 @@ const auto kMeta = Builder::BuildHelper({
 	addPillToggle(
 		Exteraless::PillStackPill::Cpu,
 		u"exteraless/pill-stack/cpu"_q,
-		u"CPU"_q,
+		tr::lng_settings_exteraless_pill_cpu(),
 		{ u"cpu"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Ram,
 		u"exteraless/pill-stack/ram"_q,
-		u"RAM"_q,
+		tr::lng_settings_exteraless_pill_ram(),
 		{ u"ram"_q, u"memory"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Net,
 		u"exteraless/pill-stack/net"_q,
-		u"Network speed"_q,
+		tr::lng_settings_exteraless_pill_net(),
 		{ u"network"_q, u"speed"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Dc,
 		u"exteraless/pill-stack/dc"_q,
-		u"DC ping"_q,
+		tr::lng_settings_exteraless_pill_dc(),
 		{ u"dc"_q, u"ping"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Proxy,
 		u"exteraless/pill-stack/proxy"_q,
-		u"Proxy"_q,
+		tr::lng_settings_exteraless_pill_proxy(),
 		{ u"proxy"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Cache,
 		u"exteraless/pill-stack/cache"_q,
-		u"Cache"_q,
+		tr::lng_settings_exteraless_pill_cache(),
 		{ u"cache"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::Ghost,
 		u"exteraless/pill-stack/ghost"_q,
-		u"Ghost Mode"_q,
+		tr::lng_settings_exteraless_pill_ghost(),
 		{ u"ghost"_q, u"pill"_q });
 	addPillToggle(
 		Exteraless::PillStackPill::LastSeen,
 		u"exteraless/pill-stack/last-seen"_q,
-		u"Last seen"_q,
+		tr::lng_settings_exteraless_pill_last_seen(),
 		{ u"last seen"_q, u"pill"_q });
 
 	builder.addSubsectionTitle({
@@ -411,7 +411,7 @@ const auto kMeta = Builder::BuildHelper({
 			FileDialog::GetWritePath(
 				nullptr,
 				tr::lng_settings_exteraless_export(tr::now),
-				u"Exteraless backup (*.extera)"_q,
+				tr::lng_settings_exteraless_file_filter(tr::now),
 				u"exteraless.extera"_q,
 				[=](QString &&path) {
 					if (path.isEmpty()) {
@@ -423,11 +423,11 @@ const auto kMeta = Builder::BuildHelper({
 							Exteraless::BuildBackup().toUtf8())
 						|| !file.commit()) {
 						controller->show(Ui::MakeInformBox(
-							"Could not export settings."));
+							tr::lng_settings_exteraless_export_error(tr::now)));
 						return;
 					}
 					controller->show(Ui::MakeInformBox(
-						"Settings exported."));
+						tr::lng_settings_exteraless_export_done(tr::now)));
 				});
 		},
 		.keywords = { u"backup"_q, u"export"_q },
@@ -444,7 +444,7 @@ const auto kMeta = Builder::BuildHelper({
 			FileDialog::GetOpenPath(
 				nullptr,
 				tr::lng_settings_exteraless_import(tr::now),
-				u"Exteraless backup (*.extera)"_q,
+				tr::lng_settings_exteraless_file_filter(tr::now),
 				[=](FileDialog::OpenResult &&result) {
 					if (result.paths.isEmpty()) {
 						return;
@@ -452,22 +452,30 @@ const auto kMeta = Builder::BuildHelper({
 					auto file = QFile(result.paths.front());
 					if (!file.open(QIODevice::ReadOnly)) {
 						controller->show(Ui::MakeInformBox(
-							"Could not read the backup."));
+							tr::lng_settings_exteraless_import_read_error(
+								tr::now)));
 						return;
 					}
 					const auto applied = Exteraless::ApplyBackup(
 						QString::fromUtf8(file.readAll()));
 					if (!applied.ok) {
 						controller->show(Ui::MakeInformBox(
-							u"Could not import settings: %1"_q
-								.arg(applied.error)));
+							tr::lng_settings_exteraless_import_failed(
+								tr::now,
+								lt_error,
+								applied.error)));
 						return;
 					}
-					auto text = u"Settings imported: %1."_q
-						.arg(applied.applied);
+					auto text = tr::lng_settings_exteraless_import_done(
+						tr::now,
+						lt_amount,
+						QString::number(applied.applied));
 					if (!applied.unknown.isEmpty()) {
-						text += u"\nUnknown keys: %1"_q
-							.arg(applied.unknown.join(", "));
+						text += u"\n"_q
+							+ tr::lng_settings_exteraless_import_unknown(
+								tr::now,
+								lt_keys,
+								applied.unknown.join(", "));
 					}
 					controller->show(Ui::MakeInformBox(text));
 				});
@@ -477,27 +485,25 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/reset"_q,
-		.title = rpl::single(u"Reset"_q),
+		.title = tr::lng_settings_exteraless_reset(),
 	});
 
 	builder.addButton({
 		.id = u"exteraless/reset/all"_q,
-		.title = rpl::single(u"Reset Exteraless settings"_q),
+		.title = tr::lng_settings_exteraless_reset_settings(),
 		.st = &st::settingsButtonNoIcon,
 		.onClick = [=] {
 			if (!controller) {
 				return;
 			}
 			controller->show(Ui::MakeConfirmBox({
-				.text = rpl::single(
-					u"Reset all Exteraless settings to defaults? "
-					u"This cannot be undone."_q),
+				.text = tr::lng_settings_exteraless_reset_confirm(),
 				.confirmed = [=] {
 					Exteraless::Config::Instance().reset();
 					Exteraless::ApplyProxyRules();
 					controller->showSettings(ExteralessSectionId());
 				},
-				.confirmText = u"Reset"_q,
+				.confirmText = tr::lng_settings_exteraless_reset(tr::now),
 			}));
 		},
 		.keywords = { u"reset"_q, u"defaults"_q, u"clear"_q },
@@ -505,12 +511,12 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/plugins"_q,
-		.title = rpl::single(u"Plugins"_q),
+		.title = tr::lng_settings_exteraless_plugins(),
 	});
 
 	builder.addButton({
 		.id = u"exteraless/plugins/open"_q,
-		.title = rpl::single(u"Plugins"_q),
+		.title = tr::lng_settings_exteraless_plugins(),
 		.st = &st::settingsButtonNoIcon,
 		.onClick = [=] {
 			if (!controller) {

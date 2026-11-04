@@ -106,7 +106,7 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | **Ключей форка desktop** | **25** | **25** | 25 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
 | Ключей `.extera` | 8 | 8 | 25 | на момент аудита было 8, после NB-04 — все 25 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
-| Локализация desktop-секции | 11 ключей `lng_settings_exteraless*` | 11 | 11 | оба отчёта сошлись |
+| Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
 Практический вывод: **порядок величины — сотни настроек на Android против
 двух с половиной десятков на desktop**, то есть покрыто примерно 4–6 %.
@@ -524,7 +524,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 | M6 | docs: «Reactions in the pinned bar can keep their old state until a restart» | `docs/feature-mapping.md`, Chats | в 7.3.1 нет pinned-reactions бара: поиск по `pinnedReactions` и `ReactionsStrip` по `Telegram/SourceFiles` пуст, файлов `history_view_reactions*` нет | устаревшее утверждение, P2 |
 | M7 | `result/` устарел | `result/bin/.Telegram-wrapped` (симлинк/деривация от 2026-11-01) против `out/bin/Telegram` (2026-11-04) | в Nix-бинарнике нет `Plugin sandbox is unavailable` и новых строк; `STATUS.md` признаёт, что пакет не пересобран, но в «Проверках» всё ещё ссылается на старый `result` как на проверенный | открыто, P1 |
 | M8 | `nix/smoke-test.sh` запускает каталог | `nix/smoke-test.sh` | запускается `./out/Telegram`, а это build-каталог; реальный бинарник — `out/bin/Telegram` | открыто, P1 |
-| M9 | Настройки не локализованы | `settings/sections/settings_exteraless.cpp` | почти все подписи Ghost/Chats/Pill Stack/Plugins — захардкоженный английский `rpl::single(u"…"_q)`; в `Telegram/Resources/langs/lang.strings` только 11 `lng_settings_exteraless*` (general/proxy/backup) | открыто, P1 |
+| M9 | Настройки не локализованы | `settings/sections/settings_exteraless.cpp` | было: почти все подписи Ghost/Chats/Pill Stack/Plugins — захардкоженный английский; в `lang.strings` было 11 ключей | 🔧 закрыто в NB-03 (2026-11-05): 30 новых ключей `lng_settings_exteraless_*` (всего 41), все подписи переведены на `tr::` |
 | M10 | Хрупкий процесс генерации патча | `nix/update-patch.sh` | база — локальный тег `v7.3.1`, который уже содержит fork-код (`mtproto/web_proxy/*`, `.agents/**`); всё, что лежит в базовом теге, в патч не попадает, поэтому на настоящем upstream-исходнике WEB proxy и будущие правки «базовых» файлов молча исчезнут | открыто, P1 |
 | M11 | Ghost-allowance: глобальный счётчик и TTL 5 с | `exteraless/ghost_mode.cpp` (`Allowance`) | счётчик не привязан к peer: чтение исключённого чата A взводит разрешение на 5 с, чтение чата B в этом окне его «съедает» | открыто, P1 (минимум — документировать) |
 | M12 | `Config::load()` не вызывается | `exteraless/config.cpp` | мёртвый публичный API: всё делает ленивый `ensureLoaded()` | открыто, P2 |

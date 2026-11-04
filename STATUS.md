@@ -126,11 +126,17 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f2e751fb…`,
-  mtime 2026-11-05 01:20; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `1d741ac6…`,
+  mtime 2026-11-05 01:40; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
+- Локализация секции Exteraless: все заголовки, чекбоксы, тумблеры и
+  сообщения боксов переведены на `tr::lng_settings_exteraless_*` (30 новых
+  ключей в `Telegram/Resources/langs/lang.strings`, суммарно 41). Сгенерирован
+  `td_lang`, пересобран `lang_instance.cpp` под обновлённый `kKeysCount`.
+  Xvfb smoke на профиле с кэшированным языковым пакетом: секция открывается
+  без падений, верхняя и нижняя части отображают локализованные подписи.
 - Chats, патч: `nix/patches/exteraless.patch` перегенерирован, `apply
   --check` и apply на чистом v7.3.1 проходят; `nix flake check --no-build`
   проходит, полная Nix-сборка не запускалась.

@@ -73,7 +73,7 @@
 | Брендинг | — | `core/launcher.cpp`, `boxes/about_box.cpp`, `core/version.h`, `Telegram/build/version` | ✅ |
 | Proxy auto-disable | `OEProxyDisableConditions`, `OEProxyAutoDisabled` | `exteraless/proxy_rules.cpp`, `exteraless/network.cpp`, `core/application.cpp` | ✅ |
 | WEB proxy | — | `mtproto/web_proxy/*`, `mtproto/details/mtproto_web_proxy_socket.{h,cpp}`, `boxes/connection_box.cpp` | 🟡 код и сборка есть, relay-сервер не развёрнут; в docs не описан |
-| Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | 🟡 11 ключей `lng_settings_exteraless*`, остальные подписи захардкожены |
+| Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
 (184 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, backup),
@@ -87,7 +87,7 @@ timeout, state). Все три прогоняются на текущем дер
 |---|---|---|---|---|---|---|---|
 | NB-01 | Ghost: инверсия счётчика просмотров и подписей тумблеров | `sendReadMessagePackets`, `messages.getMessagesViews` | `api/api_views.cpp` (`ViewsManager::viewsIncrement`), `settings/sections/settings_exteraless.cpp`, патч `nix/patches/exteraless.patch` | S · низкий | дефолтный конфиг: просмотры канала уходят; Xvfb: подписи «Don't send …» соответствуют состоянию | 🔧 исправлено в `123a29f` | R2 M1 |
 | NB-02 | Deleted messages: читать `OESaveDeletedMessages`, добавить лимит и ротацию файла | `enableSaveDeletedMessages` | `exteraless/deleted_messages.cpp`, `exteraless/deleted_messages_trim.h`, `exteraless/config.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · средний (данные, приватность, рост файла) | CLI: при выключенном ключе ничего не пишется; cap ротации; Xvfb: тумблер | ✅ 2026-11-05: гейт default `false`, лимит 1000/100, ротация при add/load (load только при включённом ключе), тумблер Chats, CLI `deleted*` (27 проверок); Xvfb: тумблер включается/выключается и пишет ключ | R2 M2 |
-| NB-03 | Локализовать секцию Exteraless: захардкоженные подписи → `lang.strings` | `strings_oe*.xml` | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | S · низкий | Xvfb на ru/en: нет английских подписей; поиск по настройкам не падает | ⬜ | R1 P0-1, R2 M9 |
+| NB-03 | Локализовать секцию Exteraless: захардкоженные подписи → `lang.strings` | `strings_oe*.xml` | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | S · низкий | Xvfb на ru/en: нет английских подписей; поиск по настройкам не падает | ✅ 2026-11-05: 30 новых ключей `lng_settings_exteraless_*` (всего 41), все подписи переведены на `tr::`, пересобран `td_lang` и `lang_instance`, Xvfb smoke | R1 P0-1, R2 M9 |
 | NB-04 | Полный экспорт/импорт `.extera` для всех 25 ключей с отчётом о неизвестных | `EtgBackup`, `InvisibleEncryptor` | `exteraless/backup.cpp`, `exteraless/config.cpp` | S · низкий | `exteraless/tests/chats/run_checks.py` + CLI-импорт файла с новыми ключами | ✅ 2026-11-05: 25 ключей в секциях `exteraconfig`/`pillstackconfig`/`mainconfig`, валидация типов, целочисленности и диапазонов, санитизация exclusions/plugins, сброс производного `OEProxyAutoDisabled`, unknown с префиксом секции; round-trip CLI | R1 P0-2 |
 | NB-05 | Сброс настроек Exteraless (кнопка + подтверждение) | `resetSettings` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` | S · низкий | сброс → дефолты, `exteraless.json` без OE-ключей | ✅ 2026-11-05: `Config::reset()`, кнопка Reset с подтверждением, пересоздание секции, CLI-группа `reset` (7 проверок), Xvfb smoke | R1 P0-3 |
 | NB-06 | Путь конфига, совместимый с `-workdir` | — | `exteraless/config.cpp` (путь данных), `core/application.cpp` | S · средний (миграция существующего файла) | запуск с `-workdir /tmp/x`: файл создаётся там, старый профиль читается | ✅ 2026-11-05: `Config::setWorkingDir()` + `cWorkingDir()` из Application, копирование старого файла при первом запуске, CLI `EXTERALESS_WORKDIR` (8 проверок), Xvfb-миграция на копии профиля | R1 P0-4 |
@@ -225,7 +225,8 @@ timeout, state). Все три прогоняются на текущем дер
 при загрузке, тумблер добавлен в Chats. Схема файла не менялась; расширение
 полей — отдельная задача NB-19.
 
-Следующие шаги того же этапа: NB-05 (✅), NB-06 (✅), NB-03 (локализация).
+Все задачи шага 0 закрыты: NB-02 (✅), NB-04 (✅), NB-05 (✅), NB-06 (✅),
+NB-03 (✅).
 
 ### 7.2 Шаг 1 — batch из трёх функций
 

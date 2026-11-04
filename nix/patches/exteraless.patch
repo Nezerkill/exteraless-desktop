@@ -74,10 +74,10 @@ index 811707d..72af6b7 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..de9aee6 100644
+index ffc8ec9..8047480 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,53 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -92,6 +92,43 @@ index ffc8ec9..de9aee6 100644
 +"lng_settings_exteraless_backup" = "Backup and restore";
 +"lng_settings_exteraless_export" = "Export settings";
 +"lng_settings_exteraless_import" = "Import settings";
++"lng_settings_exteraless_exact_counters" = "Show exact counters (1.23K → 1234)";
++"lng_settings_exteraless_ghost" = "Ghost Mode";
++"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
++"lng_settings_exteraless_ghost_stories" = "Don't send story views";
++"lng_settings_exteraless_ghost_online" = "Don't send online status";
++"lng_settings_exteraless_ghost_typing" = "Don't send typing status";
++"lng_settings_exteraless_chats" = "Chats";
++"lng_settings_exteraless_chats_remove_tail" = "Remove message tail";
++"lng_settings_exteraless_chats_hide_reactions_channels" = "Hide reactions in channels";
++"lng_settings_exteraless_chats_hide_reactions_groups" = "Hide reactions in groups";
++"lng_settings_exteraless_chats_hide_reactions_private" = "Hide reactions in private chats";
++"lng_settings_exteraless_chats_strip_links" = "Strip tracking parameters from links";
++"lng_settings_exteraless_chats_strip_paste" = "Strip tracking parameters from pasted text";
++"lng_settings_exteraless_chats_unread_capsule" = "Compact unread messages label";
++"lng_settings_exteraless_chats_save_deleted" = "Save deleted messages";
++"lng_settings_exteraless_pill_stack" = "Pill Stack";
++"lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
++"lng_settings_exteraless_pill_stack_visible" = "Visible pills";
++"lng_settings_exteraless_pill_cpu" = "CPU";
++"lng_settings_exteraless_pill_ram" = "RAM";
++"lng_settings_exteraless_pill_net" = "Network speed";
++"lng_settings_exteraless_pill_dc" = "DC ping";
++"lng_settings_exteraless_pill_proxy" = "Proxy";
++"lng_settings_exteraless_pill_cache" = "Cache";
++"lng_settings_exteraless_pill_ghost" = "Ghost Mode";
++"lng_settings_exteraless_pill_last_seen" = "Last seen";
++"lng_settings_exteraless_reset" = "Reset";
++"lng_settings_exteraless_reset_settings" = "Reset Exteraless settings";
++"lng_settings_exteraless_reset_confirm" = "Reset all Exteraless settings to defaults? This cannot be undone.";
++"lng_settings_exteraless_plugins" = "Plugins";
++"lng_settings_exteraless_export_error" = "Could not export settings.";
++"lng_settings_exteraless_export_done" = "Settings exported.";
++"lng_settings_exteraless_import_read_error" = "Could not read the backup.";
++"lng_settings_exteraless_import_failed" = "Could not import settings: {error}";
++"lng_settings_exteraless_import_done" = "Settings imported: {amount}.";
++"lng_settings_exteraless_import_unknown" = "Unknown keys: {keys}";
++"lng_settings_exteraless_file_filter" = "Exteraless backup (*.extera)";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -3393,10 +3430,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..45cedb3
+index 0000000..5b8e4ab
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,550 @@
+@@ -0,0 +1,556 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3486,7 +3523,7 @@ index 0000000..45cedb3
 +
 +	const auto disableRounding = builder.addButton({
 +		.id = u"exteraless/disable-number-rounding"_q,
-+		.title = rpl::single(u"Show exact counters (1.23K → 1234)"_q),
++		.title = tr::lng_settings_exteraless_exact_counters(),
 +		.st = &st::settingsButtonNoIcon,
 +		.toggled = rpl::single(
 +			Exteraless::Config::Instance().disableNumberRounding()),
@@ -3504,7 +3541,7 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/ghost"_q,
-+		.title = rpl::single(u"Ghost Mode"_q),
++		.title = tr::lng_settings_exteraless_ghost(),
 +	});
 +
 +	const auto addGhostToggle = [&](
@@ -3529,7 +3566,7 @@ index 0000000..45cedb3
 +	};
 +	addGhostToggle(
 +		u"exteraless/ghost/read"_q,
-+		rpl::single(u"Don't send read receipts"_q),
++		tr::lng_settings_exteraless_ghost_read(),
 +		{ u"ghost"_q, u"read"_q, u"receipts"_q },
 +		!Exteraless::Config::Instance().ghostSendReadPackets(),
 +		[](bool value) {
@@ -3537,7 +3574,7 @@ index 0000000..45cedb3
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/stories"_q,
-+		rpl::single(u"Don't send story views"_q),
++		tr::lng_settings_exteraless_ghost_stories(),
 +		{ u"ghost"_q, u"stories"_q },
 +		!Exteraless::Config::Instance().ghostSendReadStories(),
 +		[](bool value) {
@@ -3545,7 +3582,7 @@ index 0000000..45cedb3
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/online"_q,
-+		rpl::single(u"Don't send online status"_q),
++		tr::lng_settings_exteraless_ghost_online(),
 +		{ u"ghost"_q, u"online"_q },
 +		!Exteraless::Config::Instance().ghostSendOnline(),
 +		[](bool value) {
@@ -3553,7 +3590,7 @@ index 0000000..45cedb3
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/typing"_q,
-+		rpl::single(u"Don't send typing status"_q),
++		tr::lng_settings_exteraless_ghost_typing(),
 +		{ u"ghost"_q, u"typing"_q },
 +		!Exteraless::Config::Instance().ghostSendUploadProgress(),
 +		[](bool value) {
@@ -3562,18 +3599,18 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/chats"_q,
-+		.title = rpl::single(u"Chats"_q),
++		.title = tr::lng_settings_exteraless_chats(),
 +	});
 +
 +	const auto addChatsToggle = [&](
 +			QString id,
-+			QString title,
++			rpl::producer<QString> title,
 +			QStringList keywords,
 +			bool current,
 +			Fn<void(bool)> setter) {
 +		const auto toggle = builder.addButton({
 +			.id = std::move(id),
-+			.title = rpl::single(std::move(title)),
++			.title = std::move(title),
 +			.st = &st::settingsButtonNoIcon,
 +			.toggled = rpl::single(current),
 +			.keywords = std::move(keywords),
@@ -3587,7 +3624,7 @@ index 0000000..45cedb3
 +	};
 +	addChatsToggle(
 +		u"exteraless/chats/remove-tail"_q,
-+		u"Remove message tail"_q,
++		tr::lng_settings_exteraless_chats_remove_tail(),
 +		{ u"chat"_q, u"tail"_q, u"bubble"_q },
 +		Exteraless::Config::Instance().chatsSettings().removeMessageTail,
 +		[](bool value) {
@@ -3595,7 +3632,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/hide-reactions-channels"_q,
-+		u"Hide reactions in channels"_q,
++		tr::lng_settings_exteraless_chats_hide_reactions_channels(),
 +		{ u"chat"_q, u"reactions"_q, u"channel"_q },
 +		Exteraless::Config::Instance().chatsSettings().hideReactionsChannels,
 +		[](bool value) {
@@ -3604,7 +3641,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/hide-reactions-groups"_q,
-+		u"Hide reactions in groups"_q,
++		tr::lng_settings_exteraless_chats_hide_reactions_groups(),
 +		{ u"chat"_q, u"reactions"_q, u"group"_q },
 +		Exteraless::Config::Instance().chatsSettings().hideReactionsGroups,
 +		[](bool value) {
@@ -3613,7 +3650,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/hide-reactions-private"_q,
-+		u"Hide reactions in private chats"_q,
++		tr::lng_settings_exteraless_chats_hide_reactions_private(),
 +		{ u"chat"_q, u"reactions"_q, u"private"_q },
 +		Exteraless::Config::Instance().chatsSettings().hideReactionsPrivate,
 +		[](bool value) {
@@ -3622,7 +3659,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/strip-tracking"_q,
-+		u"Strip tracking parameters from links"_q,
++		tr::lng_settings_exteraless_chats_strip_links(),
 +		{ u"chat"_q, u"links"_q, u"tracking"_q, u"utm"_q },
 +		Exteraless::Config::Instance().chatsSettings().stripTrackingOnOpen,
 +		[](bool value) {
@@ -3631,7 +3668,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/strip-tracking-paste"_q,
-+		u"Strip tracking parameters from pasted text"_q,
++		tr::lng_settings_exteraless_chats_strip_paste(),
 +		{ u"chat"_q, u"paste"_q, u"tracking"_q, u"utm"_q },
 +		Exteraless::Config::Instance().chatsSettings().stripTrackingOnPaste,
 +		[](bool value) {
@@ -3640,7 +3677,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/unread-capsule"_q,
-+		u"Compact unread messages label"_q,
++		tr::lng_settings_exteraless_chats_unread_capsule(),
 +		{ u"chat"_q, u"unread"_q, u"capsule"_q, u"label"_q },
 +		Exteraless::Config::Instance().chatsSettings().unreadCapsule,
 +		[](bool value) {
@@ -3648,7 +3685,7 @@ index 0000000..45cedb3
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/save-deleted"_q,
-+		u"Save deleted messages"_q,
++		tr::lng_settings_exteraless_chats_save_deleted(),
 +		{ u"chat"_q, u"deleted"_q, u"history"_q, u"ayu"_q },
 +		Exteraless::Config::Instance().saveDeletedMessages(),
 +		[](bool value) {
@@ -3657,12 +3694,12 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/pill-stack"_q,
-+		.title = rpl::single(u"Pill Stack"_q),
++		.title = tr::lng_settings_exteraless_pill_stack(),
 +	});
 +
 +	const auto pillStack = builder.addButton({
 +		.id = u"exteraless/pill-stack/enabled"_q,
-+		.title = rpl::single(u"Show pills above the chat list"_q),
++		.title = tr::lng_settings_exteraless_pill_stack_enabled(),
 +		.st = &st::settingsButtonNoIcon,
 +		.toggled = rpl::single(
 +			Exteraless::Config::Instance().pillStackEnabled()),
@@ -3677,17 +3714,17 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/pill-stack/pills"_q,
-+		.title = rpl::single(u"Visible pills"_q),
++		.title = tr::lng_settings_exteraless_pill_stack_visible(),
 +	});
 +
 +	const auto addPillToggle = [&](
 +			Exteraless::PillStackPill pill,
 +			QString id,
-+			QString title,
++			rpl::producer<QString> title,
 +			QStringList keywords) {
 +		const auto checkbox = builder.addCheckbox({
 +			.id = std::move(id),
-+			.title = rpl::single(std::move(title)),
++			.title = std::move(title),
 +			.checked = Exteraless::HasPillStackPill(
 +				Exteraless::Config::Instance().pillStackPills(),
 +				pill),
@@ -3707,42 +3744,42 @@ index 0000000..45cedb3
 +	addPillToggle(
 +		Exteraless::PillStackPill::Cpu,
 +		u"exteraless/pill-stack/cpu"_q,
-+		u"CPU"_q,
++		tr::lng_settings_exteraless_pill_cpu(),
 +		{ u"cpu"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Ram,
 +		u"exteraless/pill-stack/ram"_q,
-+		u"RAM"_q,
++		tr::lng_settings_exteraless_pill_ram(),
 +		{ u"ram"_q, u"memory"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Net,
 +		u"exteraless/pill-stack/net"_q,
-+		u"Network speed"_q,
++		tr::lng_settings_exteraless_pill_net(),
 +		{ u"network"_q, u"speed"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Dc,
 +		u"exteraless/pill-stack/dc"_q,
-+		u"DC ping"_q,
++		tr::lng_settings_exteraless_pill_dc(),
 +		{ u"dc"_q, u"ping"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Proxy,
 +		u"exteraless/pill-stack/proxy"_q,
-+		u"Proxy"_q,
++		tr::lng_settings_exteraless_pill_proxy(),
 +		{ u"proxy"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Cache,
 +		u"exteraless/pill-stack/cache"_q,
-+		u"Cache"_q,
++		tr::lng_settings_exteraless_pill_cache(),
 +		{ u"cache"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::Ghost,
 +		u"exteraless/pill-stack/ghost"_q,
-+		u"Ghost Mode"_q,
++		tr::lng_settings_exteraless_pill_ghost(),
 +		{ u"ghost"_q, u"pill"_q });
 +	addPillToggle(
 +		Exteraless::PillStackPill::LastSeen,
 +		u"exteraless/pill-stack/last-seen"_q,
-+		u"Last seen"_q,
++		tr::lng_settings_exteraless_pill_last_seen(),
 +		{ u"last seen"_q, u"pill"_q });
 +
 +	builder.addSubsectionTitle({
@@ -3810,7 +3847,7 @@ index 0000000..45cedb3
 +			FileDialog::GetWritePath(
 +				nullptr,
 +				tr::lng_settings_exteraless_export(tr::now),
-+				u"Exteraless backup (*.extera)"_q,
++				tr::lng_settings_exteraless_file_filter(tr::now),
 +				u"exteraless.extera"_q,
 +				[=](QString &&path) {
 +					if (path.isEmpty()) {
@@ -3822,11 +3859,11 @@ index 0000000..45cedb3
 +							Exteraless::BuildBackup().toUtf8())
 +						|| !file.commit()) {
 +						controller->show(Ui::MakeInformBox(
-+							"Could not export settings."));
++							tr::lng_settings_exteraless_export_error(tr::now)));
 +						return;
 +					}
 +					controller->show(Ui::MakeInformBox(
-+						"Settings exported."));
++						tr::lng_settings_exteraless_export_done(tr::now)));
 +				});
 +		},
 +		.keywords = { u"backup"_q, u"export"_q },
@@ -3843,7 +3880,7 @@ index 0000000..45cedb3
 +			FileDialog::GetOpenPath(
 +				nullptr,
 +				tr::lng_settings_exteraless_import(tr::now),
-+				u"Exteraless backup (*.extera)"_q,
++				tr::lng_settings_exteraless_file_filter(tr::now),
 +				[=](FileDialog::OpenResult &&result) {
 +					if (result.paths.isEmpty()) {
 +						return;
@@ -3851,22 +3888,30 @@ index 0000000..45cedb3
 +					auto file = QFile(result.paths.front());
 +					if (!file.open(QIODevice::ReadOnly)) {
 +						controller->show(Ui::MakeInformBox(
-+							"Could not read the backup."));
++							tr::lng_settings_exteraless_import_read_error(
++								tr::now)));
 +						return;
 +					}
 +					const auto applied = Exteraless::ApplyBackup(
 +						QString::fromUtf8(file.readAll()));
 +					if (!applied.ok) {
 +						controller->show(Ui::MakeInformBox(
-+							u"Could not import settings: %1"_q
-+								.arg(applied.error)));
++							tr::lng_settings_exteraless_import_failed(
++								tr::now,
++								lt_error,
++								applied.error)));
 +						return;
 +					}
-+					auto text = u"Settings imported: %1."_q
-+						.arg(applied.applied);
++					auto text = tr::lng_settings_exteraless_import_done(
++						tr::now,
++						lt_amount,
++						QString::number(applied.applied));
 +					if (!applied.unknown.isEmpty()) {
-+						text += u"\nUnknown keys: %1"_q
-+							.arg(applied.unknown.join(", "));
++						text += u"\n"_q
++							+ tr::lng_settings_exteraless_import_unknown(
++								tr::now,
++								lt_keys,
++								applied.unknown.join(", "));
 +					}
 +					controller->show(Ui::MakeInformBox(text));
 +				});
@@ -3876,27 +3921,25 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/reset"_q,
-+		.title = rpl::single(u"Reset"_q),
++		.title = tr::lng_settings_exteraless_reset(),
 +	});
 +
 +	builder.addButton({
 +		.id = u"exteraless/reset/all"_q,
-+		.title = rpl::single(u"Reset Exteraless settings"_q),
++		.title = tr::lng_settings_exteraless_reset_settings(),
 +		.st = &st::settingsButtonNoIcon,
 +		.onClick = [=] {
 +			if (!controller) {
 +				return;
 +			}
 +			controller->show(Ui::MakeConfirmBox({
-+				.text = rpl::single(
-+					u"Reset all Exteraless settings to defaults? "
-+					u"This cannot be undone."_q),
++				.text = tr::lng_settings_exteraless_reset_confirm(),
 +				.confirmed = [=] {
 +					Exteraless::Config::Instance().reset();
 +					Exteraless::ApplyProxyRules();
 +					controller->showSettings(ExteralessSectionId());
 +				},
-+				.confirmText = u"Reset"_q,
++				.confirmText = tr::lng_settings_exteraless_reset(tr::now),
 +			}));
 +		},
 +		.keywords = { u"reset"_q, u"defaults"_q, u"clear"_q },
@@ -3904,12 +3947,12 @@ index 0000000..45cedb3
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/plugins"_q,
-+		.title = rpl::single(u"Plugins"_q),
++		.title = tr::lng_settings_exteraless_plugins(),
 +	});
 +
 +	builder.addButton({
 +		.id = u"exteraless/plugins/open"_q,
-+		.title = rpl::single(u"Plugins"_q),
++		.title = tr::lng_settings_exteraless_plugins(),
 +		.st = &st::settingsButtonNoIcon,
 +		.onClick = [=] {
 +			if (!controller) {
