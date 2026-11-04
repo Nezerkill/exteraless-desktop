@@ -3027,6 +3027,28 @@ index 5152d85..36949f5 100644
  		|| (media && media->skipBubbleTail())
  		|| (rich && richMediaAtBottom())
  		|| (keyboard != nullptr)
+diff --git a/Telegram/SourceFiles/lang/lang_tag.cpp b/Telegram/SourceFiles/lang/lang_tag.cpp
+index 5537d86..8abc86c 100644
+--- a/Telegram/SourceFiles/lang/lang_tag.cpp
++++ b/Telegram/SourceFiles/lang/lang_tag.cpp
+@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "lang/lang_tag.h"
+ 
+ #include "core/credits_amount.h"
++#include "exteraless/config.h"
+ #include "lang/lang_keys.h"
+ #include "ui/text/text.h"
+ #include "base/qt/qt_common_adapters.h"
+@@ -918,6 +919,9 @@ int NonZeroPartToInt(QString value) {
+ }
+ 
+ ShortenedCount FormatCountToShort(int64 number, bool onlyK) {
++	if (Exteraless::Config::Instance().disableNumberRounding()) {
++		return ShortenedCount{ number, QString::number(number), false };
++	}
+ 	auto result = ShortenedCount{ number };
+ 	const auto abs = std::abs(number);
+ 	const auto shorten = [&](int64 divider, char multiplier) {
 diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
 index 2721c7a..6bfa900 100644
 --- a/Telegram/SourceFiles/main/main_account.cpp
@@ -3276,10 +3298,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..71f2887
+index 0000000..699bf53
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,487 @@
+@@ -0,0 +1,505 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3365,6 +3387,24 @@ index 0000000..71f2887
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setAddCommaAfterMention(value);
 +		}, addComma->lifetime());
++	}
++
++	const auto disableRounding = builder.addButton({
++		.id = u"exteraless/disable-number-rounding"_q,
++		.title = rpl::single(u"Show exact counters (1.23K → 1234)"_q),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().disableNumberRounding()),
++		.keywords = { u"numbers"_q, u"rounding"_q, u"counters"_q },
++	});
++	if (disableRounding) {
++		disableRounding->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().disableNumberRounding());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setDisableNumberRounding(value);
++		}, disableRounding->lifetime());
 +	}
 +
 +	builder.addSubsectionTitle({
@@ -4363,6 +4403,16 @@ index 56d2e56..47c8b5e 100644
  			} else {
  				fieldForMention->insertTag(
  					peer->shortName(),
+diff --git a/Telegram/cmake/td_lang.cmake b/Telegram/cmake/td_lang.cmake
+index b7b3acc..3052f11 100644
+--- a/Telegram/cmake/td_lang.cmake
++++ b/Telegram/cmake/td_lang.cmake
+@@ -36,4 +36,5 @@ PUBLIC
+ target_link_libraries(td_lang
+ PUBLIC
+     desktop-app::lib_ui
++    exteraless
+ )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
 index 0000000..1e7cb37
@@ -4402,10 +4452,10 @@ index 0000000..1e7cb37
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..2cd626a
+index 0000000..c8d2673
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,167 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -4426,6 +4476,7 @@ index 0000000..2cd626a
 +
 +constexpr auto kRelativeLastSeen = "relativeLastSeen";
 +constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
++constexpr auto kDisableNumberRounding = "disableNumberRounding";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
 +constexpr auto kRemoveMessageTail = "removeMessageTail";
 +constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -4500,6 +4551,8 @@ index 0000000..2cd626a
 +	auto extera = QJsonObject();
 +	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
 +	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
++	extera[kDisableNumberRounding]
++		= Config::Instance().disableNumberRounding();
 +	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
 +	extera[kRemoveMessageTail] = chats.removeMessageTail;
 +	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -4538,6 +4591,9 @@ index 0000000..2cd626a
 +			++result.applied;
 +		} else if (key == kAddCommaAfterMention && value.isBool()) {
 +			config.setAddCommaAfterMention(value.toBool());
++			++result.applied;
++		} else if (key == kDisableNumberRounding && value.isBool()) {
++			config.setDisableNumberRounding(value.toBool());
 +			++result.applied;
 +		} else if (key == kDoNotUseProxy
 +			&& value.isDouble()
@@ -4665,10 +4721,10 @@ index 0000000..f3da876
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..ffdd520
+index 0000000..290b29e
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,442 @@
+@@ -0,0 +1,452 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -4687,6 +4743,7 @@ index 0000000..ffdd520
 +constexpr auto kVersion = 1;
 +constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 +constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
++constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 +constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -4785,6 +4842,14 @@ index 0000000..ffdd520
 +
 +void Config::setAddCommaAfterMention(bool value) {
 +	setValue(kAddCommaAfterMention, value);
++}
++
++bool Config::disableNumberRounding() const {
++	return boolValue(kDisableNumberRounding, false);
++}
++
++void Config::setDisableNumberRounding(bool value) {
++	setValue(kDisableNumberRounding, value);
 +}
 +
 +int Config::proxyDisableConditions() const {
@@ -4997,6 +5062,7 @@ index 0000000..ffdd520
 +		const auto key = i.key();
 +		if (key == kRelativeLastSeen
 +			|| key == kAddCommaAfterMention
++			|| key == kDisableNumberRounding
 +			|| key == kProxyDisableConditions
 +			|| key == kProxyAutoDisabled
 +			|| key == kGhostSendReadPackets
@@ -5113,10 +5179,10 @@ index 0000000..ffdd520
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..08aa29b
+index 0000000..37dcd33
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,126 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5168,6 +5234,9 @@ index 0000000..08aa29b
 +
 +	[[nodiscard]] bool addCommaAfterMention() const;
 +	void setAddCommaAfterMention(bool value);
++
++	[[nodiscard]] bool disableNumberRounding() const;
++	void setDisableNumberRounding(bool value);
 +
 +	[[nodiscard]] int proxyDisableConditions() const;
 +	void setProxyDisableConditions(int value);
@@ -6455,10 +6524,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..5c036e4
+index 0000000..6a74c16
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,269 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -6489,6 +6558,8 @@ index 0000000..5c036e4
 +		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
 +		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
++		<< "  exteraless-chats-cli general\n"
++		<< "  exteraless-chats-cli general-set <0|1>\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<unreadCapsule>\n"
@@ -6544,6 +6615,13 @@ index 0000000..5c036e4
 +	});
 +}
 +
++void PrintGeneral() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("disableNumberRounding"),
++			Exteraless::Config::Instance().disableNumberRounding() },
++	});
++}
++
 +void ApplyFlags(const std::array<bool, 6> &flags) {
 +	auto &config = Exteraless::Config::Instance();
 +	config.setChatsRemoveMessageTail(flags[0]);
@@ -6563,6 +6641,8 @@ index 0000000..5c036e4
 +			QJsonArray::fromStringList(result.unknown) },
 +		{ QStringLiteral("chats"),
 +			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
++		{ QStringLiteral("disableNumberRounding"),
++			Exteraless::Config::Instance().disableNumberRounding() },
 +	});
 +}
 +
@@ -6620,6 +6700,25 @@ index 0000000..5c036e4
 +			return PrintUsage();
 +		}
 +		PrintChats();
++		return 0;
++	}
++	if (mode == QStringLiteral("general")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintGeneral();
++		return 0;
++	}
++	if (mode == QStringLiteral("general-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setDisableNumberRounding(value);
++		PrintGeneral();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("config-set")) {
@@ -6762,10 +6861,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..785796c
+index 0000000..68024b9
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,454 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -6896,6 +6995,69 @@ index 0000000..785796c
 +            result.returncode == 2 and bool(result.stderr.strip()),
 +            f"exit {result.returncode}, stderr {result.stderr!r}")
 +    return len(cases), len(ledger.failures) - before
++
++
++def check_general(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "general-default")
++    data = json_call(ledger, cli, ["general"], env, "general default")
++    if data is not None:
++        ledger.check(
++            "general rounding default off",
++            data.get("disableNumberRounding") is False,
++            data)
++
++    env = make_env(work / "general-set")
++    data = json_call(
++        ledger, cli, ["general-set", "1"], env, "general set rounding")
++    if data is not None:
++        ledger.check(
++            "general rounding setter",
++            data.get("disableNumberRounding") is True,
++            data)
++    data = json_call(
++        ledger, cli, ["general"], env, "general reload rounding")
++    if data is not None:
++        ledger.check(
++            "general rounding persisted",
++            data.get("disableNumberRounding") is True,
++            data)
++
++    data = json_call(
++        ledger, cli,
++        ["backup-export", "1", "0", "0", "0", "1", "0"],
++        env, "general backup export")
++    if data is not None:
++        section = data.get("exteraconfig") or {}
++        ledger.check(
++            "general backup key",
++            section.get("disableNumberRounding") is True,
++            section)
++
++    env = make_env(work / "general-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEGeneralDisableNumberRounding": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "general fromJson")
++    if data is not None:
++        ledger.check(
++            "general fromJson accepted",
++            data.get("accepted") is True,
++            data)
++        data = json_call(ledger, cli, ["general"], env, "general fromJson read")
++        if data is not None:
++            ledger.check(
++                "general fromJson value",
++                data.get("disableNumberRounding") is True,
++                data)
++    return ledger.checks - before_checks, len(ledger.failures) - before_failures
 +
 +
 +def check_config(ledger, cli, work):
@@ -7138,11 +7300,13 @@ index 0000000..785796c
 +            prefix="exteraless-chats-checks-") as temp:
 +        work = Path(temp)
 +        config = check_config(ledger, cli, work)
++        general = check_general(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
 +    print(f"cli: {cli_args[0] - cli_args[1]} passed")
 +    print(f"config: {config[0] - config[1]} passed")
++    print(f"general: {general[0] - general[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

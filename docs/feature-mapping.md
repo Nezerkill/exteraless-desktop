@@ -20,7 +20,9 @@ New `Exteraless` section in tdesktop Settings with subsections:
 
 - **General**
   - relative last seen (`OERelativeLastSeen`, default `false`);
-  - comma after mention (`OEAddCommaAfterMention`, default `true`).
+  - comma after mention (`OEAddCommaAfterMention`, default `true`);
+  - exact counters instead of `K/M/B` (`OEGeneralDisableNumberRounding`,
+    default `false`).
 - **Appearance** — not ported: section radius, separate headers and square FAB
   have no desktop analog, because tdesktop rounds and arranges those surfaces
   with its own styles, and no `OEAppearance*` key is implemented. Avatar
@@ -37,6 +39,13 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - compact unread messages label (`OEChatsUnreadCapsule`, default `false`).
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`.
+
+`OEGeneralDisableNumberRounding` affects counters formatted through
+`Lang::FormatCountToShort`, so views, replies, reaction counts and other shared
+shortened counters show exact numbers. Counters with hand-written
+`K`/`M` formatting and counters that already use exact formatting stay
+unchanged. The setting is exported/imported as the Android backup key
+`disableNumberRounding`.
 
 Desktop behavior of the Chats keys:
 
@@ -66,7 +75,7 @@ Desktop behavior of the Chats keys:
   `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 81 checks, the plugin manifest runner 32
+- Verification: the chats runner has 87 checks, the plugin manifest runner 32
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

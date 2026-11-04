@@ -79,9 +79,9 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 81 проверка PASS
-  (38 strip, 10 reactions, 3 CLI, 7 config, 23 backup); плагины без
-  изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 87 проверок PASS
+  (38 strip, 10 reactions, 3 CLI, 7 config, 6 general, 23 backup); плагины
+  без изменений — 32 и 213 проверок.
 - Chats, Xvfb smoke: подсекция `Chats` с шестью тумблерами, tail on/off в
   личном чате, реакции скрыты в канале и группе, тумблер unread capsule
   переключается и пишет `OEChatsUnreadCapsule`; сам unread-разделитель в
@@ -91,14 +91,17 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats, сборка: итоговый `out/bin/Telegram` sha256 `b90ebe51…`, mtime
-  2026-11-04 21:14; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `205bce8c…`,
+  mtime 2026-11-04 21:39; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
 - Chats, патч: `nix/patches/exteraless.patch` перегенерирован, `apply
   --check` и apply на чистом v7.3.1 проходят; `nix flake check --no-build`
   проходит, полная Nix-сборка не запускалась.
+- General: `OEGeneralDisableNumberRounding` (default `false`) показывает
+  точные счётчики вместо `K/M/B`; backup-ключ `disableNumberRounding`
+  импортируется/экспортируется, тумблер находится в General.
 
 ### Артефакты
 

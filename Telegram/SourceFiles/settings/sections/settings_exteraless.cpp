@@ -85,6 +85,24 @@ const auto kMeta = Builder::BuildHelper({
 		}, addComma->lifetime());
 	}
 
+	const auto disableRounding = builder.addButton({
+		.id = u"exteraless/disable-number-rounding"_q,
+		.title = rpl::single(u"Show exact counters (1.23K → 1234)"_q),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().disableNumberRounding()),
+		.keywords = { u"numbers"_q, u"rounding"_q, u"counters"_q },
+	});
+	if (disableRounding) {
+		disableRounding->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().disableNumberRounding());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setDisableNumberRounding(value);
+		}, disableRounding->lifetime());
+	}
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
 		.title = rpl::single(u"Ghost Mode"_q),

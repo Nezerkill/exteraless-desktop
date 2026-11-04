@@ -2,6 +2,9 @@
 
 ## 2026-11-04
 
+- General/Nagram X: `OEGeneralDisableNumberRounding` (default `false`)
+  показывает точные значения вместо сокращённых `K/M/B`; Android backup-ключ
+  `disableNumberRounding` поддержан, тумблер — в General.
 - Chats: флаг `OEChatsUnreadCapsule` (default `false`) рисует ярлык
   непрочитанных сообщений компактной пилюлей по центру вместо полноширинной
   полосы; высота, отступы, раскладка и прокрутка не меняются, в бэкап флаг не

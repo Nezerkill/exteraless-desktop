@@ -36,4 +36,5 @@ PUBLIC
 target_link_libraries(td_lang
 PUBLIC
     desktop-app::lib_ui
+    exteraless
 )

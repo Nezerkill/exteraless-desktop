@@ -50,6 +50,9 @@ public:
 	[[nodiscard]] bool addCommaAfterMention() const;
 	void setAddCommaAfterMention(bool value);
 
+	[[nodiscard]] bool disableNumberRounding() const;
+	void setDisableNumberRounding(bool value);
+
 	[[nodiscard]] int proxyDisableConditions() const;
 	void setProxyDisableConditions(int value);
 

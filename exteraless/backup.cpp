@@ -18,6 +18,7 @@ constexpr auto kVersion = 1;
 
 constexpr auto kRelativeLastSeen = "relativeLastSeen";
 constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
+constexpr auto kDisableNumberRounding = "disableNumberRounding";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
 constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -92,6 +93,8 @@ QString BuildBackup() {
 	auto extera = QJsonObject();
 	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
 	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
+	extera[kDisableNumberRounding]
+		= Config::Instance().disableNumberRounding();
 	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
 	extera[kRemoveMessageTail] = chats.removeMessageTail;
 	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -130,6 +133,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 			++result.applied;
 		} else if (key == kAddCommaAfterMention && value.isBool()) {
 			config.setAddCommaAfterMention(value.toBool());
+			++result.applied;
+		} else if (key == kDisableNumberRounding && value.isBool()) {
+			config.setDisableNumberRounding(value.toBool());
 			++result.applied;
 		} else if (key == kDoNotUseProxy
 			&& value.isDouble()

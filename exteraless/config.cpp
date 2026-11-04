@@ -16,6 +16,7 @@ namespace {
 constexpr auto kVersion = 1;
 constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
+constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -114,6 +115,14 @@ bool Config::addCommaAfterMention() const {
 
 void Config::setAddCommaAfterMention(bool value) {
 	setValue(kAddCommaAfterMention, value);
+}
+
+bool Config::disableNumberRounding() const {
+	return boolValue(kDisableNumberRounding, false);
+}
+
+void Config::setDisableNumberRounding(bool value) {
+	setValue(kDisableNumberRounding, value);
 }
 
 int Config::proxyDisableConditions() const {
@@ -326,6 +335,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 		const auto key = i.key();
 		if (key == kRelativeLastSeen
 			|| key == kAddCommaAfterMention
+			|| key == kDisableNumberRounding
 			|| key == kProxyDisableConditions
 			|| key == kProxyAutoDisabled
 			|| key == kGhostSendReadPackets

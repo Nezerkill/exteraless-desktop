@@ -130,6 +130,69 @@ def check_cli_args(ledger, cli):
     return len(cases), len(ledger.failures) - before
 
 
+def check_general(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "general-default")
+    data = json_call(ledger, cli, ["general"], env, "general default")
+    if data is not None:
+        ledger.check(
+            "general rounding default off",
+            data.get("disableNumberRounding") is False,
+            data)
+
+    env = make_env(work / "general-set")
+    data = json_call(
+        ledger, cli, ["general-set", "1"], env, "general set rounding")
+    if data is not None:
+        ledger.check(
+            "general rounding setter",
+            data.get("disableNumberRounding") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["general"], env, "general reload rounding")
+    if data is not None:
+        ledger.check(
+            "general rounding persisted",
+            data.get("disableNumberRounding") is True,
+            data)
+
+    data = json_call(
+        ledger, cli,
+        ["backup-export", "1", "0", "0", "0", "1", "0"],
+        env, "general backup export")
+    if data is not None:
+        section = data.get("exteraconfig") or {}
+        ledger.check(
+            "general backup key",
+            section.get("disableNumberRounding") is True,
+            section)
+
+    env = make_env(work / "general-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGeneralDisableNumberRounding": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "general fromJson")
+    if data is not None:
+        ledger.check(
+            "general fromJson accepted",
+            data.get("accepted") is True,
+            data)
+        data = json_call(ledger, cli, ["general"], env, "general fromJson read")
+        if data is not None:
+            ledger.check(
+                "general fromJson value",
+                data.get("disableNumberRounding") is True,
+                data)
+    return ledger.checks - before_checks, len(ledger.failures) - before_failures
+
+
 def check_config(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -370,11 +433,13 @@ def main():
             prefix="exteraless-chats-checks-") as temp:
         work = Path(temp)
         config = check_config(ledger, cli, work)
+        general = check_general(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
     print(f"cli: {cli_args[0] - cli_args[1]} passed")
     print(f"config: {config[0] - config[1]} passed")
+    print(f"general: {general[0] - general[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

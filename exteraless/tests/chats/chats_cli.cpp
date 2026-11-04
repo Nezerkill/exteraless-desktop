@@ -28,6 +28,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
 		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
+		<< "  exteraless-chats-cli general\n"
+		<< "  exteraless-chats-cli general-set <0|1>\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<unreadCapsule>\n"
@@ -83,6 +85,13 @@ void PrintChats() {
 	});
 }
 
+void PrintGeneral() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("disableNumberRounding"),
+			Exteraless::Config::Instance().disableNumberRounding() },
+	});
+}
+
 void ApplyFlags(const std::array<bool, 6> &flags) {
 	auto &config = Exteraless::Config::Instance();
 	config.setChatsRemoveMessageTail(flags[0]);
@@ -102,6 +111,8 @@ void PrintImportResult(const Exteraless::BackupImportResult &result) {
 			QJsonArray::fromStringList(result.unknown) },
 		{ QStringLiteral("chats"),
 			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
+		{ QStringLiteral("disableNumberRounding"),
+			Exteraless::Config::Instance().disableNumberRounding() },
 	});
 }
 
@@ -159,6 +170,25 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintChats();
+		return 0;
+	}
+	if (mode == QStringLiteral("general")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintGeneral();
+		return 0;
+	}
+	if (mode == QStringLiteral("general-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setDisableNumberRounding(value);
+		PrintGeneral();
 		return 0;
 	}
 	if (mode == QStringLiteral("config-set")) {
