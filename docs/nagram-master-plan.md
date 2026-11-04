@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **176**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **184**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -73,8 +73,10 @@ APK-обновления и plugin-only API. Полный список искл�
   валидация импорта, отчёт unknown с префиксом секции.
 - `NB-05` — ✅ закрыто 2026-11-05: `Config::reset()`, кнопка Reset с
   подтверждением, пересоздание секции, CLI-группа `reset`.
-- `NB-06`: путь `exteraless.json` через `cWorkingDir()`, совместимый с
-  `-workdir`, с миграцией старого профиля.
+- `NB-06` — ✅ закрыто 2026-11-05: `Config::setWorkingDir()` от
+  `cWorkingDir()` в Application, `<workdir>/tdata/exteraless.json`,
+  копирование старого файла при первом запуске, CLI через
+  `EXTERALESS_WORKDIR`.
 - `NB-03`: локализовать захардкоженные подписи Exteraless через
   `lang.strings`.
 
@@ -124,9 +126,9 @@ nix flake check --no-build
 
 ## 7. Ограничения и принятые решения
 
-- `exteraless.json` сейчас использует `QStandardPaths::AppLocalDataLocation`,
-  а не `-workdir`; исправление — `NB-06`, до него тесты изолируются через
-  `XDG_DATA_HOME`.
+- `exteraless.json` лежит в `<workdir>/tdata` и следует `-workdir`; при
+  первом запуске с другим workdir старый файл копируется, если нового ещё
+  нет. CLI-тесты используют `EXTERALESS_WORKDIR` для изоляции.
 - Ghost: 4 из 5 функций; `OEGhostSendOfflineAfterOnline` мёртв (NB-38).
   Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
 - Deleted messages: sidecar с 9 полями, нет реакций/ответов/правок. Гейт,
@@ -145,7 +147,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-06`, затем `NB-03`, `NB-11`, `NB-07`, `NB-37`).
+   (сейчас `NB-03`, затем `NB-11`, `NB-07`, `NB-37`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

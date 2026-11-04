@@ -467,13 +467,30 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 	return true;
 }
 
+void Config::setWorkingDir(const QString &workingDir) {
+	if (_loaded || workingDir.isEmpty()) {
+		return;
+	}
+	_workingDir = workingDir;
+}
+
 void Config::ensureLoaded() const {
 	if (_loaded) {
 		return;
 	}
 	_loaded = true;
-	_path = QStandardPaths::writableLocation(
+	const auto standard = QStandardPaths::writableLocation(
 		QStandardPaths::AppLocalDataLocation) + "/tdata/exteraless.json";
+	if (_workingDir.isEmpty()) {
+		_path = standard;
+	} else {
+		_path = QDir(_workingDir).filePath(
+			QStringLiteral("tdata/exteraless.json"));
+		if (!QFile::exists(_path) && QFile::exists(standard)) {
+			QDir().mkpath(QFileInfo(_path).absolutePath());
+			QFile::copy(standard, _path);
+		}
+	}
 
 	auto file = QFile(_path);
 	if (!file.open(QIODevice::ReadOnly)) {

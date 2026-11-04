@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/application.h"
+#include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
 #include "exteraless/plugin_runtime.h"
 #include "exteraless/proxy_rules.h"
@@ -187,6 +188,7 @@ Application::Application()
 , _setupEmailLock(false)
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
+	Exteraless::Config::Instance().setWorkingDir(cWorkingDir());
 	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
 
 	_platformIntegration->init();

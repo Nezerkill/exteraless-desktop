@@ -44,6 +44,7 @@ public:
 	void load();
 	void save();
 	void reset();
+	void setWorkingDir(const QString &workingDir);
 
 	[[nodiscard]] bool relativeLastSeen() const;
 	void setRelativeLastSeen(bool value);
@@ -126,6 +127,7 @@ private:
 
 	mutable QJsonObject _values;
 	mutable QString _path;
+	mutable QString _workingDir;
 	mutable bool _loaded = false;
 	mutable ChatsSettings _chats;
 };

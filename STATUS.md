@@ -19,7 +19,8 @@
 - `Comma after mention`: запятая после упоминания в автодополнении и контекстном меню.
 - Авто-отключение прокси по VPN / мобильной сети / Wi-Fi с восстановлением после смены сети.
 - Импорт/экспорт `.extera` с Android-совместимым кодированием невидимыми символами.
-- Конфиг: `~/.local/share/ExteralessDesktop/tdata/exteraless.json`.
+- Конфиг: `<рабочий каталог>/tdata/exteraless.json`; без `-workdir` это
+  `~/.local/share/ExteralessDesktop/tdata/exteraless.json`.
 - Nix-пакет собирает upstream tdesktop и применяет `nix/patches/exteraless.patch`.
 
 ### Проверки
@@ -79,7 +80,7 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 176 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 184 проверки PASS
   (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 27 deleted, 7 reset,
   71 backup); плагины без изменений — 32 и 213 проверок.
 - Exteraless settings reset: кнопка «Reset Exteraless settings» в подсекции
@@ -89,6 +90,13 @@
   CLI-группа `reset` проверяет очистку, дефолты, persisted-файл и отсутствие
   OE-ключей. Xvfb smoke на профиле с аккаунтом: кнопка видна, подтверждение
   открывается, Reset очищает файл до `{}` и секция показывает дефолты.
+- `-workdir`: `Application` передаёт `cWorkingDir()` в
+  `Config::setWorkingDir()`, поэтому `exteraless.json` читается и пишется в
+  `<workdir>/tdata/exteraless.json`. При первом запуске, если нового файла
+  нет, старый файл из `QStandardPaths::AppLocalDataLocation` копируется.
+  CLI использует `EXTERALESS_WORKDIR` (8 проверок). Xvfb smoke на копии
+  профиля с `-workdir`: старый конфиг скопирован, применён (Show exact
+  counters и Compact unread messages label включены), старый файл не изменён.
 - Backup `.extera`: экспортируются все 25 desktop-ключей в трёх секциях —
   `exteraconfig` (21), `pillstackconfig` (2), `mainconfig` (2). Импорт
   проверяет тип, целочисленность и диапазон, санитизирует Ghost-exclusions и
@@ -118,8 +126,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `25b19465…`,
-  mtime 2026-11-05 01:07; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f2e751fb…`,
+  mtime 2026-11-05 01:20; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
@@ -183,8 +191,10 @@
 
 - Пакет по умолчанию использует API-ключи Snap-сборки tdesktop; для своего
   дистрибутива нужны собственные `apiId`/`apiHash`.
-- `exteraless.json` сейчас привязан к `QStandardPaths::AppLocalDataLocation`
-  и не учитывает `-workdir`.
+- `exteraless.json` лежит в `<рабочий каталог>/tdata` и следует `-workdir`.
+  При первом запуске с другим workdir старый файл из
+  `QStandardPaths::AppLocalDataLocation` копируется, если нового файла ещё
+  нет; старый файл остаётся на месте.
 - Плагины Android-версии несовместимы: нужен новый desktop API.
 - Плагины этапа 2, известные ограничения:
   - `bwrap` доступен только на Linux; без него host fail closed

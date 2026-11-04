@@ -1062,6 +1062,96 @@ def check_reset(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_workdir(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "workdir-env")
+    native = work / "workdir-native"
+    env["EXTERALESS_WORKDIR"] = str(native)
+    data = json_call(
+        ledger, cli, ["general-set", "1"], env, "workdir set")
+    if data is not None:
+        ledger.check(
+            "workdir set value",
+            data.get("disableNumberRounding") is True,
+            data)
+    path = native / "tdata" / "exteraless.json"
+    ledger.check("workdir file created", path.is_file(), str(path))
+    if path.is_file():
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        ledger.check(
+            "workdir file value",
+            (saved.get("exteraconfig") or {}).get(
+                "OEGeneralDisableNumberRounding") is True,
+            saved)
+    old_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    ledger.check(
+        "workdir avoids xdg path",
+        not old_path.exists(),
+        str(old_path))
+    data = json_call(ledger, cli, ["general"], env, "workdir reload")
+    if data is not None:
+        ledger.check(
+            "workdir reload value",
+            data.get("disableNumberRounding") is True,
+            data)
+
+    migrate_root = work / "workdir-migrate"
+    env = make_env(work / "workdir-migrate-env")
+    env["EXTERALESS_WORKDIR"] = str(migrate_root)
+    old_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    old_path.parent.mkdir(parents=True, exist_ok=True)
+    old_path.write_text(json.dumps({
+        "version": 1,
+        "exteraconfig": {"OEGeneralDisableNumberRounding": True},
+    }), encoding="utf-8")
+    data = json_call(ledger, cli, ["general"], env, "workdir migrate read")
+    if data is not None:
+        ledger.check(
+            "workdir migrate value",
+            data.get("disableNumberRounding") is True,
+            data)
+    migrated = migrate_root / "tdata" / "exteraless.json"
+    ledger.check(
+        "workdir migrate copied",
+        migrated.is_file() and old_path.is_file(),
+        str(migrated))
+
+    migrate_root = work / "workdir-existing"
+    env = make_env(work / "workdir-existing-env")
+    env["EXTERALESS_WORKDIR"] = str(migrate_root)
+    existing = migrate_root / "tdata" / "exteraless.json"
+    existing.parent.mkdir(parents=True, exist_ok=True)
+    existing.write_text(json.dumps({
+        "version": 1,
+        "exteraconfig": {"OEGeneralDisableNumberRounding": False},
+    }), encoding="utf-8")
+    old_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    old_path.parent.mkdir(parents=True, exist_ok=True)
+    old_path.write_text(json.dumps({
+        "version": 1,
+        "exteraconfig": {"OEGeneralDisableNumberRounding": True},
+    }), encoding="utf-8")
+    data = json_call(
+        ledger, cli, ["general"], env, "workdir existing wins")
+    if data is not None:
+        ledger.check(
+            "workdir existing wins value",
+            data.get("disableNumberRounding") is False,
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1078,6 +1168,7 @@ def main():
         general = check_general(ledger, cli, work)
         deleted = check_deleted(ledger, cli, work)
         reset = check_reset(ledger, cli, work)
+        workdir = check_workdir(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1086,6 +1177,7 @@ def main():
     print(f"general: {general[0] - general[1]} passed")
     print(f"deleted: {deleted[0] - deleted[1]} passed")
     print(f"reset: {reset[0] - reset[1]} passed")
+    print(f"workdir: {workdir[0] - workdir[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

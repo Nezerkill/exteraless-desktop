@@ -438,20 +438,29 @@ index 401b0ab..7d99d8f 100644
  	};
  }
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..b80d60f 100644
+index 7a309ac..601603b 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
-@@ -6,6 +6,9 @@ For license and copyright information please follow this link:
+@@ -6,6 +6,10 @@ For license and copyright information please follow this link:
  https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "core/application.h"
++#include "exteraless/config.h"
 +#include "exteraless/deleted_messages.h"
 +#include "exteraless/plugin_runtime.h"
 +#include "exteraless/proxy_rules.h"
  
  #include "data/data_abstract_structure.h"
  #include "data/data_channel.h"
-@@ -209,6 +212,9 @@ Application::Application()
+@@ -184,6 +188,7 @@ Application::Application()
+ , _setupEmailLock(false)
+ , _autoLockTimer([=] { checkAutoLock(); }) {
+ 	Ui::Integration::Set(&_private->uiIntegration);
++	Exteraless::Config::Instance().setWorkingDir(cWorkingDir());
+ 	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
+ 
+ 	_platformIntegration->init();
+@@ -209,6 +214,9 @@ Application::Application()
  
  	_domain->activeSessionChanges(
  	) | rpl::on_next([=](Main::Session *session) {
@@ -461,7 +470,7 @@ index 7a309ac..b80d60f 100644
  		if (session && !UpdaterDisabled()) { // #TODO multi someSessionValue
  			UpdateChecker().setMtproto(session);
  		}
-@@ -285,6 +291,8 @@ Application::~Application() {
+@@ -285,6 +293,8 @@ Application::~Application() {
  	_domain->finish();
  	MTP::WebProxy::Transport::Shutdown();
  
@@ -470,7 +479,7 @@ index 7a309ac..b80d60f 100644
  	Local::finish();
  
  	Shortcuts::Finish();
-@@ -559,6 +567,7 @@ void Application::startSettingsAndBackground() {
+@@ -559,6 +569,7 @@ void Application::startSettingsAndBackground() {
  	checkSystemDarkMode();
  	Ui::SetScreenReaderModeDisabled(
  		settings().readPref<bool>(kScreenReaderModeDisabledKey));
@@ -5014,10 +5023,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..6c5ef8b
+index 0000000..a6ab0ee
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,543 @@
+@@ -0,0 +1,560 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -5487,13 +5496,30 @@ index 0000000..6c5ef8b
 +	return true;
 +}
 +
++void Config::setWorkingDir(const QString &workingDir) {
++	if (_loaded || workingDir.isEmpty()) {
++		return;
++	}
++	_workingDir = workingDir;
++}
++
 +void Config::ensureLoaded() const {
 +	if (_loaded) {
 +		return;
 +	}
 +	_loaded = true;
-+	_path = QStandardPaths::writableLocation(
++	const auto standard = QStandardPaths::writableLocation(
 +		QStandardPaths::AppLocalDataLocation) + "/tdata/exteraless.json";
++	if (_workingDir.isEmpty()) {
++		_path = standard;
++	} else {
++		_path = QDir(_workingDir).filePath(
++			QStringLiteral("tdata/exteraless.json"));
++		if (!QFile::exists(_path) && QFile::exists(standard)) {
++			QDir().mkpath(QFileInfo(_path).absolutePath());
++			QFile::copy(standard, _path);
++		}
++	}
 +
 +	auto file = QFile(_path);
 +	if (!file.open(QIODevice::ReadOnly)) {
@@ -5563,10 +5589,10 @@ index 0000000..6c5ef8b
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..f4b15d5
+index 0000000..8b29a28
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,135 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5613,6 +5639,7 @@ index 0000000..f4b15d5
 +	void load();
 +	void save();
 +	void reset();
++	void setWorkingDir(const QString &workingDir);
 +
 +	[[nodiscard]] bool relativeLastSeen() const;
 +	void setRelativeLastSeen(bool value);
@@ -5695,6 +5722,7 @@ index 0000000..f4b15d5
 +
 +	mutable QJsonObject _values;
 +	mutable QString _path;
++	mutable QString _workingDir;
 +	mutable bool _loaded = false;
 +	mutable ChatsSettings _chats;
 +};
@@ -7028,10 +7056,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..6ec81b9
+index 0000000..258652a
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,405 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -7199,6 +7227,10 @@ index 0000000..6ec81b9
 +int main(int argc, char *argv[]) {
 +	QCoreApplication app(argc, argv);
 +	QCoreApplication::setApplicationName(QStringLiteral("ExteralessDesktop"));
++	const auto workdir = qEnvironmentVariable("EXTERALESS_WORKDIR");
++	if (!workdir.isEmpty()) {
++		Exteraless::Config::Instance().setWorkingDir(workdir);
++	}
 +	const auto arguments = app.arguments();
 +	if (arguments.size() < 2) {
 +		return PrintUsage();
@@ -7497,10 +7529,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..57e4fa1
+index 0000000..693d403
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1100 @@
+@@ -0,0 +1,1192 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -8565,6 +8597,96 @@ index 0000000..57e4fa1
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_workdir(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "workdir-env")
++    native = work / "workdir-native"
++    env["EXTERALESS_WORKDIR"] = str(native)
++    data = json_call(
++        ledger, cli, ["general-set", "1"], env, "workdir set")
++    if data is not None:
++        ledger.check(
++            "workdir set value",
++            data.get("disableNumberRounding") is True,
++            data)
++    path = native / "tdata" / "exteraless.json"
++    ledger.check("workdir file created", path.is_file(), str(path))
++    if path.is_file():
++        saved = json.loads(path.read_text(encoding="utf-8"))
++        ledger.check(
++            "workdir file value",
++            (saved.get("exteraconfig") or {}).get(
++                "OEGeneralDisableNumberRounding") is True,
++            saved)
++    old_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    ledger.check(
++        "workdir avoids xdg path",
++        not old_path.exists(),
++        str(old_path))
++    data = json_call(ledger, cli, ["general"], env, "workdir reload")
++    if data is not None:
++        ledger.check(
++            "workdir reload value",
++            data.get("disableNumberRounding") is True,
++            data)
++
++    migrate_root = work / "workdir-migrate"
++    env = make_env(work / "workdir-migrate-env")
++    env["EXTERALESS_WORKDIR"] = str(migrate_root)
++    old_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    old_path.parent.mkdir(parents=True, exist_ok=True)
++    old_path.write_text(json.dumps({
++        "version": 1,
++        "exteraconfig": {"OEGeneralDisableNumberRounding": True},
++    }), encoding="utf-8")
++    data = json_call(ledger, cli, ["general"], env, "workdir migrate read")
++    if data is not None:
++        ledger.check(
++            "workdir migrate value",
++            data.get("disableNumberRounding") is True,
++            data)
++    migrated = migrate_root / "tdata" / "exteraless.json"
++    ledger.check(
++        "workdir migrate copied",
++        migrated.is_file() and old_path.is_file(),
++        str(migrated))
++
++    migrate_root = work / "workdir-existing"
++    env = make_env(work / "workdir-existing-env")
++    env["EXTERALESS_WORKDIR"] = str(migrate_root)
++    existing = migrate_root / "tdata" / "exteraless.json"
++    existing.parent.mkdir(parents=True, exist_ok=True)
++    existing.write_text(json.dumps({
++        "version": 1,
++        "exteraconfig": {"OEGeneralDisableNumberRounding": False},
++    }), encoding="utf-8")
++    old_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    old_path.parent.mkdir(parents=True, exist_ok=True)
++    old_path.write_text(json.dumps({
++        "version": 1,
++        "exteraconfig": {"OEGeneralDisableNumberRounding": True},
++    }), encoding="utf-8")
++    data = json_call(
++        ledger, cli, ["general"], env, "workdir existing wins")
++    if data is not None:
++        ledger.check(
++            "workdir existing wins value",
++            data.get("disableNumberRounding") is False,
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -8581,6 +8703,7 @@ index 0000000..57e4fa1
 +        general = check_general(ledger, cli, work)
 +        deleted = check_deleted(ledger, cli, work)
 +        reset = check_reset(ledger, cli, work)
++        workdir = check_workdir(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -8589,6 +8712,7 @@ index 0000000..57e4fa1
 +    print(f"general: {general[0] - general[1]} passed")
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
 +    print(f"reset: {reset[0] - reset[1]} passed")
++    print(f"workdir: {workdir[0] - workdir[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

@@ -165,6 +165,10 @@ void PrintBackup() {
 int main(int argc, char *argv[]) {
 	QCoreApplication app(argc, argv);
 	QCoreApplication::setApplicationName(QStringLiteral("ExteralessDesktop"));
+	const auto workdir = qEnvironmentVariable("EXTERALESS_WORKDIR");
+	if (!workdir.isEmpty()) {
+		Exteraless::Config::Instance().setWorkingDir(workdir);
+	}
 	const auto arguments = app.arguments();
 	if (arguments.size() < 2) {
 		return PrintUsage();

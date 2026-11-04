@@ -13,7 +13,10 @@ Implemented:
   `Comma after mention`;
 - per-network proxy auto-disable (VPN, mobile data, Wi-Fi);
 - `.extera` import/export with the Android invisible-Unicode envelope;
-- JSON config at `tdata/exteraless.json` under the app data directory.
+- JSON config at `tdata/exteraless.json` under the working directory, so it
+  follows `-workdir`; without that option it is the app data directory. On the
+  first run with a different working directory the old file is copied, not
+  moved, when the new one does not exist yet.
 
 ### Settings
 
@@ -80,7 +83,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig`, `pillstackconfig`, `mainconfig`); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 176 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 184 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

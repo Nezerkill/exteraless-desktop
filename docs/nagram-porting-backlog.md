@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | 🟡 11 ключей `lng_settings_exteraless*`, остальные подписи захардкожены |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(176 проверок: strip, reactions, cli, config, general, deleted, reset, backup),
+(184 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -90,7 +90,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-03 | Локализовать секцию Exteraless: захардкоженные подписи → `lang.strings` | `strings_oe*.xml` | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | S · низкий | Xvfb на ru/en: нет английских подписей; поиск по настройкам не падает | ⬜ | R1 P0-1, R2 M9 |
 | NB-04 | Полный экспорт/импорт `.extera` для всех 25 ключей с отчётом о неизвестных | `EtgBackup`, `InvisibleEncryptor` | `exteraless/backup.cpp`, `exteraless/config.cpp` | S · низкий | `exteraless/tests/chats/run_checks.py` + CLI-импорт файла с новыми ключами | ✅ 2026-11-05: 25 ключей в секциях `exteraconfig`/`pillstackconfig`/`mainconfig`, валидация типов, целочисленности и диапазонов, санитизация exclusions/plugins, сброс производного `OEProxyAutoDisabled`, unknown с префиксом секции; round-trip CLI | R1 P0-2 |
 | NB-05 | Сброс настроек Exteraless (кнопка + подтверждение) | `resetSettings` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` | S · низкий | сброс → дефолты, `exteraless.json` без OE-ключей | ✅ 2026-11-05: `Config::reset()`, кнопка Reset с подтверждением, пересоздание секции, CLI-группа `reset` (7 проверок), Xvfb smoke | R1 P0-3 |
-| NB-06 | Путь конфига, совместимый с `-workdir` | — | `exteraless/config.cpp` (путь данных), `core/application.cpp` | S · средний (миграция существующего файла) | запуск с `-workdir /tmp/x`: файл создаётся там, старый профиль читается | ⬜ | R1 P0-4 |
+| NB-06 | Путь конфига, совместимый с `-workdir` | — | `exteraless/config.cpp` (путь данных), `core/application.cpp` | S · средний (миграция существующего файла) | запуск с `-workdir /tmp/x`: файл создаётся там, старый профиль читается | ✅ 2026-11-05: `Config::setWorkingDir()` + `cWorkingDir()` из Application, копирование старого файла при первом запуске, CLI `EXTERALESS_WORKDIR` (8 проверок), Xvfb-миграция на копии профиля | R1 P0-4 |
 | NB-07 | Время с секундами | `NekoConfig.showSeconds` | `history/view/history_view_bottom_info.cpp`, `dialogs/ui/dialogs_layout.cpp`, `history_view_element.cpp` | S · средний (время рисуется в нескольких местах) | CLI форматтера (`HH:mm` / `HH:mm:ss`, полночь, локаль) + Xvfb: чат и список | ⬜ | R1 P0-5, R2 §6.2 |
 | NB-08 | Фильтр Zalgo | `NaConfig.zalgoFilter` | `ui/text/*`, `data/data_messages.cpp` | S · средний (ломает раскладку при агрессивном фильтре) | CLI чистой функции + Xvfb: текст с комбинирующими знаками ровно рендерится, БД не меняется | ⬜ | R1 P0-6 |
 | NB-09 | Показать ID и DC в профиле | `NekoConfig.showIdAndDc`, `NaConfig.idDcType` | `info/profile/info_profile_values.cpp`, `info/profile/info_profile_top_bar.cpp` | S · низкий | Xvfb: профиль контакта и свой, значение копируется | ⬜ | R1 P0-7 |
@@ -225,8 +225,7 @@ timeout, state). Все три прогоняются на текущем дер
 при загрузке, тумблер добавлен в Chats. Схема файла не менялась; расширение
 полей — отдельная задача NB-19.
 
-Следующие шаги того же этапа: NB-05 (сброс), NB-06 (`-workdir`),
-NB-03 (локализация).
+Следующие шаги того же этапа: NB-05 (✅), NB-06 (✅), NB-03 (локализация).
 
 ### 7.2 Шаг 1 — batch из трёх функций
 
@@ -266,7 +265,7 @@ NB-09 в этом же батче. Безопасность: не влияет �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 176 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 184 проверки; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.
