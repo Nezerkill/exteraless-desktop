@@ -37,6 +37,7 @@ constexpr auto kChatsHideReactionsChannels = "OEChatsHideReactionsChannels";
 constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
 constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
 constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
+constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
@@ -282,6 +283,10 @@ void Config::setChatsStripTrackingOnOpen(bool value) {
 	setValue(kChatsStripTrackingOnOpen, value);
 }
 
+void Config::setChatsStripTrackingOnPaste(bool value) {
+	setValue(kChatsStripTrackingOnPaste, value);
+}
+
 void Config::setChatsUnreadCapsule(bool value) {
 	setValue(kChatsUnreadCapsule, value);
 }
@@ -356,6 +361,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsHideReactionsGroups
 			|| key == kChatsHideReactionsPrivate
 			|| key == kChatsStripTrackingOnOpen
+			|| key == kChatsStripTrackingOnPaste
 			|| key == kChatsUnreadCapsule) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
@@ -416,6 +422,8 @@ void Config::refreshChats() const {
 	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
 	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
 	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
+	_chats.stripTrackingOnPaste
+		= boolValue(kChatsStripTrackingOnPaste, true);
 	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
 }
 

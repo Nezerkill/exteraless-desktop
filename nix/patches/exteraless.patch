@@ -366,6 +366,76 @@ index d2f8a9f..e573e5b 100644
  		}
  	}, raw->lifetime());
  
+diff --git a/Telegram/SourceFiles/chat_helpers/message_field.cpp b/Telegram/SourceFiles/chat_helpers/message_field.cpp
+index 401b0ab..7d99d8f 100644
+--- a/Telegram/SourceFiles/chat_helpers/message_field.cpp
++++ b/Telegram/SourceFiles/chat_helpers/message_field.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "chat_helpers/message_field.h"
+ 
++#include "exteraless/config.h"
++#include "exteraless/links.h"
+ #include "history/history_widget.h"
+ #include "history/history.h" // History::session
+ #include "history/history_item.h" // HistoryItem::originalText
+@@ -61,11 +63,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ #include <QtCore/QMimeData>
+ #include <QtCore/QStack>
++#include <QtCore/QUrl>
+ #include <QtGui/QGuiApplication>
+ #include <QtGui/QTextBlock>
+ #include <QtGui/QClipboard>
+ #include <QtWidgets/QApplication>
+ 
++#include <algorithm>
++
+ namespace {
+ 
+ using namespace Ui::Text;
+@@ -83,6 +88,8 @@ constexpr auto kLinkProtocols = {
+     "tonsite://"
+ };
+ 
++constexpr auto kStripPasteLimit = 4096;
++
+ // For mention / custom emoji tags save and validate selfId,
+ // ignore tags for different users.
+ [[nodiscard]] Fn<QString(QStringView)> FieldTagMimeProcessor(
+@@ -1654,6 +1661,32 @@ Ui::InputField::MimeDataHook WrappedMessageFieldMimeHook(
+ 			field->textCursor().insertText(text);
+ 			return true;
+ 		}
++		const auto urls = data->urls();
++		const auto nonHttpUrl = std::ranges::any_of(
++			urls,
++			[](const QUrl &url) {
++				const auto scheme = url.scheme();
++				return !scheme.startsWith(
++					u"http"_q,
++					Qt::CaseInsensitive);
++			});
++		if (data->hasText()
++			&& !data->hasHtml()
++			&& !data->hasImage()
++			&& !nonHttpUrl
++			&& data->text().size() <= kStripPasteLimit
++			&& Exteraless::Config::Instance()
++				.chatsSettings().stripTrackingOnPaste) {
++			const auto text = data->text();
++			const auto stripped = Exteraless::StripTrackingInText(text);
++			if (stripped != text) {
++				if (action == Ui::InputField::MimeAction::Check) {
++					return true;
++				}
++				field->textCursor().insertText(stripped);
++				return true;
++			}
++		}
+ 		return originalHook ? originalHook(data, action) : false;
+ 	};
+ }
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
 index 7a309ac..b80d60f 100644
 --- a/Telegram/SourceFiles/core/application.cpp
@@ -3298,10 +3368,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..699bf53
+index 0000000..2795b2b
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,505 @@
+@@ -0,0 +1,514 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3533,6 +3603,15 @@ index 0000000..699bf53
 +		[](bool value) {
 +			Exteraless::Config::Instance()
 +				.setChatsStripTrackingOnOpen(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/strip-tracking-paste"_q,
++		u"Strip tracking parameters from pasted text"_q,
++		{ u"chat"_q, u"paste"_q, u"tracking"_q, u"utm"_q },
++		Exteraless::Config::Instance().chatsSettings().stripTrackingOnPaste,
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatsStripTrackingOnPaste(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/unread-capsule"_q,
@@ -4688,10 +4767,10 @@ index 0000000..c1bfde8
 +} // namespace Exteraless
 diff --git a/exteraless/chats.h b/exteraless/chats.h
 new file mode 100644
-index 0000000..f3da876
+index 0000000..b339692
 --- /dev/null
 +++ b/exteraless/chats.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,28 @@
 +#pragma once
 +
 +namespace Exteraless {
@@ -4702,6 +4781,7 @@ index 0000000..f3da876
 +	bool hideReactionsGroups = false;
 +	bool hideReactionsPrivate = false;
 +	bool stripTrackingOnOpen = true;
++	bool stripTrackingOnPaste = true;
 +	bool unreadCapsule = false;
 +};
 +
@@ -4721,10 +4801,10 @@ index 0000000..f3da876
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..290b29e
+index 0000000..906b251
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,452 @@
+@@ -0,0 +1,460 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -4764,6 +4844,7 @@ index 0000000..290b29e
 +constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
 +constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
 +constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
++constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 +constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
@@ -5009,6 +5090,10 @@ index 0000000..290b29e
 +	setValue(kChatsStripTrackingOnOpen, value);
 +}
 +
++void Config::setChatsStripTrackingOnPaste(bool value) {
++	setValue(kChatsStripTrackingOnPaste, value);
++}
++
 +void Config::setChatsUnreadCapsule(bool value) {
 +	setValue(kChatsUnreadCapsule, value);
 +}
@@ -5083,6 +5168,7 @@ index 0000000..290b29e
 +			|| key == kChatsHideReactionsGroups
 +			|| key == kChatsHideReactionsPrivate
 +			|| key == kChatsStripTrackingOnOpen
++			|| key == kChatsStripTrackingOnPaste
 +			|| key == kChatsUnreadCapsule) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
@@ -5143,6 +5229,8 @@ index 0000000..290b29e
 +	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
 +	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
 +	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
++	_chats.stripTrackingOnPaste
++		= boolValue(kChatsStripTrackingOnPaste, true);
 +	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
 +}
 +
@@ -5179,10 +5267,10 @@ index 0000000..290b29e
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..37dcd33
+index 0000000..5c6c791
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,127 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5281,6 +5369,7 @@ index 0000000..37dcd33
 +	void setChatsHideReactionsGroups(bool value);
 +	void setChatsHideReactionsPrivate(bool value);
 +	void setChatsStripTrackingOnOpen(bool value);
++	void setChatsStripTrackingOnPaste(bool value);
 +	void setChatsUnreadCapsule(bool value);
 +
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
@@ -5837,12 +5926,13 @@ index 0000000..6b6e337
 +} // namespace Exteraless
 diff --git a/exteraless/links.cpp b/exteraless/links.cpp
 new file mode 100644
-index 0000000..a311ce5
+index 0000000..9b0fa5e
 --- /dev/null
 +++ b/exteraless/links.cpp
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,139 @@
 +#include "exteraless/links.h"
 +
++#include <QRegularExpression>
 +#include <QStringList>
 +
 +namespace Exteraless {
@@ -5940,13 +6030,51 @@ index 0000000..a311ce5
 +	return result;
 +}
 +
++QString StripTrackingInText(const QString &text) {
++	static const auto expression = QRegularExpression(
++		QStringLiteral("https?://[^\\s<>\"']+"),
++		QRegularExpression::CaseInsensitiveOption);
++	const auto normalized = QString(text).replace(
++		QStringLiteral("\r\n"),
++		QStringLiteral("\n"));
++	auto last = 0;
++	auto output = QString();
++	auto match = expression.globalMatch(normalized);
++	while (match.hasNext()) {
++		const auto found = match.next();
++		auto url = found.captured();
++		auto suffix = QString();
++		static const auto trailing = QString::fromUtf8(
++			".,;:!?)]}\x27\x22`*»”’。…—");
++		while (!url.isEmpty() && trailing.contains(url.back())) {
++			suffix.prepend(url.back());
++			url.chop(1);
++		}
++		const auto cleaned = StripTracking(url);
++		if (cleaned == url) {
++			continue;
++		}
++		output += normalized.mid(
++			last,
++			found.capturedStart() - last);
++		output += cleaned;
++		output += suffix;
++		last = found.capturedEnd();
++	}
++	if (!last) {
++		return text;
++	}
++	output += normalized.mid(last);
++	return output;
++}
++
 +} // namespace Exteraless
 diff --git a/exteraless/links.h b/exteraless/links.h
 new file mode 100644
-index 0000000..a73984c
+index 0000000..12c9a3e
 --- /dev/null
 +++ b/exteraless/links.h
-@@ -0,0 +1,9 @@
+@@ -0,0 +1,10 @@
 +#pragma once
 +
 +#include <QString>
@@ -5954,6 +6082,7 @@ index 0000000..a73984c
 +namespace Exteraless {
 +
 +[[nodiscard]] QString StripTracking(const QString &url);
++[[nodiscard]] QString StripTrackingInText(const QString &text);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp
@@ -6524,10 +6653,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..6a74c16
+index 0000000..8a5698d
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,282 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -6551,18 +6680,20 @@ index 0000000..6a74c16
 +	std::cerr
 +		<< "Usage:\n"
 +		<< "  exteraless-chats-cli strip <url>\n"
++		<< "  exteraless-chats-cli strip-text <text>\n"
 +		<< "  exteraless-chats-cli hidden <hideChannels> <hideGroups> "
 +		<< "<hidePrivate> <channel> <group> <user>\n"
 +		<< "  exteraless-chats-cli config-defaults\n"
 +		<< "  exteraless-chats-cli config-loaded\n"
 +		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
-+		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
++		<< "<hideGroups> <hidePrivate> <stripTracking> <stripTrackingPaste> "
++		<< "<unreadCapsule>\n"
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1>\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
-+		<< "<unreadCapsule>\n"
++		<< "<stripTrackingPaste> <unreadCapsule>\n"
 +		<< "  exteraless-chats-cli backup-import <base64>\n"
 +		<< "  exteraless-chats-cli backup-import-json <json>\n";
 +	return 2;
@@ -6582,7 +6713,7 @@ index 0000000..6a74c16
 +[[nodiscard]] bool ReadFlags(
 +		const QStringList &arguments,
 +		int first,
-+		std::array<bool, 6> *flags) {
++		std::array<bool, 7> *flags) {
 +	for (auto i = 0; i != int(flags->size()); ++i) {
 +		if (!ReadFlag(arguments[first + i], &(*flags)[i])) {
 +			return false;
@@ -6598,6 +6729,7 @@ index 0000000..6a74c16
 +		chats.hideReactionsGroups,
 +		chats.hideReactionsPrivate,
 +		chats.stripTrackingOnOpen,
++		chats.stripTrackingOnPaste,
 +		chats.unreadCapsule,
 +	};
 +}
@@ -6622,14 +6754,15 @@ index 0000000..6a74c16
 +	});
 +}
 +
-+void ApplyFlags(const std::array<bool, 6> &flags) {
++void ApplyFlags(const std::array<bool, 7> &flags) {
 +	auto &config = Exteraless::Config::Instance();
 +	config.setChatsRemoveMessageTail(flags[0]);
 +	config.setChatsHideReactionsChannels(flags[1]);
 +	config.setChatsHideReactionsGroups(flags[2]);
 +	config.setChatsHideReactionsPrivate(flags[3]);
 +	config.setChatsStripTrackingOnOpen(flags[4]);
-+	config.setChatsUnreadCapsule(flags[5]);
++	config.setChatsStripTrackingOnPaste(flags[5]);
++	config.setChatsUnreadCapsule(flags[6]);
 +}
 +
 +void PrintImportResult(const Exteraless::BackupImportResult &result) {
@@ -6670,6 +6803,15 @@ index 0000000..6a74c16
 +		}
 +		std::cout
 +			<< Exteraless::StripTracking(arguments[2]).toUtf8().constData()
++			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("strip-text")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		std::cout
++			<< Exteraless::StripTrackingInText(arguments[2]).toUtf8().constData()
 +			<< '\n';
 +		return 0;
 +	}
@@ -6722,10 +6864,10 @@ index 0000000..6a74c16
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("config-set")) {
-+		if (arguments.size() != 8) {
++		if (arguments.size() != 9) {
 +			return PrintUsage();
 +		}
-+		auto flags = std::array<bool, 6>();
++		auto flags = std::array<bool, 7>();
 +		if (!ReadFlags(arguments, 2, &flags)) {
 +			return PrintUsage();
 +		}
@@ -6755,10 +6897,10 @@ index 0000000..6a74c16
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("backup-export")) {
-+		if (arguments.size() != 8) {
++		if (arguments.size() != 9) {
 +			return PrintUsage();
 +		}
-+		auto flags = std::array<bool, 6>();
++		auto flags = std::array<bool, 7>();
 +		if (!ReadFlags(arguments, 2, &flags)) {
 +			return PrintUsage();
 +		}
@@ -6861,10 +7003,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..68024b9
+index 0000000..e293d03
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,454 @@
+@@ -0,0 +1,484 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -6883,7 +7025,7 @@ index 0000000..68024b9
 +RUN_TIMEOUT = 30
 +MIN_STRIP_CASES = 38
 +MIN_REACTION_CASES = 10
-+EXPECTED_DEFAULTS = [True, False, False, False, True, False]
++EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
 +
 +
 +class Ledger:
@@ -6964,7 +7106,34 @@ index 0000000..68024b9
 +            f"strip {url}",
 +            result.returncode == 0 and actual == expected,
 +            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
-+    return len(rows), len(ledger.failures) - before
++    text_cases = [
++        ("see https://x.com/a?utm_source=1&id=2 now",
++         "see https://x.com/a?id=2 now"),
++        ("https://x.com/a?fbclid=1.",
++         "https://x.com/a."),
++        ("plain text", "plain text"),
++        (
++            "one https://x.com/a?utm_source=1 and "
++            "https://y.com/b?fbclid=2",
++            "one https://x.com/a and https://y.com/b",
++        ),
++        (
++            "«https://x.com/a?utm_source=1»",
++            "«https://x.com/a»",
++        ),
++        (
++            "HTTPS://X.COM/A?UTM_SOURCE=1#frag",
++            "HTTPS://X.COM/A#frag",
++        ),
++    ]
++    for text, expected in text_cases:
++        result = run(cli, ["strip-text", text])
++        actual = result.stdout.rstrip("\n")
++        ledger.check(
++            f"strip-text {text}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++    return len(rows) + len(text_cases), len(ledger.failures) - before
 +
 +
 +def check_reactions(ledger, cli):
@@ -7027,7 +7196,7 @@ index 0000000..68024b9
 +
 +    data = json_call(
 +        ledger, cli,
-+        ["backup-export", "1", "0", "0", "0", "1", "0"],
++        ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
 +        env, "general backup export")
 +    if data is not None:
 +        section = data.get("exteraconfig") or {}
@@ -7074,10 +7243,10 @@ index 0000000..68024b9
 +
 +    env = make_env(work / "config-setters")
 +    data = json_call(
-+        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "1"], env,
++        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "0", "1"], env,
 +        "config setters")
 +    if data is not None:
-+        expected = [False, True, True, False, False, True]
++        expected = [False, True, True, False, False, False, True]
 +        ledger.check(
 +            "config setters refresh cache",
 +            data.get("chats") == expected,
@@ -7099,6 +7268,7 @@ index 0000000..68024b9
 +            "OEChatsHideReactionsGroups": False,
 +            "OEChatsHideReactionsPrivate": True,
 +            "OEChatsStripTrackingOnOpen": False,
++            "OEChatsStripTrackingOnPaste": False,
 +            "OEChatsUnreadCapsule": True,
 +            "OEUnknownKey": True,
 +        },
@@ -7107,7 +7277,7 @@ index 0000000..68024b9
 +        ledger, cli, ["config-fromjson", json.dumps(root)], env,
 +        "config fromJson")
 +    if data is not None:
-+        expected = [False, True, False, True, False, True]
++        expected = [False, True, False, True, False, False, True]
 +        ledger.check(
 +            "config fromJson accepted",
 +            data.get("accepted") is True,
@@ -7139,7 +7309,7 @@ index 0000000..68024b9
 +
 +    env = make_env(work / "backup-export")
 +    data = json_call(
-+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1"], env,
++        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"], env,
 +        "backup export")
 +    encoded = None
 +    if data is not None:
@@ -7166,7 +7336,9 @@ index 0000000..68024b9
 +        ledger.check(
 +            "backup has no strip tracking key",
 +            ("OEChatsStripTrackingOnOpen" not in section
-+             and "stripTrackingOnOpen" not in section))
++             and "stripTrackingOnOpen" not in section
++             and "OEChatsStripTrackingOnPaste" not in section
++             and "stripTrackingOnPaste" not in section))
 +        ledger.check(
 +            "backup has no unread capsule key",
 +            ("OEChatsUnreadCapsule" not in section
@@ -7196,7 +7368,7 @@ index 0000000..68024b9
 +                data.get("unknown"))
 +            ledger.check(
 +                "backup import cache",
-+                data.get("chats") == [False, True, False, True, True, False],
++                data.get("chats") == [False, True, False, True, True, True, False],
 +                data.get("chats"))
 +
 +    env = make_env(work / "backup-import-four")
@@ -7227,7 +7399,7 @@ index 0000000..68024b9
 +            data.get("unknown"))
 +        ledger.check(
 +            "backup import four cache",
-+            data.get("chats") == [True, True, True, True, True, False],
++            data.get("chats") == [True, True, True, True, True, True, False],
 +            data.get("chats"))
 +
 +    env = make_env(work / "backup-wrong-type")

@@ -231,6 +231,15 @@ const auto kMeta = Builder::BuildHelper({
 				.setChatsStripTrackingOnOpen(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/strip-tracking-paste"_q,
+		u"Strip tracking parameters from pasted text"_q,
+		{ u"chat"_q, u"paste"_q, u"tracking"_q, u"utm"_q },
+		Exteraless::Config::Instance().chatsSettings().stripTrackingOnPaste,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsStripTrackingOnPaste(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/unread-capsule"_q,
 		u"Compact unread messages label"_q,
 		{ u"chat"_q, u"unread"_q, u"capsule"_q, u"label"_q },

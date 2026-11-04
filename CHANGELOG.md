@@ -2,6 +2,9 @@
 
 ## 2026-11-04
 
+- Chats paste: `OEChatsStripTrackingOnPaste` (default `true`) очищает
+  tracking-параметры в plain-text/URL вставке; rich-text не меняется, ключ
+  desktop-only.
 - General/Nagram X: `OEGeneralDisableNumberRounding` (default `false`)
   показывает точные значения вместо сокращённых `K/M/B`; Android backup-ключ
   `disableNumberRounding` поддержан, тумблер — в General.

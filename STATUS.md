@@ -79,8 +79,8 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 87 проверок PASS
-  (38 strip, 10 reactions, 3 CLI, 7 config, 6 general, 23 backup); плагины
+- Chats: `exteraless/tests/chats/run_checks.py` — 93 проверки PASS
+  (44 strip, 10 reactions, 3 CLI, 7 config, 6 general, 23 backup); плагины
   без изменений — 32 и 213 проверок.
 - Chats, Xvfb smoke: подсекция `Chats` с шестью тумблерами, tail on/off в
   личном чате, реакции скрыты в канале и группе, тумблер unread capsule
@@ -91,8 +91,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `205bce8c…`,
-  mtime 2026-11-04 21:39; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `c1f4fe5c…`,
+  mtime 2026-11-04 22:11; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
@@ -102,6 +102,9 @@
 - General: `OEGeneralDisableNumberRounding` (default `false`) показывает
   точные счётчики вместо `K/M/B`; backup-ключ `disableNumberRounding`
   импортируется/экспортируется, тумблер находится в General.
+- Chats paste: `OEChatsStripTrackingOnPaste` (default `true`) очищает
+  tracking-параметры в plain-text/URL вставке; rich-text/HTML не меняется,
+  в backup ключ не входит, CLI покрывает текст с несколькими ссылками.
 
 ### Артефакты
 

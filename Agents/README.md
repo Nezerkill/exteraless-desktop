@@ -30,7 +30,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (87 проверок: strip, reactions, CLI, config, general, backup); в приложение
+  (93 проверки: strip, reactions, CLI, config, general, backup); в приложение
   не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
@@ -62,10 +62,12 @@ sibling-чекаутом: `../exteraless`.
   меню чата.
 - Подсекция `Chats` в настройках Exteraless: `OEChatsRemoveMessageTail`
   (default `true`), `OEChatsHideReactionsChannels`/`Groups`/`Private`
-  (default `false`) и `OEChatsStripTrackingOnOpen` (default `true`). Tail и
-  reactions читаются при построении чата, поэтому применяются после его
-  повторного открытия, а реакции в pinned bar могут требовать перезапуска.
-  Strip tracking срабатывает только на клик по http/https; allowlist
+  (default `false`), `OEChatsStripTrackingOnOpen` (default `true`),
+  `OEChatsStripTrackingOnPaste` (default `true`) и `OEChatsUnreadCapsule`
+  (default `false`). Tail и reactions читаются при построении чата, поэтому
+  применяются после его повторного открытия, а реакции в pinned bar могут
+  требовать перезапуска. Strip tracking срабатывает на клик по http/https и
+  на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
   декодируются. Backup пишет `removeMessageTail`,

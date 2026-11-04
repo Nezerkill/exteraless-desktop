@@ -16,7 +16,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 RUN_TIMEOUT = 30
 MIN_STRIP_CASES = 38
 MIN_REACTION_CASES = 10
-EXPECTED_DEFAULTS = [True, False, False, False, True, False]
+EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
 
 
 class Ledger:
@@ -97,7 +97,34 @@ def check_strip(ledger, cli):
             f"strip {url}",
             result.returncode == 0 and actual == expected,
             f"exit {result.returncode}, got {actual!r}, want {expected!r}")
-    return len(rows), len(ledger.failures) - before
+    text_cases = [
+        ("see https://x.com/a?utm_source=1&id=2 now",
+         "see https://x.com/a?id=2 now"),
+        ("https://x.com/a?fbclid=1.",
+         "https://x.com/a."),
+        ("plain text", "plain text"),
+        (
+            "one https://x.com/a?utm_source=1 and "
+            "https://y.com/b?fbclid=2",
+            "one https://x.com/a and https://y.com/b",
+        ),
+        (
+            "«https://x.com/a?utm_source=1»",
+            "«https://x.com/a»",
+        ),
+        (
+            "HTTPS://X.COM/A?UTM_SOURCE=1#frag",
+            "HTTPS://X.COM/A#frag",
+        ),
+    ]
+    for text, expected in text_cases:
+        result = run(cli, ["strip-text", text])
+        actual = result.stdout.rstrip("\n")
+        ledger.check(
+            f"strip-text {text}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+    return len(rows) + len(text_cases), len(ledger.failures) - before
 
 
 def check_reactions(ledger, cli):
@@ -160,7 +187,7 @@ def check_general(ledger, cli, work):
 
     data = json_call(
         ledger, cli,
-        ["backup-export", "1", "0", "0", "0", "1", "0"],
+        ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
         env, "general backup export")
     if data is not None:
         section = data.get("exteraconfig") or {}
@@ -207,10 +234,10 @@ def check_config(ledger, cli, work):
 
     env = make_env(work / "config-setters")
     data = json_call(
-        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "1"], env,
+        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "0", "1"], env,
         "config setters")
     if data is not None:
-        expected = [False, True, True, False, False, True]
+        expected = [False, True, True, False, False, False, True]
         ledger.check(
             "config setters refresh cache",
             data.get("chats") == expected,
@@ -232,6 +259,7 @@ def check_config(ledger, cli, work):
             "OEChatsHideReactionsGroups": False,
             "OEChatsHideReactionsPrivate": True,
             "OEChatsStripTrackingOnOpen": False,
+            "OEChatsStripTrackingOnPaste": False,
             "OEChatsUnreadCapsule": True,
             "OEUnknownKey": True,
         },
@@ -240,7 +268,7 @@ def check_config(ledger, cli, work):
         ledger, cli, ["config-fromjson", json.dumps(root)], env,
         "config fromJson")
     if data is not None:
-        expected = [False, True, False, True, False, True]
+        expected = [False, True, False, True, False, False, True]
         ledger.check(
             "config fromJson accepted",
             data.get("accepted") is True,
@@ -272,7 +300,7 @@ def check_backup(ledger, cli, work):
 
     env = make_env(work / "backup-export")
     data = json_call(
-        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1"], env,
+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"], env,
         "backup export")
     encoded = None
     if data is not None:
@@ -299,7 +327,9 @@ def check_backup(ledger, cli, work):
         ledger.check(
             "backup has no strip tracking key",
             ("OEChatsStripTrackingOnOpen" not in section
-             and "stripTrackingOnOpen" not in section))
+             and "stripTrackingOnOpen" not in section
+             and "OEChatsStripTrackingOnPaste" not in section
+             and "stripTrackingOnPaste" not in section))
         ledger.check(
             "backup has no unread capsule key",
             ("OEChatsUnreadCapsule" not in section
@@ -329,7 +359,7 @@ def check_backup(ledger, cli, work):
                 data.get("unknown"))
             ledger.check(
                 "backup import cache",
-                data.get("chats") == [False, True, False, True, True, False],
+                data.get("chats") == [False, True, False, True, True, True, False],
                 data.get("chats"))
 
     env = make_env(work / "backup-import-four")
@@ -360,7 +390,7 @@ def check_backup(ledger, cli, work):
             data.get("unknown"))
         ledger.check(
             "backup import four cache",
-            data.get("chats") == [True, True, True, True, True, False],
+            data.get("chats") == [True, True, True, True, True, True, False],
             data.get("chats"))
 
     env = make_env(work / "backup-wrong-type")

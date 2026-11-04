@@ -8,6 +8,7 @@ struct ChatsSettings {
 	bool hideReactionsGroups = false;
 	bool hideReactionsPrivate = false;
 	bool stripTrackingOnOpen = true;
+	bool stripTrackingOnPaste = true;
 	bool unreadCapsule = false;
 };
 

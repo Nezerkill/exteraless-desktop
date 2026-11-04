@@ -1,8 +1,12 @@
 # Nagram X Chats Batch Implementation Plan
 
 **Status:** Completed on 2026-11-04. The batch is implemented, its runner is
-green (`exteraless/tests/chats/run_checks.py`, 79 checks), the Xvfb smoke is
-recorded and `nix/patches/exteraless.patch` applies to a clean v7.3.1.
+green (`exteraless/tests/chats/run_checks.py`, now 93 checks), the Xvfb smoke
+is recorded and `nix/patches/exteraless.patch` applies to a clean v7.3.1.
+
+**Follow-up:** paste-time stripping (`OEChatsStripTrackingOnPaste`) was
+implemented in a later task, so the original “paste is untouched” notes below
+describe the batch scope, not the current tree.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

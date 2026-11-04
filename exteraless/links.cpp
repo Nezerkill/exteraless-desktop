@@ -1,5 +1,6 @@
 #include "exteraless/links.h"
 
+#include <QRegularExpression>
 #include <QStringList>
 
 namespace Exteraless {
@@ -95,6 +96,44 @@ QString StripTracking(const QString &url) {
 	}
 	result += url.mid(end);
 	return result;
+}
+
+QString StripTrackingInText(const QString &text) {
+	static const auto expression = QRegularExpression(
+		QStringLiteral("https?://[^\\s<>\"']+"),
+		QRegularExpression::CaseInsensitiveOption);
+	const auto normalized = QString(text).replace(
+		QStringLiteral("\r\n"),
+		QStringLiteral("\n"));
+	auto last = 0;
+	auto output = QString();
+	auto match = expression.globalMatch(normalized);
+	while (match.hasNext()) {
+		const auto found = match.next();
+		auto url = found.captured();
+		auto suffix = QString();
+		static const auto trailing = QString::fromUtf8(
+			".,;:!?)]}\x27\x22`*»”’。…—");
+		while (!url.isEmpty() && trailing.contains(url.back())) {
+			suffix.prepend(url.back());
+			url.chop(1);
+		}
+		const auto cleaned = StripTracking(url);
+		if (cleaned == url) {
+			continue;
+		}
+		output += normalized.mid(
+			last,
+			found.capturedStart() - last);
+		output += cleaned;
+		output += suffix;
+		last = found.capturedEnd();
+	}
+	if (!last) {
+		return text;
+	}
+	output += normalized.mid(last);
+	return output;
 }
 
 } // namespace Exteraless

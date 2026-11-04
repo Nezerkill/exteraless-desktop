@@ -21,18 +21,20 @@ using Exteraless::ChatsSettings;
 	std::cerr
 		<< "Usage:\n"
 		<< "  exteraless-chats-cli strip <url>\n"
+		<< "  exteraless-chats-cli strip-text <text>\n"
 		<< "  exteraless-chats-cli hidden <hideChannels> <hideGroups> "
 		<< "<hidePrivate> <channel> <group> <user>\n"
 		<< "  exteraless-chats-cli config-defaults\n"
 		<< "  exteraless-chats-cli config-loaded\n"
 		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
-		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
+		<< "<hideGroups> <hidePrivate> <stripTracking> <stripTrackingPaste> "
+		<< "<unreadCapsule>\n"
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1>\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
-		<< "<unreadCapsule>\n"
+		<< "<stripTrackingPaste> <unreadCapsule>\n"
 		<< "  exteraless-chats-cli backup-import <base64>\n"
 		<< "  exteraless-chats-cli backup-import-json <json>\n";
 	return 2;
@@ -52,7 +54,7 @@ using Exteraless::ChatsSettings;
 [[nodiscard]] bool ReadFlags(
 		const QStringList &arguments,
 		int first,
-		std::array<bool, 6> *flags) {
+		std::array<bool, 7> *flags) {
 	for (auto i = 0; i != int(flags->size()); ++i) {
 		if (!ReadFlag(arguments[first + i], &(*flags)[i])) {
 			return false;
@@ -68,6 +70,7 @@ using Exteraless::ChatsSettings;
 		chats.hideReactionsGroups,
 		chats.hideReactionsPrivate,
 		chats.stripTrackingOnOpen,
+		chats.stripTrackingOnPaste,
 		chats.unreadCapsule,
 	};
 }
@@ -92,14 +95,15 @@ void PrintGeneral() {
 	});
 }
 
-void ApplyFlags(const std::array<bool, 6> &flags) {
+void ApplyFlags(const std::array<bool, 7> &flags) {
 	auto &config = Exteraless::Config::Instance();
 	config.setChatsRemoveMessageTail(flags[0]);
 	config.setChatsHideReactionsChannels(flags[1]);
 	config.setChatsHideReactionsGroups(flags[2]);
 	config.setChatsHideReactionsPrivate(flags[3]);
 	config.setChatsStripTrackingOnOpen(flags[4]);
-	config.setChatsUnreadCapsule(flags[5]);
+	config.setChatsStripTrackingOnPaste(flags[5]);
+	config.setChatsUnreadCapsule(flags[6]);
 }
 
 void PrintImportResult(const Exteraless::BackupImportResult &result) {
@@ -140,6 +144,15 @@ int main(int argc, char *argv[]) {
 		}
 		std::cout
 			<< Exteraless::StripTracking(arguments[2]).toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("strip-text")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::StripTrackingInText(arguments[2]).toUtf8().constData()
 			<< '\n';
 		return 0;
 	}
@@ -192,10 +205,10 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("config-set")) {
-		if (arguments.size() != 8) {
+		if (arguments.size() != 9) {
 			return PrintUsage();
 		}
-		auto flags = std::array<bool, 6>();
+		auto flags = std::array<bool, 7>();
 		if (!ReadFlags(arguments, 2, &flags)) {
 			return PrintUsage();
 		}
@@ -225,10 +238,10 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("backup-export")) {
-		if (arguments.size() != 8) {
+		if (arguments.size() != 9) {
 			return PrintUsage();
 		}
-		auto flags = std::array<bool, 6>();
+		auto flags = std::array<bool, 7>();
 		if (!ReadFlags(arguments, 2, &flags)) {
 			return PrintUsage();
 		}

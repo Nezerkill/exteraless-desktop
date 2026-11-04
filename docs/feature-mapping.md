@@ -36,6 +36,7 @@ New `Exteraless` section in tdesktop Settings with subsections:
     `false`) and in private chats and bots (`OEChatsHideReactionsPrivate`,
     default `false`);
   - strip tracking on open (`OEChatsStripTrackingOnOpen`, default `true`);
+  - strip tracking on paste (`OEChatsStripTrackingOnPaste`, default `true`);
   - compact unread messages label (`OEChatsUnreadCapsule`, default `false`).
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`.
@@ -57,8 +58,9 @@ Desktop behavior of the Chats keys:
   box is added. The unread capsule is read on every paint and applies without
   reopening the chat.
 - `OEChatsStripTrackingOnOpen` applies only to clicked `http`/`https` links;
-  stripping pasted text is not implemented. It is a desktop-only key: the
-  `.extera` backup neither exports nor imports it.
+  `OEChatsStripTrackingOnPaste` applies to plain-text/URL paste without
+  `text/html`, preserving rich-text formatting. Both are desktop-only keys:
+  the `.extera` backup neither exports nor imports them.
 - `OEChatsUnreadCapsule` draws the unread bar text as a centered rounded
   capsule and omits the full-width background and separator line. The bar
   height, margins, scrolling geometry and accessibility stay unchanged. It is
@@ -75,7 +77,7 @@ Desktop behavior of the Chats keys:
   `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 87 checks, the plugin manifest runner 32
+- Verification: the chats runner has 93 checks, the plugin manifest runner 32
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

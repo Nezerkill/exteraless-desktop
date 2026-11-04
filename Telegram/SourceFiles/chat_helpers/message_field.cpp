@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "chat_helpers/message_field.h"
 
+#include "exteraless/config.h"
+#include "exteraless/links.h"
 #include "history/history_widget.h"
 #include "history/history.h" // History::session
 #include "history/history_item.h" // HistoryItem::originalText
@@ -61,10 +63,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtCore/QMimeData>
 #include <QtCore/QStack>
+#include <QtCore/QUrl>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QTextBlock>
 #include <QtGui/QClipboard>
 #include <QtWidgets/QApplication>
+
+#include <algorithm>
 
 namespace {
 
@@ -82,6 +87,8 @@ constexpr auto kLinkProtocols = {
     "https://",
     "tonsite://"
 };
+
+constexpr auto kStripPasteLimit = 4096;
 
 // For mention / custom emoji tags save and validate selfId,
 // ignore tags for different users.
@@ -1653,6 +1660,32 @@ Ui::InputField::MimeDataHook WrappedMessageFieldMimeHook(
 				data->data(u"application/x-telegram-input-field"_q));
 			field->textCursor().insertText(text);
 			return true;
+		}
+		const auto urls = data->urls();
+		const auto nonHttpUrl = std::ranges::any_of(
+			urls,
+			[](const QUrl &url) {
+				const auto scheme = url.scheme();
+				return !scheme.startsWith(
+					u"http"_q,
+					Qt::CaseInsensitive);
+			});
+		if (data->hasText()
+			&& !data->hasHtml()
+			&& !data->hasImage()
+			&& !nonHttpUrl
+			&& data->text().size() <= kStripPasteLimit
+			&& Exteraless::Config::Instance()
+				.chatsSettings().stripTrackingOnPaste) {
+			const auto text = data->text();
+			const auto stripped = Exteraless::StripTrackingInText(text);
+			if (stripped != text) {
+				if (action == Ui::InputField::MimeAction::Check) {
+					return true;
+				}
+				field->textCursor().insertText(stripped);
+				return true;
+			}
 		}
 		return originalHook ? originalHook(data, action) : false;
 	};
