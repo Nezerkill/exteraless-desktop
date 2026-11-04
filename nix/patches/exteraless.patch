@@ -4555,10 +4555,10 @@ index 0000000..1e7cb37
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..c8d2673
+index 0000000..cb194a3
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,328 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -4567,6 +4567,9 @@ index 0000000..c8d2673
 +#include <QJsonObject>
 +#include <QJsonParseError>
 +#include <QJsonValue>
++
++#include <utility>
++#include <vector>
 +
 +namespace Exteraless {
 +namespace {
@@ -4585,6 +4588,27 @@ index 0000000..c8d2673
 +constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
 +constexpr auto kHideReactionsInGroups = "hideReactionsInGroups";
 +constexpr auto kHideReactionsInPrivateChats = "hideReactionsInPrivateChats";
++constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
++constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
++constexpr auto kGhostSendOnline = "OEGhostSendOnline";
++constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
++constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
++constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
++constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
++constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
++constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
++constexpr auto kPluginStates = "OEPluginStates";
++constexpr auto kPillStackEnabled = "OEPillStackEnabled";
++constexpr auto kPillStackPills = "OEPillStackPills";
++constexpr auto kMainMenuOrder = "OEMainMenuOrder";
++constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
++constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
++constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
++constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
++
++constexpr auto kSectionExtera = "exteraconfig";
++constexpr auto kSectionPills = "pillstackconfig";
++constexpr auto kSectionMain = "mainconfig";
 +
 +[[nodiscard]] QString ToBase11(int value) {
 +	auto result = QString();
@@ -4609,9 +4633,42 @@ index 0000000..c8d2673
 +	return value;
 +}
 +
-+[[nodiscard]] QJsonObject ExteraSection(const QJsonObject &root) {
-+	const auto section = root.value("exteraconfig");
-+	return section.isObject() ? section.toObject() : root;
++[[nodiscard]] bool IntegralInRange(
++		const QJsonValue &value,
++		int minimum,
++		int maximum) {
++	if (!value.isDouble()) {
++		return false;
++	}
++	const auto number = value.toDouble();
++	if (number < minimum || number > maximum) {
++		return false;
++	}
++	return (number == double(int(number)));
++}
++
++[[nodiscard]] bool ValidProxyConditions(const QJsonValue &value) {
++	return IntegralInRange(value, 0, 7);
++}
++
++[[nodiscard]] bool ValidPillMask(const QJsonValue &value) {
++	return IntegralInRange(value, 0, kPillStackAllPills);
++}
++
++[[nodiscard]] bool ValidMainMenuOrder(const QJsonValue &value) {
++	if (!value.isString()) {
++		return false;
++	}
++	const auto text = value.toString();
++	if (text.isEmpty() || text.size() > 256) {
++		return false;
++	}
++	for (const auto ch : text) {
++		if ((ch < u'a' || ch > u'z') && ch != QChar(u',')) {
++			return false;
++		}
++	}
++	return true;
 +}
 +
 +} // namespace
@@ -4650,21 +4707,46 @@ index 0000000..c8d2673
 +}
 +
 +QString BuildBackup() {
-+	const auto chats = Config::Instance().chatsSettings();
++	auto &config = Config::Instance();
++	const auto chats = config.chatsSettings();
++
 +	auto extera = QJsonObject();
-+	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
-+	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
-+	extera[kDisableNumberRounding]
-+		= Config::Instance().disableNumberRounding();
-+	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
++	extera[kRelativeLastSeen] = config.relativeLastSeen();
++	extera[kAddCommaAfterMention] = config.addCommaAfterMention();
++	extera[kDisableNumberRounding] = config.disableNumberRounding();
++	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 +	extera[kRemoveMessageTail] = chats.removeMessageTail;
 +	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
 +	extera[kHideReactionsInGroups] = chats.hideReactionsGroups;
 +	extera[kHideReactionsInPrivateChats] = chats.hideReactionsPrivate;
++	extera[kGhostSendReadPackets] = config.ghostSendReadPackets();
++	extera[kGhostSendReadStories] = config.ghostSendReadStories();
++	extera[kGhostSendOnline] = config.ghostSendOnline();
++	extera[kGhostSendUploadProgress] = config.ghostSendUploadProgress();
++	extera[kGhostSendOfflineAfterOnline]
++		= config.ghostSendOfflineAfterOnline();
++	extera[kGhostReadExclusions] = config.ghostReadExclusions();
++	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
++	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
++	extera[kProxyAutoDisabled] = config.proxyAutoDisabled();
++	extera[kPluginStates] = config.pluginStates();
++	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
++	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
++	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
++
++	auto pills = QJsonObject();
++	pills[kPillStackEnabled] = config.pillStackEnabled();
++	pills[kPillStackPills] = config.pillStackPills();
++
++	auto main = QJsonObject();
++	main[kMainMenuOrder] = config.mainMenuOrder();
++	main[kDrawerAccountsExpanded] = config.drawerAccountsExpanded();
 +
 +	auto root = QJsonObject();
 +	root["version"] = kVersion;
-+	root["exteraconfig"] = extera;
++	root[kSectionExtera] = extera;
++	root[kSectionPills] = pills;
++	root[kSectionMain] = main;
 +
 +	return EncodeInvisible(QJsonDocument(root).toJson(QJsonDocument::Compact));
 +}
@@ -4684,40 +4766,119 @@ index 0000000..c8d2673
 +		return result;
 +	}
 +
-+	const auto section = ExteraSection(document.object());
++	const auto root = document.object();
++	auto sections = std::vector<std::pair<QString, QJsonObject>>();
++	const auto sectioned = root.contains(kSectionExtera)
++		|| root.contains(kSectionPills)
++		|| root.contains(kSectionMain);
++	if (sectioned) {
++		for (const auto name : { kSectionExtera, kSectionPills, kSectionMain }) {
++			const auto value = root.value(name);
++			if (value.isObject()) {
++				sections.emplace_back(name, value.toObject());
++			} else if (!value.isUndefined()) {
++				result.unknown.push_back(name);
++			}
++		}
++		for (auto i = root.begin(); i != root.end(); ++i) {
++			const auto key = i.key();
++			if (key != QStringLiteral("version")
++				&& key != kSectionExtera
++				&& key != kSectionPills
++				&& key != kSectionMain) {
++				result.unknown.push_back(key);
++			}
++		}
++	} else {
++		sections.emplace_back(kSectionExtera, root);
++	}
++
 +	auto &config = Config::Instance();
-+	for (auto i = section.begin(); i != section.end(); ++i) {
-+		const auto key = i.key();
-+		const auto value = i.value();
++	const auto apply = [&](
++			const QString &section,
++			const QString &key,
++			const QJsonValue &value) {
++		if (section == kSectionPills) {
++			if (key == kPillStackEnabled && value.isBool()) {
++				config.setPillStackEnabled(value.toBool());
++				return true;
++			} else if (key == kPillStackPills && ValidPillMask(value)) {
++				config.setPillStackPills(value.toInt());
++				return true;
++			}
++			return false;
++		} else if (section == kSectionMain) {
++			if (key == kMainMenuOrder && ValidMainMenuOrder(value)) {
++				config.setMainMenuOrder(value.toString());
++				return true;
++			} else if (key == kDrawerAccountsExpanded && value.isBool()) {
++				config.setDrawerAccountsExpanded(value.toBool());
++				return true;
++			}
++			return false;
++		}
 +		if (key == kRelativeLastSeen && value.isBool()) {
 +			config.setRelativeLastSeen(value.toBool());
-+			++result.applied;
 +		} else if (key == kAddCommaAfterMention && value.isBool()) {
 +			config.setAddCommaAfterMention(value.toBool());
-+			++result.applied;
 +		} else if (key == kDisableNumberRounding && value.isBool()) {
 +			config.setDisableNumberRounding(value.toBool());
-+			++result.applied;
-+		} else if (key == kDoNotUseProxy
-+			&& value.isDouble()
-+			&& value.toInt() >= 0
-+			&& value.toInt() <= 7) {
++		} else if (key == kDoNotUseProxy && ValidProxyConditions(value)) {
 +			config.setProxyDisableConditions(value.toInt());
-+			++result.applied;
 +		} else if (key == kRemoveMessageTail && value.isBool()) {
 +			config.setChatsRemoveMessageTail(value.toBool());
-+			++result.applied;
 +		} else if (key == kHideReactionsInChannels && value.isBool()) {
 +			config.setChatsHideReactionsChannels(value.toBool());
-+			++result.applied;
 +		} else if (key == kHideReactionsInGroups && value.isBool()) {
 +			config.setChatsHideReactionsGroups(value.toBool());
-+			++result.applied;
 +		} else if (key == kHideReactionsInPrivateChats && value.isBool()) {
 +			config.setChatsHideReactionsPrivate(value.toBool());
-+			++result.applied;
++		} else if (key == kGhostSendReadPackets && value.isBool()) {
++			config.setGhostSendReadPackets(value.toBool());
++		} else if (key == kGhostSendReadStories && value.isBool()) {
++			config.setGhostSendReadStories(value.toBool());
++		} else if (key == kGhostSendOnline && value.isBool()) {
++			config.setGhostSendOnline(value.toBool());
++		} else if (key == kGhostSendUploadProgress && value.isBool()) {
++			config.setGhostSendUploadProgress(value.toBool());
++		} else if (key == kGhostSendOfflineAfterOnline && value.isBool()) {
++			config.setGhostSendOfflineAfterOnline(value.toBool());
++		} else if (key == kGhostReadExclusions && value.isObject()) {
++			config.setGhostReadExclusions(value.toObject());
++		} else if (key == kGhostTypingExclusions && value.isObject()) {
++			config.setGhostTypingExclusions(value.toObject());
++		} else if (key == kSaveDeletedMessages && value.isBool()) {
++			config.setSaveDeletedMessages(value.toBool());
++		} else if (key == kProxyAutoDisabled && value.isBool()) {
++			// Derived from the current network; a foreign backup must not
++			// re-enable the proxy, so import only resets it.
++			config.setProxyAutoDisabled(false);
++		} else if (key == kPluginStates && value.isObject()) {
++			config.setPluginStates(value.toObject());
++		} else if (key == kChatsStripTrackingOnOpen && value.isBool()) {
++			config.setChatsStripTrackingOnOpen(value.toBool());
++		} else if (key == kChatsStripTrackingOnPaste && value.isBool()) {
++			config.setChatsStripTrackingOnPaste(value.toBool());
++		} else if (key == kChatsUnreadCapsule && value.isBool()) {
++			config.setChatsUnreadCapsule(value.toBool());
 +		} else {
-+			result.unknown.push_back(key);
++			return false;
++		}
++		return true;
++	};
++
++	for (const auto &[section, values] : sections) {
++		for (auto i = values.begin(); i != values.end(); ++i) {
++			if (i.key() == QStringLiteral("version")) {
++				continue;
++			}
++			if (apply(section, i.key(), i.value())) {
++				++result.applied;
++			} else {
++				result.unknown.push_back((section == kSectionExtera)
++					? i.key()
++					: (section + QChar(u'.') + i.key()));
++			}
 +		}
 +	}
 +
@@ -4825,10 +4986,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..906b251
+index 0000000..c574681
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,460 @@
+@@ -0,0 +1,533 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -4899,6 +5060,38 @@ index 0000000..906b251
 +		}
 +	}
 +	return result;
++}
++
++[[nodiscard]] QJsonObject SanitizeExclusions(const QJsonValue &value) {
++	auto result = QJsonObject();
++	if (!value.isObject()) {
++		return result;
++	}
++	const auto exclusions = value.toObject();
++	for (auto i = exclusions.begin(); i != exclusions.end(); ++i) {
++		auto ok = false;
++		const auto raw = i.key().toLongLong(&ok);
++		if (!ok || !raw || !i.value().isBool() || !i.value().toBool()) {
++			continue;
++		}
++		const auto id = (raw < 0)
++			? (quint64(0) - quint64(raw))
++			: quint64(raw);
++		result.insert(QString::number(id), true);
++	}
++	return result;
++}
++
++void SanitizeExclusions(QJsonObject *values, const char *key) {
++	if (!values->contains(key)) {
++		return;
++	}
++	const auto exclusions = SanitizeExclusions(values->value(key));
++	if (exclusions.isEmpty()) {
++		values->remove(key);
++	} else {
++		(*values)[key] = exclusions;
++	}
 +}
 +
 +} // namespace
@@ -5031,6 +5224,20 @@ index 0000000..906b251
 +	setValue(kGhostReadExclusions, exclusions);
 +}
 +
++QJsonObject Config::ghostReadExclusions() const {
++	ensureLoaded();
++	return SanitizeExclusions(_values.value(kGhostReadExclusions));
++}
++
++void Config::setGhostReadExclusions(const QJsonObject &value) {
++	const auto exclusions = SanitizeExclusions(QJsonValue(value));
++	setValue(
++		kGhostReadExclusions,
++		exclusions.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(exclusions));
++}
++
 +bool Config::ghostTypingExcluded(qint64 peerId) const {
 +	ensureLoaded();
 +	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
@@ -5047,6 +5254,20 @@ index 0000000..906b251
 +		exclusions.remove(key);
 +	}
 +	setValue(kGhostTypingExclusions, exclusions);
++}
++
++QJsonObject Config::ghostTypingExclusions() const {
++	ensureLoaded();
++	return SanitizeExclusions(_values.value(kGhostTypingExclusions));
++}
++
++void Config::setGhostTypingExclusions(const QJsonObject &value) {
++	const auto exclusions = SanitizeExclusions(QJsonValue(value));
++	setValue(
++		kGhostTypingExclusions,
++		exclusions.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(exclusions));
 +}
 +
 +bool Config::saveDeletedMessages() const {
@@ -5154,6 +5375,15 @@ index 0000000..906b251
 +	return SanitizePluginStates(_values.value(kPluginStates));
 +}
 +
++void Config::setPluginStates(const QJsonObject &states) {
++	const auto sanitized = SanitizePluginStates(QJsonValue(states));
++	setValue(
++		kPluginStates,
++		sanitized.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(sanitized));
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -5208,6 +5438,8 @@ index 0000000..906b251
 +			accepted[kPluginStates] = states;
 +		}
 +	}
++	SanitizeExclusions(&accepted, kGhostReadExclusions);
++	SanitizeExclusions(&accepted, kGhostTypingExclusions);
 +	if (accepted.isEmpty()) {
 +		return false;
 +	}
@@ -5243,6 +5475,8 @@ index 0000000..906b251
 +			_values[kPluginStates] = states;
 +		}
 +	}
++	SanitizeExclusions(&_values, kGhostReadExclusions);
++	SanitizeExclusions(&_values, kGhostTypingExclusions);
 +	refreshChats();
 +}
 +
@@ -5291,10 +5525,10 @@ index 0000000..906b251
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..5c6c791
+index 0000000..3d757e4
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,132 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5369,8 +5603,12 @@ index 0000000..5c6c791
 +
 +	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
 +	void setGhostReadExcluded(qint64 peerId, bool value);
++	[[nodiscard]] QJsonObject ghostReadExclusions() const;
++	void setGhostReadExclusions(const QJsonObject &value);
 +	[[nodiscard]] bool ghostTypingExcluded(qint64 peerId) const;
 +	void setGhostTypingExcluded(qint64 peerId, bool value);
++	[[nodiscard]] QJsonObject ghostTypingExclusions() const;
++	void setGhostTypingExclusions(const QJsonObject &value);
 +
 +	[[nodiscard]] bool saveDeletedMessages() const;
 +	void setSaveDeletedMessages(bool value);
@@ -5399,6 +5637,7 @@ index 0000000..5c6c791
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 +	void setPluginEnabled(const QString &id, bool enabled);
 +	[[nodiscard]] QJsonObject pluginStates() const;
++	void setPluginStates(const QJsonObject &states);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
@@ -6750,10 +6989,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..ac258bb
+index 0000000..0f2ca4b
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,392 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -6788,6 +7027,7 @@ index 0000000..ac258bb
 +		<< "<hideGroups> <hidePrivate> <stripTracking> <stripTrackingPaste> "
 +		<< "<unreadCapsule>\n"
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
++		<< "  exteraless-chats-cli config-raw\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted\n"
@@ -6797,6 +7037,7 @@ index 0000000..ac258bb
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
++		<< "  exteraless-chats-cli backup-export-current\n"
 +		<< "  exteraless-chats-cli backup-import <base64>\n"
 +		<< "  exteraless-chats-cli backup-import-json <json>\n";
 +	return 2;
@@ -6895,6 +7136,22 @@ index 0000000..ac258bb
 +
 +[[nodiscard]] QString FromBase64(const QString &text) {
 +	return QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
++}
++
++void PrintBackup() {
++	const auto encoded = Exteraless::BuildBackup();
++	const auto document = QJsonDocument::fromJson(
++		Exteraless::DecodeInvisible(encoded));
++	const auto object = document.object();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("backup_base64"), ToBase64(encoded) },
++		{ QStringLiteral("exteraconfig"),
++			object.value(QStringLiteral("exteraconfig")).toObject() },
++		{ QStringLiteral("pillstackconfig"),
++			object.value(QStringLiteral("pillstackconfig")).toObject() },
++		{ QStringLiteral("mainconfig"),
++			object.value(QStringLiteral("mainconfig")).toObject() },
++	});
 +}
 +
 +} // namespace
@@ -7079,6 +7336,13 @@ index 0000000..ac258bb
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("config-raw")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(Exteraless::Config::Instance().toJson());
++		return 0;
++	}
 +	if (mode == QStringLiteral("backup-export")) {
 +		if (arguments.size() != 9) {
 +			return PrintUsage();
@@ -7088,15 +7352,14 @@ index 0000000..ac258bb
 +			return PrintUsage();
 +		}
 +		ApplyFlags(flags);
-+		const auto encoded = Exteraless::BuildBackup();
-+		const auto document = QJsonDocument::fromJson(
-+			Exteraless::DecodeInvisible(encoded));
-+		const auto section = document.object().value(
-+			QStringLiteral("exteraconfig")).toObject();
-+		PrintJson(QJsonObject{
-+			{ QStringLiteral("backup_base64"), ToBase64(encoded) },
-+			{ QStringLiteral("exteraconfig"), section },
-+		});
++		PrintBackup();
++		return 0;
++	}
++	if (mode == QStringLiteral("backup-export-current")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintBackup();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("backup-import")) {
@@ -7186,10 +7449,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..8dd1729
+index 0000000..a63df1e
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,591 @@
+@@ -0,0 +1,1029 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -7487,6 +7750,14 @@ index 0000000..8dd1729
 +        len(ledger.failures) - before_failures)
 +
 +
++def backup_sections(data):
++    return {
++        "exteraconfig": data.get("exteraconfig") or {},
++        "pillstackconfig": data.get("pillstackconfig") or {},
++        "mainconfig": data.get("mainconfig") or {},
++    }
++
++
 +def check_backup(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -7496,11 +7767,15 @@ index 0000000..8dd1729
 +        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"], env,
 +        "backup export")
 +    encoded = None
++    exported = None
 +    if data is not None:
-+        section = data.get("exteraconfig")
-+        if not isinstance(section, dict):
-+            ledger.check("backup exteraconfig object", False, section)
-+            section = {}
++        if not isinstance(data.get("exteraconfig"), dict):
++            ledger.check(
++                "backup exteraconfig object",
++                False,
++                data.get("exteraconfig"))
++        exported = backup_sections(data)
++        section = exported["exteraconfig"]
 +        ledger.check(
 +            "backup removeMessageTail",
 +            section.get("removeMessageTail") is False,
@@ -7518,18 +7793,69 @@ index 0000000..8dd1729
 +            section.get("hideReactionsInPrivateChats") is True,
 +            section.get("hideReactionsInPrivateChats"))
 +        ledger.check(
-+            "backup has no strip tracking key",
-+            ("OEChatsStripTrackingOnOpen" not in section
-+             and "stripTrackingOnOpen" not in section
-+             and "OEChatsStripTrackingOnPaste" not in section
-+             and "stripTrackingOnPaste" not in section))
++            "backup strip tracking keys",
++            section.get("OEChatsStripTrackingOnOpen") is False
++            and section.get("OEChatsStripTrackingOnPaste") is True,
++            (section.get("OEChatsStripTrackingOnOpen"),
++             section.get("OEChatsStripTrackingOnPaste")))
 +        ledger.check(
-+            "backup has no unread capsule key",
-+            ("OEChatsUnreadCapsule" not in section
-+             and "unreadCapsule" not in section))
++            "backup unread capsule key",
++            section.get("OEChatsUnreadCapsule") is True,
++            section.get("OEChatsUnreadCapsule"))
 +        ledger.check(
 +            "backup has no old private key",
 +            "hideReactionsInPrivate" not in section)
++        ledger.check(
++            "backup ghost booleans",
++            all(section.get(key) is True for key in (
++                "OEGhostSendReadPackets",
++                "OEGhostSendReadStories",
++                "OEGhostSendOnline",
++                "OEGhostSendUploadProgress"))
++            and section.get("OEGhostSendOfflineAfterOnline") is False,
++            {key: section.get(key) for key in section
++             if key.startswith("OEGhostSend")})
++        ledger.check(
++            "backup exclusions empty",
++            section.get("OEGhostReadExclusions") == {}
++            and section.get("OEGhostTypingExclusions") == {},
++            (section.get("OEGhostReadExclusions"),
++             section.get("OEGhostTypingExclusions")))
++        ledger.check(
++            "backup save deleted key",
++            section.get("OESaveDeletedMessages") is False,
++            section.get("OESaveDeletedMessages"))
++        ledger.check(
++            "backup proxy auto disabled key",
++            section.get("OEProxyAutoDisabled") is False,
++            section.get("OEProxyAutoDisabled"))
++        ledger.check(
++            "backup plugin states empty",
++            section.get("OEPluginStates") == {},
++            section.get("OEPluginStates"))
++        ledger.check(
++            "backup extera key count",
++            len(section) == 21,
++            sorted(section))
++        ledger.check(
++            "backup pill keys",
++            exported["pillstackconfig"] == {
++                "OEPillStackEnabled": False,
++                "OEPillStackPills": 255,
++            },
++            exported["pillstackconfig"])
++        ledger.check(
++            "backup main keys",
++            exported["mainconfig"] == {
++                "OEMainMenuOrder":
++                    "exteraless,ghost,pillstack,proxy,storage",
++                "OEDrawerAccountsExpanded": True,
++            },
++            exported["mainconfig"])
++        ledger.check(
++            "backup total key count",
++            sum(len(value) for value in exported.values()) == 25,
++            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
 +            "backup base64 present",
@@ -7547,13 +7873,388 @@ index 0000000..8dd1729
 +                data.get("ok") is True,
 +                data.get("ok"))
 +            ledger.check(
++                "backup import applied all keys",
++                data.get("applied") == 25,
++                data.get("applied"))
++            ledger.check(
 +                "backup import unknown empty",
 +                data.get("unknown") == [],
 +                data.get("unknown"))
 +            ledger.check(
 +                "backup import cache",
-+                data.get("chats") == [False, True, False, True, True, True, False],
++                data.get("chats")
++                == [False, True, False, True, False, True, True],
 +                data.get("chats"))
++        current = json_call(
++            ledger, cli, ["backup-export-current"], import_env,
++            "backup import re-export")
++        if current is not None and exported is not None:
++            ledger.check(
++                "backup import roundtrip sections",
++                backup_sections(current) == exported,
++                backup_sections(current))
++
++    env = make_env(work / "backup-import-full")
++    full = {
++        "version": 1,
++        "exteraconfig": {
++            "relativeLastSeen": True,
++            "addCommaAfterMention": False,
++            "disableNumberRounding": True,
++            "doNotUseProxy": 5,
++            "removeMessageTail": True,
++            "hideReactionsInChannels": False,
++            "hideReactionsInGroups": True,
++            "hideReactionsInPrivateChats": False,
++            "OEGhostSendReadPackets": False,
++            "OEGhostSendReadStories": False,
++            "OEGhostSendOnline": False,
++            "OEGhostSendUploadProgress": False,
++            "OEGhostSendOfflineAfterOnline": True,
++            "OEGhostReadExclusions": {
++                "123": True,
++                "-456": True,
++                "bad": True,
++                "789": False,
++                "0": True,
++            },
++            "OEGhostTypingExclusions": {"42": True},
++            "OESaveDeletedMessages": True,
++            "OEProxyAutoDisabled": True,
++            "OEPluginStates": {
++                "plugin-a": True,
++                "bad id": True,
++                "plugin-b": False,
++            },
++            "OEChatsStripTrackingOnOpen": False,
++            "OEChatsStripTrackingOnPaste": False,
++            "OEChatsUnreadCapsule": True,
++        },
++        "pillstackconfig": {
++            "OEPillStackEnabled": True,
++            "OEPillStackPills": 5,
++        },
++        "mainconfig": {
++            "OEMainMenuOrder": "ghost,exteraless",
++            "OEDrawerAccountsExpanded": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(full)], env,
++        "backup import full")
++    if data is not None:
++        ledger.check(
++            "backup import full ok",
++            data.get("ok") is True,
++            data.get("ok"))
++        ledger.check(
++            "backup import full applied",
++            data.get("applied") == 25,
++            data.get("applied"))
++        ledger.check(
++            "backup import full unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    current = json_call(
++        ledger, cli, ["backup-export-current"], env, "backup full re-export")
++    if current is not None:
++        sections = backup_sections(current)
++        section = sections["exteraconfig"]
++        ledger.check(
++            "backup full ghost flags",
++            all(section.get(key) is False for key in (
++                "OEGhostSendReadPackets",
++                "OEGhostSendReadStories",
++                "OEGhostSendOnline",
++                "OEGhostSendUploadProgress"))
++            and section.get("OEGhostSendOfflineAfterOnline") is True,
++            {key: section.get(key) for key in section
++             if key.startswith("OEGhostSend")})
++        ledger.check(
++            "backup full read exclusions sanitized",
++            section.get("OEGhostReadExclusions") == {
++                "123": True,
++                "456": True,
++            },
++            section.get("OEGhostReadExclusions"))
++        ledger.check(
++            "backup full typing exclusions",
++            section.get("OEGhostTypingExclusions") == {"42": True},
++            section.get("OEGhostTypingExclusions"))
++        ledger.check(
++            "backup full plugin states sanitized",
++            section.get("OEPluginStates") == {"plugin-a": True},
++            section.get("OEPluginStates"))
++        ledger.check(
++            "backup full save deleted",
++            section.get("OESaveDeletedMessages") is True,
++            section.get("OESaveDeletedMessages"))
++        ledger.check(
++            "backup full proxy auto reset",
++            section.get("OEProxyAutoDisabled") is False,
++            section.get("OEProxyAutoDisabled"))
++        ledger.check(
++            "backup full generic keys",
++            section.get("relativeLastSeen") is True
++            and section.get("addCommaAfterMention") is False
++            and section.get("disableNumberRounding") is True
++            and section.get("doNotUseProxy") == 5
++            and section.get("OEChatsStripTrackingOnOpen") is False
++            and section.get("OEChatsStripTrackingOnPaste") is False
++            and section.get("OEChatsUnreadCapsule") is True,
++            section)
++        ledger.check(
++            "backup full pill keys",
++            sections["pillstackconfig"] == {
++                "OEPillStackEnabled": True,
++                "OEPillStackPills": 5,
++            },
++            sections["pillstackconfig"])
++        ledger.check(
++            "backup full main keys",
++            sections["mainconfig"] == {
++                "OEMainMenuOrder": "ghost,exteraless",
++                "OEDrawerAccountsExpanded": False,
++            },
++            sections["mainconfig"])
++
++    env = make_env(work / "backup-unknown-sections")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "removeMessageTail": True,
++            "OEUnknown": True,
++        },
++        "pillstackconfig": {
++            "OEPillStackPills": 300,
++            "futurePill": 1,
++        },
++        "mainconfig": {
++            "OEMainMenuOrder": "bad order",
++            "OEDrawerAccountsExpanded": True,
++        },
++        "unknownsection": {"x": 1},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "backup unknown sections")
++    if data is not None:
++        ledger.check(
++            "backup unknown sections ok",
++            data.get("ok") is True,
++            data.get("ok"))
++        ledger.check(
++            "backup unknown sections applied",
++            data.get("applied") == 2,
++            data.get("applied"))
++        ledger.check(
++            "backup unknown sections report",
++            sorted(data.get("unknown") or []) == [
++                "OEUnknown",
++                "mainconfig.OEMainMenuOrder",
++                "pillstackconfig.OEPillStackPills",
++                "pillstackconfig.futurePill",
++                "unknownsection",
++            ],
++            data.get("unknown"))
++
++    env = make_env(work / "backup-legacy-eight")
++    legacy = {
++        "version": 1,
++        "exteraconfig": {
++            "relativeLastSeen": True,
++            "addCommaAfterMention": False,
++            "disableNumberRounding": True,
++            "doNotUseProxy": 3,
++            "removeMessageTail": False,
++            "hideReactionsInChannels": True,
++            "hideReactionsInGroups": True,
++            "hideReactionsInPrivateChats": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(legacy)], env,
++        "backup import legacy eight")
++    if data is not None:
++        ledger.check(
++            "backup legacy eight applied",
++            data.get("applied") == 8,
++            data.get("applied"))
++        ledger.check(
++            "backup legacy eight unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    current = json_call(
++        ledger, cli, ["backup-export-current"], env,
++        "backup legacy eight re-export")
++    if current is not None:
++        sections = backup_sections(current)
++        ledger.check(
++            "backup legacy eight completed to 25",
++            (len(sections["exteraconfig"]),
++             len(sections["pillstackconfig"]),
++             len(sections["mainconfig"])) == (21, 2, 2),
++            {name: len(value) for name, value in sections.items()})
++        ledger.check(
++            "backup legacy eight values",
++            sections["exteraconfig"].get("doNotUseProxy") == 3
++            and sections["exteraconfig"].get("removeMessageTail") is False
++            and sections["exteraconfig"].get("hideReactionsInPrivateChats")
++                is True,
++            sections["exteraconfig"])
++
++    env = make_env(work / "backup-flat-legacy")
++    flat = {
++        "version": 1,
++        "relativeLastSeen": True,
++        "removeMessageTail": False,
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(flat)], env,
++        "backup import flat legacy")
++    if data is not None:
++        ledger.check(
++            "backup flat legacy applied",
++            data.get("applied") == 2,
++            data.get("applied"))
++        ledger.check(
++            "backup flat legacy unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++
++    for index, (name, proxy, pills) in enumerate([
++            ("fractional", 6.5, 5.9),
++            ("negative", -1, -1),
++            ("too big", 8, 256)]):
++        env = make_env(work / f"backup-numeric-{index}")
++        root = {
++            "version": 1,
++            "exteraconfig": {"doNotUseProxy": proxy},
++            "pillstackconfig": {"OEPillStackPills": pills},
++        }
++        data = json_call(
++            ledger, cli, ["backup-import-json", json.dumps(root)], env,
++            f"backup numeric {name}")
++        if data is not None:
++            ledger.check(
++                f"backup numeric {name} applied zero",
++                data.get("applied") == 0,
++                data.get("applied"))
++            ledger.check(
++                f"backup numeric {name} unknown",
++                sorted(data.get("unknown") or []) == [
++                    "doNotUseProxy",
++                    "pillstackconfig.OEPillStackPills",
++                ],
++                data.get("unknown"))
++
++    env = make_env(work / "backup-sanitize-load")
++    config_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    config_path.parent.mkdir(parents=True, exist_ok=True)
++    config_path.write_text(json.dumps({
++        "version": 1,
++        "exteraconfig": {
++            "OEGhostReadExclusions": {
++                "123": True,
++                "-9": True,
++                "bad": True,
++                "456": False,
++            },
++            "OEPluginStates": {
++                "plugin-a": True,
++                "bad id": True,
++                "plugin-b": False,
++            },
++        },
++    }), encoding="utf-8")
++    current = json_call(
++        ledger, cli, ["backup-export-current"], env,
++        "backup sanitize load")
++    if current is not None:
++        section = backup_sections(current)["exteraconfig"]
++        ledger.check(
++            "backup sanitize load exclusions",
++            section.get("OEGhostReadExclusions") == {
++                "123": True,
++                "9": True,
++            },
++            section.get("OEGhostReadExclusions"))
++        ledger.check(
++            "backup sanitize load plugins",
++            section.get("OEPluginStates") == {"plugin-a": True},
++            section.get("OEPluginStates"))
++    raw = json_call(
++        ledger, cli, ["config-raw"], env, "backup sanitize load raw")
++    if raw is not None:
++        section = raw.get("exteraconfig") or {}
++        ledger.check(
++            "backup sanitize load raw exclusions",
++            section.get("OEGhostReadExclusions") == {"123": True, "9": True},
++            section.get("OEGhostReadExclusions"))
++        ledger.check(
++            "backup sanitize load raw plugins",
++            section.get("OEPluginStates") == {"plugin-a": True},
++            section.get("OEPluginStates"))
++
++    env = make_env(work / "backup-sanitize-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEGhostReadExclusions": {"321": True, "bad": True},
++            "OEPluginStates": {"plugin-b": True, "bad id": True},
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "backup sanitize fromJson")
++    if data is not None:
++        ledger.check(
++            "backup sanitize fromJson accepted",
++            data.get("accepted") is True,
++            data.get("accepted"))
++    current = json_call(
++        ledger, cli, ["backup-export-current"], env,
++        "backup sanitize fromJson export")
++    if current is not None:
++        section = backup_sections(current)["exteraconfig"]
++        ledger.check(
++            "backup sanitize fromJson exclusions",
++            section.get("OEGhostReadExclusions") == {"321": True},
++            section.get("OEGhostReadExclusions"))
++        ledger.check(
++            "backup sanitize fromJson plugins",
++            section.get("OEPluginStates") == {"plugin-b": True},
++            section.get("OEPluginStates"))
++    raw = json_call(
++        ledger, cli, ["config-raw"], env, "backup sanitize fromJson raw")
++    if raw is not None:
++        section = raw.get("exteraconfig") or {}
++        ledger.check(
++            "backup sanitize fromJson raw exclusions",
++            section.get("OEGhostReadExclusions") == {"321": True},
++            section.get("OEGhostReadExclusions"))
++        ledger.check(
++            "backup sanitize fromJson raw plugins",
++            section.get("OEPluginStates") == {"plugin-b": True},
++            section.get("OEPluginStates"))
++    saved_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    if saved_path.is_file():
++        saved = json.loads(saved_path.read_text(encoding="utf-8"))
++        saved_section = saved.get("exteraconfig") or {}
++        ledger.check(
++            "backup sanitize fromJson saved",
++            saved_section.get("OEGhostReadExclusions") == {"321": True}
++            and saved_section.get("OEPluginStates") == {"plugin-b": True},
++            saved_section)
++    else:
++        ledger.check(
++            "backup sanitize fromJson saved",
++            False,
++            str(saved_path))
 +
 +    env = make_env(work / "backup-import-four")
 +    root = {

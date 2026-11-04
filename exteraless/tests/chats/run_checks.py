@@ -295,6 +295,14 @@ def check_config(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def backup_sections(data):
+    return {
+        "exteraconfig": data.get("exteraconfig") or {},
+        "pillstackconfig": data.get("pillstackconfig") or {},
+        "mainconfig": data.get("mainconfig") or {},
+    }
+
+
 def check_backup(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -304,11 +312,15 @@ def check_backup(ledger, cli, work):
         ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"], env,
         "backup export")
     encoded = None
+    exported = None
     if data is not None:
-        section = data.get("exteraconfig")
-        if not isinstance(section, dict):
-            ledger.check("backup exteraconfig object", False, section)
-            section = {}
+        if not isinstance(data.get("exteraconfig"), dict):
+            ledger.check(
+                "backup exteraconfig object",
+                False,
+                data.get("exteraconfig"))
+        exported = backup_sections(data)
+        section = exported["exteraconfig"]
         ledger.check(
             "backup removeMessageTail",
             section.get("removeMessageTail") is False,
@@ -326,18 +338,69 @@ def check_backup(ledger, cli, work):
             section.get("hideReactionsInPrivateChats") is True,
             section.get("hideReactionsInPrivateChats"))
         ledger.check(
-            "backup has no strip tracking key",
-            ("OEChatsStripTrackingOnOpen" not in section
-             and "stripTrackingOnOpen" not in section
-             and "OEChatsStripTrackingOnPaste" not in section
-             and "stripTrackingOnPaste" not in section))
+            "backup strip tracking keys",
+            section.get("OEChatsStripTrackingOnOpen") is False
+            and section.get("OEChatsStripTrackingOnPaste") is True,
+            (section.get("OEChatsStripTrackingOnOpen"),
+             section.get("OEChatsStripTrackingOnPaste")))
         ledger.check(
-            "backup has no unread capsule key",
-            ("OEChatsUnreadCapsule" not in section
-             and "unreadCapsule" not in section))
+            "backup unread capsule key",
+            section.get("OEChatsUnreadCapsule") is True,
+            section.get("OEChatsUnreadCapsule"))
         ledger.check(
             "backup has no old private key",
             "hideReactionsInPrivate" not in section)
+        ledger.check(
+            "backup ghost booleans",
+            all(section.get(key) is True for key in (
+                "OEGhostSendReadPackets",
+                "OEGhostSendReadStories",
+                "OEGhostSendOnline",
+                "OEGhostSendUploadProgress"))
+            and section.get("OEGhostSendOfflineAfterOnline") is False,
+            {key: section.get(key) for key in section
+             if key.startswith("OEGhostSend")})
+        ledger.check(
+            "backup exclusions empty",
+            section.get("OEGhostReadExclusions") == {}
+            and section.get("OEGhostTypingExclusions") == {},
+            (section.get("OEGhostReadExclusions"),
+             section.get("OEGhostTypingExclusions")))
+        ledger.check(
+            "backup save deleted key",
+            section.get("OESaveDeletedMessages") is False,
+            section.get("OESaveDeletedMessages"))
+        ledger.check(
+            "backup proxy auto disabled key",
+            section.get("OEProxyAutoDisabled") is False,
+            section.get("OEProxyAutoDisabled"))
+        ledger.check(
+            "backup plugin states empty",
+            section.get("OEPluginStates") == {},
+            section.get("OEPluginStates"))
+        ledger.check(
+            "backup extera key count",
+            len(section) == 21,
+            sorted(section))
+        ledger.check(
+            "backup pill keys",
+            exported["pillstackconfig"] == {
+                "OEPillStackEnabled": False,
+                "OEPillStackPills": 255,
+            },
+            exported["pillstackconfig"])
+        ledger.check(
+            "backup main keys",
+            exported["mainconfig"] == {
+                "OEMainMenuOrder":
+                    "exteraless,ghost,pillstack,proxy,storage",
+                "OEDrawerAccountsExpanded": True,
+            },
+            exported["mainconfig"])
+        ledger.check(
+            "backup total key count",
+            sum(len(value) for value in exported.values()) == 25,
+            {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
             "backup base64 present",
@@ -355,13 +418,388 @@ def check_backup(ledger, cli, work):
                 data.get("ok") is True,
                 data.get("ok"))
             ledger.check(
+                "backup import applied all keys",
+                data.get("applied") == 25,
+                data.get("applied"))
+            ledger.check(
                 "backup import unknown empty",
                 data.get("unknown") == [],
                 data.get("unknown"))
             ledger.check(
                 "backup import cache",
-                data.get("chats") == [False, True, False, True, True, True, False],
+                data.get("chats")
+                == [False, True, False, True, False, True, True],
                 data.get("chats"))
+        current = json_call(
+            ledger, cli, ["backup-export-current"], import_env,
+            "backup import re-export")
+        if current is not None and exported is not None:
+            ledger.check(
+                "backup import roundtrip sections",
+                backup_sections(current) == exported,
+                backup_sections(current))
+
+    env = make_env(work / "backup-import-full")
+    full = {
+        "version": 1,
+        "exteraconfig": {
+            "relativeLastSeen": True,
+            "addCommaAfterMention": False,
+            "disableNumberRounding": True,
+            "doNotUseProxy": 5,
+            "removeMessageTail": True,
+            "hideReactionsInChannels": False,
+            "hideReactionsInGroups": True,
+            "hideReactionsInPrivateChats": False,
+            "OEGhostSendReadPackets": False,
+            "OEGhostSendReadStories": False,
+            "OEGhostSendOnline": False,
+            "OEGhostSendUploadProgress": False,
+            "OEGhostSendOfflineAfterOnline": True,
+            "OEGhostReadExclusions": {
+                "123": True,
+                "-456": True,
+                "bad": True,
+                "789": False,
+                "0": True,
+            },
+            "OEGhostTypingExclusions": {"42": True},
+            "OESaveDeletedMessages": True,
+            "OEProxyAutoDisabled": True,
+            "OEPluginStates": {
+                "plugin-a": True,
+                "bad id": True,
+                "plugin-b": False,
+            },
+            "OEChatsStripTrackingOnOpen": False,
+            "OEChatsStripTrackingOnPaste": False,
+            "OEChatsUnreadCapsule": True,
+        },
+        "pillstackconfig": {
+            "OEPillStackEnabled": True,
+            "OEPillStackPills": 5,
+        },
+        "mainconfig": {
+            "OEMainMenuOrder": "ghost,exteraless",
+            "OEDrawerAccountsExpanded": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(full)], env,
+        "backup import full")
+    if data is not None:
+        ledger.check(
+            "backup import full ok",
+            data.get("ok") is True,
+            data.get("ok"))
+        ledger.check(
+            "backup import full applied",
+            data.get("applied") == 25,
+            data.get("applied"))
+        ledger.check(
+            "backup import full unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env, "backup full re-export")
+    if current is not None:
+        sections = backup_sections(current)
+        section = sections["exteraconfig"]
+        ledger.check(
+            "backup full ghost flags",
+            all(section.get(key) is False for key in (
+                "OEGhostSendReadPackets",
+                "OEGhostSendReadStories",
+                "OEGhostSendOnline",
+                "OEGhostSendUploadProgress"))
+            and section.get("OEGhostSendOfflineAfterOnline") is True,
+            {key: section.get(key) for key in section
+             if key.startswith("OEGhostSend")})
+        ledger.check(
+            "backup full read exclusions sanitized",
+            section.get("OEGhostReadExclusions") == {
+                "123": True,
+                "456": True,
+            },
+            section.get("OEGhostReadExclusions"))
+        ledger.check(
+            "backup full typing exclusions",
+            section.get("OEGhostTypingExclusions") == {"42": True},
+            section.get("OEGhostTypingExclusions"))
+        ledger.check(
+            "backup full plugin states sanitized",
+            section.get("OEPluginStates") == {"plugin-a": True},
+            section.get("OEPluginStates"))
+        ledger.check(
+            "backup full save deleted",
+            section.get("OESaveDeletedMessages") is True,
+            section.get("OESaveDeletedMessages"))
+        ledger.check(
+            "backup full proxy auto reset",
+            section.get("OEProxyAutoDisabled") is False,
+            section.get("OEProxyAutoDisabled"))
+        ledger.check(
+            "backup full generic keys",
+            section.get("relativeLastSeen") is True
+            and section.get("addCommaAfterMention") is False
+            and section.get("disableNumberRounding") is True
+            and section.get("doNotUseProxy") == 5
+            and section.get("OEChatsStripTrackingOnOpen") is False
+            and section.get("OEChatsStripTrackingOnPaste") is False
+            and section.get("OEChatsUnreadCapsule") is True,
+            section)
+        ledger.check(
+            "backup full pill keys",
+            sections["pillstackconfig"] == {
+                "OEPillStackEnabled": True,
+                "OEPillStackPills": 5,
+            },
+            sections["pillstackconfig"])
+        ledger.check(
+            "backup full main keys",
+            sections["mainconfig"] == {
+                "OEMainMenuOrder": "ghost,exteraless",
+                "OEDrawerAccountsExpanded": False,
+            },
+            sections["mainconfig"])
+
+    env = make_env(work / "backup-unknown-sections")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "removeMessageTail": True,
+            "OEUnknown": True,
+        },
+        "pillstackconfig": {
+            "OEPillStackPills": 300,
+            "futurePill": 1,
+        },
+        "mainconfig": {
+            "OEMainMenuOrder": "bad order",
+            "OEDrawerAccountsExpanded": True,
+        },
+        "unknownsection": {"x": 1},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "backup unknown sections")
+    if data is not None:
+        ledger.check(
+            "backup unknown sections ok",
+            data.get("ok") is True,
+            data.get("ok"))
+        ledger.check(
+            "backup unknown sections applied",
+            data.get("applied") == 2,
+            data.get("applied"))
+        ledger.check(
+            "backup unknown sections report",
+            sorted(data.get("unknown") or []) == [
+                "OEUnknown",
+                "mainconfig.OEMainMenuOrder",
+                "pillstackconfig.OEPillStackPills",
+                "pillstackconfig.futurePill",
+                "unknownsection",
+            ],
+            data.get("unknown"))
+
+    env = make_env(work / "backup-legacy-eight")
+    legacy = {
+        "version": 1,
+        "exteraconfig": {
+            "relativeLastSeen": True,
+            "addCommaAfterMention": False,
+            "disableNumberRounding": True,
+            "doNotUseProxy": 3,
+            "removeMessageTail": False,
+            "hideReactionsInChannels": True,
+            "hideReactionsInGroups": True,
+            "hideReactionsInPrivateChats": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(legacy)], env,
+        "backup import legacy eight")
+    if data is not None:
+        ledger.check(
+            "backup legacy eight applied",
+            data.get("applied") == 8,
+            data.get("applied"))
+        ledger.check(
+            "backup legacy eight unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "backup legacy eight re-export")
+    if current is not None:
+        sections = backup_sections(current)
+        ledger.check(
+            "backup legacy eight completed to 25",
+            (len(sections["exteraconfig"]),
+             len(sections["pillstackconfig"]),
+             len(sections["mainconfig"])) == (21, 2, 2),
+            {name: len(value) for name, value in sections.items()})
+        ledger.check(
+            "backup legacy eight values",
+            sections["exteraconfig"].get("doNotUseProxy") == 3
+            and sections["exteraconfig"].get("removeMessageTail") is False
+            and sections["exteraconfig"].get("hideReactionsInPrivateChats")
+                is True,
+            sections["exteraconfig"])
+
+    env = make_env(work / "backup-flat-legacy")
+    flat = {
+        "version": 1,
+        "relativeLastSeen": True,
+        "removeMessageTail": False,
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(flat)], env,
+        "backup import flat legacy")
+    if data is not None:
+        ledger.check(
+            "backup flat legacy applied",
+            data.get("applied") == 2,
+            data.get("applied"))
+        ledger.check(
+            "backup flat legacy unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+
+    for index, (name, proxy, pills) in enumerate([
+            ("fractional", 6.5, 5.9),
+            ("negative", -1, -1),
+            ("too big", 8, 256)]):
+        env = make_env(work / f"backup-numeric-{index}")
+        root = {
+            "version": 1,
+            "exteraconfig": {"doNotUseProxy": proxy},
+            "pillstackconfig": {"OEPillStackPills": pills},
+        }
+        data = json_call(
+            ledger, cli, ["backup-import-json", json.dumps(root)], env,
+            f"backup numeric {name}")
+        if data is not None:
+            ledger.check(
+                f"backup numeric {name} applied zero",
+                data.get("applied") == 0,
+                data.get("applied"))
+            ledger.check(
+                f"backup numeric {name} unknown",
+                sorted(data.get("unknown") or []) == [
+                    "doNotUseProxy",
+                    "pillstackconfig.OEPillStackPills",
+                ],
+                data.get("unknown"))
+
+    env = make_env(work / "backup-sanitize-load")
+    config_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps({
+        "version": 1,
+        "exteraconfig": {
+            "OEGhostReadExclusions": {
+                "123": True,
+                "-9": True,
+                "bad": True,
+                "456": False,
+            },
+            "OEPluginStates": {
+                "plugin-a": True,
+                "bad id": True,
+                "plugin-b": False,
+            },
+        },
+    }), encoding="utf-8")
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "backup sanitize load")
+    if current is not None:
+        section = backup_sections(current)["exteraconfig"]
+        ledger.check(
+            "backup sanitize load exclusions",
+            section.get("OEGhostReadExclusions") == {
+                "123": True,
+                "9": True,
+            },
+            section.get("OEGhostReadExclusions"))
+        ledger.check(
+            "backup sanitize load plugins",
+            section.get("OEPluginStates") == {"plugin-a": True},
+            section.get("OEPluginStates"))
+    raw = json_call(
+        ledger, cli, ["config-raw"], env, "backup sanitize load raw")
+    if raw is not None:
+        section = raw.get("exteraconfig") or {}
+        ledger.check(
+            "backup sanitize load raw exclusions",
+            section.get("OEGhostReadExclusions") == {"123": True, "9": True},
+            section.get("OEGhostReadExclusions"))
+        ledger.check(
+            "backup sanitize load raw plugins",
+            section.get("OEPluginStates") == {"plugin-a": True},
+            section.get("OEPluginStates"))
+
+    env = make_env(work / "backup-sanitize-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGhostReadExclusions": {"321": True, "bad": True},
+            "OEPluginStates": {"plugin-b": True, "bad id": True},
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "backup sanitize fromJson")
+    if data is not None:
+        ledger.check(
+            "backup sanitize fromJson accepted",
+            data.get("accepted") is True,
+            data.get("accepted"))
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "backup sanitize fromJson export")
+    if current is not None:
+        section = backup_sections(current)["exteraconfig"]
+        ledger.check(
+            "backup sanitize fromJson exclusions",
+            section.get("OEGhostReadExclusions") == {"321": True},
+            section.get("OEGhostReadExclusions"))
+        ledger.check(
+            "backup sanitize fromJson plugins",
+            section.get("OEPluginStates") == {"plugin-b": True},
+            section.get("OEPluginStates"))
+    raw = json_call(
+        ledger, cli, ["config-raw"], env, "backup sanitize fromJson raw")
+    if raw is not None:
+        section = raw.get("exteraconfig") or {}
+        ledger.check(
+            "backup sanitize fromJson raw exclusions",
+            section.get("OEGhostReadExclusions") == {"321": True},
+            section.get("OEGhostReadExclusions"))
+        ledger.check(
+            "backup sanitize fromJson raw plugins",
+            section.get("OEPluginStates") == {"plugin-b": True},
+            section.get("OEPluginStates"))
+    saved_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    if saved_path.is_file():
+        saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        saved_section = saved.get("exteraconfig") or {}
+        ledger.check(
+            "backup sanitize fromJson saved",
+            saved_section.get("OEGhostReadExclusions") == {"321": True}
+            and saved_section.get("OEPluginStates") == {"plugin-b": True},
+            saved_section)
+    else:
+        ledger.check(
+            "backup sanitize fromJson saved",
+            False,
+            str(saved_path))
 
     env = make_env(work / "backup-import-four")
     root = {

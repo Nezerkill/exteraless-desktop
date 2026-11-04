@@ -7,6 +7,9 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 
+#include <utility>
+#include <vector>
+
 namespace Exteraless {
 namespace {
 
@@ -24,6 +27,27 @@ constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
 constexpr auto kHideReactionsInGroups = "hideReactionsInGroups";
 constexpr auto kHideReactionsInPrivateChats = "hideReactionsInPrivateChats";
+constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
+constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
+constexpr auto kGhostSendOnline = "OEGhostSendOnline";
+constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
+constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
+constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
+constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
+constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
+constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
+constexpr auto kPluginStates = "OEPluginStates";
+constexpr auto kPillStackEnabled = "OEPillStackEnabled";
+constexpr auto kPillStackPills = "OEPillStackPills";
+constexpr auto kMainMenuOrder = "OEMainMenuOrder";
+constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
+constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
+constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
+constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
+
+constexpr auto kSectionExtera = "exteraconfig";
+constexpr auto kSectionPills = "pillstackconfig";
+constexpr auto kSectionMain = "mainconfig";
 
 [[nodiscard]] QString ToBase11(int value) {
 	auto result = QString();
@@ -48,9 +72,42 @@ constexpr auto kHideReactionsInPrivateChats = "hideReactionsInPrivateChats";
 	return value;
 }
 
-[[nodiscard]] QJsonObject ExteraSection(const QJsonObject &root) {
-	const auto section = root.value("exteraconfig");
-	return section.isObject() ? section.toObject() : root;
+[[nodiscard]] bool IntegralInRange(
+		const QJsonValue &value,
+		int minimum,
+		int maximum) {
+	if (!value.isDouble()) {
+		return false;
+	}
+	const auto number = value.toDouble();
+	if (number < minimum || number > maximum) {
+		return false;
+	}
+	return (number == double(int(number)));
+}
+
+[[nodiscard]] bool ValidProxyConditions(const QJsonValue &value) {
+	return IntegralInRange(value, 0, 7);
+}
+
+[[nodiscard]] bool ValidPillMask(const QJsonValue &value) {
+	return IntegralInRange(value, 0, kPillStackAllPills);
+}
+
+[[nodiscard]] bool ValidMainMenuOrder(const QJsonValue &value) {
+	if (!value.isString()) {
+		return false;
+	}
+	const auto text = value.toString();
+	if (text.isEmpty() || text.size() > 256) {
+		return false;
+	}
+	for (const auto ch : text) {
+		if ((ch < u'a' || ch > u'z') && ch != QChar(u',')) {
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace
@@ -89,21 +146,46 @@ QByteArray DecodeInvisible(const QString &text) {
 }
 
 QString BuildBackup() {
-	const auto chats = Config::Instance().chatsSettings();
+	auto &config = Config::Instance();
+	const auto chats = config.chatsSettings();
+
 	auto extera = QJsonObject();
-	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
-	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
-	extera[kDisableNumberRounding]
-		= Config::Instance().disableNumberRounding();
-	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
+	extera[kRelativeLastSeen] = config.relativeLastSeen();
+	extera[kAddCommaAfterMention] = config.addCommaAfterMention();
+	extera[kDisableNumberRounding] = config.disableNumberRounding();
+	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 	extera[kRemoveMessageTail] = chats.removeMessageTail;
 	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
 	extera[kHideReactionsInGroups] = chats.hideReactionsGroups;
 	extera[kHideReactionsInPrivateChats] = chats.hideReactionsPrivate;
+	extera[kGhostSendReadPackets] = config.ghostSendReadPackets();
+	extera[kGhostSendReadStories] = config.ghostSendReadStories();
+	extera[kGhostSendOnline] = config.ghostSendOnline();
+	extera[kGhostSendUploadProgress] = config.ghostSendUploadProgress();
+	extera[kGhostSendOfflineAfterOnline]
+		= config.ghostSendOfflineAfterOnline();
+	extera[kGhostReadExclusions] = config.ghostReadExclusions();
+	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
+	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
+	extera[kProxyAutoDisabled] = config.proxyAutoDisabled();
+	extera[kPluginStates] = config.pluginStates();
+	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
+	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
+	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
+
+	auto pills = QJsonObject();
+	pills[kPillStackEnabled] = config.pillStackEnabled();
+	pills[kPillStackPills] = config.pillStackPills();
+
+	auto main = QJsonObject();
+	main[kMainMenuOrder] = config.mainMenuOrder();
+	main[kDrawerAccountsExpanded] = config.drawerAccountsExpanded();
 
 	auto root = QJsonObject();
 	root["version"] = kVersion;
-	root["exteraconfig"] = extera;
+	root[kSectionExtera] = extera;
+	root[kSectionPills] = pills;
+	root[kSectionMain] = main;
 
 	return EncodeInvisible(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }
@@ -123,40 +205,119 @@ BackupImportResult ApplyBackup(const QString &text) {
 		return result;
 	}
 
-	const auto section = ExteraSection(document.object());
+	const auto root = document.object();
+	auto sections = std::vector<std::pair<QString, QJsonObject>>();
+	const auto sectioned = root.contains(kSectionExtera)
+		|| root.contains(kSectionPills)
+		|| root.contains(kSectionMain);
+	if (sectioned) {
+		for (const auto name : { kSectionExtera, kSectionPills, kSectionMain }) {
+			const auto value = root.value(name);
+			if (value.isObject()) {
+				sections.emplace_back(name, value.toObject());
+			} else if (!value.isUndefined()) {
+				result.unknown.push_back(name);
+			}
+		}
+		for (auto i = root.begin(); i != root.end(); ++i) {
+			const auto key = i.key();
+			if (key != QStringLiteral("version")
+				&& key != kSectionExtera
+				&& key != kSectionPills
+				&& key != kSectionMain) {
+				result.unknown.push_back(key);
+			}
+		}
+	} else {
+		sections.emplace_back(kSectionExtera, root);
+	}
+
 	auto &config = Config::Instance();
-	for (auto i = section.begin(); i != section.end(); ++i) {
-		const auto key = i.key();
-		const auto value = i.value();
+	const auto apply = [&](
+			const QString &section,
+			const QString &key,
+			const QJsonValue &value) {
+		if (section == kSectionPills) {
+			if (key == kPillStackEnabled && value.isBool()) {
+				config.setPillStackEnabled(value.toBool());
+				return true;
+			} else if (key == kPillStackPills && ValidPillMask(value)) {
+				config.setPillStackPills(value.toInt());
+				return true;
+			}
+			return false;
+		} else if (section == kSectionMain) {
+			if (key == kMainMenuOrder && ValidMainMenuOrder(value)) {
+				config.setMainMenuOrder(value.toString());
+				return true;
+			} else if (key == kDrawerAccountsExpanded && value.isBool()) {
+				config.setDrawerAccountsExpanded(value.toBool());
+				return true;
+			}
+			return false;
+		}
 		if (key == kRelativeLastSeen && value.isBool()) {
 			config.setRelativeLastSeen(value.toBool());
-			++result.applied;
 		} else if (key == kAddCommaAfterMention && value.isBool()) {
 			config.setAddCommaAfterMention(value.toBool());
-			++result.applied;
 		} else if (key == kDisableNumberRounding && value.isBool()) {
 			config.setDisableNumberRounding(value.toBool());
-			++result.applied;
-		} else if (key == kDoNotUseProxy
-			&& value.isDouble()
-			&& value.toInt() >= 0
-			&& value.toInt() <= 7) {
+		} else if (key == kDoNotUseProxy && ValidProxyConditions(value)) {
 			config.setProxyDisableConditions(value.toInt());
-			++result.applied;
 		} else if (key == kRemoveMessageTail && value.isBool()) {
 			config.setChatsRemoveMessageTail(value.toBool());
-			++result.applied;
 		} else if (key == kHideReactionsInChannels && value.isBool()) {
 			config.setChatsHideReactionsChannels(value.toBool());
-			++result.applied;
 		} else if (key == kHideReactionsInGroups && value.isBool()) {
 			config.setChatsHideReactionsGroups(value.toBool());
-			++result.applied;
 		} else if (key == kHideReactionsInPrivateChats && value.isBool()) {
 			config.setChatsHideReactionsPrivate(value.toBool());
-			++result.applied;
+		} else if (key == kGhostSendReadPackets && value.isBool()) {
+			config.setGhostSendReadPackets(value.toBool());
+		} else if (key == kGhostSendReadStories && value.isBool()) {
+			config.setGhostSendReadStories(value.toBool());
+		} else if (key == kGhostSendOnline && value.isBool()) {
+			config.setGhostSendOnline(value.toBool());
+		} else if (key == kGhostSendUploadProgress && value.isBool()) {
+			config.setGhostSendUploadProgress(value.toBool());
+		} else if (key == kGhostSendOfflineAfterOnline && value.isBool()) {
+			config.setGhostSendOfflineAfterOnline(value.toBool());
+		} else if (key == kGhostReadExclusions && value.isObject()) {
+			config.setGhostReadExclusions(value.toObject());
+		} else if (key == kGhostTypingExclusions && value.isObject()) {
+			config.setGhostTypingExclusions(value.toObject());
+		} else if (key == kSaveDeletedMessages && value.isBool()) {
+			config.setSaveDeletedMessages(value.toBool());
+		} else if (key == kProxyAutoDisabled && value.isBool()) {
+			// Derived from the current network; a foreign backup must not
+			// re-enable the proxy, so import only resets it.
+			config.setProxyAutoDisabled(false);
+		} else if (key == kPluginStates && value.isObject()) {
+			config.setPluginStates(value.toObject());
+		} else if (key == kChatsStripTrackingOnOpen && value.isBool()) {
+			config.setChatsStripTrackingOnOpen(value.toBool());
+		} else if (key == kChatsStripTrackingOnPaste && value.isBool()) {
+			config.setChatsStripTrackingOnPaste(value.toBool());
+		} else if (key == kChatsUnreadCapsule && value.isBool()) {
+			config.setChatsUnreadCapsule(value.toBool());
 		} else {
-			result.unknown.push_back(key);
+			return false;
+		}
+		return true;
+	};
+
+	for (const auto &[section, values] : sections) {
+		for (auto i = values.begin(); i != values.end(); ++i) {
+			if (i.key() == QStringLiteral("version")) {
+				continue;
+			}
+			if (apply(section, i.key(), i.value())) {
+				++result.applied;
+			} else {
+				result.unknown.push_back((section == kSectionExtera)
+					? i.key()
+					: (section + QChar(u'.') + i.key()));
+			}
 		}
 	}
 

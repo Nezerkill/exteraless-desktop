@@ -79,9 +79,18 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 121 проверка PASS
-  (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 15 deleted, 23 backup);
+- Chats: `exteraless/tests/chats/run_checks.py` — 169 проверок PASS
+  (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 27 deleted, 71 backup);
   плагины без изменений — 32 и 213 проверок.
+- Backup `.extera`: экспортируются все 25 desktop-ключей в трёх секциях —
+  `exteraconfig` (21), `pillstackconfig` (2), `mainconfig` (2). Импорт
+  проверяет тип, целочисленность и диапазон, санитизирует Ghost-exclusions и
+  plugin states, сбрасывает производный `OEProxyAutoDisabled`, принимает
+  старый плоский формат и репортит неизвестное с префиксом секции.
+  Round-trip «export → import → export» совпадает; импорт полного набора
+  применяет 25 ключей, импорт неизвестного набора — 2 известных и 5
+  неизвестных. Xvfb boot smoke 35 с PASS с невалидными exclusions/plugins
+  в конфиге.
 - Chats/Deleted messages: `OESaveDeletedMessages` (default `false`) теперь
   реально управляет записью: при выключенном ключе ничего не сохраняется,
   архив не урезается при загрузке, тумблер «Save deleted messages» добавлен
@@ -102,8 +111,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `75a166b4…`,
-  mtime 2026-11-05 00:25; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `359d8dbc…`,
+  mtime 2026-11-05 00:57; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
@@ -115,7 +124,8 @@
   импортируется/экспортируется, тумблер находится в General.
 - Chats paste: `OEChatsStripTrackingOnPaste` (default `true`) очищает
   tracking-параметры в plain-text/URL вставке; rich-text/HTML не меняется,
-  в backup ключ не входит, CLI покрывает текст с несколькими ссылками.
+  ключ входит в `.extera` как `OEChatsStripTrackingOnPaste`, CLI покрывает
+  текст с несколькими ссылками.
 
 ### Артефакты
 

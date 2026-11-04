@@ -61,12 +61,12 @@ Desktop behavior of the Chats keys:
   reopening the chat.
 - `OEChatsStripTrackingOnOpen` applies only to clicked `http`/`https` links;
   `OEChatsStripTrackingOnPaste` applies to plain-text/URL paste without
-  `text/html`, preserving rich-text formatting. Both are desktop-only keys:
-  the `.extera` backup neither exports nor imports them.
+  `text/html`, preserving rich-text formatting. Both are desktop-only keys and
+  are exported under their `OE*` names.
 - `OEChatsUnreadCapsule` draws the unread bar text as a centered rounded
   capsule and omits the full-width background and separator line. The bar
   height, margins, scrolling geometry and accessibility stay unchanged. It is
-  a desktop-only key and is not included in `.extera` backups.
+  a desktop-only key and is exported under its `OE*` name.
 - The tracking allowlist is conservative: the `utm_*` family plus `fbclid`,
   `gclid`, `dclid`, `gbraid`, `wbraid`, `msclkid`, `yclid`, `twclid`,
   `ttclid`, `igshid`, `li_fat_id`, `mc_cid`, `mc_eid`, `_hsenc`, `_hsmi`,
@@ -75,11 +75,11 @@ Desktop behavior of the Chats keys:
   `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
   `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
   names are never decoded.
-- `.extera` backup carries `removeMessageTail`, `hideReactionsInChannels`,
-  `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
+- `.extera` backup carries all 25 desktop keys in three sections
+  (`exteraconfig`, `pillstackconfig`, `mainconfig`); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 121 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 169 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -107,9 +107,17 @@ inactive and the setting UI says so.
 
 ### Backup
 
-`.extera` is a JSON document wrapped in invisible Unicode characters. Import
-maps known `OE*` keys and writes a report with unknown/unsupported keys. Export
-writes only Exteraless settings in MVP1; Telegram account data is not included.
+`.extera` is a JSON document wrapped in invisible Unicode characters. It
+contains all 25 desktop keys in three sections: `exteraconfig` (21 keys),
+`pillstackconfig` (2 keys) and `mainconfig` (2 keys). Import validates every
+known key, applies only the right type and range, and reports the rest as
+unknown; entries in `pillstackconfig`/`mainconfig` and unknown top-level
+sections are reported with their section name. `OEProxyAutoDisabled` is
+exported as a snapshot but reset on import because it derives from the current
+network. Plugin states are included as enable flags only; plugin files and
+Telegram account data are not included. Importing a backup enables the plugin
+ids listed in it, so only import files you trust. Treat the file as sensitive:
+Ghost exclusions contain peer ids.
 
 ## MVP2: Ghost, deleted messages, Pill Stack, drawer
 

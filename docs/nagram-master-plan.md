@@ -24,9 +24,9 @@ APK-обновления и plugin-only API. Полный список искл�
   (unread capsule).
 - Реализовано 18 групп: General, Ghost 4/5, deleted messages (частично),
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
-  drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 8
+  drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **121**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **169**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -69,7 +69,8 @@ APK-обновления и plugin-only API. Полный список искл�
 
 - `NB-02` — ✅ закрыто 2026-11-05: гейт `OESaveDeletedMessages`, лимит
   1000/100 и ротация sidecar, тумблер в Chats.
-- `NB-04`: полный `.extera` export/import всех 25 ключей, отчёт unknown.
+- `NB-04` — ✅ закрыто 2026-11-05: все 25 ключей `.extera` в трёх секциях,
+  валидация импорта, отчёт unknown с префиксом секции.
 - `NB-05`: сброс настроек Exteraless с подтверждением.
 - `NB-06`: путь `exteraless.json` через `cWorkingDir()`, совместимый с
   `-workdir`, с миграцией старого профиля.
@@ -134,7 +135,8 @@ nix flake check --no-build
   capability; stage 3 (меню/настройки/intents) — NB-79.
 - WEB proxy уже есть в коде и Nix-сборке, но не описан в feature-mapping и не
   имеет развёрнутого relay; задача NB-90.
-- `.extera` сейчас 8 из 25 ключей; расширение — NB-04.
+- `.extera` содержит все 25 desktop-ключей; плагины экспортируются только как
+  enable-флаги, без файлов.
 - Android-only и `lib_ui`-зависимые пункты не добавлять в код без отдельного
   решения по упаковке.
 
@@ -142,8 +144,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-04`, затем `NB-05`, `NB-06`, `NB-03`, `NB-11`,
-   `NB-07`, `NB-37`).
+   (сейчас `NB-05`, затем `NB-06`, `NB-03`, `NB-11`, `NB-07`, `NB-37`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

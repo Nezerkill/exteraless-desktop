@@ -72,8 +72,12 @@ public:
 
 	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
 	void setGhostReadExcluded(qint64 peerId, bool value);
+	[[nodiscard]] QJsonObject ghostReadExclusions() const;
+	void setGhostReadExclusions(const QJsonObject &value);
 	[[nodiscard]] bool ghostTypingExcluded(qint64 peerId) const;
 	void setGhostTypingExcluded(qint64 peerId, bool value);
+	[[nodiscard]] QJsonObject ghostTypingExclusions() const;
+	void setGhostTypingExclusions(const QJsonObject &value);
 
 	[[nodiscard]] bool saveDeletedMessages() const;
 	void setSaveDeletedMessages(bool value);
@@ -102,6 +106,7 @@ public:
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;
+	void setPluginStates(const QJsonObject &states);
 
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);

@@ -104,7 +104,7 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
 | **Ключей форка desktop** | **25** | **25** | 25 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 8 | — |
+| Ключей `.extera` | 8 | 8 | 25 | на момент аудита было 8, после NB-04 — все 25 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 11 ключей `lng_settings_exteraless*` | 11 | 11 | оба отчёта сошлись |
 
@@ -150,7 +150,7 @@ A–F. Это одно и то же деление, и ниже использу
 | 13 | Pill Stack (8 пилюль) | `OEPillStackEnabled`, `OEPillStackPills` | `Telegram/SourceFiles/exteraless/pill_stack.{h,cpp}`, `dialogs/dialogs_widget.cpp` | ✅ (CPU/RAM/Net/DC/Proxy/Cache/Ghost/LastSeen; метрики ОС — Linux) |
 | 14 | Drawer: аккаунты, бейджи, порядок | `OEDrawerAccountsExpanded`, `OEMainMenuOrder` | `window/window_main_menu.cpp`, `settings/sections/settings_information.cpp` (`AccountsOptions`) | ✅ |
 | 15 | Plugins stage 1+2 | `OEPluginStates` | `exteraless/plugins/scanner.cpp`, `Telegram/SourceFiles/exteraless/{plugin_runtime,plugins_box}.{h,cpp}` | ✅ по раннерам, ограничения — в `docs/feature-mapping.md` |
-| 16 | `.extera` backup | — | `exteraless/backup.cpp` (8 ключей, invisible-Unicode envelope) | 🟡 8 из 25 desktop-ключей |
+| 16 | `.extera` backup | — | `exteraless/backup.cpp` (25 ключей в трёх секциях, invisible-Unicode envelope) | ✅ 25 из 25 desktop-ключей |
 | 17 | Брендинг | — | `core/launcher.cpp`, `boxes/about_box.cpp`, `core/version.h`, `Telegram/build/version` | ✅ |
 | 18 | WEB proxy | — | `mtproto/web_proxy/*` (6 файлов) + `mtproto/details/mtproto_web_proxy_socket.{h,cpp}`, ~3.1k строк; UI в `boxes/connection_box.cpp`, статус в `core/application.cpp` | 🟡 код есть и компилируется, серверная часть (`tproxy-server`) не развёрнута |
 
@@ -191,7 +191,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡/❌ |
 | Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ❌ |
 | Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | ❌ |
-| Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 1 формат (8 ключей) |
+| Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 1 формат (25 ключей) |
 | WEB proxy (desktop-only) | — | ~3.1k строк | 🟡 код есть, сервер нет |
 
 ### 6.2 Appearance (74 пункта `AppearanceConfig`)
@@ -456,7 +456,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 
 | Формат | Android | Desktop |
 |---|---|---|
-| `.extera` (невидимые Unicode + JSON) | `EtgBackup`, `InvisibleEncryptor` | ✅ `exteraless/backup.cpp`, 8 ключей |
+| `.extera` (невидимые Unicode + JSON) | `EtgBackup`, `InvisibleEncryptor` | ✅ `exteraless/backup.cpp`, 25 ключей |
 | Полный `.json` всех настроек | `SettingsBackupHelper` | ❌ |
 | Импорт базы AyuGram | `AyuDatabaseImport` | ❌ |
 | Бэкап плагинов | `PluginsBackup` | ❌ |
@@ -519,7 +519,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 | M2 | Deleted messages: мёртвый ключ, всегда включено, без лимита | `exteraless/config.cpp` (`saveDeletedMessages`), `exteraless/deleted_messages.cpp`, `core/application.cpp` (`attach`) | было: `OESaveDeletedMessages` записан и принимается `fromJson`, но не читается; запись шла всегда; `save()` синхронно перезаписывает весь JSON на каждое удаление, без cap и ротации | 🔧 закрыто в NB-02 (2026-11-05): ключ читается перед записью, default `false`, cap 1000 записей/100 на чат с ротацией при добавлении и загрузке, тумблер в Chats; расширение схемы — NB-19 |
 | M3 | docs: «UI: a deleted-message mark in the chat» | `docs/feature-mapping.md`, раздел Deleted messages | метки в чате нет: `DeletedMessages` используется только в `window/window_peer_menu.cpp` (счётчик и бокс), `history/view/**` о ней не знает | открыто, P1 |
 | M4 | docs: «On `UpdateDeleteMessages`, the message is saved before the local history is cleared» | там же | реализация висит на `session->data().itemsAboutToBeDestroyed`, то есть ловит любое уничтожение элемента (очистка истории, выход из канала, сброс кэша), а не только серверное удаление | открыто, P1 |
-| M5 | `OEGhostSendOfflineAfterOnline` — мёртвый ключ | `exteraless/config.cpp` | объявлен, но нигде не читается, нет в UI и в `.extera`; семантика Android `sendOfflinePacketAfterOnline` не реализована | открыто, P1 |
+| M5 | `OEGhostSendOfflineAfterOnline` — мёртвый ключ | `exteraless/config.cpp` | объявлен, но нигде не читается и нет в UI; в `.extera` экспортируется для полноты, семантика Android `sendOfflinePacketAfterOnline` не реализована | открыто, P1 |
 | M6 | docs: «Reactions in the pinned bar can keep their old state until a restart» | `docs/feature-mapping.md`, Chats | в 7.3.1 нет pinned-reactions бара: поиск по `pinnedReactions` и `ReactionsStrip` по `Telegram/SourceFiles` пуст, файлов `history_view_reactions*` нет | устаревшее утверждение, P2 |
 | M7 | `result/` устарел | `result/bin/.Telegram-wrapped` (симлинк/деривация от 2026-11-01) против `out/bin/Telegram` (2026-11-04) | в Nix-бинарнике нет `Plugin sandbox is unavailable` и новых строк; `STATUS.md` признаёт, что пакет не пересобран, но в «Проверках» всё ещё ссылается на старый `result` как на проверенный | открыто, P1 |
 | M8 | `nix/smoke-test.sh` запускает каталог | `nix/smoke-test.sh` | запускается `./out/Telegram`, а это build-каталог; реальный бинарник — `out/bin/Telegram` | открыто, P1 |
@@ -534,9 +534,9 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 Отдельно — расхождения `docs/feature-mapping.md` с фактом, которые не вошли в
 M-нумерацию:
 
-- «Backup экспортирует 7 ключей»: в текущей редакции файла числа нет, а код
-  `exteraless/backup.cpp` экспортирует 8 ключей. Утверждение из отчёта 1
-  относится к более старой редакции; фиксируем факт — 8.
+- «Backup экспортирует 7 ключей»: в текущей редакции файла числа нет. На
+  момент аудита `exteraless/backup.cpp` экспортировал 8 ключей; после NB-04
+  он экспортирует все 25 desktop-ключей в трёх секциях.
 - «Pill Stack и drawer» описаны как MVP2, но не сказано, что пилюль 8 из 15 и
   что drag-порядка нет; в `STATUS.md` этого тоже нет.
 - `README.md` до сих пор держит пункт «Движок Python-плагинов с моделью
@@ -601,14 +601,31 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (8)
+## 13. Приложение B. Ключи `.extera` (25)
 
-`relativeLastSeen`, `addCommaAfterMention`, `disableNumberRounding`,
-`doNotUseProxy`, `removeMessageTail`, `hideReactionsInChannels`,
-`hideReactionsInGroups`, `hideReactionsInPrivateChats`.
+Секция `exteraconfig` (21): `relativeLastSeen`, `addCommaAfterMention`,
+`disableNumberRounding`, `doNotUseProxy`, `removeMessageTail`,
+`hideReactionsInChannels`, `hideReactionsInGroups`,
+`hideReactionsInPrivateChats`, `OEGhostSendReadPackets`,
+`OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress`,
+`OEGhostSendOfflineAfterOnline`, `OEGhostReadExclusions`,
+`OEGhostTypingExclusions`, `OESaveDeletedMessages`, `OEProxyAutoDisabled`,
+`OEPluginStates`, `OEChatsStripTrackingOnOpen`,
+`OEChatsStripTrackingOnPaste`, `OEChatsUnreadCapsule`.
 
-Неизвестные ключи репортятся, а не отбрасываются молча; старое имя
-`hideReactionsInPrivate` попадает в отчёт как неизвестное.
+Секция `pillstackconfig` (2): `OEPillStackEnabled`, `OEPillStackPills`.
+
+Секция `mainconfig` (2): `OEMainMenuOrder`, `OEDrawerAccountsExpanded`.
+
+Импорт проверяет тип и диапазон каждого ключа (proxy-маска 0–7, маска пилюль
+0–255, допустимый `OEMainMenuOrder`), требует целые числа для масок,
+санитизирует exclusions и plugin states и репортит остальное как неизвестное,
+с префиксом секции для `pillstackconfig` и `mainconfig`. `OEProxyAutoDisabled`
+экспортируется как снимок, но при импорте сбрасывается: это производное
+сетевое состояние, и чужой файл не должен включать прокси. Импорт
+`OEPluginStates` включает перечисленные plugin id, поэтому импортировать
+стоит только доверенные файлы. Старое имя `hideReactionsInPrivate` попадает
+в отчёт как неизвестное.
 
 ## 14. Приложение C. Куда ложится новая функция
 

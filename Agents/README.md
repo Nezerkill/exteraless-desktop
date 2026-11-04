@@ -30,8 +30,8 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (93 проверки: strip, reactions, CLI, config, general, backup); в приложение
-  не входят.
+  (169 проверок: strip, reactions, CLI, config, general, deleted, backup);
+  в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
@@ -70,10 +70,9 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет `removeMessageTail`,
-  `hideReactionsInChannels`, `hideReactionsInGroups` и
-  `hideReactionsInPrivateChats`; strip tracking — desktop-only ключ и в
-  backup не входит.
+  декодируются. Backup пишет все 25 desktop-ключей в секциях `exteraconfig`,
+  `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
+  сбрасывается, потому что это производное сетевое состояние.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
   сохраняет новый порядок в конфиг.

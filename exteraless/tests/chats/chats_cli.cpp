@@ -32,6 +32,7 @@ using Exteraless::ChatsSettings;
 		<< "<hideGroups> <hidePrivate> <stripTracking> <stripTrackingPaste> "
 		<< "<unreadCapsule>\n"
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
+		<< "  exteraless-chats-cli config-raw\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted\n"
@@ -41,6 +42,7 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
+		<< "  exteraless-chats-cli backup-export-current\n"
 		<< "  exteraless-chats-cli backup-import <base64>\n"
 		<< "  exteraless-chats-cli backup-import-json <json>\n";
 	return 2;
@@ -139,6 +141,22 @@ void PrintImportResult(const Exteraless::BackupImportResult &result) {
 
 [[nodiscard]] QString FromBase64(const QString &text) {
 	return QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
+}
+
+void PrintBackup() {
+	const auto encoded = Exteraless::BuildBackup();
+	const auto document = QJsonDocument::fromJson(
+		Exteraless::DecodeInvisible(encoded));
+	const auto object = document.object();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("backup_base64"), ToBase64(encoded) },
+		{ QStringLiteral("exteraconfig"),
+			object.value(QStringLiteral("exteraconfig")).toObject() },
+		{ QStringLiteral("pillstackconfig"),
+			object.value(QStringLiteral("pillstackconfig")).toObject() },
+		{ QStringLiteral("mainconfig"),
+			object.value(QStringLiteral("mainconfig")).toObject() },
+	});
 }
 
 } // namespace
@@ -323,6 +341,13 @@ int main(int argc, char *argv[]) {
 		});
 		return 0;
 	}
+	if (mode == QStringLiteral("config-raw")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(Exteraless::Config::Instance().toJson());
+		return 0;
+	}
 	if (mode == QStringLiteral("backup-export")) {
 		if (arguments.size() != 9) {
 			return PrintUsage();
@@ -332,15 +357,14 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		ApplyFlags(flags);
-		const auto encoded = Exteraless::BuildBackup();
-		const auto document = QJsonDocument::fromJson(
-			Exteraless::DecodeInvisible(encoded));
-		const auto section = document.object().value(
-			QStringLiteral("exteraconfig")).toObject();
-		PrintJson(QJsonObject{
-			{ QStringLiteral("backup_base64"), ToBase64(encoded) },
-			{ QStringLiteral("exteraconfig"), section },
-		});
+		PrintBackup();
+		return 0;
+	}
+	if (mode == QStringLiteral("backup-export-current")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintBackup();
 		return 0;
 	}
 	if (mode == QStringLiteral("backup-import")) {

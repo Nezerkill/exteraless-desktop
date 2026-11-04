@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Backup `.extera`: экспорт/импорт всех 25 desktop-ключей в секциях
+  `exteraconfig`, `pillstackconfig` и `mainconfig`; импорт валидирует типы и
+  диапазоны, санитизирует Ghost-exclusions и plugin states, принимает старый
+  плоский формат и репортит неизвестные ключи с префиксом секции.
 - Chats/Deleted messages: `OESaveDeletedMessages` (default `false`) теперь
   гейтит запись удалённых сообщений, sidecar ограничен 1000 записями и 100
   на чат с ротацией при добавлении и загрузке; тумблер «Save deleted

@@ -70,6 +70,38 @@ const auto kDefaultMainMenuOrder = QStringLiteral(
 	return result;
 }
 
+[[nodiscard]] QJsonObject SanitizeExclusions(const QJsonValue &value) {
+	auto result = QJsonObject();
+	if (!value.isObject()) {
+		return result;
+	}
+	const auto exclusions = value.toObject();
+	for (auto i = exclusions.begin(); i != exclusions.end(); ++i) {
+		auto ok = false;
+		const auto raw = i.key().toLongLong(&ok);
+		if (!ok || !raw || !i.value().isBool() || !i.value().toBool()) {
+			continue;
+		}
+		const auto id = (raw < 0)
+			? (quint64(0) - quint64(raw))
+			: quint64(raw);
+		result.insert(QString::number(id), true);
+	}
+	return result;
+}
+
+void SanitizeExclusions(QJsonObject *values, const char *key) {
+	if (!values->contains(key)) {
+		return;
+	}
+	const auto exclusions = SanitizeExclusions(values->value(key));
+	if (exclusions.isEmpty()) {
+		values->remove(key);
+	} else {
+		(*values)[key] = exclusions;
+	}
+}
+
 } // namespace
 
 Config &Config::Instance() {
@@ -200,6 +232,20 @@ void Config::setGhostReadExcluded(qint64 peerId, bool value) {
 	setValue(kGhostReadExclusions, exclusions);
 }
 
+QJsonObject Config::ghostReadExclusions() const {
+	ensureLoaded();
+	return SanitizeExclusions(_values.value(kGhostReadExclusions));
+}
+
+void Config::setGhostReadExclusions(const QJsonObject &value) {
+	const auto exclusions = SanitizeExclusions(QJsonValue(value));
+	setValue(
+		kGhostReadExclusions,
+		exclusions.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(exclusions));
+}
+
 bool Config::ghostTypingExcluded(qint64 peerId) const {
 	ensureLoaded();
 	const auto key = QString::number(peerId < 0 ? -peerId : peerId);
@@ -216,6 +262,20 @@ void Config::setGhostTypingExcluded(qint64 peerId, bool value) {
 		exclusions.remove(key);
 	}
 	setValue(kGhostTypingExclusions, exclusions);
+}
+
+QJsonObject Config::ghostTypingExclusions() const {
+	ensureLoaded();
+	return SanitizeExclusions(_values.value(kGhostTypingExclusions));
+}
+
+void Config::setGhostTypingExclusions(const QJsonObject &value) {
+	const auto exclusions = SanitizeExclusions(QJsonValue(value));
+	setValue(
+		kGhostTypingExclusions,
+		exclusions.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(exclusions));
 }
 
 bool Config::saveDeletedMessages() const {
@@ -323,6 +383,15 @@ QJsonObject Config::pluginStates() const {
 	return SanitizePluginStates(_values.value(kPluginStates));
 }
 
+void Config::setPluginStates(const QJsonObject &states) {
+	const auto sanitized = SanitizePluginStates(QJsonValue(states));
+	setValue(
+		kPluginStates,
+		sanitized.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(sanitized));
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -377,6 +446,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			accepted[kPluginStates] = states;
 		}
 	}
+	SanitizeExclusions(&accepted, kGhostReadExclusions);
+	SanitizeExclusions(&accepted, kGhostTypingExclusions);
 	if (accepted.isEmpty()) {
 		return false;
 	}
@@ -412,6 +483,8 @@ void Config::ensureLoaded() const {
 			_values[kPluginStates] = states;
 		}
 	}
+	SanitizeExclusions(&_values, kGhostReadExclusions);
+	SanitizeExclusions(&_values, kGhostTypingExclusions);
 	refreshChats();
 }
 
