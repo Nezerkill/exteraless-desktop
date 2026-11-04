@@ -33,7 +33,8 @@ New `Exteraless` section in tdesktop Settings with subsections:
     `false`), in groups and supergroups (`OEChatsHideReactionsGroups`, default
     `false`) and in private chats and bots (`OEChatsHideReactionsPrivate`,
     default `false`);
-  - strip tracking on open (`OEChatsStripTrackingOnOpen`, default `true`).
+  - strip tracking on open (`OEChatsStripTrackingOnOpen`, default `true`);
+  - compact unread messages label (`OEChatsUnreadCapsule`, default `false`).
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`.
 
@@ -44,10 +45,15 @@ Desktop behavior of the Chats keys:
   after a restart. Reactions in the pinned bar can keep their old state until
   a restart. Hiding reactions removes the reactions list and its click target;
   server-side reactions and counters are not changed, and no overlay or extra
-  box is added.
+  box is added. The unread capsule is read on every paint and applies without
+  reopening the chat.
 - `OEChatsStripTrackingOnOpen` applies only to clicked `http`/`https` links;
   stripping pasted text is not implemented. It is a desktop-only key: the
   `.extera` backup neither exports nor imports it.
+- `OEChatsUnreadCapsule` draws the unread bar text as a centered rounded
+  capsule and omits the full-width background and separator line. The bar
+  height, margins, scrolling geometry and accessibility stay unchanged. It is
+  a desktop-only key and is not included in `.extera` backups.
 - The tracking allowlist is conservative: the `utm_*` family plus `fbclid`,
   `gclid`, `dclid`, `gbraid`, `wbraid`, `msclkid`, `yclid`, `twclid`,
   `ttclid`, `igshid`, `li_fat_id`, `mc_cid`, `mc_eid`, `_hsenc`, `_hsmi`,
@@ -60,11 +66,13 @@ Desktop behavior of the Chats keys:
   `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 79 checks, the plugin manifest runner 32
+- Verification: the chats runner has 81 checks, the plugin manifest runner 32
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
-  tail on/off and reactions hidden in a channel and in a group. Private-chat
-  reactions were verified only by the CLI, because the smoke profile had no
-  private chat with reactions.
+  tail on/off, reactions hidden in a channel and in a group, and the unread
+  capsule toggle. The smoke profile did not expose an unread divider, so the
+  capsule paint itself was not captured; it is covered by build/code review.
+  Private-chat reactions were verified only by the CLI, because the smoke
+  profile had no private chat with reactions.
 
 All keys keep their `OE*` names. On import, unknown keys are reported, not
 silently dropped. Existing tdesktop settings remain untouched.

@@ -36,6 +36,7 @@ constexpr auto kChatsHideReactionsChannels = "OEChatsHideReactionsChannels";
 constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
 constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
 constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
+constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -272,6 +273,10 @@ void Config::setChatsStripTrackingOnOpen(bool value) {
 	setValue(kChatsStripTrackingOnOpen, value);
 }
 
+void Config::setChatsUnreadCapsule(bool value) {
+	setValue(kChatsUnreadCapsule, value);
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -340,7 +345,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsHideReactionsChannels
 			|| key == kChatsHideReactionsGroups
 			|| key == kChatsHideReactionsPrivate
-			|| key == kChatsStripTrackingOnOpen) {
+			|| key == kChatsStripTrackingOnOpen
+			|| key == kChatsUnreadCapsule) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -400,6 +406,7 @@ void Config::refreshChats() const {
 	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
 	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
 	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
+	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
 }
 
 bool Config::boolValue(const char *key, bool fallback) const {

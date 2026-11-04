@@ -22,4 +22,8 @@ bool HiddenReactionsFor(bool channel, bool group, bool user) {
 		user);
 }
 
+bool UnreadCapsuleEnabled() {
+	return Config::Instance().chatsSettings().unreadCapsule;
+}
+
 } // namespace Exteraless

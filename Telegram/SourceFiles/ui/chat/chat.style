@@ -353,6 +353,9 @@ historyStatusFgTyping: historyStatusFgActive;
 historyUnreadBarHeight: 32px;
 historyUnreadBarMargin: 8px;
 historyUnreadBarFont: semiboldFont;
+historyUnreadCapsuleHeight: 24px;
+historyUnreadCapsuleRadius: 12px;
+historyUnreadCapsulePadding: 16px;
 
 historyForwardChooseMargins: margins(30px, 10px, 30px, 10px);
 historyForwardChooseFont: font(16px);

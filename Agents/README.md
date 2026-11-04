@@ -16,7 +16,7 @@ sibling-чекаутом: `../exteraless`.
   - `backup.*` — формат `.extera`;
   - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам;
   - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов;
-  - `chats.*` — `ChatsSettings` и правило скрытия реакций;
+  - `chats.*` — `ChatsSettings`, правило скрытия реакций и unread capsule;
   - `links.*` — `StripTracking` для http/https-ссылок.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
   один `QProcess` на приложение (bwrap + Python host), JSON-lines IPC,
@@ -30,7 +30,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (79 проверок: strip, reactions, CLI, config, backup); в приложение не
+  (81 проверка: strip, reactions, CLI, config, backup); в приложение не
   входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.

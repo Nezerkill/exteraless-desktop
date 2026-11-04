@@ -8,6 +8,7 @@ struct ChatsSettings {
 	bool hideReactionsGroups = false;
 	bool hideReactionsPrivate = false;
 	bool stripTrackingOnOpen = true;
+	bool unreadCapsule = false;
 };
 
 [[nodiscard]] bool HiddenReactionsFor(
@@ -20,5 +21,7 @@ struct ChatsSettings {
 	bool channel,
 	bool group,
 	bool user);
+
+[[nodiscard]] bool UnreadCapsuleEnabled();
 
 } // namespace Exteraless

@@ -2899,7 +2899,7 @@ index dcb902d..5b28a1d 100644
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
 diff --git a/Telegram/SourceFiles/history/view/history_view_element.cpp b/Telegram/SourceFiles/history/view/history_view_element.cpp
-index 057de48..8550728 100644
+index 057de48..2e5ac9e 100644
 --- a/Telegram/SourceFiles/history/view/history_view_element.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_element.cpp
 @@ -70,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -2910,7 +2910,86 @@ index 057de48..8550728 100644
  #include "lang/lang_keys.h"
  #include "styles/style_chat.h"
  #include "styles/style_chat_style.h"
-@@ -2967,6 +2968,14 @@ void Element::setupReactions(Element *replacing) {
+@@ -784,18 +785,21 @@ void UnreadBar::paint(
+ 	const auto st = context.st;
+ 	const auto bottom = y + height();
+ 	y += marginTop();
+-	p.fillRect(
+-		0,
+-		y,
+-		w,
+-		height() - marginTop() - st::lineWidth,
+-		st->historyUnreadBarBg());
+-	p.fillRect(
+-		0,
+-		bottom - st::lineWidth,
+-		w,
+-		st::lineWidth,
+-		st->historyUnreadBarBorder());
++	const auto capsule = Exteraless::UnreadCapsuleEnabled();
++	if (!capsule) {
++		p.fillRect(
++			0,
++			y,
++			w,
++			height() - marginTop() - st::lineWidth,
++			st->historyUnreadBarBg());
++		p.fillRect(
++			0,
++			bottom - st::lineWidth,
++			w,
++			st::lineWidth,
++			st->historyUnreadBarBorder());
++	}
+ 	p.setFont(st::historyUnreadBarFont);
+ 	p.setPen(st->historyUnreadBarFg());
+ 
+@@ -809,13 +813,37 @@ void UnreadBar::paint(
+ 	}
+ 	w = maxwidth;
+ 
+-	const auto skip = st::historyUnreadBarHeight
+-		- 2 * st::lineWidth
+-		- st::historyUnreadBarFont->height;
+-	p.drawText(
+-		(w - width) / 2,
+-		y + (skip / 2) + st::historyUnreadBarFont->ascent,
+-		text);
++	const auto band = height() - marginTop() - st::lineWidth;
++	const auto barFont = st::historyUnreadBarFont;
++	auto textTop = y
++		+ (st::historyUnreadBarHeight
++			- 2 * st::lineWidth
++			- barFont->height) / 2;
++	if (capsule) {
++		const auto capsuleHeight = st::historyUnreadCapsuleHeight;
++		const auto capsuleWidth = std::min(
++			w,
++			width + 2 * st::historyUnreadCapsulePadding);
++		const auto capsuleTop = y + (band - capsuleHeight) / 2;
++		const auto radius = std::min(
++			st::historyUnreadCapsuleRadius,
++			capsuleHeight / 2);
++		auto hq = PainterHighQualityEnabler(p);
++		p.setPen(st->historyUnreadBarBorder());
++		p.setBrush(st->historyUnreadBarBg());
++		p.drawRoundedRect(
++			QRect(
++				(w - capsuleWidth) / 2,
++				capsuleTop,
++				capsuleWidth,
++				capsuleHeight),
++			radius,
++			radius);
++		p.setBrush(Qt::NoBrush);
++		p.setPen(st->historyUnreadBarFg());
++		textTop = capsuleTop + (capsuleHeight - barFont->height) / 2;
++	}
++	p.drawText((w - width) / 2, textTop + barFont->ascent, text);
+ 	if (previousTranslation != 0) {
+ 		p.translate(previousTranslation, 0);
+ 	}
+@@ -2967,6 +2995,14 @@ void Element::setupReactions(Element *replacing) {
  
  void Element::refreshReactions() {
  	using namespace Reactions;
@@ -3197,10 +3276,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..f6adda5
+index 0000000..71f2887
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,487 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3414,6 +3493,14 @@ index 0000000..f6adda5
 +		[](bool value) {
 +			Exteraless::Config::Instance()
 +				.setChatsStripTrackingOnOpen(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/unread-capsule"_q,
++		u"Compact unread messages label"_q,
++		{ u"chat"_q, u"unread"_q, u"capsule"_q, u"label"_q },
++		Exteraless::Config::Instance().chatsSettings().unreadCapsule,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsUnreadCapsule(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -3841,6 +3928,20 @@ index 62e91ea..29e649e 100644
  	{ // Folders
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
+diff --git a/Telegram/SourceFiles/ui/chat/chat.style b/Telegram/SourceFiles/ui/chat/chat.style
+index 3f7770b..2a47f9f 100644
+--- a/Telegram/SourceFiles/ui/chat/chat.style
++++ b/Telegram/SourceFiles/ui/chat/chat.style
+@@ -353,6 +353,9 @@ historyStatusFgTyping: historyStatusFgActive;
+ historyUnreadBarHeight: 32px;
+ historyUnreadBarMargin: 8px;
+ historyUnreadBarFont: semiboldFont;
++historyUnreadCapsuleHeight: 24px;
++historyUnreadCapsuleRadius: 12px;
++historyUnreadCapsulePadding: 16px;
+ 
+ historyForwardChooseMargins: margins(30px, 10px, 30px, 10px);
+ historyForwardChooseFont: font(16px);
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
 index db8dcec..bdd82a3 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
@@ -4496,10 +4597,10 @@ index 0000000..7551af5
 +} // namespace Exteraless
 diff --git a/exteraless/chats.cpp b/exteraless/chats.cpp
 new file mode 100644
-index 0000000..745a168
+index 0000000..c1bfde8
 --- /dev/null
 +++ b/exteraless/chats.cpp
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,29 @@
 +#include "exteraless/chats.h"
 +
 +#include "exteraless/config.h"
@@ -4524,13 +4625,17 @@ index 0000000..745a168
 +		user);
 +}
 +
++bool UnreadCapsuleEnabled() {
++	return Config::Instance().chatsSettings().unreadCapsule;
++}
++
 +} // namespace Exteraless
 diff --git a/exteraless/chats.h b/exteraless/chats.h
 new file mode 100644
-index 0000000..5ca91d1
+index 0000000..f3da876
 --- /dev/null
 +++ b/exteraless/chats.h
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,27 @@
 +#pragma once
 +
 +namespace Exteraless {
@@ -4541,6 +4646,7 @@ index 0000000..5ca91d1
 +	bool hideReactionsGroups = false;
 +	bool hideReactionsPrivate = false;
 +	bool stripTrackingOnOpen = true;
++	bool unreadCapsule = false;
 +};
 +
 +[[nodiscard]] bool HiddenReactionsFor(
@@ -4554,13 +4660,15 @@ index 0000000..5ca91d1
 +	bool group,
 +	bool user);
 +
++[[nodiscard]] bool UnreadCapsuleEnabled();
++
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..aa9d58a
+index 0000000..ffdd520
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,435 @@
+@@ -0,0 +1,442 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -4599,6 +4707,7 @@ index 0000000..aa9d58a
 +constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
 +constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
 +constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
++constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -4835,6 +4944,10 @@ index 0000000..aa9d58a
 +	setValue(kChatsStripTrackingOnOpen, value);
 +}
 +
++void Config::setChatsUnreadCapsule(bool value) {
++	setValue(kChatsUnreadCapsule, value);
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -4903,7 +5016,8 @@ index 0000000..aa9d58a
 +			|| key == kChatsHideReactionsChannels
 +			|| key == kChatsHideReactionsGroups
 +			|| key == kChatsHideReactionsPrivate
-+			|| key == kChatsStripTrackingOnOpen) {
++			|| key == kChatsStripTrackingOnOpen
++			|| key == kChatsUnreadCapsule) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -4963,6 +5077,7 @@ index 0000000..aa9d58a
 +	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
 +	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
 +	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
++	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
 +}
 +
 +bool Config::boolValue(const char *key, bool fallback) const {
@@ -4998,10 +5113,10 @@ index 0000000..aa9d58a
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..36c7edc
+index 0000000..08aa29b
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,123 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5097,6 +5212,7 @@ index 0000000..36c7edc
 +	void setChatsHideReactionsGroups(bool value);
 +	void setChatsHideReactionsPrivate(bool value);
 +	void setChatsStripTrackingOnOpen(bool value);
++	void setChatsUnreadCapsule(bool value);
 +
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 +	void setPluginEnabled(const QString &id, bool enabled);
@@ -6339,10 +6455,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..2f326c7
+index 0000000..5c036e4
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,239 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -6371,10 +6487,11 @@ index 0000000..2f326c7
 +		<< "  exteraless-chats-cli config-defaults\n"
 +		<< "  exteraless-chats-cli config-loaded\n"
 +		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
-+		<< "<hideGroups> <hidePrivate> <stripTracking>\n"
++		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
-+		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking>\n"
++		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
++		<< "<unreadCapsule>\n"
 +		<< "  exteraless-chats-cli backup-import <base64>\n"
 +		<< "  exteraless-chats-cli backup-import-json <json>\n";
 +	return 2;
@@ -6391,10 +6508,10 @@ index 0000000..2f326c7
 +	return false;
 +}
 +
-+[[nodiscard]] bool ReadFiveFlags(
++[[nodiscard]] bool ReadFlags(
 +		const QStringList &arguments,
 +		int first,
-+		std::array<bool, 5> *flags) {
++		std::array<bool, 6> *flags) {
 +	for (auto i = 0; i != int(flags->size()); ++i) {
 +		if (!ReadFlag(arguments[first + i], &(*flags)[i])) {
 +			return false;
@@ -6410,6 +6527,7 @@ index 0000000..2f326c7
 +		chats.hideReactionsGroups,
 +		chats.hideReactionsPrivate,
 +		chats.stripTrackingOnOpen,
++		chats.unreadCapsule,
 +	};
 +}
 +
@@ -6426,13 +6544,14 @@ index 0000000..2f326c7
 +	});
 +}
 +
-+void ApplyFlags(const std::array<bool, 5> &flags) {
++void ApplyFlags(const std::array<bool, 6> &flags) {
 +	auto &config = Exteraless::Config::Instance();
 +	config.setChatsRemoveMessageTail(flags[0]);
 +	config.setChatsHideReactionsChannels(flags[1]);
 +	config.setChatsHideReactionsGroups(flags[2]);
 +	config.setChatsHideReactionsPrivate(flags[3]);
 +	config.setChatsStripTrackingOnOpen(flags[4]);
++	config.setChatsUnreadCapsule(flags[5]);
 +}
 +
 +void PrintImportResult(const Exteraless::BackupImportResult &result) {
@@ -6504,11 +6623,11 @@ index 0000000..2f326c7
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("config-set")) {
-+		if (arguments.size() != 7) {
++		if (arguments.size() != 8) {
 +			return PrintUsage();
 +		}
-+		auto flags = std::array<bool, 5>();
-+		if (!ReadFiveFlags(arguments, 2, &flags)) {
++		auto flags = std::array<bool, 6>();
++		if (!ReadFlags(arguments, 2, &flags)) {
 +			return PrintUsage();
 +		}
 +		ApplyFlags(flags);
@@ -6537,11 +6656,11 @@ index 0000000..2f326c7
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("backup-export")) {
-+		if (arguments.size() != 7) {
++		if (arguments.size() != 8) {
 +			return PrintUsage();
 +		}
-+		auto flags = std::array<bool, 5>();
-+		if (!ReadFiveFlags(arguments, 2, &flags)) {
++		auto flags = std::array<bool, 6>();
++		if (!ReadFlags(arguments, 2, &flags)) {
 +			return PrintUsage();
 +		}
 +		ApplyFlags(flags);
@@ -6643,10 +6762,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..f582f82
+index 0000000..785796c
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,389 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -6663,9 +6782,9 @@ index 0000000..f582f82
 +    / "exteraless-chats-cli")
 +FIXTURES = Path(__file__).resolve().parent / "fixtures"
 +RUN_TIMEOUT = 30
-+MIN_STRIP_CASES = 19
++MIN_STRIP_CASES = 38
 +MIN_REACTION_CASES = 10
-+EXPECTED_DEFAULTS = [True, False, False, False, True]
++EXPECTED_DEFAULTS = [True, False, False, False, True, False]
 +
 +
 +class Ledger:
@@ -6766,6 +6885,8 @@ index 0000000..f582f82
 +    cases = [
 +        ("strip without URL", ["strip"]),
 +        ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
++        ("config-set with five values",
++         ["config-set", "0", "1", "0", "1", "0"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -6791,10 +6912,10 @@ index 0000000..f582f82
 +
 +    env = make_env(work / "config-setters")
 +    data = json_call(
-+        ledger, cli, ["config-set", "0", "1", "1", "0", "0"], env,
++        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "1"], env,
 +        "config setters")
 +    if data is not None:
-+        expected = [False, True, True, False, False]
++        expected = [False, True, True, False, False, True]
 +        ledger.check(
 +            "config setters refresh cache",
 +            data.get("chats") == expected,
@@ -6816,6 +6937,7 @@ index 0000000..f582f82
 +            "OEChatsHideReactionsGroups": False,
 +            "OEChatsHideReactionsPrivate": True,
 +            "OEChatsStripTrackingOnOpen": False,
++            "OEChatsUnreadCapsule": True,
 +            "OEUnknownKey": True,
 +        },
 +    }
@@ -6823,7 +6945,7 @@ index 0000000..f582f82
 +        ledger, cli, ["config-fromjson", json.dumps(root)], env,
 +        "config fromJson")
 +    if data is not None:
-+        expected = [False, True, False, True, False]
++        expected = [False, True, False, True, False, True]
 +        ledger.check(
 +            "config fromJson accepted",
 +            data.get("accepted") is True,
@@ -6855,7 +6977,7 @@ index 0000000..f582f82
 +
 +    env = make_env(work / "backup-export")
 +    data = json_call(
-+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0"], env,
++        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1"], env,
 +        "backup export")
 +    encoded = None
 +    if data is not None:
@@ -6884,6 +7006,10 @@ index 0000000..f582f82
 +            ("OEChatsStripTrackingOnOpen" not in section
 +             and "stripTrackingOnOpen" not in section))
 +        ledger.check(
++            "backup has no unread capsule key",
++            ("OEChatsUnreadCapsule" not in section
++             and "unreadCapsule" not in section))
++        ledger.check(
 +            "backup has no old private key",
 +            "hideReactionsInPrivate" not in section)
 +        encoded = data.get("backup_base64")
@@ -6908,7 +7034,7 @@ index 0000000..f582f82
 +                data.get("unknown"))
 +            ledger.check(
 +                "backup import cache",
-+                data.get("chats") == [False, True, False, True, True],
++                data.get("chats") == [False, True, False, True, True, False],
 +                data.get("chats"))
 +
 +    env = make_env(work / "backup-import-four")
@@ -6939,7 +7065,7 @@ index 0000000..f582f82
 +            data.get("unknown"))
 +        ledger.check(
 +            "backup import four cache",
-+            data.get("chats") == [True, True, True, True, True],
++            data.get("chats") == [True, True, True, True, True, False],
 +            data.get("chats"))
 +
 +    env = make_env(work / "backup-wrong-type")

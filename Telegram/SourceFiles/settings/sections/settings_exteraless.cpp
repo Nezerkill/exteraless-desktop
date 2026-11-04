@@ -212,6 +212,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance()
 				.setChatsStripTrackingOnOpen(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/unread-capsule"_q,
+		u"Compact unread messages label"_q,
+		{ u"chat"_q, u"unread"_q, u"capsule"_q, u"label"_q },
+		Exteraless::Config::Instance().chatsSettings().unreadCapsule,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsUnreadCapsule(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,

@@ -14,9 +14,9 @@ DEFAULT_CLI = (
     / "exteraless-chats-cli")
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 RUN_TIMEOUT = 30
-MIN_STRIP_CASES = 19
+MIN_STRIP_CASES = 38
 MIN_REACTION_CASES = 10
-EXPECTED_DEFAULTS = [True, False, False, False, True]
+EXPECTED_DEFAULTS = [True, False, False, False, True, False]
 
 
 class Ledger:
@@ -117,6 +117,8 @@ def check_cli_args(ledger, cli):
     cases = [
         ("strip without URL", ["strip"]),
         ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
+        ("config-set with five values",
+         ["config-set", "0", "1", "0", "1", "0"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -142,10 +144,10 @@ def check_config(ledger, cli, work):
 
     env = make_env(work / "config-setters")
     data = json_call(
-        ledger, cli, ["config-set", "0", "1", "1", "0", "0"], env,
+        ledger, cli, ["config-set", "0", "1", "1", "0", "0", "1"], env,
         "config setters")
     if data is not None:
-        expected = [False, True, True, False, False]
+        expected = [False, True, True, False, False, True]
         ledger.check(
             "config setters refresh cache",
             data.get("chats") == expected,
@@ -167,6 +169,7 @@ def check_config(ledger, cli, work):
             "OEChatsHideReactionsGroups": False,
             "OEChatsHideReactionsPrivate": True,
             "OEChatsStripTrackingOnOpen": False,
+            "OEChatsUnreadCapsule": True,
             "OEUnknownKey": True,
         },
     }
@@ -174,7 +177,7 @@ def check_config(ledger, cli, work):
         ledger, cli, ["config-fromjson", json.dumps(root)], env,
         "config fromJson")
     if data is not None:
-        expected = [False, True, False, True, False]
+        expected = [False, True, False, True, False, True]
         ledger.check(
             "config fromJson accepted",
             data.get("accepted") is True,
@@ -206,7 +209,7 @@ def check_backup(ledger, cli, work):
 
     env = make_env(work / "backup-export")
     data = json_call(
-        ledger, cli, ["backup-export", "0", "1", "0", "1", "0"], env,
+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1"], env,
         "backup export")
     encoded = None
     if data is not None:
@@ -235,6 +238,10 @@ def check_backup(ledger, cli, work):
             ("OEChatsStripTrackingOnOpen" not in section
              and "stripTrackingOnOpen" not in section))
         ledger.check(
+            "backup has no unread capsule key",
+            ("OEChatsUnreadCapsule" not in section
+             and "unreadCapsule" not in section))
+        ledger.check(
             "backup has no old private key",
             "hideReactionsInPrivate" not in section)
         encoded = data.get("backup_base64")
@@ -259,7 +266,7 @@ def check_backup(ledger, cli, work):
                 data.get("unknown"))
             ledger.check(
                 "backup import cache",
-                data.get("chats") == [False, True, False, True, True],
+                data.get("chats") == [False, True, False, True, True, False],
                 data.get("chats"))
 
     env = make_env(work / "backup-import-four")
@@ -290,7 +297,7 @@ def check_backup(ledger, cli, work):
             data.get("unknown"))
         ledger.check(
             "backup import four cache",
-            data.get("chats") == [True, True, True, True, True],
+            data.get("chats") == [True, True, True, True, True, False],
             data.get("chats"))
 
     env = make_env(work / "backup-wrong-type")

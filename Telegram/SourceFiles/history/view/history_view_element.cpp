@@ -785,18 +785,21 @@ void UnreadBar::paint(
 	const auto st = context.st;
 	const auto bottom = y + height();
 	y += marginTop();
-	p.fillRect(
-		0,
-		y,
-		w,
-		height() - marginTop() - st::lineWidth,
-		st->historyUnreadBarBg());
-	p.fillRect(
-		0,
-		bottom - st::lineWidth,
-		w,
-		st::lineWidth,
-		st->historyUnreadBarBorder());
+	const auto capsule = Exteraless::UnreadCapsuleEnabled();
+	if (!capsule) {
+		p.fillRect(
+			0,
+			y,
+			w,
+			height() - marginTop() - st::lineWidth,
+			st->historyUnreadBarBg());
+		p.fillRect(
+			0,
+			bottom - st::lineWidth,
+			w,
+			st::lineWidth,
+			st->historyUnreadBarBorder());
+	}
 	p.setFont(st::historyUnreadBarFont);
 	p.setPen(st->historyUnreadBarFg());
 
@@ -810,13 +813,37 @@ void UnreadBar::paint(
 	}
 	w = maxwidth;
 
-	const auto skip = st::historyUnreadBarHeight
-		- 2 * st::lineWidth
-		- st::historyUnreadBarFont->height;
-	p.drawText(
-		(w - width) / 2,
-		y + (skip / 2) + st::historyUnreadBarFont->ascent,
-		text);
+	const auto band = height() - marginTop() - st::lineWidth;
+	const auto barFont = st::historyUnreadBarFont;
+	auto textTop = y
+		+ (st::historyUnreadBarHeight
+			- 2 * st::lineWidth
+			- barFont->height) / 2;
+	if (capsule) {
+		const auto capsuleHeight = st::historyUnreadCapsuleHeight;
+		const auto capsuleWidth = std::min(
+			w,
+			width + 2 * st::historyUnreadCapsulePadding);
+		const auto capsuleTop = y + (band - capsuleHeight) / 2;
+		const auto radius = std::min(
+			st::historyUnreadCapsuleRadius,
+			capsuleHeight / 2);
+		auto hq = PainterHighQualityEnabler(p);
+		p.setPen(st->historyUnreadBarBorder());
+		p.setBrush(st->historyUnreadBarBg());
+		p.drawRoundedRect(
+			QRect(
+				(w - capsuleWidth) / 2,
+				capsuleTop,
+				capsuleWidth,
+				capsuleHeight),
+			radius,
+			radius);
+		p.setBrush(Qt::NoBrush);
+		p.setPen(st->historyUnreadBarFg());
+		textTop = capsuleTop + (capsuleHeight - barFont->height) / 2;
+	}
+	p.drawText((w - width) / 2, textTop + barFont->ascent, text);
 	if (previousTranslation != 0) {
 		p.translate(previousTranslation, 0);
 	}

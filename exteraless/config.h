@@ -93,6 +93,7 @@ public:
 	void setChatsHideReactionsGroups(bool value);
 	void setChatsHideReactionsPrivate(bool value);
 	void setChatsStripTrackingOnOpen(bool value);
+	void setChatsUnreadCapsule(bool value);
 
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);

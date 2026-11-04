@@ -26,10 +26,11 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-defaults\n"
 		<< "  exteraless-chats-cli config-loaded\n"
 		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
-		<< "<hideGroups> <hidePrivate> <stripTracking>\n"
+		<< "<hideGroups> <hidePrivate> <stripTracking> <unreadCapsule>\n"
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
-		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking>\n"
+		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
+		<< "<unreadCapsule>\n"
 		<< "  exteraless-chats-cli backup-import <base64>\n"
 		<< "  exteraless-chats-cli backup-import-json <json>\n";
 	return 2;
@@ -46,10 +47,10 @@ using Exteraless::ChatsSettings;
 	return false;
 }
 
-[[nodiscard]] bool ReadFiveFlags(
+[[nodiscard]] bool ReadFlags(
 		const QStringList &arguments,
 		int first,
-		std::array<bool, 5> *flags) {
+		std::array<bool, 6> *flags) {
 	for (auto i = 0; i != int(flags->size()); ++i) {
 		if (!ReadFlag(arguments[first + i], &(*flags)[i])) {
 			return false;
@@ -65,6 +66,7 @@ using Exteraless::ChatsSettings;
 		chats.hideReactionsGroups,
 		chats.hideReactionsPrivate,
 		chats.stripTrackingOnOpen,
+		chats.unreadCapsule,
 	};
 }
 
@@ -81,13 +83,14 @@ void PrintChats() {
 	});
 }
 
-void ApplyFlags(const std::array<bool, 5> &flags) {
+void ApplyFlags(const std::array<bool, 6> &flags) {
 	auto &config = Exteraless::Config::Instance();
 	config.setChatsRemoveMessageTail(flags[0]);
 	config.setChatsHideReactionsChannels(flags[1]);
 	config.setChatsHideReactionsGroups(flags[2]);
 	config.setChatsHideReactionsPrivate(flags[3]);
 	config.setChatsStripTrackingOnOpen(flags[4]);
+	config.setChatsUnreadCapsule(flags[5]);
 }
 
 void PrintImportResult(const Exteraless::BackupImportResult &result) {
@@ -159,11 +162,11 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("config-set")) {
-		if (arguments.size() != 7) {
+		if (arguments.size() != 8) {
 			return PrintUsage();
 		}
-		auto flags = std::array<bool, 5>();
-		if (!ReadFiveFlags(arguments, 2, &flags)) {
+		auto flags = std::array<bool, 6>();
+		if (!ReadFlags(arguments, 2, &flags)) {
 			return PrintUsage();
 		}
 		ApplyFlags(flags);
@@ -192,11 +195,11 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("backup-export")) {
-		if (arguments.size() != 7) {
+		if (arguments.size() != 8) {
 			return PrintUsage();
 		}
-		auto flags = std::array<bool, 5>();
-		if (!ReadFiveFlags(arguments, 2, &flags)) {
+		auto flags = std::array<bool, 6>();
+		if (!ReadFlags(arguments, 2, &flags)) {
 			return PrintUsage();
 		}
 		ApplyFlags(flags);
