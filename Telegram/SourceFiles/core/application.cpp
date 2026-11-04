@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "core/application.h"
 #include "exteraless/deleted_messages.h"
+#include "exteraless/plugin_runtime.h"
 #include "exteraless/proxy_rules.h"
 
 #include "data/data_abstract_structure.h"
@@ -289,6 +290,8 @@ Application::~Application() {
 	_private->proxyRotation = nullptr;
 	_domain->finish();
 	MTP::WebProxy::Transport::Shutdown();
+
+	Exteraless::Plugins::Runtime::Stop();
 
 	Local::finish();
 

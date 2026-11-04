@@ -144,6 +144,76 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/chats"_q,
+		.title = rpl::single(u"Chats"_q),
+	});
+
+	const auto addChatsToggle = [&](
+			QString id,
+			QString title,
+			QStringList keywords,
+			bool current,
+			Fn<void(bool)> setter) {
+		const auto toggle = builder.addButton({
+			.id = std::move(id),
+			.title = rpl::single(std::move(title)),
+			.st = &st::settingsButtonNoIcon,
+			.toggled = rpl::single(current),
+			.keywords = std::move(keywords),
+		});
+		if (toggle) {
+			toggle->toggledChanges(
+			) | rpl::on_next([=](bool value) {
+				setter(value);
+			}, toggle->lifetime());
+		}
+	};
+	addChatsToggle(
+		u"exteraless/chats/remove-tail"_q,
+		u"Remove message tail"_q,
+		{ u"chat"_q, u"tail"_q, u"bubble"_q },
+		Exteraless::Config::Instance().chatsSettings().removeMessageTail,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsRemoveMessageTail(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-reactions-channels"_q,
+		u"Hide reactions in channels"_q,
+		{ u"chat"_q, u"reactions"_q, u"channel"_q },
+		Exteraless::Config::Instance().chatsSettings().hideReactionsChannels,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHideReactionsChannels(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-reactions-groups"_q,
+		u"Hide reactions in groups"_q,
+		{ u"chat"_q, u"reactions"_q, u"group"_q },
+		Exteraless::Config::Instance().chatsSettings().hideReactionsGroups,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHideReactionsGroups(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-reactions-private"_q,
+		u"Hide reactions in private chats"_q,
+		{ u"chat"_q, u"reactions"_q, u"private"_q },
+		Exteraless::Config::Instance().chatsSettings().hideReactionsPrivate,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHideReactionsPrivate(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/strip-tracking"_q,
+		u"Strip tracking parameters from links"_q,
+		{ u"chat"_q, u"links"_q, u"tracking"_q, u"utm"_q },
+		Exteraless::Config::Instance().chatsSettings().stripTrackingOnOpen,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsStripTrackingOnOpen(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,
 		.title = rpl::single(u"Pill Stack"_q),
 	});

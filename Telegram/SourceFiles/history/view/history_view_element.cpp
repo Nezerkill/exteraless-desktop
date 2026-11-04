@@ -70,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_forum_topic.h"
 #include "data/data_message_reactions.h"
 #include "data/data_user.h"
+#include "exteraless/chats.h"
 #include "lang/lang_keys.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
@@ -2967,6 +2968,14 @@ void Element::setupReactions(Element *replacing) {
 
 void Element::refreshReactions() {
 	using namespace Reactions;
+	const auto peer = history()->peer;
+	if (Exteraless::HiddenReactionsFor(
+			peer->isBroadcast(),
+			peer->isChat() || peer->isMegagroup(),
+			peer->isUser())) {
+		setReactions(nullptr);
+		return;
+	}
 	auto reactionsData = InlineListDataFromMessage(this);
 	if (reactionsData.reactions.empty()
 		|| context() == Context::MediaEditor) {

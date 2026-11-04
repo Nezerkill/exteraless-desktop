@@ -1,0 +1,23 @@
+from base_plugin import BasePlugin
+
+import os
+
+__id__ = "sandbox_observe"
+__name__ = "Sandbox Observe"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Observe(BasePlugin):
+    def on_load(self):
+        self.log(
+            "sandbox uid=%d home=%d plugins=%d pp=%d cwd=%s" % (
+                os.getuid(),
+                1 if os.path.exists("/home") else 0,
+                1 if os.path.isdir("/plugins") else 0,
+                1 if os.environ.get("PYTHONPATH") else 0,
+                os.getcwd(),
+            ))
+
+
+plugin = Observe()

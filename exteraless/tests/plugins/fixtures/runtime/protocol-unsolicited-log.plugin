@@ -1,0 +1,22 @@
+from base_plugin import BasePlugin
+
+import __main__
+
+__id__ = "protocol_unsolicited"
+__name__ = "Protocol Unsolicited"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Unsolicited(BasePlugin):
+    def on_load(self):
+        __main__._send({
+            "seq": 0,
+            "type": "log",
+            "id": "demo_unsolicited",
+            "message": "unsolicited log",
+        })
+        self.log("after unsolicited")
+
+
+plugin = Unsolicited()

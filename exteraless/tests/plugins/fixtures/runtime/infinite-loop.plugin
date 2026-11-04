@@ -1,0 +1,15 @@
+from base_plugin import BasePlugin
+
+__id__ = "infinite_loop"
+__name__ = "Infinite Loop"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class InfiniteLoop(BasePlugin):
+    def on_load(self):
+        while True:
+            pass
+
+
+plugin = InfiniteLoop()

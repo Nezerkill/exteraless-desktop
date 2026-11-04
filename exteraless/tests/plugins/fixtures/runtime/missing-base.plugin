@@ -1,0 +1,6 @@
+from base_plugin import BasePlugin
+
+__id__ = "missing_base"
+__name__ = "Missing Base"
+__version__ = "1.0.0"
+__permissions__ = []

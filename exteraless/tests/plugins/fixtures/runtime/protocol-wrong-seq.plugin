@@ -1,0 +1,21 @@
+from base_plugin import BasePlugin
+
+import __main__
+
+__id__ = "protocol_wrong_seq"
+__name__ = "Protocol Wrong Seq"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class WrongSeq(BasePlugin):
+    def on_load(self):
+        __main__._send({
+            "seq": 987654,
+            "type": "loaded",
+            "ok": True,
+        })
+        self.log("wrong seq sent")
+
+
+plugin = WrongSeq()

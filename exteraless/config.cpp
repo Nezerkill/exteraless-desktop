@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonValue>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
 
@@ -29,6 +30,12 @@ constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
 constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
+constexpr auto kPluginStates = "OEPluginStates";
+constexpr auto kChatsRemoveMessageTail = "OEChatsRemoveMessageTail";
+constexpr auto kChatsHideReactionsChannels = "OEChatsHideReactionsChannels";
+constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
+constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
+constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -36,6 +43,28 @@ const auto kDefaultMainMenuOrder = QStringLiteral(
 [[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 	const auto values = root.value("exteraconfig");
 	return values.isObject() ? values.toObject() : root;
+}
+
+[[nodiscard]] bool IsValidPluginId(const QString &id) {
+	static const auto expression = QRegularExpression(
+		QStringLiteral("^[A-Za-z][A-Za-z0-9_-]{1,31}$"));
+	return expression.match(id).hasMatch();
+}
+
+[[nodiscard]] QJsonObject SanitizePluginStates(const QJsonValue &value) {
+	auto result = QJsonObject();
+	if (!value.isObject()) {
+		return result;
+	}
+	const auto states = value.toObject();
+	for (auto i = states.begin(); i != states.end(); ++i) {
+		if (IsValidPluginId(i.key())
+			&& i.value().isBool()
+			&& i.value().toBool()) {
+			result.insert(i.key(), true);
+		}
+	}
+	return result;
 }
 
 } // namespace
@@ -47,6 +76,7 @@ Config &Config::Instance() {
 
 void Config::load() {
 	ensureLoaded();
+	refreshChats();
 }
 
 void Config::save() {
@@ -217,6 +247,63 @@ void Config::setDrawerAccountsExpanded(bool value) {
 	setValue(kDrawerAccountsExpanded, value);
 }
 
+ChatsSettings Config::chatsSettings() const {
+	ensureLoaded();
+	return _chats;
+}
+
+void Config::setChatsRemoveMessageTail(bool value) {
+	setValue(kChatsRemoveMessageTail, value);
+}
+
+void Config::setChatsHideReactionsChannels(bool value) {
+	setValue(kChatsHideReactionsChannels, value);
+}
+
+void Config::setChatsHideReactionsGroups(bool value) {
+	setValue(kChatsHideReactionsGroups, value);
+}
+
+void Config::setChatsHideReactionsPrivate(bool value) {
+	setValue(kChatsHideReactionsPrivate, value);
+}
+
+void Config::setChatsStripTrackingOnOpen(bool value) {
+	setValue(kChatsStripTrackingOnOpen, value);
+}
+
+bool Config::pluginEnabled(const QString &id) const {
+	if (!IsValidPluginId(id)) {
+		return false;
+	}
+	ensureLoaded();
+	return SanitizePluginStates(
+		_values.value(kPluginStates)).value(id).toBool();
+}
+
+void Config::setPluginEnabled(const QString &id, bool enabled) {
+	if (!IsValidPluginId(id)) {
+		return;
+	}
+	ensureLoaded();
+	auto states = SanitizePluginStates(_values.value(kPluginStates));
+	if (enabled) {
+		states.insert(id, true);
+	} else {
+		states.remove(id);
+	}
+	setValue(
+		kPluginStates,
+		states.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(states));
+}
+
+QJsonObject Config::pluginStates() const {
+	ensureLoaded();
+	return SanitizePluginStates(_values.value(kPluginStates));
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -247,10 +334,25 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kPillStackEnabled
 			|| key == kPillStackPills
 			|| key == kMainMenuOrder
-			|| key == kDrawerAccountsExpanded) {
+			|| key == kDrawerAccountsExpanded
+			|| key == kPluginStates
+			|| key == kChatsRemoveMessageTail
+			|| key == kChatsHideReactionsChannels
+			|| key == kChatsHideReactionsGroups
+			|| key == kChatsHideReactionsPrivate
+			|| key == kChatsStripTrackingOnOpen) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
+		}
+	}
+	if (accepted.contains(kPluginStates)) {
+		const auto states = SanitizePluginStates(
+			accepted.value(kPluginStates));
+		if (states.isEmpty()) {
+			accepted.remove(kPluginStates);
+		} else {
+			accepted[kPluginStates] = states;
 		}
 	}
 	if (accepted.isEmpty()) {
@@ -258,6 +360,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 	}
 	_values = accepted;
 	save();
+	refreshChats();
 	return true;
 }
 
@@ -279,6 +382,24 @@ void Config::ensureLoaded() const {
 		return;
 	}
 	_values = Unwrap(document.object());
+	if (_values.contains(kPluginStates)) {
+		const auto states = SanitizePluginStates(_values.value(kPluginStates));
+		if (states.isEmpty()) {
+			_values.remove(kPluginStates);
+		} else {
+			_values[kPluginStates] = states;
+		}
+	}
+	refreshChats();
+}
+
+void Config::refreshChats() const {
+	_chats.removeMessageTail = boolValue(kChatsRemoveMessageTail, true);
+	_chats.hideReactionsChannels = boolValue(
+		kChatsHideReactionsChannels, false);
+	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
+	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
+	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
 }
 
 bool Config::boolValue(const char *key, bool fallback) const {
@@ -307,6 +428,7 @@ void Config::setValue(const char *key, const QJsonValue &value) {
 		return;
 	}
 	_values[key] = value;
+	refreshChats();
 	save();
 }
 

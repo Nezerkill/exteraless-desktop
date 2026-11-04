@@ -1,0 +1,21 @@
+from base_plugin import BasePlugin
+
+import os
+import sys
+
+__id__ = "deny_import"
+__name__ = "Deny Import"
+__version__ = "1.0.0"
+__permissions__ = ["native"]
+
+
+class DenyImport(BasePlugin):
+    def on_load(self):
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        try:
+            import evilmod
+        except (PermissionError, ImportError, OSError):
+            self.log("import denied")
+
+
+plugin = DenyImport()

@@ -24,6 +24,7 @@
       name = "exteraless-desktop-dev";
       inputsFrom = [tdesktop];
       packages = with pkgs; [
+        bubblewrap
         ccache
         clang-tools
         cmake
@@ -31,6 +32,7 @@
         mesa
         ninja
         pkg-config
+        python3
         xvfb-run
       ];
       shellHook = ''

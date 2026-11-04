@@ -24,6 +24,8 @@ in
   pname = "exteraless-desktop";
   inherit unwrapped;
 }).overrideAttrs (old: {
+  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ pkgs.makeWrapper ];
+
   postInstall = (old.postInstall or "") + ''
     if [ -e "$out/share/applications/org.telegram.desktop.desktop" ]; then
       chmod -R u+w "$out/share/applications"
@@ -35,11 +37,8 @@ in
     fi
   '';
 
-  postFixup = ''
-    if [ -d "$out/share/dbus-1/services" ]; then
-      chmod -R u+w "$out/share/dbus-1/services"
-      substituteInPlace "$out/share/dbus-1/services"/* \
-        --replace-fail "$unwrapped" "$out"
-    fi
+  postFixup = (old.postFixup or "") + ''
+    wrapProgram "$out/bin/Telegram" \
+      --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap pkgs.python3 ]}
   '';
 })

@@ -1,0 +1,22 @@
+from base_plugin import BasePlugin
+
+import os
+
+__id__ = "deny_write"
+__name__ = "Deny Write"
+__version__ = "1.0.0"
+__permissions__ = ["files"]
+
+
+class DenyWrite(BasePlugin):
+    def on_load(self):
+        target = os.path.join(
+            os.path.dirname(__file__), "..", "marker-denied")
+        try:
+            with open(target, "w") as marker:
+                marker.write("bad")
+        except (PermissionError, OSError):
+            self.log("write denied")
+
+
+plugin = DenyWrite()

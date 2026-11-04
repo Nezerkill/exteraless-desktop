@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..0543e04 100644
+index 811707d..098fe7c 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,21 @@ endif()
+@@ -70,6 +70,23 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -29,12 +29,14 @@ index 811707d..0543e04 100644
 +    SourceFiles/exteraless/pill_stack.h
 +    SourceFiles/exteraless/plugins_box.cpp
 +    SourceFiles/exteraless/plugins_box.h
++    SourceFiles/exteraless/plugin_runtime.cpp
++    SourceFiles/exteraless/plugin_runtime.h
 +)
 +
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +124,7 @@ PRIVATE
+@@ -109,6 +126,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -42,7 +44,7 @@ index 811707d..0543e04 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1696,7 @@ PRIVATE
+@@ -1680,6 +1698,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -50,7 +52,7 @@ index 811707d..0543e04 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1914,8 @@ PRIVATE
+@@ -1897,6 +1916,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -59,7 +61,7 @@ index 811707d..0543e04 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2549,10 @@ else()
+@@ -2530,6 +2551,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -365,19 +367,20 @@ index d2f8a9f..e573e5b 100644
  	}, raw->lifetime());
  
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..a45ddf5 100644
+index 7a309ac..b80d60f 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
-@@ -6,6 +6,8 @@ For license and copyright information please follow this link:
+@@ -6,6 +6,9 @@ For license and copyright information please follow this link:
  https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "core/application.h"
 +#include "exteraless/deleted_messages.h"
++#include "exteraless/plugin_runtime.h"
 +#include "exteraless/proxy_rules.h"
  
  #include "data/data_abstract_structure.h"
  #include "data/data_channel.h"
-@@ -209,6 +211,9 @@ Application::Application()
+@@ -209,6 +212,9 @@ Application::Application()
  
  	_domain->activeSessionChanges(
  	) | rpl::on_next([=](Main::Session *session) {
@@ -387,7 +390,16 @@ index 7a309ac..a45ddf5 100644
  		if (session && !UpdaterDisabled()) { // #TODO multi someSessionValue
  			UpdateChecker().setMtproto(session);
  		}
-@@ -559,6 +564,7 @@ void Application::startSettingsAndBackground() {
+@@ -285,6 +291,8 @@ Application::~Application() {
+ 	_domain->finish();
+ 	MTP::WebProxy::Transport::Shutdown();
+ 
++	Exteraless::Plugins::Runtime::Stop();
++
+ 	Local::finish();
+ 
+ 	Shortcuts::Finish();
+@@ -559,6 +567,7 @@ void Application::startSettingsAndBackground() {
  	checkSystemDarkMode();
  	Ui::SetScreenReaderModeDisabled(
  		settings().readPref<bool>(kScreenReaderModeDisabledKey));
@@ -416,6 +428,35 @@ index b3b76e0..69e17e0 100644
  
  #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
  	// fallback session management is useless for tdesktop since it doesn't have
+diff --git a/Telegram/SourceFiles/core/ui_integration.cpp b/Telegram/SourceFiles/core/ui_integration.cpp
+index 18d91fb..8261b41 100644
+--- a/Telegram/SourceFiles/core/ui_integration.cpp
++++ b/Telegram/SourceFiles/core/ui_integration.cpp
+@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "core/click_handler_types.h"
+ #include "data/stickers/data_custom_emoji.h"
+ #include "data/data_session.h"
++#include "exteraless/config.h"
++#include "exteraless/links.h"
+ #include "iv/iv_instance.h"
+ #include "ui/text/text_custom_emoji.h"
+ #include "ui/text/text_utilities.h"
+@@ -417,9 +419,13 @@ bool UiIntegration::handleUrlClick(
+ 		const QVariant &context) {
+ 	// Only our own token may be added below, never one that came with it,
+ 	// unless the url itself was given to us by the server for this login.
++	const auto clickUrl = Exteraless::Config::Instance()
++		.chatsSettings().stripTrackingOnOpen
++		? Exteraless::StripTracking(original)
++		: original;
+ 	const auto url = context.value<ClickHandlerContext>().keepWebAuthTokens
+-		? original
+-		: UrlWithoutWebAuthTokens(original);
++		? clickUrl
++		: UrlWithoutWebAuthTokens(clickUrl);
+ 	const auto local = Core::TryConvertUrlToLocal(url);
+ 	if (Core::InternalPassportOrOAuthLink(local)) {
+ 		return true;
 diff --git a/Telegram/SourceFiles/core/version.h b/Telegram/SourceFiles/core/version.h
 index 2de2881..50a19fb 100644
 --- a/Telegram/SourceFiles/core/version.h
@@ -1193,33 +1234,1406 @@ index 0000000..faafca7
 +};
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.cpp b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
+new file mode 100644
+index 0000000..f2f439c
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
+@@ -0,0 +1,1271 @@
++#include "exteraless/plugin_runtime.h"
++
++#include <QDateTime>
++#include <QDeadlineTimer>
++#include <QDebug>
++#include <QDir>
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QProcess>
++#include <QProcessEnvironment>
++#include <QStandardPaths>
++#include <QStringList>
++
++#include <algorithm>
++
++namespace Exteraless::Plugins {
++namespace {
++
++constexpr auto kStartTimeout = 5000;
++constexpr auto kCommandTimeout = 10000;
++constexpr auto kWriteTimeout = 2000;
++constexpr auto kStopTimeout = 3000;
++constexpr auto kKillTimeout = 1000;
++constexpr auto kMaxReadBuffer = 1024 * 1024;
++
++constexpr auto kSandboxUnavailable =
++	"Plugin sandbox is unavailable.";
++constexpr auto kProtocolViolation =
++	"Plugin host protocol violation.";
++constexpr auto kInvalidOutput =
++	"Plugin host returned invalid output.";
++
++constexpr auto kHostScript = R"PY(
++import importlib.machinery
++import importlib.util
++import io
++import json
++import os
++import re
++import stat
++import sys
++import sysconfig
++import types
++
++try:
++    _FD_LIMIT = min(int(os.sysconf('SC_OPEN_MAX')), 1 << 20)
++except (OSError, ValueError):
++    _FD_LIMIT = 65536
++os.closerange(3, _FD_LIMIT)
++
++ID_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
++MAX_BYTES = 2 * 1024 * 1024
++SUPPORTED = ('.plugin', '.py')
++
++DENY_EXACT = {
++    'os.system', 'os.exec', 'os.fork', 'os.forkpty', 'os.posix_spawn',
++    'os.spawn', 'os.kill', 'os.killpg', 'subprocess.Popen', 'pty.spawn',
++    'socket.__new__', 'socket.connect', 'socket.bind', 'socket.getaddrinfo',
++    'socket.gethostbyname', 'socket.gethostbyname_ex', 'socket.gethostbyaddr',
++    'socket.sendto', 'socket.sendmsg',
++    'sys.addaudithook', 'sys._getframe', 'sys._current_frames',
++    'sys.settrace', 'sys.setprofile', 'builtins.input', 'os.chdir',
++    'gc.get_objects', 'gc.get_referrers', 'gc.get_referents',
++    'fcntl.fcntl', 'fcntl.ioctl', 'mmap.__new__',
++    '_thread.start_new_thread', 'threading.Thread',
++}
++DENY_PREFIX = ('ctypes.',)
++MUTATING = {
++    'os.remove', 'os.rename', 'os.replace', 'os.rmdir', 'os.mkdir',
++    'os.link', 'os.symlink', 'os.chmod', 'os.chown', 'os.truncate',
++    'os.utime', 'os.mkfifo', 'os.mknod',
++    'shutil.copyfile', 'shutil.copymode', 'shutil.copystat',
++    'shutil.move', 'shutil.rmtree',
++}
++
++_CURRENT_ID = ['']
++_CURRENT_SEQ = [0]
++_ALLOW_COMPILE = [False]
++_LOAD_CODE = [None]
++_IN_AUDIT = [False]
++_PLUGINS = {}
++
++
++class _NullSink:
++    encoding = 'utf-8'
++    errors = 'replace'
++
++    def write(self, text):
++        return len(text) if isinstance(text, str) else 0
++
++    def writelines(self, lines):
++        for line in lines:
++            self.write(line)
++
++    def flush(self):
++        pass
++
++    def isatty(self):
++        return False
++
++    def writable(self):
++        return True
++
++    def readable(self):
++        return False
++
++    def fileno(self):
++        raise OSError('plugin output is not available')
++
++
++class BasePlugin:
++    def on_load(self):
++        pass
++
++    def on_unload(self):
++        pass
++
++    def log(self, message):
++        _host_log(_CURRENT_ID[0], str(message)[:500])
++
++
++PROTOCOL = os.fdopen(os.dup(1), 'wb', buffering=0)
++INPUT = os.fdopen(os.dup(0), 'rb', buffering=0)
++_DEVNULL = os.open(os.devnull, os.O_RDWR)
++os.dup2(_DEVNULL, 0)
++os.dup2(_DEVNULL, 1)
++os.dup2(_DEVNULL, 2)
++os.close(_DEVNULL)
++sys.stdin = io.StringIO('')
++sys.stdout = _NullSink()
++sys.stderr = _NullSink()
++
++ROOT = os.path.realpath(sys.argv[1])
++_PATHS = sysconfig.get_paths()
++STDLIB = os.path.realpath(_PATHS['stdlib'])
++PLATSTDLIB = os.path.realpath(_PATHS['platstdlib'])
++READ_ROOTS = tuple(sorted({
++    ROOT,
++    STDLIB,
++    PLATSTDLIB,
++    os.path.realpath(os.path.dirname(os.__file__)),
++}))
++WRITE_ROOTS = (ROOT,)
++
++
++def _send(message):
++    try:
++        PROTOCOL.write((json.dumps(message, ensure_ascii=False) + '\n')
++                       .encode('utf-8', 'replace'))
++    except OSError:
++        os._exit(1)
++
++
++def _host_log(plugin_id, message):
++    _send({
++        'seq': _CURRENT_SEQ[0],
++        'type': 'log',
++        'id': plugin_id,
++        'message': message,
++    })
++
++
++def _text(value):
++    if isinstance(value, bytes):
++        return os.fsdecode(value)
++    return value if isinstance(value, str) else None
++
++
++def _real(path):
++    try:
++        return os.path.realpath(path)
++    except (OSError, ValueError):
++        return os.path.abspath(path)
++
++
++def _under(path, roots):
++    real = _real(path)
++    for root in roots:
++        if real == root or real.startswith(root + os.sep):
++            return True
++    return False
++
++
++def _stdlib_caller():
++    try:
++        frame = sys._getframe(3)
++    except (AttributeError, ValueError):
++        return False
++    if frame is None:
++        return False
++    filename = frame.f_code.co_filename
++    if not (isinstance(filename, str)
++            and _under(filename, (STDLIB, PLATSTDLIB))):
++        return False
++    frame = frame.f_back
++    for _ in range(8):
++        if frame is None:
++            return False
++        if frame.f_code.co_filename in (
++                '<frozen importlib._bootstrap>',
++                '<frozen importlib._bootstrap_external>'):
++            return True
++        frame = frame.f_back
++    return False
++
++
++def _deny(event, detail):
++    _send({
++        'seq': _CURRENT_SEQ[0],
++        'type': 'audit',
++        'id': _CURRENT_ID[0],
++        'event': event,
++        'detail': str(detail)[:500],
++    })
++    raise PermissionError('Exteraless audit: %s denied' % event)
++
++
++def _check_open(args):
++    if not args:
++        _deny('open', 'missing arguments')
++    target = args[0]
++    if isinstance(target, int):
++        _deny('open', 'file descriptor %d' % target)
++    text = _text(target)
++    if text is None:
++        _deny('open', repr(target)[:500])
++    mode = args[1] if len(args) > 1 else None
++    flags = args[2] if len(args) > 2 else 0
++    writing = False
++    if isinstance(mode, str):
++        writing = any(ch in mode for ch in 'wax+')
++    if isinstance(flags, int):
++        writing = writing or bool(flags & (
++            os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND))
++    roots = WRITE_ROOTS if writing else READ_ROOTS
++    if not _under(text, roots):
++        _deny('open', '%s %s' % (
++            text, mode if isinstance(mode, str) else flags))
++
++
++def _audit_check(event, args):
++    if event in DENY_EXACT or event.startswith(DENY_PREFIX):
++        _deny(event, repr(args)[:500])
++    if event == 'open':
++        _check_open(args)
++    elif event in ('os.listdir', 'os.scandir'):
++        target = args[0] if args else None
++        if target is None:
++            target = ROOT
++        text = _text(target)
++        if text is None or not _under(text, READ_ROOTS):
++            _deny(event, repr(target)[:500])
++    elif event in MUTATING:
++        for value in args:
++            if (value is None or isinstance(value, bool)
++                    or isinstance(value, int)):
++                continue
++            text = _text(value)
++            if text is None or not _under(text, WRITE_ROOTS):
++                _deny(event, repr(args)[:500])
++    elif event in ('os.setxattr', 'os.removexattr'):
++        target = args[0] if args else None
++        text = _text(target)
++        if text is None or not _under(text, WRITE_ROOTS):
++            _deny(event, repr(args)[:500])
++    elif event in ('os.getxattr', 'os.listxattr'):
++        target = args[0] if args else None
++        text = _text(target)
++        if text is None or not _under(text, READ_ROOTS):
++            _deny(event, repr(args)[:500])
++    elif event == 'import':
++        module = args[0] if args else ''
++        filename = args[1] if len(args) > 1 else None
++        if filename is None or module in sys.builtin_module_names:
++            return
++        text = _text(filename)
++        if text is None or not _under(text, READ_ROOTS):
++            _deny(event, 'module %s from %r' % (module, filename))
++    elif event == 'compile':
++        filename = args[1] if len(args) > 1 else ''
++        text = _text(filename)
++        if _ALLOW_COMPILE[0]:
++            return
++        if text is not None and _under(text, (STDLIB, PLATSTDLIB)):
++            return
++        if _stdlib_caller():
++            return
++        _deny(event, repr(filename)[:500])
++    elif event == 'exec':
++        code = args[0] if args else None
++        if code is _LOAD_CODE[0]:
++            return
++        filename = getattr(code, 'co_filename', None)
++        text = _text(filename)
++        if text is not None and _under(text, (STDLIB, PLATSTDLIB)):
++            return
++        if _stdlib_caller():
++            return
++        _deny(event, repr(filename)[:500])
++
++
++def _audit(event, args):
++    # Best-effort only: fork_exec or a fresh interpreter bypasses it; bwrap is the boundary.
++    if _IN_AUDIT[0]:
++        return
++    _IN_AUDIT[0] = True
++    try:
++        _audit_check(event, args)
++    finally:
++        _IN_AUDIT[0] = False
++
++
++class _ImportGuard:
++    def find_spec(self, fullname, path=None, target=None):
++        leaf = fullname.rpartition('.')[2]
++        search = sys.path if path is None else path
++        for entry in search:
++            if not isinstance(entry, str) or not entry:
++                continue
++            real = _real(entry)
++            if _under(real, READ_ROOTS):
++                continue
++            candidates = (
++                os.path.join(real, leaf + '.py'),
++                os.path.join(real, leaf + '.pyc'),
++                os.path.join(real, leaf + '.so'),
++                os.path.join(real, leaf, '__init__.py'),
++            )
++            for candidate in candidates:
++                try:
++                    if os.path.isfile(candidate):
++                        _deny('import', 'module %s from %s' % (
++                            fullname, real))
++                except OSError:
++                    continue
++        return None
++
++
++sys.meta_path.insert(0, _ImportGuard())
++
++
++class _PluginLoader(importlib.machinery.SourceFileLoader):
++    def __init__(self, fullname, path, data):
++        super().__init__(fullname, path)
++        self._data = data
++
++    def get_data(self, path):
++        if _real(path) == _real(self.path):
++            return self._data
++        return super().get_data(path)
++
++    def get_code(self, fullname):
++        source = importlib.util.decode_source(self._data)
++        _ALLOW_COMPILE[0] = True
++        try:
++            code = compile(source, self.path, 'exec')
++        finally:
++            _ALLOW_COMPILE[0] = False
++        _LOAD_CODE[0] = code
++        return code
++
++
++def _module_under_root(name):
++    module = sys.modules.get(name)
++    filename = getattr(module, '__file__', None) if module is not None else None
++    return isinstance(filename, str) and _under(filename, (ROOT,))
++
++
++def _purge(names):
++    for name in set(names):
++        if _module_under_root(name):
++            sys.modules.pop(name, None)
++
++
++def _find_plugin(module):
++    candidate = getattr(module, 'plugin', None)
++    if isinstance(candidate, BasePlugin):
++        return candidate, ''
++    instances = []
++    subclasses = []
++    for value in vars(module).values():
++        if isinstance(value, BasePlugin):
++            instances.append(value)
++        elif (isinstance(value, type)
++              and value is not BasePlugin
++              and issubclass(value, BasePlugin)):
++            subclasses.append(value)
++    if len(instances) > 1:
++        return None, 'Plugin declares more than one BasePlugin instance.'
++    if len(instances) == 1:
++        return instances[0], ''
++    if len(subclasses) > 1:
++        return None, 'Plugin declares more than one BasePlugin subclass.'
++    if len(subclasses) == 1:
++        try:
++            return subclasses[0](), ''
++        except BaseException as error:
++            return None, 'Plugin could not be created: %s' % error
++    return None, 'Plugin must declare a BasePlugin instance or subclass.'
++
++
++def _load(message):
++    seq = _CURRENT_SEQ[0]
++    plugin_id = message.get('id')
++    if not isinstance(plugin_id, str) or not ID_RE.match(plugin_id):
++        _send({'seq': seq, 'type': 'error', 'message': 'Invalid plugin id.'})
++        return
++    path = message.get('path')
++    if not isinstance(path, str) or not os.path.isabs(path):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin path is not absolute.'})
++        return
++    real = _real(path)
++    if os.path.dirname(real) != ROOT:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin path is outside the plugins directory.'})
++        return
++    if not real.lower().endswith(SUPPORTED):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Unsupported plugin format.'})
++        return
++    if os.path.islink(path):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin path is a symlink.'})
++        return
++    try:
++        info = os.stat(path, follow_symlinks=False)
++    except OSError as error:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin file is missing: %s' % error})
++        return
++    if not stat.S_ISREG(info.st_mode):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin path is not a regular file.'})
++        return
++    flags = (os.O_RDONLY
++             | getattr(os, 'O_NOFOLLOW', 0)
++             | getattr(os, 'O_BINARY', 0))
++    try:
++        descriptor = os.open(path, flags)
++    except OSError as error:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin file could not be opened: %s' % error})
++        return
++    chunks = []
++    total = 0
++    try:
++        info = os.fstat(descriptor)
++        if not stat.S_ISREG(info.st_mode):
++            _send({'seq': seq, 'type': 'error',
++                   'message': 'Plugin path is not a regular file.'})
++            return
++        if info.st_size > MAX_BYTES:
++            _send({'seq': seq, 'type': 'error',
++                   'message': 'Plugin file is larger than 2 MiB.'})
++            return
++        while True:
++            chunk = os.read(descriptor, 65536)
++            if not chunk:
++                break
++            total += len(chunk)
++            if total > MAX_BYTES:
++                _send({'seq': seq, 'type': 'error',
++                       'message': 'Plugin file is larger than 2 MiB.'})
++                return
++            chunks.append(chunk)
++    finally:
++        os.close(descriptor)
++    data = b''.join(chunks)
++
++    existing = _PLUGINS.get(plugin_id)
++    if existing is not None:
++        if existing['path'] == real:
++            _send({'seq': seq, 'type': 'loaded', 'ok': True})
++        else:
++            _send({'seq': seq, 'type': 'error',
++                   'message': 'Plugin id is already loaded from another path.'})
++        return
++
++    module_name = 'exteraless_plugin_' + plugin_id
++    before = set(sys.modules)
++    _CURRENT_ID[0] = plugin_id
++    try:
++        loader = _PluginLoader(module_name, real, data)
++        spec = importlib.util.spec_from_file_location(
++            module_name, real, loader=loader)
++        module = importlib.util.module_from_spec(spec)
++        sys.modules[module_name] = module
++        spec.loader.exec_module(module)
++    except BaseException as error:
++        sys.modules.pop(module_name, None)
++        _purge(set(sys.modules) - before)
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin load failed: %s' % error})
++        return
++    finally:
++        _LOAD_CODE[0] = None
++
++    instance, error = _find_plugin(module)
++    if error:
++        _purge({module_name})
++        _send({'seq': seq, 'type': 'error', 'message': error})
++        return
++    declared = getattr(module, '__id__', None)
++    if declared != plugin_id:
++        _purge({module_name})
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin id mismatch: expected %s, got %s.' % (
++                   plugin_id, declared)})
++        return
++
++    modules = {
++        name for name in set(sys.modules) - before if _module_under_root(name)
++    }
++    modules.add(module_name)
++    record = {
++        'module': module,
++        'instance': instance,
++        'path': real,
++        'modules': modules,
++    }
++    _PLUGINS[plugin_id] = record
++    try:
++        instance.on_load()
++    except BaseException as error:
++        _PLUGINS.pop(plugin_id, None)
++        try:
++            instance.on_unload()
++        except BaseException:
++            pass
++        _purge(modules)
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin load failed: %s' % error})
++        return
++    _send({'seq': seq, 'type': 'loaded', 'ok': True})
++
++
++def _unload(message):
++    seq = _CURRENT_SEQ[0]
++    plugin_id = message.get('id')
++    record = None
++    if isinstance(plugin_id, str):
++        record = _PLUGINS.pop(plugin_id, None)
++    if record is None:
++        _send({'seq': seq, 'type': 'unloaded', 'ok': True})
++        return
++    warning = ''
++    _CURRENT_ID[0] = plugin_id
++    try:
++        record['instance'].on_unload()
++    except BaseException as error:
++        warning = 'on_unload failed: %s' % error
++    _purge(record['modules'])
++    response = {'seq': seq, 'type': 'unloaded', 'ok': True}
++    if warning:
++        response['warning'] = warning
++    _send(response)
++
++
++def _shutdown():
++    for plugin_id in list(_PLUGINS):
++        record = _PLUGINS.get(plugin_id)
++        if record is None:
++            continue
++        _CURRENT_ID[0] = plugin_id
++        try:
++            record['instance'].on_unload()
++        except BaseException:
++            pass
++        _purge(record['modules'])
++    _PLUGINS.clear()
++    _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
++
++
++def _handle(line):
++    try:
++        message = json.loads(line)
++    except ValueError:
++        _send({'seq': 0, 'type': 'error', 'message': 'Invalid command.'})
++        return True
++    if not isinstance(message, dict):
++        _send({'seq': 0, 'type': 'error', 'message': 'Invalid command.'})
++        return True
++    seq = message.get('seq')
++    _CURRENT_SEQ[0] = seq if isinstance(seq, int) else 0
++    command = message.get('cmd')
++    if command == 'shutdown':
++        _shutdown()
++        return False
++    if command == 'load':
++        _load(message)
++    elif command == 'unload':
++        _unload(message)
++    else:
++        _send({'seq': _CURRENT_SEQ[0], 'type': 'error',
++               'message': 'Unknown command.'})
++    _CURRENT_ID[0] = ''
++    _CURRENT_SEQ[0] = 0
++    return True
++
++
++KEYCTL_JOIN_SESSION_KEYRING = 1
++KEYCTL_SYSCALL = {
++    'aarch64': 219,
++    'armv7l': 311,
++    'i686': 288,
++    'ppc64le': 240,
++    'riscv64': 219,
++    's390x': 280,
++    'x86_64': 250,
++}
++
++
++def _close_library_fds():
++    # Importing ctypes leaves an fd on libffi; the host keeps only its own.
++    try:
++        names = os.listdir('/proc/self/fd')
++    except OSError:
++        return
++    for name in names:
++        try:
++            target = os.readlink('/proc/self/fd/' + name)
++        except OSError:
++            continue
++        if 'libffi' in target or '_ctypes' in target:
++            try:
++                os.close(int(name))
++            except (OSError, ValueError):
++                pass
++
++
++def _join_session_keyring():
++    # Best-effort: bwrap leaves session keyrings shared, so drop the inherited one.
++    try:
++        import ctypes
++        libc = ctypes.CDLL(None, use_errno=True)
++        symbol = getattr(libc, 'keyctl', None)
++        if symbol is not None:
++            symbol.restype = ctypes.c_long
++            return symbol(
++                KEYCTL_JOIN_SESSION_KEYRING, ctypes.c_ulong(0), 0, 0)
++        number = KEYCTL_SYSCALL.get(os.uname().machine)
++        if number is None:
++            return -1
++        libc.syscall.restype = ctypes.c_long
++        return libc.syscall(
++            ctypes.c_long(number),
++            ctypes.c_long(KEYCTL_JOIN_SESSION_KEYRING),
++            ctypes.c_ulong(0),
++            0,
++            0)
++    except Exception:
++        return -1
++    finally:
++        _close_library_fds()
++
++
++def _install():
++    sys.addaudithook(_audit)
++    base = types.ModuleType('base_plugin')
++    base.BasePlugin = BasePlugin
++    sys.modules['base_plugin'] = base
++
++
++def main():
++    _join_session_keyring()
++    _install()
++    _send({'type': 'ready', 'api': 1})
++    while True:
++        try:
++            line = INPUT.readline()
++        except OSError:
++            return
++        if not line:
++            return
++        text = line.decode('utf-8', 'replace').strip()
++        if not text:
++            continue
++        if not _handle(text):
++            return
++
++
++main()
++)PY";
++
++Runtime *gRuntime = nullptr;
++
++[[nodiscard]] QString StderrOf(QProcess *process) {
++	return process
++		? QString::fromUtf8(process->readAllStandardError()).trimmed()
++		: QString();
++}
++
++[[nodiscard]] QString FindBwrap() {
++	const auto overridePath = qEnvironmentVariable("EXTERALESS_BWRAP").trimmed();
++	if (!overridePath.isEmpty()) {
++		return QStandardPaths::findExecutable(overridePath);
++	}
++	return QStandardPaths::findExecutable(QStringLiteral("bwrap"));
++}
++
++[[nodiscard]] QStringList ReadOnlyBinds() {
++	auto result = QStringList();
++	for (const auto &path : {
++			QStringLiteral("/nix"),
++			QStringLiteral("/run/current-system/sw"),
++			QStringLiteral("/usr"),
++			QStringLiteral("/bin"),
++			QStringLiteral("/lib"),
++			QStringLiteral("/lib64") }) {
++		if (QFileInfo::exists(path)) {
++			result
++				<< QStringLiteral("--ro-bind")
++				<< path
++				<< path;
++		}
++	}
++	for (const auto &path : {
++			QStringLiteral("/etc/resolv.conf"),
++			QStringLiteral("/etc/hosts"),
++			QStringLiteral("/etc/nsswitch.conf"),
++			QStringLiteral("/etc/passwd"),
++			QStringLiteral("/etc/group"),
++			QStringLiteral("/etc/localtime") }) {
++		if (QFileInfo::exists(path)) {
++			result
++				<< QStringLiteral("--ro-bind")
++				<< path
++				<< path;
++		}
++	}
++	return result;
++}
++
++[[nodiscard]] QString SandboxPath() {
++	for (const auto &path : {
++			QStringLiteral("/run/current-system/sw/bin"),
++			QStringLiteral("/usr/local/bin"),
++			QStringLiteral("/usr/bin"),
++			QStringLiteral("/bin") }) {
++		if (QFileInfo(path).isDir()) {
++			return path;
++		}
++	}
++	return QString();
++}
++
++[[nodiscard]] QStringList SandboxArguments(
++		const QString &pluginsRoot,
++		const QString &python,
++		const QString &script,
++		const QString &sandboxPath) {
++	return QStringList{
++		QStringLiteral("--unshare-all"),
++		QStringLiteral("--unshare-user"),
++		QStringLiteral("--disable-userns"),
++		QStringLiteral("--die-with-parent"),
++		QStringLiteral("--new-session"),
++		QStringLiteral("--cap-drop"),
++		QStringLiteral("ALL"),
++		QStringLiteral("--proc"),
++		QStringLiteral("/proc"),
++		QStringLiteral("--dev"),
++		QStringLiteral("/dev"),
++		QStringLiteral("--tmpfs"),
++		QStringLiteral("/tmp"),
++	} + ReadOnlyBinds() + QStringList{
++		QStringLiteral("--ro-bind"),
++		pluginsRoot,
++		QStringLiteral("/plugins"),
++		QStringLiteral("--remount-ro"),
++		QStringLiteral("/"),
++		QStringLiteral("--chdir"),
++		QStringLiteral("/"),
++		QStringLiteral("--clearenv"),
++		QStringLiteral("--setenv"),
++		QStringLiteral("PATH"),
++		sandboxPath,
++		QStringLiteral("--setenv"),
++		QStringLiteral("HOME"),
++		QStringLiteral("/tmp"),
++		QStringLiteral("--setenv"),
++		QStringLiteral("TMPDIR"),
++		QStringLiteral("/tmp"),
++		QStringLiteral("--setenv"),
++		QStringLiteral("LANG"),
++		QStringLiteral("C.UTF-8"),
++		QStringLiteral("--"),
++		python,
++		QStringLiteral("-I"),
++		QStringLiteral("-B"),
++		QStringLiteral("-c"),
++		script,
++		QStringLiteral("/plugins"),
++	};
++}
++
++} // namespace
++
++Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
++: _pluginsDirectory(std::move(pluginsDirectory))
++, _auditLogPath(std::move(auditLogPath)) {
++}
++
++Runtime::~Runtime() {
++	stop();
++}
++
++void Runtime::Start(QString pluginsDirectory, QString auditLogPath) {
++	if (gRuntime
++		&& gRuntime->_pluginsDirectory == pluginsDirectory
++		&& gRuntime->_auditLogPath == auditLogPath) {
++		return;
++	}
++	Stop();
++	gRuntime = new Runtime(std::move(pluginsDirectory), std::move(auditLogPath));
++}
++
++Runtime *Runtime::Instance() {
++	return gRuntime;
++}
++
++void Runtime::Stop() {
++	delete gRuntime;
++	gRuntime = nullptr;
++}
++
++PathCheck Runtime::ValidatePath(
++		const QString &pluginsDirectory,
++		const QString &path) {
++	const auto rootInfo = QFileInfo(pluginsDirectory);
++	if (pluginsDirectory.isEmpty() || !rootInfo.exists() || !rootInfo.isDir()) {
++		return {
++			false,
++			QString(),
++			QStringLiteral("Plugins directory is missing."),
++		};
++	}
++	const auto canonicalRoot = rootInfo.canonicalFilePath();
++	if (canonicalRoot.isEmpty()) {
++		return {
++			false,
++			QString(),
++			QStringLiteral("Plugins directory is missing."),
++		};
++	}
++	if (path.isEmpty()) {
++		return { false, QString(), QStringLiteral("Plugin file is missing.") };
++	}
++	const auto info = QFileInfo(path);
++	if (info.isSymLink()) {
++		return { false, QString(), QStringLiteral("Plugin path is a symlink.") };
++	}
++	if (!info.exists()) {
++		return { false, QString(), QStringLiteral("Plugin file is missing.") };
++	}
++	if (!info.isFile()) {
++		return {
++			false,
++			QString(),
++			QStringLiteral("Plugin path is not a regular file."),
++		};
++	}
++	const auto canonical = info.canonicalFilePath();
++	if (canonical.isEmpty()) {
++		return { false, QString(), QStringLiteral("Plugin file is missing.") };
++	}
++	const auto canonicalInfo = QFileInfo(canonical);
++	if (canonicalInfo.isSymLink()) {
++		return { false, QString(), QStringLiteral("Plugin path is a symlink.") };
++	}
++	if (!canonicalInfo.isFile()) {
++		return {
++			false,
++			QString(),
++			QStringLiteral("Plugin path is not a regular file."),
++		};
++	}
++	const auto relative = QDir(canonicalRoot).relativeFilePath(canonical);
++	if (relative.isEmpty()
++		|| relative.startsWith(QStringLiteral(".."))
++		|| relative.contains(QLatin1Char('/'))
++		|| relative.contains(QLatin1Char('\\'))) {
++		return {
++			false,
++			QString(),
++			QStringLiteral(
++				"Plugin is outside the plugins directory or not directly "
++				"inside it."),
++		};
++	}
++	const auto lower = canonical.toLower();
++	if (!lower.endsWith(QStringLiteral(".plugin"))
++		&& !lower.endsWith(QStringLiteral(".py"))) {
++		return { false, QString(), QStringLiteral("Unsupported plugin format.") };
++	}
++	return { true, canonical, QString() };
++}
++
++bool Runtime::isRunning() const {
++	return _process && _process->state() == QProcess::Running;
++}
++
++bool Runtime::isLoaded(const QString &id) const {
++	return isRunning() && _loaded.contains(id);
++}
++
++qint64 Runtime::hostPid() const {
++	return isRunning() ? _process->processId() : 0;
++}
++
++const QString &Runtime::pluginsDirectory() const {
++	return _pluginsDirectory;
++}
++
++Result Runtime::enable(const QString &id, const QString &path) {
++	const auto check = ValidatePath(_pluginsDirectory, path);
++	if (!check.ok) {
++		return { false, check.error };
++	}
++	const auto canonical = check.canonicalPath;
++	const auto filename = QFileInfo(canonical).fileName();
++	if (filename.isEmpty()
++		|| filename == QStringLiteral(".")
++		|| filename == QStringLiteral("..")
++		|| filename.contains(QLatin1Char('/'))
++		|| filename.contains(QLatin1Char('\\'))) {
++		return { false, QStringLiteral("Plugin file is missing.") };
++	}
++	if (isRunning() && _loaded.value(id) == canonical) {
++		return { true, QString() };
++	}
++	if (_loaded.contains(id)) {
++		const auto disabled = disable(id);
++		if (!disabled.ok) {
++			return disabled;
++		}
++	}
++	if (!isRunning()) {
++		clearHost();
++		auto error = QString();
++		if (!startHost(&error)) {
++			return { false, error };
++		}
++	}
++	auto request = QJsonObject{
++		{ QStringLiteral("seq"), ++_seq },
++		{ QStringLiteral("cmd"), QStringLiteral("load") },
++		{ QStringLiteral("id"), id },
++		{ QStringLiteral("path"), QStringLiteral("/plugins/") + filename },
++	};
++	auto response = QJsonObject();
++	auto error = QString();
++	if (!sendRequest(request, &response, &error)) {
++		return { false, error };
++	}
++	const auto type = response.value(QStringLiteral("type")).toString();
++	if (type == QStringLiteral("loaded")) {
++		const auto ok = response.value(QStringLiteral("ok"));
++		if (!ok.isBool() || !ok.toBool()) {
++			protocolViolation(&error);
++			return { false, error };
++		}
++		_loaded[id] = canonical;
++		return { true, QString() };
++	}
++	if (type == QStringLiteral("error")) {
++		return { false, response.value(QStringLiteral("message")).toString() };
++	}
++	protocolViolation(&error);
++	return { false, error };
++}
++
++Result Runtime::disable(const QString &id) {
++	if (!isRunning()) {
++		clearHost();
++		return { true, QString() };
++	}
++	if (!_loaded.contains(id)) {
++		return { true, QString() };
++	}
++	auto request = QJsonObject{
++		{ QStringLiteral("seq"), ++_seq },
++		{ QStringLiteral("cmd"), QStringLiteral("unload") },
++		{ QStringLiteral("id"), id },
++	};
++	auto response = QJsonObject();
++	auto error = QString();
++	if (!sendRequest(request, &response, &error)) {
++		return { false, error };
++	}
++	const auto type = response.value(QStringLiteral("type")).toString();
++	if (type == QStringLiteral("unloaded")) {
++		const auto ok = response.value(QStringLiteral("ok"));
++		if (!ok.isBool() || !ok.toBool()) {
++			protocolViolation(&error);
++			return { false, error };
++		}
++		_loaded.remove(id);
++		const auto warning = response.value(QStringLiteral("warning")).toString();
++		if (!warning.isEmpty()) {
++			writeAuditRecord(
++				QStringLiteral("log"),
++				id,
++				QStringLiteral("log"),
++				warning);
++		}
++		return { true, QString() };
++	}
++	if (type == QStringLiteral("error")) {
++		clearHost();
++		return { false, response.value(QStringLiteral("message")).toString() };
++	}
++	protocolViolation(&error);
++	return { false, error };
++}
++
++void Runtime::stop() {
++	if (_process && _process->state() == QProcess::Running) {
++		const auto request = QJsonObject{
++			{ QStringLiteral("cmd"), QStringLiteral("shutdown") },
++		};
++		auto payload = QJsonDocument(request).toJson(QJsonDocument::Compact);
++		payload.append('\n');
++		_process->write(payload);
++		_process->waitForBytesWritten(kWriteTimeout);
++		if (!_process->waitForFinished(kStopTimeout)) {
++			_process->kill();
++			_process->waitForFinished(kKillTimeout);
++		}
++	}
++	clearHost();
++}
++
++void Runtime::clearHost() {
++	if (_process) {
++		if (_process->state() != QProcess::NotRunning) {
++			_process->kill();
++			_process->waitForFinished(kKillTimeout);
++		}
++		_process.reset();
++	}
++	_readBuffer.clear();
++	_loaded.clear();
++	_seq = 0;
++}
++
++bool Runtime::startHost(QString *error) {
++	const auto python = QStandardPaths::findExecutable(
++		QStringLiteral("python3"));
++	if (python.isEmpty()) {
++		*error = QStringLiteral("Python 3 was not found.");
++		return false;
++	}
++	const auto canonicalPython = QFileInfo(python).canonicalFilePath();
++	if (canonicalPython.isEmpty()) {
++		*error = QStringLiteral("Python 3 was not found.");
++		return false;
++	}
++	const auto bwrap = FindBwrap();
++	if (bwrap.isEmpty()) {
++		*error = QString::fromUtf8(kSandboxUnavailable);
++		return false;
++	}
++	const auto canonicalRoot = QFileInfo(_pluginsDirectory).canonicalFilePath();
++	if (canonicalRoot.isEmpty() || !QFileInfo(canonicalRoot).isDir()) {
++		*error = QStringLiteral("Plugins directory is missing.");
++		return false;
++	}
++	auto sandboxPath = SandboxPath();
++	if (sandboxPath.isEmpty()) {
++		sandboxPath = QFileInfo(canonicalPython).absolutePath();
++	}
++	if (!QFileInfo(sandboxPath).isDir()) {
++		*error = QString::fromUtf8(kSandboxUnavailable);
++		return false;
++	}
++	_process = std::make_unique<QProcess>();
++	_process->setProcessEnvironment(QProcessEnvironment());
++	_process->setProgram(bwrap);
++	_process->setArguments(SandboxArguments(
++		canonicalRoot,
++		canonicalPython,
++		QString::fromUtf8(kHostScript),
++		sandboxPath));
++	_process->start();
++	if (!_process->waitForStarted(kStartTimeout)) {
++		clearHost();
++		*error = QStringLiteral("Plugin host failed to start.");
++		return false;
++	}
++	auto message = QJsonObject();
++	auto readError = QString();
++	if (!readMessage(kStartTimeout, 0, true, &message, &readError)
++		|| message.value(QStringLiteral("type")).toString()
++			!= QStringLiteral("ready")) {
++		clearHost();
++		*error = QStringLiteral("Plugin host failed to start.");
++		if (!readError.isEmpty()) {
++			*error += QStringLiteral(" ") + readError;
++		}
++		return false;
++	}
++	return true;
++}
++
++void Runtime::protocolViolation(QString *error) {
++	clearHost();
++	*error = QString::fromUtf8(kProtocolViolation);
++}
++
++bool Runtime::sendRequest(
++		const QJsonObject &request,
++		QJsonObject *response,
++		QString *error) {
++	if (!isRunning()) {
++		*error = QStringLiteral("Plugin host is not running.");
++		return false;
++	}
++	auto payload = QJsonDocument(request).toJson(QJsonDocument::Compact);
++	payload.append('\n');
++	if (_process->write(payload) != payload.size()) {
++		clearHost();
++		*error = QStringLiteral("Plugin host exited.");
++		return false;
++	}
++	_process->waitForBytesWritten(kWriteTimeout);
++	return readMessage(
++		kCommandTimeout,
++		request.value(QStringLiteral("seq")).toInt(),
++		false,
++		response,
++		error);
++}
++
++bool Runtime::readMessage(
++		int timeout,
++		int expectedSeq,
++		bool returnReady,
++		QJsonObject *response,
++		QString *error) {
++	const auto deadline = QDeadlineTimer(timeout);
++	while (true) {
++		if (_process) {
++			_readBuffer += _process->readAllStandardOutput();
++		}
++		if (_readBuffer.size() > kMaxReadBuffer) {
++			clearHost();
++			*error = QStringLiteral("Plugin host returned too much output.");
++			return false;
++		}
++		while (true) {
++			const auto newline = _readBuffer.indexOf('\n');
++			if (newline < 0) {
++				break;
++			}
++			const auto line = _readBuffer.left(newline);
++			_readBuffer.remove(0, newline + 1);
++			if (line.trimmed().isEmpty()) {
++				continue;
++			}
++			auto parseError = QJsonParseError{0, QJsonParseError::NoError};
++			const auto document = QJsonDocument::fromJson(line, &parseError);
++			if (parseError.error != QJsonParseError::NoError
++				|| !document.isObject()) {
++				clearHost();
++				*error = QString::fromUtf8(kInvalidOutput);
++				return false;
++			}
++			const auto object = document.object();
++			const auto type = object.value(QStringLiteral("type")).toString();
++			if (type == QStringLiteral("ready")) {
++				if (returnReady && expectedSeq == 0) {
++					*response = object;
++					return true;
++				}
++				protocolViolation(error);
++				return false;
++			}
++			const auto seqValue = object.value(QStringLiteral("seq"));
++			const auto knownSeq = seqValue.isDouble()
++				&& (seqValue.toInt() == expectedSeq)
++				&& (expectedSeq != 0);
++			if (type == QStringLiteral("audit")) {
++				if (!knownSeq) {
++					qWarning("Dropped an unsolicited plugin host audit event.");
++					continue;
++				}
++				writeAuditRecord(
++					QStringLiteral("denied"),
++					object.value(QStringLiteral("id")).toString(),
++					object.value(QStringLiteral("event")).toString(),
++					object.value(QStringLiteral("detail")).toString());
++				continue;
++			}
++			if (type == QStringLiteral("log")) {
++				if (!knownSeq) {
++					qWarning("Dropped an unsolicited plugin host log message.");
++					continue;
++				}
++				writeAuditRecord(
++					QStringLiteral("log"),
++					object.value(QStringLiteral("id")).toString(),
++					QStringLiteral("log"),
++					object.value(QStringLiteral("message")).toString());
++				continue;
++			}
++			if (!knownSeq
++				|| (type != QStringLiteral("loaded")
++					&& type != QStringLiteral("unloaded")
++					&& type != QStringLiteral("error"))) {
++				protocolViolation(error);
++				return false;
++			}
++			*response = object;
++			return true;
++		}
++		if (!isRunning()) {
++			const auto stderrText = StderrOf(_process.get());
++			clearHost();
++			*error = stderrText.isEmpty()
++				? QStringLiteral("Plugin host exited.")
++				: QStringLiteral("Plugin host exited: %1").arg(stderrText);
++			return false;
++		}
++		if (deadline.hasExpired()) {
++			clearHost();
++			*error = QStringLiteral("Plugin host timed out.");
++			return false;
++		}
++		const auto remaining = deadline.remainingTime();
++		_process->waitForReadyRead(int(std::clamp<qint64>(
++			remaining,
++			1,
++			50)));
++	}
++}
++
++void Runtime::writeAuditRecord(
++		const QString &kind,
++		const QString &id,
++		const QString &event,
++		const QString &detail) {
++	const auto directory = QFileInfo(_auditLogPath).absolutePath();
++	if (!QDir().mkpath(directory)) {
++		qWarning("Could not create the plugin audit log directory.");
++		return;
++	}
++	auto file = QFile(_auditLogPath);
++	if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
++		qWarning("Could not open the plugin audit log for writing.");
++		return;
++	}
++	const auto record = QJsonObject{
++		{
++			QStringLiteral("time"),
++			QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs),
++		},
++		{ QStringLiteral("kind"), kind },
++		{ QStringLiteral("plugin"), id },
++		{ QStringLiteral("event"), event },
++		{ QStringLiteral("detail"), detail },
++	};
++	file.write(QJsonDocument(record).toJson(QJsonDocument::Compact));
++	file.write("\n");
++}
++
++} // namespace Exteraless::Plugins
+diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.h b/Telegram/SourceFiles/exteraless/plugin_runtime.h
+new file mode 100644
+index 0000000..520432e
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/plugin_runtime.h
+@@ -0,0 +1,79 @@
++#pragma once
++
++#include <QByteArray>
++#include <QHash>
++#include <QJsonObject>
++#include <QString>
++
++#include <memory>
++
++class QProcess;
++
++namespace Exteraless::Plugins {
++
++struct Result {
++	bool ok = false;
++	QString error;
++};
++
++struct PathCheck {
++	bool ok = false;
++	QString canonicalPath;
++	QString error;
++};
++
++class Runtime final {
++public:
++	Runtime(QString pluginsDirectory, QString auditLogPath);
++	~Runtime();
++
++	Runtime(const Runtime &) = delete;
++	Runtime &operator=(const Runtime &) = delete;
++
++	static void Start(QString pluginsDirectory, QString auditLogPath);
++	[[nodiscard]] static Runtime *Instance();
++	static void Stop();
++
++	[[nodiscard]] Result enable(const QString &id, const QString &path);
++	[[nodiscard]] Result disable(const QString &id);
++	void stop();
++
++	[[nodiscard]] bool isRunning() const;
++	[[nodiscard]] bool isLoaded(const QString &id) const;
++	[[nodiscard]] qint64 hostPid() const;
++	[[nodiscard]] const QString &pluginsDirectory() const;
++
++	[[nodiscard]] static PathCheck ValidatePath(
++		const QString &pluginsDirectory,
++		const QString &path);
++
++private:
++	void clearHost();
++	[[nodiscard]] bool startHost(QString *error);
++	void protocolViolation(QString *error);
++	[[nodiscard]] bool sendRequest(
++		const QJsonObject &request,
++		QJsonObject *response,
++		QString *error);
++	[[nodiscard]] bool readMessage(
++		int timeout,
++		int expectedSeq,
++		bool returnReady,
++		QJsonObject *response,
++		QString *error);
++	void writeAuditRecord(
++		const QString &kind,
++		const QString &id,
++		const QString &event,
++		const QString &detail);
++
++	std::unique_ptr<QProcess> _process;
++	QByteArray _readBuffer;
++	QHash<QString, QString> _loaded;
++	int _seq = 0;
++	QString _pluginsDirectory;
++	QString _auditLogPath;
++
++};
++
++} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugins_box.cpp b/Telegram/SourceFiles/exteraless/plugins_box.cpp
 new file mode 100644
-index 0000000..036d39e
+index 0000000..db944d6
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugins_box.cpp
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,257 @@
 +#include "exteraless/plugins_box.h"
 +
++#include "exteraless/config.h"
++#include "exteraless/plugin_runtime.h"
 +#include "exteraless/plugins/scanner.h"
 +#include "core/file_utilities.h"
 +#include "settings.h"
 +#include "lang/lang_keys.h"
 +#include "ui/layers/generic_box.h"
++#include "ui/widgets/buttons.h"
 +#include "ui/widgets/labels.h"
 +#include "ui/wrap/vertical_layout.h"
 +#include "window/window_session_controller.h"
 +#include "styles/style_boxes.h"
 +#include "styles/style_layers.h"
++#include "styles/style_settings.h"
 +
 +#include <QDir>
 +#include <rpl/rpl.h>
++
++#include <memory>
++#include <vector>
 +
 +namespace Exteraless {
 +namespace {
 +
 +[[nodiscard]] QString PluginsDirectory() {
 +	return cWorkingDir() + u"tdata/plugins"_q;
++}
++
++[[nodiscard]] QString AuditLogPath() {
++	return cWorkingDir() + u"tdata/plugins-audit.log"_q;
 +}
 +
 +[[nodiscard]] QString RowText(const Plugins::Entry &entry) {
@@ -1240,15 +2654,98 @@ index 0000000..036d39e
 +	return text;
 +}
 +
++[[nodiscard]] QString ButtonText(const Plugins::Entry &entry) {
++	auto text = entry.name.isEmpty() ? entry.file : entry.name;
++	if (!entry.version.isEmpty()) {
++		text += u" "_q + entry.version;
++	}
++	return text;
++}
++
++struct Row {
++	Plugins::Entry entry;
++	rpl::variable<bool> enabled;
++	bool loaded = false;
++	QString error;
++	Ui::FlatLabel *details = nullptr;
++	Ui::SettingsButton *button = nullptr;
++};
++
++[[nodiscard]] QString StateText(const Row &row) {
++	if (!row.enabled.current()) {
++		return row.error.isEmpty()
++			? u"Disabled"_q
++			: u"Disabled: "_q + row.error;
++	} else if (row.loaded) {
++		return u"Enabled (running)"_q;
++	}
++	return row.error.isEmpty()
++		? u"Enabled (not running)"_q
++		: u"Enabled (not running): "_q + row.error;
++}
++
++[[nodiscard]] QString DetailsText(
++		const Plugins::Entry &entry,
++		const QString &status) {
++	auto text = QString();
++	if (!entry.author.isEmpty()) {
++		text += entry.author + u"\n"_q;
++	}
++	text += u"permissions: "_q
++		+ (entry.permissions.isEmpty()
++			? u"none"_q
++			: entry.permissions.join(u", "_q));
++	text += u"\nfile: "_q + entry.file;
++	text += u"\n"_q + status;
++	return text;
++}
++
++[[nodiscard]] QString HostStatusText(const Plugins::Runtime &runtime) {
++	return runtime.isRunning()
++		? u"Plugin host: running"_q
++		: u"Plugin host: stopped"_q;
++}
++
++void RefreshRows(
++		const std::vector<std::unique_ptr<Row>> &rows,
++		Plugins::Runtime *runtime) {
++	for (const auto &row : rows) {
++		row->loaded = runtime && runtime->isLoaded(row->entry.id);
++		row->details->setText(DetailsText(row->entry, StateText(*row)));
++	}
++}
++
 +} // namespace
 +
 +void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 +	const auto directory = PluginsDirectory();
++	const auto auditLog = AuditLogPath();
 +	QDir().mkpath(directory);
++	Plugins::Runtime::Start(directory, auditLog);
 +	const auto result = Plugins::ScanPlugins(directory);
++	const auto runtime = Plugins::Runtime::Instance();
 +	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 +		box->setTitle(u"Plugins (%1)"_q.arg(int(result.entries.size())));
 +		const auto layout = box->verticalLayout();
++		const auto rows = box->lifetime().make_state<
++			std::vector<std::unique_ptr<Row>>>();
++
++		const auto hostStatus = layout->add(
++			object_ptr<Ui::FlatLabel>(
++				box,
++				rpl::single(
++					runtime
++						? HostStatusText(*runtime)
++						: u"Plugin host: stopped"_q),
++				st::boxLabel),
++			st::boxRowPadding);
++		layout->add(
++			object_ptr<Ui::FlatLabel>(
++				box,
++				rpl::single(u"Enabled plugins start when this window opens. The host keeps running until Exteraless exits. Manifest permissions are informational in this stage; network, subprocess, native and out-of-directory file access are denied for every plugin."_q),
++				st::boxLabel),
++			st::boxRowPadding);
++
 +		if (!result.error.isEmpty()) {
 +			layout->add(
 +				object_ptr<Ui::FlatLabel>(
@@ -1264,15 +2761,64 @@ index 0000000..036d39e
 +						u"No plugins in "_q + directory + u"."_q),
 +					st::boxLabel),
 +				st::boxRowPadding);
-+		} else {
-+			for (const auto &entry : result.entries) {
++		}
++		for (const auto &entry : result.entries) {
++			if (!entry.error.isEmpty()) {
 +				layout->add(
 +					object_ptr<Ui::FlatLabel>(
 +						box,
 +						rpl::single(RowText(entry)),
 +						st::boxLabel),
 +					st::boxRowPadding);
++				continue;
 +			}
++			auto row = std::make_unique<Row>();
++			row->entry = entry;
++			row->enabled = Config::Instance().pluginEnabled(entry.id);
++			const auto rowPtr = row.get();
++			row->button = layout->add(
++				object_ptr<Ui::SettingsButton>(
++					box,
++					rpl::single(ButtonText(entry)),
++					st::settingsButtonNoIcon));
++			row->button->toggleOn(row->enabled.value(), true);
++			row->details = layout->add(
++				object_ptr<Ui::FlatLabel>(
++					box,
++					rpl::single(DetailsText(entry, StateText(*row))),
++					st::boxLabel),
++				st::boxRowPadding);
++			row->button->setClickedCallback([=] {
++				const auto runtime = Plugins::Runtime::Instance();
++				if (!runtime) {
++					return;
++				}
++				const auto enable = !rowPtr->enabled.current();
++				const auto path = directory + u"/"_q + rowPtr->entry.file;
++				if (enable) {
++					rowPtr->details->setText(DetailsText(
++						rowPtr->entry,
++						u"Loading..."_q));
++					const auto result = runtime->enable(
++						rowPtr->entry.id,
++						path);
++					Config::Instance().setPluginEnabled(
++						rowPtr->entry.id,
++						true);
++					rowPtr->error = result.error;
++				} else {
++					const auto result = runtime->disable(
++						rowPtr->entry.id);
++					Config::Instance().setPluginEnabled(
++						rowPtr->entry.id,
++						false);
++					rowPtr->error = result.error;
++				}
++				rowPtr->enabled.force_assign(enable);
++				RefreshRows(*rows, runtime);
++				hostStatus->setText(HostStatusText(*runtime));
++			});
++			rows->push_back(std::move(row));
 +		}
 +
 +		box->addLeftButton(rpl::single(u"Open folder"_q), [=] {
@@ -1280,6 +2826,35 @@ index 0000000..036d39e
 +			File::Launch(directory);
 +		});
 +		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
++
++		box->showFinishes() | rpl::take(1) | rpl::on_next([=] {
++			const auto runtime = Plugins::Runtime::Instance();
++			if (!runtime) {
++				return;
++			}
++			for (const auto &row : *rows) {
++				if (!row->enabled.current()
++					|| !row->entry.error.isEmpty()) {
++					if (row->entry.id.isEmpty()
++						|| !runtime->isLoaded(row->entry.id)) {
++						continue;
++					}
++					const auto result = runtime->disable(
++						row->entry.id);
++					row->error = result.error;
++					continue;
++				}
++				row->details->setText(DetailsText(
++					row->entry,
++					u"Enabled (not running)"_q));
++				const auto result = runtime->enable(
++					row->entry.id,
++					directory + u"/"_q + row->entry.file);
++				row->error = result.error;
++			}
++			RefreshRows(*rows, runtime);
++			hostStatus->setText(HostStatusText(*runtime));
++		}, box->lifetime());
 +	}));
 +}
 +
@@ -1323,6 +2898,56 @@ index dcb902d..5b28a1d 100644
  	_history->session().api().request(MTPmessages_SetTyping(
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
+diff --git a/Telegram/SourceFiles/history/view/history_view_element.cpp b/Telegram/SourceFiles/history/view/history_view_element.cpp
+index 057de48..8550728 100644
+--- a/Telegram/SourceFiles/history/view/history_view_element.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_element.cpp
+@@ -70,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_forum_topic.h"
+ #include "data/data_message_reactions.h"
+ #include "data/data_user.h"
++#include "exteraless/chats.h"
+ #include "lang/lang_keys.h"
+ #include "styles/style_chat.h"
+ #include "styles/style_chat_style.h"
+@@ -2967,6 +2968,14 @@ void Element::setupReactions(Element *replacing) {
+ 
+ void Element::refreshReactions() {
+ 	using namespace Reactions;
++	const auto peer = history()->peer;
++	if (Exteraless::HiddenReactionsFor(
++			peer->isBroadcast(),
++			peer->isChat() || peer->isMegagroup(),
++			peer->isUser())) {
++		setReactions(nullptr);
++		return;
++	}
+ 	auto reactionsData = InlineListDataFromMessage(this);
+ 	if (reactionsData.reactions.empty()
+ 		|| context() == Context::MediaEditor) {
+diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
+index 5152d85..36949f5 100644
+--- a/Telegram/SourceFiles/history/view/history_view_message.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_message.cpp
+@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_channel.h"
+ #include "data/data_forum_topic.h"
+ #include "data/data_message_reactions.h"
++#include "exteraless/config.h"
+ #include "lang/lang_keys.h"
+ #include "mainwidget.h"
+ #include "main/main_session.h"
+@@ -6611,7 +6612,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
+ 			&& !edges.infoBelow
+ 			&& (rich->article.edgeBlocks().bottom == Block::VisualMedia);
+ 	};
+-	const auto skipTail = smallBottom
++	const auto skipTail = Exteraless::Config::Instance()
++		.chatsSettings().removeMessageTail
++		|| smallBottom
+ 		|| (media && media->skipBubbleTail())
+ 		|| (rich && richMediaAtBottom())
+ 		|| (keyboard != nullptr)
 diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
 index 2721c7a..6bfa900 100644
 --- a/Telegram/SourceFiles/main/main_account.cpp
@@ -1572,10 +3197,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..1dce8ca
+index 0000000..f6adda5
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,409 @@
+@@ -0,0 +1,479 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -1719,6 +3344,76 @@ index 0000000..1dce8ca
 +		Exteraless::Config::Instance().ghostSendUploadProgress(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setGhostSendUploadProgress(value);
++		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chats"_q,
++		.title = rpl::single(u"Chats"_q),
++	});
++
++	const auto addChatsToggle = [&](
++			QString id,
++			QString title,
++			QStringList keywords,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto toggle = builder.addButton({
++			.id = std::move(id),
++			.title = rpl::single(std::move(title)),
++			.st = &st::settingsButtonNoIcon,
++			.toggled = rpl::single(current),
++			.keywords = std::move(keywords),
++		});
++		if (toggle) {
++			toggle->toggledChanges(
++			) | rpl::on_next([=](bool value) {
++				setter(value);
++			}, toggle->lifetime());
++		}
++	};
++	addChatsToggle(
++		u"exteraless/chats/remove-tail"_q,
++		u"Remove message tail"_q,
++		{ u"chat"_q, u"tail"_q, u"bubble"_q },
++		Exteraless::Config::Instance().chatsSettings().removeMessageTail,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsRemoveMessageTail(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/hide-reactions-channels"_q,
++		u"Hide reactions in channels"_q,
++		{ u"chat"_q, u"reactions"_q, u"channel"_q },
++		Exteraless::Config::Instance().chatsSettings().hideReactionsChannels,
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatsHideReactionsChannels(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/hide-reactions-groups"_q,
++		u"Hide reactions in groups"_q,
++		{ u"chat"_q, u"reactions"_q, u"group"_q },
++		Exteraless::Config::Instance().chatsSettings().hideReactionsGroups,
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatsHideReactionsGroups(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/hide-reactions-private"_q,
++		u"Hide reactions in private chats"_q,
++		{ u"chat"_q, u"reactions"_q, u"private"_q },
++		Exteraless::Config::Instance().chatsSettings().hideReactionsPrivate,
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatsHideReactionsPrivate(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/strip-tracking"_q,
++		u"Strip tracking parameters from links"_q,
++		{ u"chat"_q, u"links"_q, u"tracking"_q, u"utm"_q },
++		Exteraless::Config::Instance().chatsSettings().stripTrackingOnOpen,
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatsStripTrackingOnOpen(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -2569,17 +4264,21 @@ index 56d2e56..47c8b5e 100644
  					peer->shortName(),
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..7bee2af
+index 0000000..1e7cb37
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,31 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
++    chats.cpp
++    chats.h
 +    config.cpp
 +    config.h
 +    exteraless.cpp
 +    exteraless.h
++    links.cpp
++    links.h
 +    network.cpp
 +    network.h
 +    plugins/scanner.cpp
@@ -2599,12 +4298,13 @@ index 0000000..7bee2af
 +)
 +
 +add_subdirectory(tests/plugins)
++add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..bbfd88f
+index 0000000..2cd626a
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,161 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -2626,6 +4326,10 @@ index 0000000..bbfd88f
 +constexpr auto kRelativeLastSeen = "relativeLastSeen";
 +constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
++constexpr auto kRemoveMessageTail = "removeMessageTail";
++constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
++constexpr auto kHideReactionsInGroups = "hideReactionsInGroups";
++constexpr auto kHideReactionsInPrivateChats = "hideReactionsInPrivateChats";
 +
 +[[nodiscard]] QString ToBase11(int value) {
 +	auto result = QString();
@@ -2691,10 +4395,15 @@ index 0000000..bbfd88f
 +}
 +
 +QString BuildBackup() {
++	const auto chats = Config::Instance().chatsSettings();
 +	auto extera = QJsonObject();
 +	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
 +	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
 +	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
++	extera[kRemoveMessageTail] = chats.removeMessageTail;
++	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
++	extera[kHideReactionsInGroups] = chats.hideReactionsGroups;
++	extera[kHideReactionsInPrivateChats] = chats.hideReactionsPrivate;
 +
 +	auto root = QJsonObject();
 +	root["version"] = kVersion;
@@ -2735,6 +4444,18 @@ index 0000000..bbfd88f
 +			&& value.toInt() <= 7) {
 +			config.setProxyDisableConditions(value.toInt());
 +			++result.applied;
++		} else if (key == kRemoveMessageTail && value.isBool()) {
++			config.setChatsRemoveMessageTail(value.toBool());
++			++result.applied;
++		} else if (key == kHideReactionsInChannels && value.isBool()) {
++			config.setChatsHideReactionsChannels(value.toBool());
++			++result.applied;
++		} else if (key == kHideReactionsInGroups && value.isBool()) {
++			config.setChatsHideReactionsGroups(value.toBool());
++			++result.applied;
++		} else if (key == kHideReactionsInPrivateChats && value.isBool()) {
++			config.setChatsHideReactionsPrivate(value.toBool());
++			++result.applied;
 +		} else {
 +			result.unknown.push_back(key);
 +		}
@@ -2773,12 +4494,73 @@ index 0000000..7551af5
 +[[nodiscard]] BackupImportResult ApplyBackup(const QString &text);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/chats.cpp b/exteraless/chats.cpp
+new file mode 100644
+index 0000000..745a168
+--- /dev/null
++++ b/exteraless/chats.cpp
+@@ -0,0 +1,25 @@
++#include "exteraless/chats.h"
++
++#include "exteraless/config.h"
++
++namespace Exteraless {
++
++bool HiddenReactionsFor(
++		const ChatsSettings &settings,
++		bool channel,
++		bool group,
++		bool user) {
++	return (channel && settings.hideReactionsChannels)
++		|| (group && settings.hideReactionsGroups)
++		|| (user && settings.hideReactionsPrivate);
++}
++
++bool HiddenReactionsFor(bool channel, bool group, bool user) {
++	return HiddenReactionsFor(
++		Config::Instance().chatsSettings(),
++		channel,
++		group,
++		user);
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/chats.h b/exteraless/chats.h
+new file mode 100644
+index 0000000..5ca91d1
+--- /dev/null
++++ b/exteraless/chats.h
+@@ -0,0 +1,24 @@
++#pragma once
++
++namespace Exteraless {
++
++struct ChatsSettings {
++	bool removeMessageTail = true;
++	bool hideReactionsChannels = false;
++	bool hideReactionsGroups = false;
++	bool hideReactionsPrivate = false;
++	bool stripTrackingOnOpen = true;
++};
++
++[[nodiscard]] bool HiddenReactionsFor(
++	const ChatsSettings &settings,
++	bool channel,
++	bool group,
++	bool user);
++
++[[nodiscard]] bool HiddenReactionsFor(
++	bool channel,
++	bool group,
++	bool user);
++
++} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..77d6c0c
+index 0000000..aa9d58a
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,313 @@
+@@ -0,0 +1,435 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -2787,6 +4569,7 @@ index 0000000..77d6c0c
 +#include <QJsonDocument>
 +#include <QJsonParseError>
 +#include <QJsonValue>
++#include <QRegularExpression>
 +#include <QSaveFile>
 +#include <QStandardPaths>
 +
@@ -2810,6 +4593,12 @@ index 0000000..77d6c0c
 +constexpr auto kPillStackPills = "OEPillStackPills";
 +constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 +constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
++constexpr auto kPluginStates = "OEPluginStates";
++constexpr auto kChatsRemoveMessageTail = "OEChatsRemoveMessageTail";
++constexpr auto kChatsHideReactionsChannels = "OEChatsHideReactionsChannels";
++constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
++constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
++constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -2817,6 +4606,28 @@ index 0000000..77d6c0c
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
 +	return values.isObject() ? values.toObject() : root;
++}
++
++[[nodiscard]] bool IsValidPluginId(const QString &id) {
++	static const auto expression = QRegularExpression(
++		QStringLiteral("^[A-Za-z][A-Za-z0-9_-]{1,31}$"));
++	return expression.match(id).hasMatch();
++}
++
++[[nodiscard]] QJsonObject SanitizePluginStates(const QJsonValue &value) {
++	auto result = QJsonObject();
++	if (!value.isObject()) {
++		return result;
++	}
++	const auto states = value.toObject();
++	for (auto i = states.begin(); i != states.end(); ++i) {
++		if (IsValidPluginId(i.key())
++			&& i.value().isBool()
++			&& i.value().toBool()) {
++			result.insert(i.key(), true);
++		}
++	}
++	return result;
 +}
 +
 +} // namespace
@@ -2828,6 +4639,7 @@ index 0000000..77d6c0c
 +
 +void Config::load() {
 +	ensureLoaded();
++	refreshChats();
 +}
 +
 +void Config::save() {
@@ -2998,6 +4810,63 @@ index 0000000..77d6c0c
 +	setValue(kDrawerAccountsExpanded, value);
 +}
 +
++ChatsSettings Config::chatsSettings() const {
++	ensureLoaded();
++	return _chats;
++}
++
++void Config::setChatsRemoveMessageTail(bool value) {
++	setValue(kChatsRemoveMessageTail, value);
++}
++
++void Config::setChatsHideReactionsChannels(bool value) {
++	setValue(kChatsHideReactionsChannels, value);
++}
++
++void Config::setChatsHideReactionsGroups(bool value) {
++	setValue(kChatsHideReactionsGroups, value);
++}
++
++void Config::setChatsHideReactionsPrivate(bool value) {
++	setValue(kChatsHideReactionsPrivate, value);
++}
++
++void Config::setChatsStripTrackingOnOpen(bool value) {
++	setValue(kChatsStripTrackingOnOpen, value);
++}
++
++bool Config::pluginEnabled(const QString &id) const {
++	if (!IsValidPluginId(id)) {
++		return false;
++	}
++	ensureLoaded();
++	return SanitizePluginStates(
++		_values.value(kPluginStates)).value(id).toBool();
++}
++
++void Config::setPluginEnabled(const QString &id, bool enabled) {
++	if (!IsValidPluginId(id)) {
++		return;
++	}
++	ensureLoaded();
++	auto states = SanitizePluginStates(_values.value(kPluginStates));
++	if (enabled) {
++		states.insert(id, true);
++	} else {
++		states.remove(id);
++	}
++	setValue(
++		kPluginStates,
++		states.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(states));
++}
++
++QJsonObject Config::pluginStates() const {
++	ensureLoaded();
++	return SanitizePluginStates(_values.value(kPluginStates));
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -3028,10 +4897,25 @@ index 0000000..77d6c0c
 +			|| key == kPillStackEnabled
 +			|| key == kPillStackPills
 +			|| key == kMainMenuOrder
-+			|| key == kDrawerAccountsExpanded) {
++			|| key == kDrawerAccountsExpanded
++			|| key == kPluginStates
++			|| key == kChatsRemoveMessageTail
++			|| key == kChatsHideReactionsChannels
++			|| key == kChatsHideReactionsGroups
++			|| key == kChatsHideReactionsPrivate
++			|| key == kChatsStripTrackingOnOpen) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
++		}
++	}
++	if (accepted.contains(kPluginStates)) {
++		const auto states = SanitizePluginStates(
++			accepted.value(kPluginStates));
++		if (states.isEmpty()) {
++			accepted.remove(kPluginStates);
++		} else {
++			accepted[kPluginStates] = states;
 +		}
 +	}
 +	if (accepted.isEmpty()) {
@@ -3039,6 +4923,7 @@ index 0000000..77d6c0c
 +	}
 +	_values = accepted;
 +	save();
++	refreshChats();
 +	return true;
 +}
 +
@@ -3060,6 +4945,24 @@ index 0000000..77d6c0c
 +		return;
 +	}
 +	_values = Unwrap(document.object());
++	if (_values.contains(kPluginStates)) {
++		const auto states = SanitizePluginStates(_values.value(kPluginStates));
++		if (states.isEmpty()) {
++			_values.remove(kPluginStates);
++		} else {
++			_values[kPluginStates] = states;
++		}
++	}
++	refreshChats();
++}
++
++void Config::refreshChats() const {
++	_chats.removeMessageTail = boolValue(kChatsRemoveMessageTail, true);
++	_chats.hideReactionsChannels = boolValue(
++		kChatsHideReactionsChannels, false);
++	_chats.hideReactionsGroups = boolValue(kChatsHideReactionsGroups, false);
++	_chats.hideReactionsPrivate = boolValue(kChatsHideReactionsPrivate, false);
++	_chats.stripTrackingOnOpen = boolValue(kChatsStripTrackingOnOpen, true);
 +}
 +
 +bool Config::boolValue(const char *key, bool fallback) const {
@@ -3088,17 +4991,20 @@ index 0000000..77d6c0c
 +		return;
 +	}
 +	_values[key] = value;
++	refreshChats();
 +	save();
 +}
 +
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..6271eae
+index 0000000..36c7edc
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,122 @@
 +#pragma once
++
++#include "exteraless/chats.h"
 +
 +#include <QJsonObject>
 +#include <QJsonValue>
@@ -3185,6 +5091,17 @@ index 0000000..6271eae
 +	[[nodiscard]] bool drawerAccountsExpanded() const;
 +	void setDrawerAccountsExpanded(bool value);
 +
++	[[nodiscard]] ChatsSettings chatsSettings() const;
++	void setChatsRemoveMessageTail(bool value);
++	void setChatsHideReactionsChannels(bool value);
++	void setChatsHideReactionsGroups(bool value);
++	void setChatsHideReactionsPrivate(bool value);
++	void setChatsStripTrackingOnOpen(bool value);
++
++	[[nodiscard]] bool pluginEnabled(const QString &id) const;
++	void setPluginEnabled(const QString &id, bool enabled);
++	[[nodiscard]] QJsonObject pluginStates() const;
++
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 +
@@ -3192,6 +5109,7 @@ index 0000000..6271eae
 +	Config() = default;
 +
 +	void ensureLoaded() const;
++	void refreshChats() const;
 +	[[nodiscard]] bool boolValue(const char *key, bool fallback) const;
 +	[[nodiscard]] int intValue(const char *key, int fallback) const;
 +	[[nodiscard]] QString stringValue(
@@ -3202,6 +5120,7 @@ index 0000000..6271eae
 +	mutable QJsonObject _values;
 +	mutable QString _path;
 +	mutable bool _loaded = false;
++	mutable ChatsSettings _chats;
 +};
 +
 +} // namespace Exteraless
@@ -3729,6 +5648,127 @@ index 0000000..6b6e337
 +
 +[[nodiscard]] bool IsGhostActive();
 +void SetGhostActive(bool active);
++
++} // namespace Exteraless
+diff --git a/exteraless/links.cpp b/exteraless/links.cpp
+new file mode 100644
+index 0000000..a311ce5
+--- /dev/null
++++ b/exteraless/links.cpp
+@@ -0,0 +1,100 @@
++#include "exteraless/links.h"
++
++#include <QStringList>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] bool IsTrackingKey(const QString &key) {
++	const auto lower = key.toLower();
++	if (lower.startsWith(QStringLiteral("utm_"))) {
++		return true;
++	}
++	static const auto keys = QStringList{
++		QStringLiteral("fbclid"),
++		QStringLiteral("gclid"),
++		QStringLiteral("dclid"),
++		QStringLiteral("gbraid"),
++		QStringLiteral("wbraid"),
++		QStringLiteral("msclkid"),
++		QStringLiteral("yclid"),
++		QStringLiteral("twclid"),
++		QStringLiteral("ttclid"),
++		QStringLiteral("igshid"),
++		QStringLiteral("li_fat_id"),
++		QStringLiteral("mc_cid"),
++		QStringLiteral("mc_eid"),
++		QStringLiteral("_hsenc"),
++		QStringLiteral("_hsmi"),
++		QStringLiteral("mkt_tok"),
++		QStringLiteral("rb_clickid"),
++		QStringLiteral("s_cid"),
++		QStringLiteral("vero_id"),
++		QStringLiteral("wickedid"),
++		QStringLiteral("oly_anon_id"),
++		QStringLiteral("oly_enc_id"),
++	};
++	return keys.contains(lower);
++}
++
++} // namespace
++
++QString StripTracking(const QString &url) {
++	const auto colon = url.indexOf(u':');
++	if (colon <= 0) {
++		return url;
++	}
++	const auto scheme = url.mid(0, colon);
++	if (scheme.compare(QStringLiteral("http"), Qt::CaseInsensitive) != 0
++		&& scheme.compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0) {
++		return url;
++	}
++	const auto start = colon + 1;
++	if (url.mid(start, 2) != QStringLiteral("//")) {
++		return url;
++	}
++	const auto authorityBegin = start + 2;
++	auto authorityEnd = authorityBegin;
++	while (authorityEnd != url.size()
++		&& url[authorityEnd] != u'/'
++		&& url[authorityEnd] != u'?'
++		&& url[authorityEnd] != u'#') {
++		++authorityEnd;
++	}
++	if (authorityEnd == authorityBegin) {
++		return url;
++	}
++	const auto query = url.indexOf(u'?', authorityEnd);
++	if (query < 0) {
++		return url;
++	}
++	const auto fragment = url.indexOf(u'#', authorityEnd);
++	if (fragment >= 0 && fragment < query) {
++		return url;
++	}
++	const auto end = (fragment >= 0) ? fragment : url.size();
++	const auto parts = url.mid(query + 1, end - query - 1)
++		.split(u'&', Qt::KeepEmptyParts);
++	auto kept = QStringList();
++	auto keptNonEmpty = false;
++	for (const auto &part : parts) {
++		const auto equal = part.indexOf(u'=');
++		const auto key = (equal >= 0) ? part.left(equal) : part;
++		if (!IsTrackingKey(key)) {
++			kept.push_back(part);
++			keptNonEmpty = keptNonEmpty || !part.isEmpty();
++		}
++	}
++	if (kept.size() == parts.size()) {
++		return url;
++	}
++	auto result = url.left(query);
++	if (keptNonEmpty) {
++		result += u'?';
++		result += kept.join(QStringLiteral("&"));
++	}
++	result += url.mid(end);
++	return result;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/links.h b/exteraless/links.h
+new file mode 100644
+index 0000000..a73984c
+--- /dev/null
++++ b/exteraless/links.h
+@@ -0,0 +1,9 @@
++#pragma once
++
++#include <QString>
++
++namespace Exteraless {
++
++[[nodiscard]] QString StripTracking(const QString &url);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp
@@ -4285,15 +6325,735 @@ index 0000000..204b97a
 +void ApplyProxyRules();
 +
 +} // namespace Exteraless
+diff --git a/exteraless/tests/chats/CMakeLists.txt b/exteraless/tests/chats/CMakeLists.txt
+new file mode 100644
+index 0000000..05215b8
+--- /dev/null
++++ b/exteraless/tests/chats/CMakeLists.txt
+@@ -0,0 +1,6 @@
++add_executable(exteraless-chats-cli EXCLUDE_FROM_ALL chats_cli.cpp)
++
++target_link_libraries(exteraless-chats-cli
++PRIVATE
++    exteraless
++)
+diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
+new file mode 100644
+index 0000000..2f326c7
+--- /dev/null
++++ b/exteraless/tests/chats/chats_cli.cpp
+@@ -0,0 +1,236 @@
++#include "exteraless/backup.h"
++#include "exteraless/chats.h"
++#include "exteraless/config.h"
++#include "exteraless/links.h"
++
++#include <QByteArray>
++#include <QCoreApplication>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QStringList>
++
++#include <array>
++#include <iostream>
++
++namespace {
++
++using Exteraless::ChatsSettings;
++
++[[nodiscard]] int PrintUsage() {
++	std::cerr
++		<< "Usage:\n"
++		<< "  exteraless-chats-cli strip <url>\n"
++		<< "  exteraless-chats-cli hidden <hideChannels> <hideGroups> "
++		<< "<hidePrivate> <channel> <group> <user>\n"
++		<< "  exteraless-chats-cli config-defaults\n"
++		<< "  exteraless-chats-cli config-loaded\n"
++		<< "  exteraless-chats-cli config-set <removeTail> <hideChannels> "
++		<< "<hideGroups> <hidePrivate> <stripTracking>\n"
++		<< "  exteraless-chats-cli config-fromjson <json>\n"
++		<< "  exteraless-chats-cli backup-export <removeTail> "
++		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking>\n"
++		<< "  exteraless-chats-cli backup-import <base64>\n"
++		<< "  exteraless-chats-cli backup-import-json <json>\n";
++	return 2;
++}
++
++[[nodiscard]] bool ReadFlag(const QString &text, bool *value) {
++	if (text == QStringLiteral("0")) {
++		*value = false;
++		return true;
++	} else if (text == QStringLiteral("1")) {
++		*value = true;
++		return true;
++	}
++	return false;
++}
++
++[[nodiscard]] bool ReadFiveFlags(
++		const QStringList &arguments,
++		int first,
++		std::array<bool, 5> *flags) {
++	for (auto i = 0; i != int(flags->size()); ++i) {
++		if (!ReadFlag(arguments[first + i], &(*flags)[i])) {
++			return false;
++		}
++	}
++	return true;
++}
++
++[[nodiscard]] QJsonArray ChatsArray(const ChatsSettings &chats) {
++	return QJsonArray{
++		chats.removeMessageTail,
++		chats.hideReactionsChannels,
++		chats.hideReactionsGroups,
++		chats.hideReactionsPrivate,
++		chats.stripTrackingOnOpen,
++	};
++}
++
++void PrintJson(const QJsonObject &root) {
++	const auto bytes = QJsonDocument(root).toJson(QJsonDocument::Compact);
++	std::cout.write(bytes.constData(), bytes.size());
++	std::cout << '\n';
++}
++
++void PrintChats() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("chats"),
++			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
++	});
++}
++
++void ApplyFlags(const std::array<bool, 5> &flags) {
++	auto &config = Exteraless::Config::Instance();
++	config.setChatsRemoveMessageTail(flags[0]);
++	config.setChatsHideReactionsChannels(flags[1]);
++	config.setChatsHideReactionsGroups(flags[2]);
++	config.setChatsHideReactionsPrivate(flags[3]);
++	config.setChatsStripTrackingOnOpen(flags[4]);
++}
++
++void PrintImportResult(const Exteraless::BackupImportResult &result) {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("ok"), result.ok },
++		{ QStringLiteral("error"), result.error },
++		{ QStringLiteral("applied"), result.applied },
++		{ QStringLiteral("unknown"),
++			QJsonArray::fromStringList(result.unknown) },
++		{ QStringLiteral("chats"),
++			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
++	});
++}
++
++[[nodiscard]] QString ToBase64(const QString &text) {
++	return QString::fromLatin1(text.toUtf8().toBase64());
++}
++
++[[nodiscard]] QString FromBase64(const QString &text) {
++	return QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
++}
++
++} // namespace
++
++int main(int argc, char *argv[]) {
++	QCoreApplication app(argc, argv);
++	QCoreApplication::setApplicationName(QStringLiteral("ExteralessDesktop"));
++	const auto arguments = app.arguments();
++	if (arguments.size() < 2) {
++		return PrintUsage();
++	}
++	const auto mode = arguments[1];
++	if (mode == QStringLiteral("strip")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		std::cout
++			<< Exteraless::StripTracking(arguments[2]).toUtf8().constData()
++			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("hidden")) {
++		if (arguments.size() != 8) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 6>();
++		for (auto i = 0; i != int(flags.size()); ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		auto settings = Exteraless::ChatsSettings();
++		settings.hideReactionsChannels = flags[0];
++		settings.hideReactionsGroups = flags[1];
++		settings.hideReactionsPrivate = flags[2];
++		std::cout << (Exteraless::HiddenReactionsFor(
++			settings,
++			flags[3],
++			flags[4],
++			flags[5]) ? "hidden" : "shown") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("config-defaults")
++		|| mode == QStringLiteral("config-loaded")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintChats();
++		return 0;
++	}
++	if (mode == QStringLiteral("config-set")) {
++		if (arguments.size() != 7) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 5>();
++		if (!ReadFiveFlags(arguments, 2, &flags)) {
++			return PrintUsage();
++		}
++		ApplyFlags(flags);
++		PrintChats();
++		return 0;
++	}
++	if (mode == QStringLiteral("config-fromjson")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto document = QJsonDocument::fromJson(arguments[2].toUtf8());
++		if (!document.isObject()) {
++			return PrintUsage();
++		}
++		auto unknown = QStringList();
++		const auto accepted = Exteraless::Config::Instance().fromJson(
++			document.object(),
++			&unknown);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("accepted"), accepted },
++			{ QStringLiteral("unknown"),
++				QJsonArray::fromStringList(unknown) },
++			{ QStringLiteral("chats"),
++				ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("backup-export")) {
++		if (arguments.size() != 7) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 5>();
++		if (!ReadFiveFlags(arguments, 2, &flags)) {
++			return PrintUsage();
++		}
++		ApplyFlags(flags);
++		const auto encoded = Exteraless::BuildBackup();
++		const auto document = QJsonDocument::fromJson(
++			Exteraless::DecodeInvisible(encoded));
++		const auto section = document.object().value(
++			QStringLiteral("exteraconfig")).toObject();
++		PrintJson(QJsonObject{
++			{ QStringLiteral("backup_base64"), ToBase64(encoded) },
++			{ QStringLiteral("exteraconfig"), section },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("backup-import")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto encoded = FromBase64(arguments[2]);
++		PrintImportResult(Exteraless::ApplyBackup(encoded));
++		return 0;
++	}
++	if (mode == QStringLiteral("backup-import-json")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto document = QJsonDocument::fromJson(arguments[2].toUtf8());
++		if (!document.isObject()) {
++			return PrintUsage();
++		}
++		const auto encoded = Exteraless::EncodeInvisible(
++			document.toJson(QJsonDocument::Compact));
++		PrintImportResult(Exteraless::ApplyBackup(encoded));
++		return 0;
++	}
++	return PrintUsage();
++}
+diff --git a/exteraless/tests/chats/fixtures/reactions.tsv b/exteraless/tests/chats/fixtures/reactions.tsv
+new file mode 100644
+index 0000000..7c64c57
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/reactions.tsv
+@@ -0,0 +1,11 @@
++# hideChannels	hideGroups	hidePrivate	channel	group	user	expected
++0	0	0	1	0	0	shown
++1	0	0	1	0	0	hidden
++0	1	0	0	1	0	hidden
++0	0	1	0	0	1	hidden
++1	0	0	0	1	0	shown
++0	1	0	1	0	0	shown
++0	0	1	1	0	0	shown
++1	1	1	0	0	1	hidden
++1	1	1	1	0	0	hidden
++1	1	1	0	1	0	hidden
+diff --git a/exteraless/tests/chats/fixtures/strip.tsv b/exteraless/tests/chats/fixtures/strip.tsv
+new file mode 100644
+index 0000000..0b46db4
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/strip.tsv
+@@ -0,0 +1,39 @@
++# input	expected
++https://example.com/a?utm_source=x	https://example.com/a
++https://example.com/a?utm_source=x&id=7#frag	https://example.com/a?id=7#frag
++https://example.com/a?id=7&UTM_Medium=y	https://example.com/a?id=7
++https://example.com/a?fbclid=abc&gclid=d	https://example.com/a
++https://example.com/a?utm_source=x#section?utm_source=y	https://example.com/a#section?utm_source=y
++https://example.com/a?si=abc&ref=nav&source=web&s=1	https://example.com/a?si=abc&ref=nav&source=web&s=1
++https://example.com/a?q=a%2Fb&utm_term=x	https://example.com/a?q=a%2Fb
++https://example.com/a?q=a+b&utm_campaign=x	https://example.com/a?q=a+b
++https://example.com/a?utm_source=	https://example.com/a
++http://example.com/?utm_source=x	http://example.com/
++tg://resolve?utm_source=x	tg://resolve?utm_source=x
++tonsite://example.com?utm_source=x	tonsite://example.com?utm_source=x
++ftp://example.com/?utm_source=x	ftp://example.com/?utm_source=x
++mailto:a@b.c?subject=x	mailto:a@b.c?subject=x
++https://example.com/a#utm_source=x	https://example.com/a#utm_source=x
++https://example.com/a?%75tm_source=x	https://example.com/a?%75tm_source=x
++https://example.com/a?utm_source=x&utm_source=y&id=1	https://example.com/a?id=1
++https://example.com/a?utm_source	https://example.com/a
++HTTPS://Example.com/A?utm_source=x	HTTPS://Example.com/A
++https://example.com/a?id=1&utm_source=x&page=2&fbclid=y	https://example.com/a?id=1&page=2
++https://example.com/a?q=%C3%A9&utm_source=x	https://example.com/a?q=%C3%A9
++https://example.com/a?q=a%26b%3Dc&utm_term=x	https://example.com/a?q=a%26b%3Dc
++https://example.com/a?fbclid=1&gclid=2&dclid=3&gbraid=4&wbraid=5&msclkid=6&yclid=7&twclid=8&ttclid=9&igshid=10&li_fat_id=11&mc_cid=12&mc_eid=13&_hsenc=14&_hsmi=15&mkt_tok=16&rb_clickid=17&s_cid=18&vero_id=19&wickedid=20&oly_anon_id=21&oly_enc_id=22	https://example.com/a
++https://example.com/a?gbraid=abc&wbraid=def&keep=1	https://example.com/a?keep=1
++https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1	https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1
++https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5	https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5
++https://example.com/a?spm=1&scm=2&sc_cid=3	https://example.com/a?spm=1&scm=2&sc_cid=3
++https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6	https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6
++https://example.com/a?s_cid=1&sc_cid=2&keep=3	https://example.com/a?sc_cid=2&keep=3
++https://example.com/a?FBCLID=UPPER&ref=keep	https://example.com/a?ref=keep
++https://example.com/a?=x&utm_source=y	https://example.com/a?=x
++not a url	not a url
++http:/example.com/?utm_source=x	http:/example.com/?utm_source=x
++https://?utm_source=x	https://?utm_source=x
++http://	http://
++//example.com/?utm_source=x	//example.com/?utm_source=x
++https://example.com/a?	https://example.com/a?
++https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
+diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
+new file mode 100755
+index 0000000..f582f82
+--- /dev/null
++++ b/exteraless/tests/chats/run_checks.py
+@@ -0,0 +1,382 @@
++#!/usr/bin/env python3
++"""Regression checks for the Exteraless chats helpers and config/backup."""
++
++import json
++import os
++import subprocess
++import sys
++import tempfile
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[3]
++DEFAULT_CLI = (
++    ROOT / "out" / "exteraless" / "tests" / "chats"
++    / "exteraless-chats-cli")
++FIXTURES = Path(__file__).resolve().parent / "fixtures"
++RUN_TIMEOUT = 30
++MIN_STRIP_CASES = 19
++MIN_REACTION_CASES = 10
++EXPECTED_DEFAULTS = [True, False, False, False, True]
++
++
++class Ledger:
++    def __init__(self):
++        self.checks = 0
++        self.failures = []
++
++    def check(self, name, condition, detail=""):
++        self.checks += 1
++        if condition:
++            return
++        suffix = f": {detail}" if detail else ""
++        print(f"FAIL {name}{suffix}")
++        self.failures.append(name)
++
++
++def run(cli, arguments, env=None):
++    return subprocess.run(
++        [str(cli), *arguments],
++        capture_output=True,
++        text=True,
++        env=env,
++        timeout=RUN_TIMEOUT)
++
++
++def make_env(root):
++    data = root / "data"
++    cache = root / "cache"
++    data.mkdir(parents=True)
++    cache.mkdir(parents=True)
++    env = dict(os.environ)
++    env["XDG_DATA_HOME"] = str(data)
++    env["XDG_CACHE_HOME"] = str(cache)
++    return env
++
++
++def json_call(ledger, cli, arguments, env, name):
++    result = run(cli, arguments, env=env)
++    if result.returncode != 0:
++        ledger.check(
++            name,
++            False,
++            f"exit {result.returncode}, stderr {result.stderr.strip()!r}")
++        return None
++    try:
++        return json.loads(result.stdout)
++    except json.JSONDecodeError as error:
++        ledger.check(name, False, f"invalid JSON: {error}")
++        return None
++
++
++def load_rows(name, columns, minimum):
++    rows = []
++    for number, line in enumerate(
++            (FIXTURES / name).read_text(encoding="utf-8").splitlines(),
++            start=1):
++        if not line or line.startswith("#"):
++            continue
++        fields = line.split("\t")
++        if len(fields) != columns:
++            raise SystemExit(
++                f"{name}:{number}: expected {columns} columns, "
++                f"got {len(fields)}")
++        rows.append(fields)
++    if len(rows) < minimum:
++        raise SystemExit(
++            f"{name}: expected at least {minimum} cases, got {len(rows)}")
++    return rows
++
++
++def check_strip(ledger, cli):
++    rows = load_rows("strip.tsv", 2, MIN_STRIP_CASES)
++    before = len(ledger.failures)
++    for url, expected in rows:
++        result = run(cli, ["strip", url])
++        actual = result.stdout.rstrip("\n")
++        ledger.check(
++            f"strip {url}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++    return len(rows), len(ledger.failures) - before
++
++
++def check_reactions(ledger, cli):
++    rows = load_rows("reactions.tsv", 7, MIN_REACTION_CASES)
++    before = len(ledger.failures)
++    for row in rows:
++        result = run(cli, ["hidden", *row[:6]])
++        actual = result.stdout.rstrip("\n")
++        ledger.check(
++            f"reactions {'/'.join(row[:6])}",
++            result.returncode == 0 and actual == row[6],
++            f"exit {result.returncode}, got {actual!r}, want {row[6]!r}")
++    return len(rows), len(ledger.failures) - before
++
++
++def check_cli_args(ledger, cli):
++    cases = [
++        ("strip without URL", ["strip"]),
++        ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
++    ]
++    before = len(ledger.failures)
++    for name, arguments in cases:
++        result = run(cli, arguments)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++    return len(cases), len(ledger.failures) - before
++
++
++def check_config(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "config-defaults")
++    data = json_call(ledger, cli, ["config-defaults"], env, "config defaults")
++    if data is not None:
++        ledger.check(
++            "config defaults 1/0/0/0/1",
++            data.get("chats") == EXPECTED_DEFAULTS,
++            data.get("chats"))
++
++    env = make_env(work / "config-setters")
++    data = json_call(
++        ledger, cli, ["config-set", "0", "1", "1", "0", "0"], env,
++        "config setters")
++    if data is not None:
++        expected = [False, True, True, False, False]
++        ledger.check(
++            "config setters refresh cache",
++            data.get("chats") == expected,
++            data.get("chats"))
++        reloaded = json_call(
++            ledger, cli, ["config-loaded"], env, "config reload")
++        if reloaded is not None:
++            ledger.check(
++                "config reload persisted",
++                reloaded.get("chats") == expected,
++                reloaded.get("chats"))
++
++    env = make_env(work / "config-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsRemoveMessageTail": False,
++            "OEChatsHideReactionsChannels": True,
++            "OEChatsHideReactionsGroups": False,
++            "OEChatsHideReactionsPrivate": True,
++            "OEChatsStripTrackingOnOpen": False,
++            "OEUnknownKey": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "config fromJson")
++    if data is not None:
++        expected = [False, True, False, True, False]
++        ledger.check(
++            "config fromJson accepted",
++            data.get("accepted") is True,
++            data.get("accepted"))
++        ledger.check(
++            "config fromJson unknown",
++            data.get("unknown") == ["OEUnknownKey"],
++            data.get("unknown"))
++        ledger.check(
++            "config fromJson cache",
++            data.get("chats") == expected,
++            data.get("chats"))
++        reloaded = json_call(
++            ledger, cli, ["config-loaded"], env, "config fromJson reload")
++        if reloaded is not None:
++            ledger.check(
++                "config fromJson persisted",
++                reloaded.get("chats") == expected,
++                reloaded.get("chats"))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++def check_backup(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "backup-export")
++    data = json_call(
++        ledger, cli, ["backup-export", "0", "1", "0", "1", "0"], env,
++        "backup export")
++    encoded = None
++    if data is not None:
++        section = data.get("exteraconfig")
++        if not isinstance(section, dict):
++            ledger.check("backup exteraconfig object", False, section)
++            section = {}
++        ledger.check(
++            "backup removeMessageTail",
++            section.get("removeMessageTail") is False,
++            section.get("removeMessageTail"))
++        ledger.check(
++            "backup hideReactionsInChannels",
++            section.get("hideReactionsInChannels") is True,
++            section.get("hideReactionsInChannels"))
++        ledger.check(
++            "backup hideReactionsInGroups",
++            section.get("hideReactionsInGroups") is False,
++            section.get("hideReactionsInGroups"))
++        ledger.check(
++            "backup hideReactionsInPrivateChats",
++            section.get("hideReactionsInPrivateChats") is True,
++            section.get("hideReactionsInPrivateChats"))
++        ledger.check(
++            "backup has no strip tracking key",
++            ("OEChatsStripTrackingOnOpen" not in section
++             and "stripTrackingOnOpen" not in section))
++        ledger.check(
++            "backup has no old private key",
++            "hideReactionsInPrivate" not in section)
++        encoded = data.get("backup_base64")
++        ledger.check(
++            "backup base64 present",
++            isinstance(encoded, str) and bool(encoded),
++            encoded)
++
++    import_env = make_env(work / "backup-import")
++    if encoded:
++        data = json_call(
++            ledger, cli, ["backup-import", encoded], import_env,
++            "backup import")
++        if data is not None:
++            ledger.check(
++                "backup import ok",
++                data.get("ok") is True,
++                data.get("ok"))
++            ledger.check(
++                "backup import unknown empty",
++                data.get("unknown") == [],
++                data.get("unknown"))
++            ledger.check(
++                "backup import cache",
++                data.get("chats") == [False, True, False, True, True],
++                data.get("chats"))
++
++    env = make_env(work / "backup-import-four")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "removeMessageTail": True,
++            "hideReactionsInChannels": True,
++            "hideReactionsInGroups": True,
++            "hideReactionsInPrivateChats": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "backup import four")
++    if data is not None:
++        ledger.check(
++            "backup import four ok",
++            data.get("ok") is True,
++            data.get("ok"))
++        ledger.check(
++            "backup import applied four keys",
++            data.get("applied") == 4,
++            data.get("applied"))
++        ledger.check(
++            "backup import four unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++        ledger.check(
++            "backup import four cache",
++            data.get("chats") == [True, True, True, True, True],
++            data.get("chats"))
++
++    env = make_env(work / "backup-wrong-type")
++    root = {
++        "version": 1,
++        "exteraconfig": {"removeMessageTail": "yes"},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "backup wrong type")
++    if data is not None:
++        ledger.check(
++            "backup wrong type ok",
++            data.get("ok") is True,
++            data.get("ok"))
++        ledger.check(
++            "backup wrong type applied zero",
++            data.get("applied") == 0,
++            data.get("applied"))
++        ledger.check(
++            "backup wrong type unknown",
++            data.get("unknown") == ["removeMessageTail"],
++            data.get("unknown"))
++        ledger.check(
++            "backup wrong type cache defaults",
++            data.get("chats") == EXPECTED_DEFAULTS,
++            data.get("chats"))
++
++    env = make_env(work / "backup-old-name")
++    root = {
++        "version": 1,
++        "exteraconfig": {"hideReactionsInPrivate": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "backup old name")
++    if data is not None:
++        ledger.check(
++            "backup old name ok",
++            data.get("ok") is True,
++            data.get("ok"))
++        ledger.check(
++            "backup old name applied zero",
++            data.get("applied") == 0,
++            data.get("applied"))
++        ledger.check(
++            "backup old name unknown",
++            data.get("unknown") == ["hideReactionsInPrivate"],
++            data.get("unknown"))
++        ledger.check(
++            "backup old name cache defaults",
++            data.get("chats") == EXPECTED_DEFAULTS,
++            data.get("chats"))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++def main():
++    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
++    if not cli.is_file():
++        print(f"FAIL chats CLI is missing at {cli}")
++        return 2
++    ledger = Ledger()
++    strips = check_strip(ledger, cli)
++    reactions = check_reactions(ledger, cli)
++    cli_args = check_cli_args(ledger, cli)
++    with tempfile.TemporaryDirectory(
++            prefix="exteraless-chats-checks-") as temp:
++        work = Path(temp)
++        config = check_config(ledger, cli, work)
++        backup = check_backup(ledger, cli, work)
++    print(f"strip: {strips[0] - strips[1]} passed")
++    print(f"reactions: {reactions[0] - reactions[1]} passed")
++    print(f"cli: {cli_args[0] - cli_args[1]} passed")
++    print(f"config: {config[0] - config[1]} passed")
++    print(f"backup: {backup[0] - backup[1]} passed")
++    if ledger.failures:
++        print(
++            f"RESULT: FAIL ({len(ledger.failures)} failed "
++            f"of {ledger.checks} checks)")
++        return 1
++    print(f"RESULT: PASS ({ledger.checks} checks)")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
 diff --git a/exteraless/tests/plugins/CMakeLists.txt b/exteraless/tests/plugins/CMakeLists.txt
 new file mode 100644
-index 0000000..9f86274
+index 0000000..f38604c
 --- /dev/null
 +++ b/exteraless/tests/plugins/CMakeLists.txt
-@@ -0,0 +1,6 @@
+@@ -0,0 +1,22 @@
 +add_executable(exteraless-plugins-scan EXCLUDE_FROM_ALL scan_cli.cpp)
 +
 +target_link_libraries(exteraless-plugins-scan
++PRIVATE
++    exteraless
++)
++
++add_executable(exteraless-plugin-host-cli EXCLUDE_FROM_ALL
++    plugin_host_cli.cpp
++    ${CMAKE_SOURCE_DIR}/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
++    ${CMAKE_SOURCE_DIR}/Telegram/SourceFiles/exteraless/plugin_runtime.h
++)
++
++target_include_directories(exteraless-plugin-host-cli
++PRIVATE
++    ${CMAKE_SOURCE_DIR}/Telegram/SourceFiles
++)
++
++target_link_libraries(exteraless-plugin-host-cli
 +PRIVATE
 +    exteraless
 +)
@@ -4337,6 +7097,488 @@ index 0000000..84a0bca
 +++ b/exteraless/tests/plugins/fixtures/notes.txt
 @@ -0,0 +1 @@
 +Plain notes are not plugins and must be ignored by the scanner.
+diff --git a/exteraless/tests/plugins/fixtures/runtime/crash.plugin b/exteraless/tests/plugins/fixtures/runtime/crash.plugin
+new file mode 100644
+index 0000000..1cb4679
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/crash.plugin
+@@ -0,0 +1,16 @@
++from base_plugin import BasePlugin
++
++import os
++
++__id__ = "crash_plugin"
++__name__ = "Crash"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Crash(BasePlugin):
++    def on_load(self):
++        os._exit(1)
++
++
++plugin = Crash()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-ctypes.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-ctypes.plugin
+new file mode 100644
+index 0000000..b329579
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-ctypes.plugin
+@@ -0,0 +1,31 @@
++from base_plugin import BasePlugin
++
++import ctypes
++import os
++
++__id__ = "deny_ctypes"
++__name__ = "Deny Ctypes"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++
++class DenyCtypes(BasePlugin):
++    def on_load(self):
++        target = os.path.join(
++            os.path.dirname(__file__), "..", "marker-ctypes")
++        try:
++            libc = ctypes.CDLL(None)
++            libc.open.restype = ctypes.c_int
++            descriptor = libc.open(
++                target.encode(), os.O_WRONLY | os.O_CREAT, 0o600)
++            if descriptor < 0:
++                raise OSError("libc.open failed")
++            libc.write(descriptor, b"bad", 3)
++            libc.close(descriptor)
++        except (PermissionError, OSError):
++            self.log("ctypes denied")
++        else:
++            self.log("ctypes allowed")
++
++
++plugin = DenyCtypes()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-exec.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-exec.plugin
+new file mode 100644
+index 0000000..39bd2c8
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-exec.plugin
+@@ -0,0 +1,21 @@
++from base_plugin import BasePlugin
++
++import os
++
++__id__ = "deny_exec"
++__name__ = "Deny Exec"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++
++class DenyExec(BasePlugin):
++    def on_load(self):
++        target = os.path.join(
++            os.path.dirname(__file__), "..", "marker-exec-denied")
++        try:
++            exec("open(%r, 'w').write('bad')" % target, {})
++        except (PermissionError, OSError):
++            self.log("exec denied")
++
++
++plugin = DenyExec()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-import.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-import.plugin
+new file mode 100644
+index 0000000..6cc4664
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-import.plugin
+@@ -0,0 +1,21 @@
++from base_plugin import BasePlugin
++
++import os
++import sys
++
++__id__ = "deny_import"
++__name__ = "Deny Import"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++
++class DenyImport(BasePlugin):
++    def on_load(self):
++        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
++        try:
++            import evilmod
++        except (PermissionError, ImportError, OSError):
++            self.log("import denied")
++
++
++plugin = DenyImport()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-socket.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-socket.plugin
+new file mode 100644
+index 0000000..c231bc3
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-socket.plugin
+@@ -0,0 +1,21 @@
++from base_plugin import BasePlugin
++
++import socket
++
++__id__ = "deny_socket"
++__name__ = "Deny Socket"
++__version__ = "1.0.0"
++__permissions__ = ["network"]
++
++
++class DenySocket(BasePlugin):
++    def on_load(self):
++        try:
++            sock = socket.socket()
++            sock.connect(("127.0.0.1", 9))
++            sock.close()
++        except (PermissionError, OSError):
++            self.log("socket denied")
++
++
++plugin = DenySocket()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-subprocess.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-subprocess.plugin
+new file mode 100644
+index 0000000..14dad33
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-subprocess.plugin
+@@ -0,0 +1,22 @@
++from base_plugin import BasePlugin
++
++import os
++import subprocess
++
++__id__ = "deny_subprocess"
++__name__ = "Deny Subprocess"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++
++class DenySubprocess(BasePlugin):
++    def on_load(self):
++        target = os.path.join(
++            os.path.dirname(__file__), "..", "marker-subprocess")
++        try:
++            subprocess.run(["sh", "-c", "echo bad > %s" % target])
++        except (PermissionError, OSError):
++            self.log("subprocess denied")
++
++
++plugin = DenySubprocess()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/deny-write.plugin b/exteraless/tests/plugins/fixtures/runtime/deny-write.plugin
+new file mode 100644
+index 0000000..3380579
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/deny-write.plugin
+@@ -0,0 +1,22 @@
++from base_plugin import BasePlugin
++
++import os
++
++__id__ = "deny_write"
++__name__ = "Deny Write"
++__version__ = "1.0.0"
++__permissions__ = ["files"]
++
++
++class DenyWrite(BasePlugin):
++    def on_load(self):
++        target = os.path.join(
++            os.path.dirname(__file__), "..", "marker-denied")
++        try:
++            with open(target, "w") as marker:
++                marker.write("bad")
++        except (PermissionError, OSError):
++            self.log("write denied")
++
++
++plugin = DenyWrite()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/id-mismatch.plugin b/exteraless/tests/plugins/fixtures/runtime/id-mismatch.plugin
+new file mode 100644
+index 0000000..8a1a3cf
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/id-mismatch.plugin
+@@ -0,0 +1,13 @@
++from base_plugin import BasePlugin
++
++__id__ = "other_id"
++__name__ = "Id Mismatch"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Mismatch(BasePlugin):
++    pass
++
++
++plugin = Mismatch()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/infinite-loop.plugin b/exteraless/tests/plugins/fixtures/runtime/infinite-loop.plugin
+new file mode 100644
+index 0000000..d6f8fed
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/infinite-loop.plugin
+@@ -0,0 +1,15 @@
++from base_plugin import BasePlugin
++
++__id__ = "infinite_loop"
++__name__ = "Infinite Loop"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class InfiniteLoop(BasePlugin):
++    def on_load(self):
++        while True:
++            pass
++
++
++plugin = InfiniteLoop()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/keyring-observe.plugin b/exteraless/tests/plugins/fixtures/runtime/keyring-observe.plugin
+new file mode 100644
+index 0000000..db79524
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/keyring-observe.plugin
+@@ -0,0 +1,20 @@
++from base_plugin import BasePlugin
++
++__id__ = "keyring_observe"
++__name__ = "Keyring Observe"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++
++class Observe(BasePlugin):
++    def on_load(self):
++        try:
++            with open("/proc/keys") as handle:
++                handle.read()
++        except (PermissionError, OSError):
++            self.log("keyring read denied")
++        else:
++            self.log("keyring read allowed")
++
++
++plugin = Observe()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/missing-base.plugin b/exteraless/tests/plugins/fixtures/runtime/missing-base.plugin
+new file mode 100644
+index 0000000..b747459
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/missing-base.plugin
+@@ -0,0 +1,6 @@
++from base_plugin import BasePlugin
++
++__id__ = "missing_base"
++__name__ = "Missing Base"
++__version__ = "1.0.0"
++__permissions__ = []
+diff --git a/exteraless/tests/plugins/fixtures/runtime/print-noise.plugin b/exteraless/tests/plugins/fixtures/runtime/print-noise.plugin
+new file mode 100644
+index 0000000..1dfa6f9
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/print-noise.plugin
+@@ -0,0 +1,19 @@
++from base_plugin import BasePlugin
++
++import sys
++
++__id__ = "print_noise"
++__name__ = "Print Noise"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class PrintNoise(BasePlugin):
++    def on_load(self):
++        print("noise from plugin")
++        print("noise from plugin stderr", file=sys.stderr)
++        sys.stdout.write("noise written directly\n")
++        self.log("print survived")
++
++
++plugin = PrintNoise()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/protocol-missing-seq.plugin b/exteraless/tests/plugins/fixtures/runtime/protocol-missing-seq.plugin
+new file mode 100644
+index 0000000..33370f0
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/protocol-missing-seq.plugin
+@@ -0,0 +1,20 @@
++from base_plugin import BasePlugin
++
++import __main__
++
++__id__ = "protocol_missing_seq"
++__name__ = "Protocol Missing Seq"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class MissingSeq(BasePlugin):
++    def on_load(self):
++        __main__._send({
++            "type": "loaded",
++            "ok": True,
++        })
++        self.log("missing seq sent")
++
++
++plugin = MissingSeq()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/protocol-ok-false.plugin b/exteraless/tests/plugins/fixtures/runtime/protocol-ok-false.plugin
+new file mode 100644
+index 0000000..9f9465d
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/protocol-ok-false.plugin
+@@ -0,0 +1,21 @@
++from base_plugin import BasePlugin
++
++import __main__
++
++__id__ = "protocol_ok_false"
++__name__ = "Protocol Ok False"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class OkFalse(BasePlugin):
++    def on_load(self):
++        __main__._send({
++            "seq": __main__._CURRENT_SEQ[0],
++            "type": "loaded",
++            "ok": False,
++        })
++        self.log("false ok sent")
++
++
++plugin = OkFalse()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/protocol-unsolicited-log.plugin b/exteraless/tests/plugins/fixtures/runtime/protocol-unsolicited-log.plugin
+new file mode 100644
+index 0000000..26f1381
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/protocol-unsolicited-log.plugin
+@@ -0,0 +1,22 @@
++from base_plugin import BasePlugin
++
++import __main__
++
++__id__ = "protocol_unsolicited"
++__name__ = "Protocol Unsolicited"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Unsolicited(BasePlugin):
++    def on_load(self):
++        __main__._send({
++            "seq": 0,
++            "type": "log",
++            "id": "demo_unsolicited",
++            "message": "unsolicited log",
++        })
++        self.log("after unsolicited")
++
++
++plugin = Unsolicited()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/protocol-wrong-seq.plugin b/exteraless/tests/plugins/fixtures/runtime/protocol-wrong-seq.plugin
+new file mode 100644
+index 0000000..3b6b284
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/protocol-wrong-seq.plugin
+@@ -0,0 +1,21 @@
++from base_plugin import BasePlugin
++
++import __main__
++
++__id__ = "protocol_wrong_seq"
++__name__ = "Protocol Wrong Seq"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class WrongSeq(BasePlugin):
++    def on_load(self):
++        __main__._send({
++            "seq": 987654,
++            "type": "loaded",
++            "ok": True,
++        })
++        self.log("wrong seq sent")
++
++
++plugin = WrongSeq()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/sandbox-observe.plugin b/exteraless/tests/plugins/fixtures/runtime/sandbox-observe.plugin
+new file mode 100644
+index 0000000..bb6846f
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/sandbox-observe.plugin
+@@ -0,0 +1,23 @@
++from base_plugin import BasePlugin
++
++import os
++
++__id__ = "sandbox_observe"
++__name__ = "Sandbox Observe"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Observe(BasePlugin):
++    def on_load(self):
++        self.log(
++            "sandbox uid=%d home=%d plugins=%d pp=%d cwd=%s" % (
++                os.getuid(),
++                1 if os.path.exists("/home") else 0,
++                1 if os.path.isdir("/plugins") else 0,
++                1 if os.environ.get("PYTHONPATH") else 0,
++                os.getcwd(),
++            ))
++
++
++plugin = Observe()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/valid-second.plugin b/exteraless/tests/plugins/fixtures/runtime/valid-second.plugin
+new file mode 100644
+index 0000000..6c7e5cf
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/valid-second.plugin
+@@ -0,0 +1,17 @@
++from base_plugin import BasePlugin
++
++__id__ = "demo_second"
++__name__ = "Demo Second"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Second(BasePlugin):
++    def on_load(self):
++        self.log("second loaded")
++
++    def on_unload(self):
++        self.log("second unloaded")
++
++
++plugin = Second()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/valid.plugin b/exteraless/tests/plugins/fixtures/runtime/valid.plugin
+new file mode 100644
+index 0000000..0bbbda4
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/valid.plugin
+@@ -0,0 +1,17 @@
++from base_plugin import BasePlugin
++
++__id__ = "demo_runtime"
++__name__ = "Demo Runtime"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Demo(BasePlugin):
++    def on_load(self):
++        self.log("demo loaded")
++
++    def on_unload(self):
++        self.log("demo unloaded")
++
++
++plugin = Demo()
 diff --git a/exteraless/tests/plugins/fixtures/unknown-permission.plugin b/exteraless/tests/plugins/fixtures/unknown-permission.plugin
 new file mode 100644
 index 0000000..3ad7661
@@ -4361,6 +7603,278 @@ index 0000000..7bdb96b
 +
 +def greet():
 +    return "hello"
+diff --git a/exteraless/tests/plugins/plugin_host_cli.cpp b/exteraless/tests/plugins/plugin_host_cli.cpp
+new file mode 100644
+index 0000000..a377295
+--- /dev/null
++++ b/exteraless/tests/plugins/plugin_host_cli.cpp
+@@ -0,0 +1,266 @@
++#include "exteraless/config.h"
++#include "exteraless/exteraless.h"
++#include "exteraless/plugin_runtime.h"
++
++#include <QCoreApplication>
++#include <QFile>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QStringList>
++
++#include <iostream>
++
++namespace {
++
++using Exteraless::Plugins::Runtime;
++
++void WriteJson(const QJsonObject &result) {
++	const auto output = QJsonDocument(result).toJson(QJsonDocument::Compact);
++	std::cout.write(output.constData(), output.size());
++	std::cout << '\n';
++	std::cout.flush();
++}
++
++void WriteJson(const QJsonArray &result) {
++	const auto output = QJsonDocument(result).toJson(QJsonDocument::Compact);
++	std::cout.write(output.constData(), output.size());
++	std::cout << '\n';
++	std::cout.flush();
++}
++
++int Usage() {
++	std::cerr << "Usage: exteraless-plugin-host-cli "
++		"<pluginsRoot> <auditLog> <command> [args...]\n";
++	return 2;
++}
++
++[[nodiscard]] Runtime *StartRuntime(
++		const QString &pluginsRoot,
++		const QString &auditLog) {
++	Runtime::Start(pluginsRoot, auditLog);
++	return Runtime::Instance();
++}
++
++struct RuntimeGuard {
++	~RuntimeGuard() {
++		Runtime::Stop();
++	}
++};
++
++[[nodiscard]] QJsonObject StateResult(const QString &id) {
++	return QJsonObject{
++		{ QStringLiteral("ok"), true },
++		{ QStringLiteral("enabled"),
++			Exteraless::Config::Instance().pluginEnabled(id) },
++	};
++}
++
++[[nodiscard]] QJsonObject ImportStateResult(const QString &path) {
++	auto output = QJsonObject{
++		{ QStringLiteral("ok"), false },
++		{ QStringLiteral("unknown"), QJsonArray() },
++	};
++	auto file = QFile(path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		output[QStringLiteral("error")] =
++			QStringLiteral("Could not read the state file.");
++		return output;
++	}
++	auto parseError = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(file.readAll(), &parseError);
++	if (parseError.error != QJsonParseError::NoError
++		|| !document.isObject()) {
++		output[QStringLiteral("error")] =
++			QStringLiteral("Invalid state file.");
++		return output;
++	}
++	auto unknown = QStringList();
++	const auto ok = Exteraless::Config::Instance().fromJson(
++		document.object(),
++		&unknown);
++	auto unknownArray = QJsonArray();
++	for (const auto &key : unknown) {
++		unknownArray.append(key);
++	}
++	return QJsonObject{
++		{ QStringLiteral("ok"), ok },
++		{ QStringLiteral("unknown"), unknownArray },
++	};
++}
++
++[[nodiscard]] QJsonObject MultiOperation(
++		Runtime *runtime,
++		const QJsonObject &operation) {
++	auto id = operation.value(QStringLiteral("id")).toString();
++	auto result = QJsonObject{
++		{ QStringLiteral("op"), operation.value(QStringLiteral("op")).toString() },
++		{ QStringLiteral("ok"), false },
++		{ QStringLiteral("error"), QStringLiteral("Unknown operation.") },
++		{ QStringLiteral("loaded"), false },
++		{ QStringLiteral("pid"), double(runtime->hostPid()) },
++	};
++	const auto op = result.value(QStringLiteral("op")).toString();
++	if (op == QStringLiteral("enable")) {
++		const auto path = operation.value(QStringLiteral("path")).toString();
++		if (id.isEmpty() || path.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing plugin id or path.");
++		} else {
++			const auto enabled = runtime->enable(id, path);
++			result[QStringLiteral("ok")] = enabled.ok;
++			result[QStringLiteral("error")] = enabled.error;
++		}
++	} else if (op == QStringLiteral("disable")) {
++		if (id.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing plugin id.");
++		} else {
++			const auto disabled = runtime->disable(id);
++			result[QStringLiteral("ok")] = disabled.ok;
++			result[QStringLiteral("error")] = disabled.error;
++		}
++	} else if (op == QStringLiteral("stop")) {
++		runtime->stop();
++		result[QStringLiteral("ok")] = true;
++		result[QStringLiteral("error")] = QString();
++	} else if (op == QStringLiteral("pid")) {
++		result[QStringLiteral("ok")] = true;
++		result[QStringLiteral("error")] = QString();
++	}
++	result[QStringLiteral("loaded")] =
++		!id.isEmpty() && runtime->isLoaded(id);
++	result[QStringLiteral("pid")] = double(runtime->hostPid());
++	return result;
++}
++
++} // namespace
++
++int main(int argc, char *argv[]) {
++	QCoreApplication app(argc, argv);
++	QCoreApplication::setApplicationName(Exteraless::AppFileName());
++	const auto arguments = app.arguments();
++	if (arguments.size() < 4) {
++		return Usage();
++	}
++	const auto pluginsRoot = arguments[1];
++	const auto auditLog = arguments[2];
++	const auto command = arguments[3];
++	const auto rest = arguments.mid(4);
++
++	if (command == QStringLiteral("validate")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		const auto check = Runtime::ValidatePath(pluginsRoot, rest[0]);
++		WriteJson(QJsonObject{
++			{ QStringLiteral("ok"), check.ok },
++			{ QStringLiteral("path"), check.canonicalPath },
++			{ QStringLiteral("error"), check.error },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("state-get")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		WriteJson(StateResult(rest[0]));
++		return 0;
++	}
++	if (command == QStringLiteral("state-set")) {
++		if (rest.size() != 2
++			|| (rest[1] != QStringLiteral("true")
++				&& rest[1] != QStringLiteral("false"))) {
++			return Usage();
++		}
++		Exteraless::Config::Instance().setPluginEnabled(
++			rest[0],
++			rest[1] == QStringLiteral("true"));
++		WriteJson(StateResult(rest[0]));
++		return 0;
++	}
++	if (command == QStringLiteral("import-state")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		WriteJson(ImportStateResult(rest[0]));
++		return 0;
++	}
++	if (command == QStringLiteral("enable")) {
++		if (rest.size() != 2) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		const auto enabled = runtime->enable(rest[0], rest[1]);
++		const auto guard = RuntimeGuard();
++		WriteJson(QJsonObject{
++			{ QStringLiteral("ok"), enabled.ok },
++			{ QStringLiteral("error"), enabled.error },
++			{ QStringLiteral("pid"), double(runtime->hostPid()) },
++			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("disable")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		const auto disabled = runtime->disable(rest[0]);
++		const auto guard = RuntimeGuard();
++		WriteJson(QJsonObject{
++			{ QStringLiteral("ok"), disabled.ok },
++			{ QStringLiteral("error"), disabled.error },
++			{ QStringLiteral("pid"), double(runtime->hostPid()) },
++			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("stop")) {
++		if (!rest.isEmpty()) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		runtime->stop();
++		const auto guard = RuntimeGuard();
++		WriteJson(QJsonObject{
++			{ QStringLiteral("ok"), true },
++			{ QStringLiteral("error"), QString() },
++			{ QStringLiteral("pid"), double(runtime->hostPid()) },
++			{ QStringLiteral("loaded"), false },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("multi")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		auto parseError = QJsonParseError{0, QJsonParseError::NoError};
++		const auto document = QJsonDocument::fromJson(
++			rest[0].toUtf8(),
++			&parseError);
++		if (parseError.error != QJsonParseError::NoError
++			|| !document.isArray()) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		auto results = QJsonArray();
++		const auto guard = RuntimeGuard();
++		for (const auto &value : document.array()) {
++			results.append(value.isObject()
++				? MultiOperation(runtime, value.toObject())
++				: QJsonObject{
++					{ QStringLiteral("op"), QString() },
++					{ QStringLiteral("ok"), false },
++					{ QStringLiteral("error"),
++						QStringLiteral("Unknown operation.") },
++					{ QStringLiteral("loaded"), false },
++					{ QStringLiteral("pid"), double(runtime->hostPid()) },
++				});
++		}
++		WriteJson(results);
++		return 0;
++	}
++	return Usage();
++}
 diff --git a/exteraless/tests/plugins/run_checks.py b/exteraless/tests/plugins/run_checks.py
 new file mode 100755
 index 0000000..159435e
@@ -4676,6 +8190,2162 @@ index 0000000..159435e
 +            print(f"  - {name}")
 +        return 1
 +    print(f"RESULT: PASS ({ledger.checks} checks)")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/exteraless/tests/plugins/run_host_checks.py b/exteraless/tests/plugins/run_host_checks.py
+new file mode 100644
+index 0000000..ddb173e
+--- /dev/null
++++ b/exteraless/tests/plugins/run_host_checks.py
+@@ -0,0 +1,2150 @@
++#!/usr/bin/env python3
++"""Backend regression checks for the Exteraless Python plugin host."""
++
++import ctypes
++import json
++import os
++import re
++import shutil
++import subprocess
++import sys
++import tempfile
++import time
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[3]
++DEFAULT_CLI = (
++    ROOT / "out" / "exteraless" / "tests" / "plugins"
++    / "exteraless-plugin-host-cli")
++FIXTURES = Path(__file__).resolve().parent / "fixtures" / "runtime"
++RUNTIME_CPP = (
++    ROOT / "Telegram" / "SourceFiles" / "exteraless" / "plugin_runtime.cpp")
++RUN_TIMEOUT = 90
++
++STARTUP_SOURCES = [
++    ROOT / "Telegram" / "SourceFiles" / "core" / "application.cpp",
++    ROOT / "Telegram" / "SourceFiles" / "core" / "application.h",
++    ROOT / "Telegram" / "SourceFiles" / "core" / "launcher.cpp",
++    ROOT / "Telegram" / "SourceFiles" / "core" / "launcher.h",
++    ROOT / "Telegram" / "SourceFiles" / "main",
++]
++STARTUP_HOST_MARKERS = ("Runtime::Start", "Runtime::Instance")
++
++SANDBOX_PREFIX = [
++    "--unshare-all",
++    "--unshare-user",
++    "--disable-userns",
++    "--die-with-parent",
++    "--new-session",
++    "--cap-drop",
++    "ALL",
++    "--proc",
++    "/proc",
++    "--dev",
++    "/dev",
++    "--tmpfs",
++    "/tmp",
++]
++
++SYSTEM_BIND_PATHS = [
++    "/nix",
++    "/run/current-system/sw",
++    "/usr",
++    "/bin",
++    "/lib",
++    "/lib64",
++]
++
++ETC_BIND_PATHS = [
++    "/etc/resolv.conf",
++    "/etc/hosts",
++    "/etc/nsswitch.conf",
++    "/etc/passwd",
++    "/etc/group",
++    "/etc/localtime",
++]
++
++SANDBOX_PATH_CANDIDATES = [
++    "/run/current-system/sw/bin",
++    "/usr/local/bin",
++    "/usr/bin",
++    "/bin",
++]
++
++REQUIRED_SANDBOX_FLAGS = [
++    ["--unshare-all"],
++    ["--unshare-user"],
++    ["--disable-userns"],
++    ["--cap-drop", "ALL"],
++    ["--remount-ro"],
++]
++
++FORBIDDEN_SANDBOX_FLAGS = [
++    "--share-net",
++    "--bind",
++    "--dev-bind",
++    "--cap-add",
++]
++
++KEY_SPEC_SESSION_KEYRING = -3
++KEYCTL_GET_KEYRING_ID = 0
++KEYCTL_SYSCALL = {
++    "aarch64": 219,
++    "armv7l": 311,
++    "i686": 288,
++    "ppc64le": 240,
++    "riscv64": 219,
++    "s390x": 280,
++    "x86_64": 250,
++}
++
++EVIDENCE_SCRIPT = """
++import ctypes
++import json
++import os
++import socket
++
++def attempt(path):
++    try:
++        with open(path, "w") as handle:
++            handle.write("x")
++    except OSError as error:
++        return str(error.errno)
++    return "allowed"
++
++try:
++    sock = socket.socket()
++    sock.settimeout(2)
++    sock.connect(("1.1.1.1", 53))
++    network = "connected"
++except OSError as error:
++    network = str(error.errno)
++status = open("/proc/self/status").read()
++caps = [
++    line.split()[1] for line in status.splitlines()
++    if line.startswith("CapEff:")
++][0]
++nnp = [
++    line.split()[1] for line in status.splitlines()
++    if line.startswith("NoNewPrivs:")
++][0]
++libc = ctypes.CDLL(None, use_errno=True)
++os.makedirs("/tmp/mountpoint", exist_ok=True)
++mounted = libc.mount(
++    b"tmpfs", b"/tmp/mountpoint", b"tmpfs", 0, b"")
++mount_errno = ctypes.get_errno()
++remounted = libc.mount(None, b"/", None, 32, None)
++remount_errno = ctypes.get_errno()
++print(json.dumps({
++    "uid": os.getuid(),
++    "pid1": open("/proc/1/cmdline", "rb").read().split(b"\\0")[0].decode(),
++    "home": os.path.exists("/home"),
++    "root": attempt("/root-probe"),
++    "plugins": attempt("/plugins/probe"),
++    "nix": attempt("/nix/probe"),
++    "tmp": attempt("/tmp/probe"),
++    "caps": caps,
++    "nnp": nnp,
++    "net": network,
++    "mount": [mounted, mount_errno],
++    "remount": [remounted, remount_errno],
++    "proc1_home": os.path.exists("/proc/1/root/home"),
++    "proc1_nix": os.path.exists("/proc/1/root/nix"),
++    "repo": os.path.exists("__REPO__"),
++    "tdata": os.path.exists("__TDATA__"),
++    "cwd": os.getcwd(),
++}))
++"""
++
++KEYRING_PROBE = """
++import ctypes
++import json
++import os
++
++KEY_SPEC_SESSION_KEYRING = -3
++
++__JOIN__
++
++
++def keyctl(op, arg=0):
++    libc = ctypes.CDLL(None, use_errno=True)
++    symbol = getattr(libc, 'keyctl', None)
++    if symbol is not None:
++        symbol.restype = ctypes.c_long
++        return symbol(op, ctypes.c_ulong(arg), 0, 0)
++    number = KEYCTL_SYSCALL.get(os.uname().machine)
++    if number is None:
++        return -1
++    libc.syscall.restype = ctypes.c_long
++    return libc.syscall(
++        ctypes.c_long(number), ctypes.c_long(op), ctypes.c_ulong(arg), 0, 0)
++
++
++def keys():
++    try:
++        with open('/proc/keys') as handle:
++            return handle.read().splitlines()
++    except OSError:
++        return None
++
++
++before = keyctl(0, KEY_SPEC_SESSION_KEYRING)
++joined = _join_session_keyring()
++after = keyctl(0, KEY_SPEC_SESSION_KEYRING)
++print(json.dumps({
++    'before': before,
++    'joined': joined,
++    'after': after,
++    'keys': keys(),
++}))
++"""
++
++
++def find_bwrap():
++    override = os.environ.get("EXTERALESS_BWRAP", "").strip()
++    if override:
++        found = shutil.which(override)
++        return found
++    found = shutil.which("bwrap")
++    if found:
++        return found
++    patterns = [
++        "*bubblewrap-0.12.0*/bin/bwrap",
++        "*bubblewrap-*/bin/bwrap",
++    ]
++    for pattern in patterns:
++        for path in sorted(Path("/nix/store").glob(pattern)):
++            if os.access(path, os.X_OK):
++                return str(path)
++    return None
++
++
++BWRAP = find_bwrap()
++
++
++def sandbox_tokens():
++    tokens = list(SANDBOX_PREFIX)
++    for path in SYSTEM_BIND_PATHS + ETC_BIND_PATHS:
++        if os.path.exists(path):
++            tokens += ["--ro-bind", path, path]
++    return tokens
++
++
++def sandbox_path():
++    for path in SANDBOX_PATH_CANDIDATES:
++        if os.path.isdir(path):
++            return path
++    python = shutil.which("python3")
++    if python is None:
++        return "/"
++    return str(Path(os.path.realpath(python)).parent)
++
++
++def bwrap_command(plugins, payload):
++    return [
++        BWRAP,
++        *sandbox_tokens(),
++        "--ro-bind",
++        str(plugins),
++        "/plugins",
++        "--remount-ro",
++        "/",
++        "--chdir",
++        "/",
++        "--clearenv",
++        "--setenv",
++        "PATH",
++        sandbox_path(),
++        "--setenv",
++        "HOME",
++        "/tmp",
++        "--setenv",
++        "TMPDIR",
++        "/tmp",
++        "--setenv",
++        "LANG",
++        "C.UTF-8",
++        "--",
++        str(Path(os.path.realpath(shutil.which("python3")))),
++        "-I",
++        "-B",
++        "-c",
++        payload,
++        "/plugins",
++    ]
++
++
++class Ledger:
++    def __init__(self):
++        self.checks = 0
++        self.failures = []
++        self.skips = []
++
++    def check(self, name, condition, detail=""):
++        self.checks += 1
++        if condition:
++            print(f"PASS {name}")
++        else:
++            suffix = f": {detail}" if detail else ""
++            print(f"FAIL {name}{suffix}")
++            self.failures.append(name)
++
++    def skip(self, name, detail=""):
++        suffix = f": {detail}" if detail else ""
++        print(f"SKIP {name}{suffix}")
++        self.skips.append(name)
++
++
++def workspace(work, name):
++    base = work / name
++    plugins = base / "plugins"
++    tdata = base / "tdata"
++    plugins.mkdir(parents=True)
++    tdata.mkdir()
++    return base, plugins, tdata / "plugins-audit.log"
++
++
++def copy_fixture(plugins, name):
++    target = plugins / name
++    shutil.copyfile(FIXTURES / name, target)
++    return target
++
++
++def write_plugin(plugins, name, body):
++    target = plugins / name
++    target.write_text(body, encoding="utf-8")
++    return target
++
++
++def cli_env(data_home, extra=None):
++    env = dict(os.environ)
++    env["XDG_DATA_HOME"] = str(data_home)
++    env["XDG_CACHE_HOME"] = str(data_home.parent / "cache")
++    if BWRAP is not None:
++        env["EXTERALESS_BWRAP"] = BWRAP
++    if extra:
++        env.update(extra)
++    return env
++
++
++def run_cli(cli, plugins, audit, args, data_home, extra_env=None,
++            timeout=RUN_TIMEOUT):
++    env = cli_env(data_home, extra_env)
++    result = subprocess.run(
++        [str(cli), str(plugins), str(audit), *args],
++        capture_output=True,
++        text=True,
++        env=env,
++        timeout=timeout)
++    if result.returncode != 0:
++        raise RuntimeError(
++            f"CLI exited {result.returncode} for {args}: "
++            f"{result.stderr.strip()}")
++    return json.loads(result.stdout)
++
++
++def audit_records(path):
++    records = []
++    if not path.exists():
++        return records
++    for line in path.read_text(encoding="utf-8").splitlines():
++        line = line.strip()
++        if not line:
++            continue
++        try:
++            records.append(json.loads(line))
++        except ValueError:
++            continue
++    return records
++
++
++def has_event(records, plugin, event):
++    return any(
++        record.get("kind") == "denied"
++        and record.get("plugin") == plugin
++        and record.get("event") == event
++        for record in records)
++
++
++def has_log(records, plugin, detail):
++    return any(
++        record.get("kind") == "log"
++        and record.get("plugin") == plugin
++        and record.get("event") == "log"
++        and record.get("detail") == detail
++        for record in records)
++
++
++def has_any_log(records, detail):
++    return any(
++        record.get("kind") == "log"
++        and record.get("event") == "log"
++        and record.get("detail") == detail
++        for record in records)
++
++
++def host_pids(plugins_root):
++    needle = str(plugins_root).encode()
++    pids = []
++    for entry in Path("/proc").iterdir():
++        if not entry.name.isdigit():
++            continue
++        try:
++            command = (entry / "cmdline").read_bytes()
++        except OSError:
++            continue
++        sandboxed = b"bubblewrap" in command and needle in command
++        bare = b"exteraless_plugin_" in command and b"-I" in command
++        if sandboxed or bare:
++            pids.append(int(entry.name))
++    return pids
++
++
++def extract_block(name, marker):
++    source = RUNTIME_CPP.read_text(encoding="utf-8")
++    match = re.search(
++        rf'{name}\s*=\s*R"{marker}\((.*?)\){marker}";',
++        source,
++        re.S)
++    return match.group(1) if match else None
++
++
++def extract_keyring_join(script):
++    match = re.search(
++        r"^KEYCTL_JOIN_SESSION_KEYRING = 1\n(?:[^\n]*\n)*?"
++        r"^def _join_session_keyring\(\):\n(?:[ \t].*\n|\n)*",
++        script,
++        re.M)
++    return match.group(0) if match else None
++
++
++def keyctl_call(op, arg=0):
++    libc = ctypes.CDLL(None, use_errno=True)
++    symbol = getattr(libc, "keyctl", None)
++    if symbol is not None:
++        symbol.restype = ctypes.c_long
++        return symbol(op, ctypes.c_ulong(arg), 0, 0)
++    number = KEYCTL_SYSCALL.get(os.uname().machine)
++    if number is None:
++        return -1
++    libc.syscall.restype = ctypes.c_long
++    return libc.syscall(
++        ctypes.c_long(number), ctypes.c_long(op), ctypes.c_ulong(arg), 0, 0)
++
++
++def read_proc_keys():
++    try:
++        text = Path("/proc/keys").read_text(encoding="utf-8", errors="replace")
++    except OSError:
++        return None
++    return text.splitlines()
++
++
++def session_keyring_serials(lines):
++    serials = set()
++    for line in lines or ():
++        fields = line.split()
++        if (len(fields) >= 9
++                and fields[7] == "keyring"
++                and fields[8].startswith("_ses:")):
++            try:
++                serials.add(int(fields[0], 16))
++            except ValueError:
++                continue
++    return serials
++
++
++def key_serials(lines):
++    serials = set()
++    for line in lines or ():
++        fields = line.split()
++        if not fields:
++            continue
++        try:
++            serials.add(int(fields[0], 16))
++        except ValueError:
++            continue
++    return serials
++
++
++def host_session_keyring():
++    if read_proc_keys() is None:
++        return None
++    ctypes.set_errno(0)
++    serial = keyctl_call(KEYCTL_GET_KEYRING_ID, KEY_SPEC_SESSION_KEYRING)
++    return serial if serial > 0 else None
++
++
++def require_tool(name):
++    path = shutil.which(name)
++    return path
++
++
++def tool_directory(work, name, tools, extra_scripts=None):
++    directory = work / name
++    directory.mkdir(parents=True, exist_ok=True)
++    for tool in tools:
++        target = require_tool(tool)
++        if target is None:
++            return None
++        os.symlink(target, directory / tool)
++    for script_name, body in (extra_scripts or {}).items():
++        path = directory / script_name
++        path.write_text(body, encoding="utf-8")
++        path.chmod(0o755)
++    return directory
++
++
++def block_body(source, signature):
++    start = source.find(signature)
++    if start < 0:
++        return None
++    start = source.find("{", start)
++    end = source.find("\n}\n", start)
++    return source[start:end + 3] if 0 <= start < end else None
++
++
++def check_static(ledger):
++    script = extract_block("kHostScript", "PY")
++    ledger.check("host script found", script is not None, str(RUNTIME_CPP))
++    if script is not None:
++        try:
++            compile(script, "<host>", "exec")
++        except SyntaxError as error:
++            ledger.check("host script syntax", False, str(error))
++        else:
++            ledger.check("host script syntax", True)
++    source = RUNTIME_CPP.read_text(encoding="utf-8")
++    arguments = block_body(source, "QStringList SandboxArguments(")
++    binds = block_body(source, "QStringList ReadOnlyBinds(")
++    path_block = block_body(source, "QString SandboxPath(")
++    ledger.check("sandbox arguments found", bool(arguments))
++    position = 0
++    ordered = bool(arguments)
++    missing = ""
++    for token in SANDBOX_PREFIX:
++        found = arguments.find(f'"{token}"', position)
++        if found < 0:
++            ordered = False
++            missing = token
++            break
++        position = found + len(token) + 2
++    ledger.check(
++        "sandbox arguments ordered",
++        ordered,
++        missing or (arguments or "")[:200])
++    missing_required = ""
++    required = bool(arguments) and bool(binds)
++    sandbox_source = (arguments or "") + (binds or "")
++    for tokens in REQUIRED_SANDBOX_FLAGS:
++        found = sandbox_source.find(f'"{tokens[0]}"', 0)
++        if found < 0:
++            required = False
++            missing_required = tokens[0]
++            break
++        if len(tokens) > 1 and sandbox_source.find(
++                f'"{tokens[1]}"', found) < 0:
++            required = False
++            missing_required = " ".join(tokens)
++            break
++    ledger.check("sandbox: required flags present", required, missing_required)
++    forbidden = [
++        token for token in FORBIDDEN_SANDBOX_FLAGS
++        if f'"{token}"' in source
++    ]
++    ledger.check(
++        "sandbox: forbidden flags absent",
++        not forbidden,
++        forbidden)
++    missing_binds = [
++        path for path in SYSTEM_BIND_PATHS + ETC_BIND_PATHS
++        if not binds or f'"{path}"' not in binds
++    ]
++    ledger.check(
++        "sandbox: existing system binds",
++        not missing_binds
++        and '"--ro-bind"' in (binds or "")
++        and "QFileInfo::exists" in (binds or ""),
++        missing_binds)
++    ledger.check(
++        "sandbox: no unconditional system bind",
++        bool(arguments) and '"/nix"' not in arguments,
++        (arguments or "")[:200])
++    clearenv = arguments.find('"--clearenv"') if arguments else -1
++    setenv = arguments.find('"--setenv"') if arguments else -1
++    ledger.check(
++        "sandbox: environment scrubbed",
++        clearenv >= 0
++        and setenv > clearenv
++        and all(f'"{key}"' in arguments for key in ("HOME", "TMPDIR", "LANG")),
++        (arguments or "")[:200])
++    ledger.check(
++        "sandbox: PATH uses an existing directory",
++        bool(arguments)
++        and '"PATH"' in arguments
++        and bool(path_block)
++        and "QFileInfo(path).isDir()" in (path_block or "")
++        and all(f'"{path}"' in path_block for path in SANDBOX_PATH_CANDIDATES),
++        path_block)
++    ledger.check(
++        "sandbox: no unshare fallback",
++        'QStringLiteral("unshare")' not in source
++        and "kSandboxWrapper" not in source)
++    ledger.check(
++        "sandbox: no chroot wrapper",
++        "chroot" not in source.lower())
++    join_code = extract_keyring_join(script or "")
++    ledger.check(
++        "keyring: join code in host script",
++        join_code is not None
++        and "ctypes.CDLL" in join_code
++        and "KEYCTL_JOIN_SESSION_KEYRING" in join_code)
++    if script is not None:
++        main_body = script[script.find("def main():"):]
++        join_call = main_body.find("_join_session_keyring()")
++        install_call = main_body.find("_install()")
++        ledger.check(
++            "keyring: join before hook and plugin load",
++            join_call >= 0 and install_call > join_call,
++            [join_call, install_call])
++
++
++def check_bwrap_environment(ledger, work):
++    ledger.check(
++        "bwrap: found",
++        BWRAP is not None,
++        "EXTERALESS_BWRAP or PATH or /nix/store")
++    if BWRAP is None:
++        return
++    version = subprocess.run(
++        [BWRAP, "--version"],
++        capture_output=True,
++        text=True,
++        timeout=30)
++    ledger.check(
++        "bwrap: version",
++        version.returncode == 0
++        and version.stdout.strip().startswith("bubblewrap"),
++        f"{version.returncode} {version.stdout.strip()} "
++        f"{version.stderr.strip()}")
++    base, plugins, _ = workspace(work, "bwrap-evidence")
++    payload = EVIDENCE_SCRIPT.replace(
++        "__REPO__", str(ROOT)).replace(
++        "__TDATA__", str(base / "tdata"))
++    result = subprocess.run(
++        bwrap_command(plugins, payload),
++        capture_output=True,
++        text=True,
++        timeout=60)
++    ledger.check(
++        "bwrap: payload ran",
++        result.returncode == 0,
++        f"{result.returncode} {result.stderr.strip()[-400:]}")
++    try:
++        evidence = json.loads(result.stdout.strip().splitlines()[-1])
++    except (ValueError, IndexError):
++        evidence = {}
++    ledger.check(
++        "bwrap: pid 1 is bubblewrap",
++        "bubblewrap" in str(evidence.get("pid1", "")),
++        evidence.get("pid1"))
++    ledger.check(
++        "bwrap: uid preserved",
++        evidence.get("uid") == os.getuid(),
++        [evidence.get("uid"), os.getuid()])
++    ledger.check("bwrap: home hidden", evidence.get("home") is False, evidence)
++    ledger.check("bwrap: root read-only", evidence.get("root") == "30", evidence)
++    ledger.check(
++        "bwrap: plugins read-only",
++        evidence.get("plugins") == "30",
++        evidence)
++    if os.path.exists("/nix"):
++        ledger.check(
++            "bwrap: nix read-only",
++            evidence.get("nix") == "30",
++            evidence)
++    else:
++        ledger.skip("bwrap: nix read-only", "/nix is absent")
++    ledger.check("bwrap: tmp writable", evidence.get("tmp") == "allowed", evidence)
++    ledger.check(
++        "bwrap: sandbox PATH exists",
++        os.path.isdir(sandbox_path()),
++        sandbox_path())
++    ledger.check(
++        "bwrap: capabilities dropped",
++        evidence.get("caps") == "0000000000000000",
++        evidence.get("caps"))
++    ledger.check(
++        "bwrap: no new privileges",
++        evidence.get("nnp") == "1",
++        evidence.get("nnp"))
++    ledger.check(
++        "bwrap: network unreachable",
++        evidence.get("net") == "101",
++        evidence.get("net"))
++    ledger.check(
++        "bwrap: mount denied",
++        evidence.get("mount") == [-1, 1],
++        evidence.get("mount"))
++    ledger.check(
++        "bwrap: remount denied",
++        evidence.get("remount") == [-1, 1],
++        evidence.get("remount"))
++    ledger.check(
++        "bwrap: proc root has no home",
++        evidence.get("proc1_home") is False,
++        evidence.get("proc1_home"))
++    if os.path.exists("/nix"):
++        ledger.check(
++            "bwrap: proc root keeps nix",
++            evidence.get("proc1_nix") is True,
++            evidence.get("proc1_nix"))
++    else:
++        ledger.skip("bwrap: proc root keeps nix", "/nix is absent")
++    ledger.check(
++        "bwrap: repository hidden",
++        evidence.get("repo") is False,
++        evidence.get("repo"))
++    ledger.check(
++        "bwrap: tdata hidden",
++        evidence.get("tdata") is False,
++        evidence.get("tdata"))
++    ledger.check("bwrap: cwd is root", evidence.get("cwd") == "/", evidence)
++
++
++def check_keyring(ledger, work):
++    script = extract_block("kHostScript", "PY")
++    join_code = extract_keyring_join(script or "")
++    host_keys = read_proc_keys()
++    host_serial = host_session_keyring()
++    if join_code is None or BWRAP is None:
++        ledger.skip(
++            "keyring: sandbox session keyring",
++            "join code or bwrap is unavailable")
++        return
++    _, plugins, _ = workspace(work, "keyring")
++    payload = KEYRING_PROBE.replace("__JOIN__", join_code)
++    result = subprocess.run(
++        bwrap_command(plugins, payload),
++        capture_output=True,
++        text=True,
++        timeout=60)
++    ledger.check(
++        "keyring: sandbox probe ran",
++        result.returncode == 0,
++        f"{result.returncode} {result.stderr.strip()[-400:]}")
++    try:
++        evidence = json.loads(result.stdout.strip().splitlines()[-1])
++    except (ValueError, IndexError):
++        evidence = {}
++    before = evidence.get("before", -1)
++    joined = evidence.get("joined", -1)
++    after = evidence.get("after", -1)
++    sandbox_keys = evidence.get("keys")
++    ledger.check(
++        "keyring: join succeeds in sandbox",
++        isinstance(joined, int) and joined > 0,
++        evidence)
++    ledger.check(
++        "keyring: sandbox session keyring is the joined keyring",
++        after == joined and joined > 0,
++        [before, joined, after])
++    if sandbox_keys is None:
++        ledger.skip(
++            "keyring: sandbox /proc/keys lists the session keyring",
++            "no /proc/keys in the sandbox")
++    else:
++        ledger.check(
++            "keyring: sandbox /proc/keys lists the session keyring",
++            joined > 0 and joined in session_keyring_serials(sandbox_keys),
++            sandbox_keys)
++    if host_serial is None:
++        ledger.skip(
++            "keyring: sandbox inherits the host session keyring before join",
++            "the host has no session keyring")
++        ledger.skip(
++            "keyring: plugin session keyring differs from the host",
++            "the host has no session keyring")
++        ledger.skip(
++            "keyring: host session keyring absent in the sandbox",
++            "the host has no session keyring")
++        return
++    ledger.check(
++        "keyring: sandbox inherits the host session keyring before join",
++        before == host_serial,
++        [before, host_serial])
++    ledger.check(
++        "keyring: plugin session keyring differs from the host",
++        after == joined and after != host_serial,
++        [after, joined, host_serial])
++    if sandbox_keys is None:
++        ledger.skip(
++            "keyring: host session keyring absent in the sandbox",
++            "no /proc/keys in the sandbox")
++        return
++    ledger.check(
++        "keyring: host session keyring absent in the sandbox",
++        host_serial not in key_serials(sandbox_keys),
++        [host_serial, sorted(key_serials(sandbox_keys))])
++    listed = session_keyring_serials(host_keys)
++    if not listed:
++        ledger.skip(
++            "keyring: host /proc/keys lists its session keyring",
++            "the host keyring is not listed")
++    else:
++        ledger.check(
++            "keyring: host /proc/keys lists its session keyring",
++            host_serial in listed,
++            [sorted(listed), host_serial])
++
++
++def check_keyring_plugin(ledger, cli, work):
++    if read_proc_keys() is None:
++        ledger.skip(
++            "keyring plugin: host keyring read denied",
++            "the host has no /proc/keys")
++        return
++    _, plugins, audit = workspace(work, "keyring-plugin")
++    fixture = copy_fixture(plugins, "keyring-observe.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "keyring_observe", str(fixture)], work / "data")
++    ledger.check("keyring plugin: load ok", data.get("ok") is True, data)
++    records = audit_records(audit)
++    ledger.check(
++        "keyring plugin: host keyring read denied",
++        has_event(records, "keyring_observe", "open"),
++        records)
++    ledger.check(
++        "keyring plugin: plugin logged denial",
++        has_log(records, "keyring_observe", "keyring read denied"),
++        records)
++    ledger.check(
++        "keyring plugin: no keyring read",
++        not has_any_log(records, "keyring read allowed"),
++        records)
++
++
++def check_valid_load(ledger, cli, work):
++    _, plugins, audit = workspace(work, "valid")
++    valid = copy_fixture(plugins, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(valid)], work / "data")
++    ledger.check("valid: load ok", data.get("ok") is True, data)
++    ledger.check("valid: loaded", data.get("loaded") is True, data)
++    pid = data.get("pid")
++    ledger.check("valid: host pid", isinstance(pid, int) and pid > 0, pid)
++    records = audit_records(audit)
++    ledger.check(
++        "valid: log in audit",
++        has_log(records, "demo_runtime", "demo loaded"),
++        records)
++
++
++def check_sandbox_observe(ledger, cli, work):
++    _, plugins, audit = workspace(work, "sandbox-observe")
++    fixture = copy_fixture(plugins, "sandbox-observe.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "sandbox_observe", str(fixture)], work / "data",
++        extra_env={"PYTHONPATH": "/exteraless-evil"})
++    ledger.check("sandbox observe: load ok", data.get("ok") is True, data)
++    records = audit_records(audit)
++    ledger.check(
++        "sandbox observe: uid, no home, scrubbed env, root cwd",
++        has_log(
++            records,
++            "sandbox_observe",
++            "sandbox uid=%d home=0 plugins=1 pp=0 cwd=/" % os.getuid()),
++        records)
++
++
++def check_unload(ledger, cli, work):
++    _, plugins, audit = workspace(work, "unload")
++    valid = copy_fixture(plugins, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_runtime", "path": str(valid)},
++                {"op": "disable", "id": "demo_runtime"},
++            ]),
++        ],
++        work / "data")
++    ledger.check("unload: two results", len(data) == 2, data)
++    if len(data) == 2:
++        ledger.check("unload: enable ok", data[0].get("ok") is True, data[0])
++        ledger.check("unload: enable loaded", data[0].get("loaded") is True)
++        ledger.check("unload: disable ok", data[1].get("ok") is True, data[1])
++        ledger.check(
++            "unload: disable not loaded",
++            data[1].get("loaded") is False,
++            data[1])
++    records = audit_records(audit)
++    ledger.check(
++        "unload: on_unload logged",
++        has_log(records, "demo_runtime", "demo unloaded"),
++        records)
++
++
++def check_deny_write(ledger, cli, work):
++    base, plugins, audit = workspace(work, "deny-write")
++    fixture = copy_fixture(plugins, "deny-write.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_write", str(fixture)], work / "data")
++    ledger.check("deny write: load ok", data.get("ok") is True, data)
++    ledger.check("deny write: marker absent", not (base / "marker-denied").exists())
++    records = audit_records(audit)
++    ledger.check(
++        "deny write: exact open denial",
++        has_event(records, "deny_write", "open"),
++        records)
++    ledger.check(
++        "deny write: plugin logged denial",
++        has_log(records, "deny_write", "write denied"),
++        records)
++
++
++def check_escape_write(ledger, cli, work):
++    base, plugins, audit = workspace(work, "escape-write")
++    marker = base / "escape-write-marker"
++    marker.write_text("control", encoding="utf-8")
++    fixture = write_plugin(
++        plugins,
++        "escape-write.plugin",
++        "from base_plugin import BasePlugin\n"
++        "\n"
++        "import os\n"
++        "\n"
++        "__id__ = \"escape_write\"\n"
++        "__name__ = \"Escape Write\"\n"
++        "__version__ = \"1.0.0\"\n"
++        "__permissions__ = [\"files\"]\n"
++        "\n"
++        "\n"
++        "class Escape(BasePlugin):\n"
++        "    def on_load(self):\n"
++        "        try:\n"
++        f"            with open({str(marker)!r}, \"w\") as handle:\n"
++        "                handle.write(\"bad\")\n"
++        "        except (PermissionError, OSError):\n"
++        "            self.log(\"escape write denied\")\n"
++        "        else:\n"
++        "            self.log(\"escape write allowed\")\n"
++        "        self.log(\"escape path exists=%d\" % (\n"
++        f"            1 if os.path.exists({str(marker)!r}) else 0))\n"
++        "\n"
++        "\n"
++        "plugin = Escape()\n")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "escape_write", str(fixture)], work / "data")
++    ledger.check("escape write: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "escape write: host marker untouched",
++        marker.read_text(encoding="utf-8") == "control",
++        marker.read_text(encoding="utf-8"))
++    records = audit_records(audit)
++    ledger.check(
++        "escape write: host path invisible",
++        has_log(records, "escape_write", "escape path exists=0"),
++        records)
++    ledger.check(
++        "escape write: exact open denial",
++        has_event(records, "escape_write", "open"),
++        records)
++    ledger.check(
++        "escape write: denied log",
++        has_log(records, "escape_write", "escape write denied"),
++        records)
++    ledger.check(
++        "escape write: never allowed",
++        not has_any_log(records, "escape write allowed"),
++        records)
++
++
++def check_escape_xattr(ledger, cli, work):
++    base, plugins, audit = workspace(work, "escape-xattr")
++    marker = base / "xattr-marker"
++    marker.write_text("host file", encoding="utf-8")
++    fixture = write_plugin(
++        plugins,
++        "escape-xattr.plugin",
++        "from base_plugin import BasePlugin\n"
++        "\n"
++        "import os\n"
++        "\n"
++        "__id__ = \"escape_xattr\"\n"
++        "__name__ = \"Escape Xattr\"\n"
++        "__version__ = \"1.0.0\"\n"
++        "__permissions__ = [\"files\"]\n"
++        "\n"
++        "\n"
++        "class Escape(BasePlugin):\n"
++        "    def on_load(self):\n"
++        "        try:\n"
++        f"            os.setxattr({str(marker)!r}, b\"user.exteraless\", b\"bad\")\n"
++        "        except (PermissionError, OSError):\n"
++        "            self.log(\"xattr denied\")\n"
++        "        else:\n"
++        "            self.log(\"xattr allowed\")\n"
++        "\n"
++        "\n"
++        "plugin = Escape()\n")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "escape_xattr", str(fixture)], work / "data")
++    ledger.check("escape xattr: load ok", data.get("ok") is True, data)
++    try:
++        os.getxattr(marker, b"user.exteraless")
++        touched = True
++    except OSError:
++        touched = False
++    ledger.check("escape xattr: host xattr absent", not touched)
++    records = audit_records(audit)
++    ledger.check(
++        "escape xattr: exact setxattr denial",
++        has_event(records, "escape_xattr", "os.setxattr"),
++        records)
++    ledger.check(
++        "escape xattr: denied log",
++        has_log(records, "escape_xattr", "xattr denied"),
++        records)
++    ledger.check(
++        "escape xattr: never allowed",
++        not has_any_log(records, "xattr allowed"),
++        records)
++
++
++
++FORK_FIXTURE = '''from base_plugin import BasePlugin
++
++import _posixsubprocess
++import os
++import sys
++
++__id__ = "escape_fork"
++__name__ = "Escape Fork"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++MARKER = {marker}
++SHELL = "/run/current-system/sw/bin/sh"
++MOUNT_CODE = """
++import ctypes
++import os
++import sys
++
++os.makedirs("/tmp/m", exist_ok=True)
++pid1 = open("/proc/1/cmdline", "rb").read()
++inside = b"bubblewrap" in pid1 and not os.path.exists("/home")
++libc = ctypes.CDLL(None, use_errno=True)
++mounted = libc.mount(b"tmpfs", b"/tmp/m", b"tmpfs", 0, b"")
++mount_errno = ctypes.get_errno()
++remounted = libc.mount(None, b"/", None, 32, None)
++remount_errno = ctypes.get_errno()
++sys.exit(0 if (inside
++               and mounted == -1 and mount_errno == 1
++               and remounted == -1 and remount_errno == 1) else 9)
++"""
++NET_CODE = """
++import socket
++import sys
++
++try:
++    sock = socket.socket()
++    sock.settimeout(2)
++    sock.connect(("1.1.1.1", 53))
++except OSError as error:
++    sys.exit(0 if error.errno == 101 else 9)
++sys.exit(9)
++"""
++
++
++def spawn(arguments):
++    error_read, error_write = os.pipe()
++    executable = os.fsencode(arguments[0])
++    try:
++        pid = _posixsubprocess.fork_exec(
++            arguments, (executable,), True, (error_write,),
++            None, None, -1, -1, -1, -1, -1, -1,
++            error_read, error_write, True, False,
++            -1, None, None, None, -1, None)
++    finally:
++        os.close(error_write)
++    os.read(error_read, 4096)
++    os.close(error_read)
++    _, status = os.waitpid(pid, 0)
++    return os.waitstatus_to_exitcode(status)
++
++
++class EscapeFork(BasePlugin):
++    def on_load(self):
++        direct = spawn([
++            SHELL.encode(), b"-c",
++            ("printf bad > %s && exit 0 || exit 9" % MARKER).encode(),
++        ])
++        self.log("fork-write-rc=%d" % direct)
++        through = spawn([
++            SHELL.encode(), b"-c",
++            ("printf bad > /proc/1/root%s && exit 0 || exit 9"
++             % MARKER).encode(),
++        ])
++        self.log("fork-proc1-write-rc=%d" % through)
++        home = spawn([
++            SHELL.encode(), b"-c", b"test -e /proc/1/root/home",
++        ])
++        self.log("fork-proc1-home-rc=%d" % home)
++        nix = spawn([
++            SHELL.encode(), b"-c", b"test -e /proc/1/root/nix",
++        ])
++        self.log("fork-proc1-nix-rc=%d" % nix)
++        mount = spawn([
++            sys.executable.encode(), b"-I", b"-B", b"-c",
++            MOUNT_CODE.encode(),
++        ])
++        self.log("fork-mount-rc=%d" % mount)
++        net = spawn([
++            sys.executable.encode(), b"-I", b"-B", b"-c",
++            NET_CODE.encode(),
++        ])
++        self.log("fork-net-rc=%d" % net)
++
++
++plugin = EscapeFork()
++'''
++
++
++def check_fork_escape(ledger, cli, work):
++    base, plugins, audit = workspace(work, "escape-fork")
++    marker = base / "escape-fork-marker"
++    marker.write_text("control", encoding="utf-8")
++    fixture = write_plugin(
++        plugins,
++        "escape-fork.plugin",
++        FORK_FIXTURE.format(marker=repr(str(marker))))
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "escape_fork", str(fixture)], work / "data")
++    ledger.check("fork escape: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "fork escape: host marker untouched",
++        marker.read_text(encoding="utf-8") == "control",
++        marker.read_text(encoding="utf-8"))
++    records = audit_records(audit)
++    expectations = [
++        ("direct write denied", "fork-write-rc=9"),
++        ("proc root write denied", "fork-proc1-write-rc=9"),
++        ("proc root has no home", "fork-proc1-home-rc=1"),
++        ("proc root keeps nix", "fork-proc1-nix-rc=0"),
++        ("mount and remount denied", "fork-mount-rc=0"),
++        ("network unreachable", "fork-net-rc=0"),
++    ]
++    for name, detail in expectations:
++        ledger.check(
++            f"fork escape: {name}",
++            has_log(records, "escape_fork", detail),
++            records)
++    ledger.check(
++        "fork escape: no escape code",
++        not has_any_log(records, "fork-write-rc=0")
++        and not has_any_log(records, "fork-proc1-write-rc=0"),
++        records)
++
++
++def check_deny_socket(ledger, cli, work):
++    _, plugins, audit = workspace(work, "deny-socket")
++    fixture = copy_fixture(plugins, "deny-socket.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_socket", str(fixture)], work / "data")
++    ledger.check("deny socket: load ok", data.get("ok") is True, data)
++    records = audit_records(audit)
++    ledger.check(
++        "deny socket: exact socket denial",
++        has_event(records, "deny_socket", "socket.__new__"),
++        records)
++    ledger.check(
++        "deny socket: plugin logged denial",
++        has_log(records, "deny_socket", "socket denied"),
++        records)
++
++
++def check_deny_subprocess(ledger, cli, work):
++    base, plugins, audit = workspace(work, "deny-subprocess")
++    fixture = copy_fixture(plugins, "deny-subprocess.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_subprocess", str(fixture)], work / "data")
++    ledger.check("deny subprocess: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "deny subprocess: marker absent",
++        not (base / "marker-subprocess").exists())
++    records = audit_records(audit)
++    ledger.check(
++        "deny subprocess: exact Popen denial",
++        has_event(records, "deny_subprocess", "subprocess.Popen"),
++        records)
++    ledger.check(
++        "deny subprocess: plugin logged denial",
++        has_log(records, "deny_subprocess", "subprocess denied"),
++        records)
++
++
++def check_deny_ctypes(ledger, cli, work):
++    base, plugins, audit = workspace(work, "deny-ctypes")
++    fixture = copy_fixture(plugins, "deny-ctypes.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_ctypes", str(fixture)], work / "data")
++    ledger.check("deny ctypes: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "deny ctypes: marker absent",
++        not (base / "marker-ctypes").exists())
++    records = audit_records(audit)
++    ledger.check(
++        "deny ctypes: exact dlopen denial",
++        has_event(records, "deny_ctypes", "ctypes.dlopen"),
++        records)
++    ledger.check(
++        "deny ctypes: plugin logged denial",
++        has_log(records, "deny_ctypes", "ctypes denied"),
++        records)
++    ledger.check(
++        "deny ctypes: never allowed",
++        not has_any_log(records, "ctypes allowed"),
++        records)
++
++
++def check_deny_exec(ledger, cli, work):
++    base, plugins, audit = workspace(work, "deny-exec")
++    fixture = copy_fixture(plugins, "deny-exec.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_exec", str(fixture)], work / "data")
++    ledger.check("deny exec: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "deny exec: marker absent",
++        not (base / "marker-exec-denied").exists())
++    records = audit_records(audit)
++    ledger.check(
++        "deny exec: exact compile denial",
++        has_event(records, "deny_exec", "compile"),
++        records)
++    ledger.check(
++        "deny exec: plugin logged denial",
++        has_log(records, "deny_exec", "exec denied"),
++        records)
++
++
++def check_escape_exec(ledger, cli, work):
++    base, plugins, audit = workspace(work, "escape-exec")
++    marker = base / "escape-exec-marker"
++    marker.write_text("control", encoding="utf-8")
++    fixture = write_plugin(
++        plugins,
++        "escape-exec.plugin",
++        "from base_plugin import BasePlugin\n"
++        "\n"
++        "__id__ = \"escape_exec\"\n"
++        "__name__ = \"Escape Exec\"\n"
++        "__version__ = \"1.0.0\"\n"
++        "__permissions__ = [\"native\"]\n"
++        "\n"
++        "\n"
++        "class Escape(BasePlugin):\n"
++        "    def on_load(self):\n"
++        "        try:\n"
++        f"            exec(\"open({str(marker)!r}, 'w').write('bad')\", {{}})\n"
++        "        except (PermissionError, OSError):\n"
++        "            self.log(\"escape exec denied\")\n"
++        "        else:\n"
++        "            self.log(\"escape exec allowed\")\n"
++        "\n"
++        "\n"
++        "plugin = Escape()\n")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "escape_exec", str(fixture)], work / "data")
++    ledger.check("escape exec: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "escape exec: host marker untouched",
++        marker.read_text(encoding="utf-8") == "control",
++        marker.read_text(encoding="utf-8"))
++    records = audit_records(audit)
++    ledger.check(
++        "escape exec: exact compile denial",
++        has_event(records, "escape_exec", "compile"),
++        records)
++    ledger.check(
++        "escape exec: denied log",
++        has_log(records, "escape_exec", "escape exec denied"),
++        records)
++    ledger.check(
++        "escape exec: never allowed",
++        not has_any_log(records, "escape exec allowed"),
++        records)
++
++
++
++CHILD_MARKERS_FIXTURE = '''from base_plugin import BasePlugin
++
++import ctypes
++import os
++import subprocess
++
++__id__ = "escape_children"
++__name__ = "Escape Children"
++__version__ = "1.0.0"
++__permissions__ = ["native"]
++
++SUB = {sub}
++CTYPES = {ctypes_marker}
++EXEC = {exec_marker}
++
++
++class Escape(BasePlugin):
++    def on_load(self):
++        results = []
++        try:
++            subprocess.run([
++                "/run/current-system/sw/bin/sh", "-c",
++                "printf bad > %s" % SUB,
++            ])
++        except (PermissionError, OSError):
++            results.append("sub=0")
++        else:
++            results.append("sub=1")
++        try:
++            libc = ctypes.CDLL(None)
++            libc.open.restype = ctypes.c_int
++            descriptor = libc.open(
++                CTYPES.encode(), os.O_WRONLY | os.O_CREAT, 0o600)
++            if descriptor >= 0:
++                libc.write(descriptor, b"bad", 3)
++                libc.close(descriptor)
++                results.append("ct=1")
++            else:
++                results.append("ct=0")
++        except (PermissionError, OSError):
++            results.append("ct=0")
++        try:
++            exec("open(%r, 'w').write('bad')" % EXEC, {{}})
++        except (PermissionError, OSError):
++            results.append("exec=0")
++        else:
++            results.append("exec=1")
++        self.log("child-markers " + " ".join(results))
++
++
++plugin = Escape()
++'''
++
++
++def check_escape_child_markers(ledger, cli, work):
++    base, plugins, audit = workspace(work, "escape-children")
++    sub = base / "sub-marker"
++    ctypes_marker = base / "ctypes-marker"
++    exec_marker = base / "exec-marker"
++    for path in (sub, ctypes_marker, exec_marker):
++        path.write_text("control", encoding="utf-8")
++    fixture = write_plugin(
++        plugins,
++        "escape-children.plugin",
++        CHILD_MARKERS_FIXTURE.format(
++            sub=repr(str(sub)),
++            ctypes_marker=repr(str(ctypes_marker)),
++            exec_marker=repr(str(exec_marker))))
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "escape_children", str(fixture)], work / "data")
++    ledger.check(
++        "escape children: load ok",
++        data.get("ok") is True,
++        data)
++    for name, path in (
++            ("subprocess", sub),
++            ("ctypes", ctypes_marker),
++            ("exec", exec_marker)):
++        ledger.check(
++            f"escape children: {name} marker untouched",
++            path.read_text(encoding="utf-8") == "control",
++            path.read_text(encoding="utf-8"))
++    records = audit_records(audit)
++    ledger.check(
++        "escape children: all denied",
++        has_log(records, "escape_children", "child-markers sub=0 ct=0 exec=0"),
++        records)
++
++
++def check_deny_import(ledger, cli, work):
++    base, plugins, audit = workspace(work, "deny-import")
++    fixture = copy_fixture(plugins, "deny-import.plugin")
++    evilmod = base / "evilmod.py"
++    evilmod.write_text(
++        "import os\n"
++        "open(os.path.join(os.path.dirname(__file__), 'evilmod-ran'), "
++        "'w').write('bad')\n",
++        encoding="utf-8")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_import", str(fixture)], work / "data")
++    ledger.check("deny import: load ok", data.get("ok") is True, data)
++    ledger.check(
++        "deny import: evilmod not executed",
++        not (base / "evilmod-ran").exists())
++    records = audit_records(audit)
++    ledger.check(
++        "deny import: plugin logged denial",
++        has_log(records, "deny_import", "import denied"),
++        records)
++
++
++def find_foreign_module():
++    profiles = Path("/etc/profiles")
++    if not profiles.is_dir():
++        return None, None
++    stdlib_names = set(sys.stdlib_module_names)
++    for site in sorted(profiles.glob("*/*/lib/python*/site-packages")):
++        for candidate in sorted(site.glob("*/__init__.py")):
++            name = candidate.parent.name
++            if (name.isidentifier()
++                    and not name.startswith("_")
++                    and name not in stdlib_names):
++                return site, name
++    return None, None
++
++
++def check_foreign_import(ledger, cli, work):
++    site, module = find_foreign_module()
++    if site is None:
++        ledger.skip(
++            "import outside roots: audit denial",
++            "no python site-packages outside the stdlib was found")
++        return
++    _, plugins, audit = workspace(work, "foreign-import")
++    fixture = write_plugin(
++        plugins,
++        "foreign-import.plugin",
++        "from base_plugin import BasePlugin\n"
++        "\n"
++        "import sys\n"
++        "\n"
++        "__id__ = \"foreign_import\"\n"
++        "__name__ = \"Foreign Import\"\n"
++        "__version__ = \"1.0.0\"\n"
++        "__permissions__ = [\"native\"]\n"
++        "\n"
++        "\n"
++        "class Foreign(BasePlugin):\n"
++        "    def on_load(self):\n"
++        f"        sys.path.insert(0, {str(Path(os.path.realpath(site)))!r})\n"
++        "        try:\n"
++        f"            import {module}\n"
++        "        except (PermissionError, ImportError, OSError):\n"
++        "            self.log(\"foreign import denied\")\n"
++        "        else:\n"
++        "            self.log(\"foreign import allowed\")\n"
++        "\n"
++        "\n"
++        "plugin = Foreign()\n")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "foreign_import", str(fixture)], work / "data")
++    ledger.check("foreign import: load ok", data.get("ok") is True, data)
++    records = audit_records(audit)
++    ledger.check(
++        "foreign import: exact import denial",
++        has_event(records, "foreign_import", "import"),
++        records)
++    ledger.check(
++        "foreign import: module not executed",
++        has_log(records, "foreign_import", "foreign import denied")
++        and not has_any_log(records, "foreign import allowed"),
++        records)
++
++
++def check_print_noise(ledger, cli, work):
++    _, plugins, audit = workspace(work, "print-noise")
++    fixture = copy_fixture(plugins, "print-noise.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "print_noise", str(fixture)], work / "data")
++    ledger.check("print noise: load ok", data.get("ok") is True, data)
++    ledger.check("print noise: loaded", data.get("loaded") is True, data)
++    records = audit_records(audit)
++    ledger.check(
++        "print noise: log survived",
++        has_log(records, "print_noise", "print survived"),
++        records)
++    ledger.check(
++        "print noise: no noise in protocol",
++        not has_any_log(records, "noise from plugin"),
++        records)
++
++
++def check_paths(ledger, cli, work):
++    base, plugins, audit = workspace(work, "paths")
++    valid = copy_fixture(plugins, "valid.plugin")
++    outside = base / "outside"
++    outside.mkdir()
++    outside_fixture = copy_fixture(outside, "valid.plugin")
++
++    data = run_cli(
++        cli, plugins, audit, ["validate", str(outside_fixture)], work / "data")
++    ledger.check("path outside: rejected", data.get("ok") is False, data)
++    ledger.check(
++        "path outside: outside in error",
++        "outside" in data.get("error", ""),
++        data.get("error"))
++
++    data = run_cli(
++        cli, plugins, audit,
++        ["validate", str(plugins / ".." / "outside" / "valid.plugin")],
++        work / "data")
++    ledger.check("path traversal: rejected", data.get("ok") is False, data)
++    ledger.check(
++        "path traversal: outside in error",
++        "outside" in data.get("error", ""),
++        data.get("error"))
++
++    link = plugins / "linked.plugin"
++    try:
++        os.symlink(valid, link)
++    except OSError as error:
++        ledger.skip("symlink: rejected", str(error))
++    else:
++        data = run_cli(
++            cli, plugins, audit, ["validate", str(link)], work / "data")
++        ledger.check("symlink: rejected", data.get("ok") is False, data)
++        ledger.check(
++            "symlink: symlink in error",
++            "symlink" in data.get("error", ""),
++            data.get("error"))
++
++    wrong = plugins / "wrong.txt"
++    wrong.write_text("__id__ = \"wrong\"\n", encoding="utf-8")
++    data = run_cli(
++        cli, plugins, audit, ["validate", str(wrong)], work / "data")
++    ledger.check("wrong extension: rejected", data.get("ok") is False, data)
++    ledger.check(
++        "wrong extension: unsupported format in error",
++        "Unsupported plugin format" in data.get("error", ""),
++        data.get("error"))
++
++    nested = plugins / "nested"
++    nested.mkdir()
++    nested_fixture = copy_fixture(nested, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit, ["validate", str(nested_fixture)], work / "data")
++    ledger.check("nested path: rejected", data.get("ok") is False, data)
++    ledger.check(
++        "nested path: directly inside in error",
++        "directly inside" in data.get("error", ""),
++        data.get("error"))
++
++    data = run_cli(
++        cli, plugins, audit,
++        ["validate", str(plugins / "missing.plugin")], work / "data")
++    ledger.check("missing file: rejected", data.get("ok") is False, data)
++    ledger.check(
++        "missing file: missing in error",
++        "missing" in data.get("error", ""),
++        data.get("error"))
++
++    symlink_root = base / "plugins-link"
++    try:
++        os.symlink(plugins, symlink_root)
++    except OSError as error:
++        ledger.skip("canonical plugins root", str(error))
++    else:
++        data = run_cli(
++            cli, symlink_root, audit,
++            ["enable", "demo_runtime", str(valid)], work / "data")
++        ledger.check(
++            "canonical plugins root: load ok",
++            data.get("ok") is True,
++            data)
++        ledger.check(
++            "canonical plugins root: loaded",
++            data.get("loaded") is True,
++            data)
++
++
++def check_bwrap_unavailable(ledger, cli, work):
++    _, plugins, audit = workspace(work, "bwrap-unavailable")
++    fixture = copy_fixture(plugins, "deny-write.plugin")
++    tools = tool_directory(work, "bwrap-absent-bin", ["python3"])
++    ledger.check("bwrap unavailable: tools built", tools is not None)
++    if tools is None:
++        return
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_write", str(fixture)], work / "data",
++        extra_env={"PATH": str(tools), "EXTERALESS_BWRAP": ""})
++    ledger.check(
++        "bwrap unavailable: enable failed",
++        data.get("ok") is False,
++        data)
++    ledger.check(
++        "bwrap unavailable: exact error",
++        data.get("error") == "Plugin sandbox is unavailable.",
++        data.get("error"))
++    ledger.check(
++        "bwrap unavailable: no host pid",
++        data.get("pid") == 0,
++        data.get("pid"))
++    ledger.check(
++        "bwrap unavailable: plugin not executed",
++        not (work / "bwrap-unavailable" / "marker-denied").exists()
++        and not audit.exists(),
++        audit)
++    ledger.check(
++        "bwrap unavailable: no process left",
++        host_pids(plugins) == [],
++        host_pids(plugins))
++
++
++def check_bwrap_override(ledger, cli, work):
++    _, plugins, audit = workspace(work, "bwrap-override")
++    fixture = copy_fixture(plugins, "valid.plugin")
++    tools = tool_directory(work, "bwrap-override-bin", ["python3"])
++    ledger.check("bwrap override: tools built", tools is not None and BWRAP)
++    if tools is None or BWRAP is None:
++        return
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(fixture)], work / "data",
++        extra_env={
++            "PATH": str(tools),
++            "EXTERALESS_BWRAP": BWRAP,
++        })
++    ledger.check(
++        "bwrap override: load ok",
++        data.get("ok") is True and data.get("loaded") is True,
++        data)
++
++    invalid = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(fixture)], work / "data",
++        extra_env={
++            "PATH": str(tools),
++            "EXTERALESS_BWRAP": "/nonexistent/bwrap",
++        })
++    ledger.check(
++        "bwrap override: invalid override fails closed",
++        invalid.get("ok") is False
++        and invalid.get("error") == "Plugin sandbox is unavailable.",
++        invalid)
++
++
++def check_bwrap_failure(ledger, cli, work):
++    base, plugins, audit = workspace(work, "bwrap-failure")
++    fixture = copy_fixture(plugins, "deny-write.plugin")
++    marker = base / "fake-bwrap-ran"
++    tools = tool_directory(
++        work,
++        "bwrap-broken-bin",
++        ["python3"],
++        extra_scripts={
++            "bwrap": "#!/bin/sh\n"
++                     f"echo ran >> {marker}\n"
++                     "exit 1\n",
++        })
++    ledger.check("bwrap failure: tools built", tools is not None)
++    if tools is None:
++        return
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "deny_write", str(fixture)], work / "data",
++        extra_env={"PATH": str(tools), "EXTERALESS_BWRAP": ""})
++    ledger.check(
++        "bwrap failure: enable failed",
++        data.get("ok") is False,
++        data)
++    ledger.check(
++        "bwrap failure: start error",
++        data.get("error", "").startswith("Plugin host failed to start."),
++        data.get("error"))
++    ledger.check(
++        "bwrap failure: fake bwrap executed",
++        marker.is_file(),
++        str(marker))
++    ledger.check(
++        "bwrap failure: no host started",
++        data.get("pid") == 0 and not audit.exists(),
++        data)
++
++
++def check_protocol(ledger, cli, work):
++    cases = [
++        ("protocol-wrong-seq.plugin", "protocol_wrong_seq", "wrong seq"),
++        ("protocol-missing-seq.plugin", "protocol_missing_seq", "missing seq"),
++        ("protocol-ok-false.plugin", "protocol_ok_false", "false ok"),
++    ]
++    for fixture_name, plugin_id, label in cases:
++        _, plugins, audit = workspace(work, f"protocol-{label.replace(' ', '-')}")
++        fixture = copy_fixture(plugins, fixture_name)
++        data = run_cli(
++            cli, plugins, audit,
++            ["enable", plugin_id, str(fixture)], work / "data")
++        ledger.check(
++            f"protocol {label}: rejected",
++            data.get("ok") is False,
++            data)
++        ledger.check(
++            f"protocol {label}: violation error",
++            data.get("error") == "Plugin host protocol violation.",
++            data.get("error"))
++        ledger.check(
++            f"protocol {label}: host killed",
++            data.get("pid") == 0
++            and host_pids(plugins) == [],
++            [data.get("pid"), host_pids(plugins)])
++
++    _, plugins, audit = workspace(work, "protocol-restart")
++    broken = copy_fixture(plugins, "protocol-wrong-seq.plugin")
++    valid = copy_fixture(plugins, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {
++                    "op": "enable",
++                    "id": "protocol_wrong_seq",
++                    "path": str(broken),
++                },
++                {"op": "enable", "id": "demo_runtime", "path": str(valid)},
++            ]),
++        ],
++        work / "data")
++    ledger.check("protocol restart: two results", len(data) == 2, data)
++    if len(data) == 2:
++        ledger.check(
++            "protocol restart: first rejected",
++            data[0].get("ok") is False,
++            data[0])
++        ledger.check(
++            "protocol restart: second loaded",
++            data[1].get("ok") is True and data[1].get("loaded") is True,
++            data[1])
++
++    _, plugins, audit = workspace(work, "protocol-unsolicited")
++    fixture = copy_fixture(plugins, "protocol-unsolicited-log.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "protocol_unsolicited", str(fixture)], work / "data")
++    ledger.check(
++        "protocol unsolicited: load ok",
++        data.get("ok") is True and data.get("loaded") is True,
++        data)
++    records = audit_records(audit)
++    ledger.check(
++        "protocol unsolicited: accepted known log",
++        has_log(records, "protocol_unsolicited", "after unsolicited"),
++        records)
++    ledger.check(
++        "protocol unsolicited: dropped stale log",
++        not has_any_log(records, "unsolicited log"),
++        records)
++
++
++def check_fd_hygiene(ledger, work):
++    script = extract_block("kHostScript", "PY")
++    python = require_tool("python3")
++    if script is None or python is None:
++        ledger.check("fd hygiene: prerequisites", False)
++        return
++    marker = work / "fd-marker"
++    descriptor = os.open(marker, os.O_RDWR | os.O_CREAT, 0o600)
++    try:
++        process = subprocess.Popen(
++            [python, "-I", "-B", "-c", script, "/plugins"],
++            stdin=subprocess.PIPE,
++            stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE,
++            pass_fds=(descriptor,),
++        )
++    finally:
++        os.close(descriptor)
++    try:
++        ready = process.stdout.readline(4096)
++        try:
++            message = json.loads(ready)
++        except ValueError:
++            message = {}
++        ledger.check(
++            "fd hygiene: host ready",
++            message.get("type") == "ready",
++            ready)
++        open_fds = sorted(
++            int(name)
++            for name in os.listdir(f"/proc/{process.pid}/fd"))
++        targets = []
++        for descriptor_name in os.listdir(f"/proc/{process.pid}/fd"):
++            try:
++                targets.append(os.readlink(
++                    f"/proc/{process.pid}/fd/{descriptor_name}"))
++            except OSError:
++                continue
++        ledger.check(
++            "fd hygiene: inherited fd closed",
++            not any(str(marker) in target for target in targets),
++            targets)
++        ledger.check(
++            "fd hygiene: only standard and protocol fds",
++            open_fds == [0, 1, 2, 3, 4],
++            open_fds)
++        process.stdin.write(b'{"cmd":"shutdown"}\n')
++        process.stdin.flush()
++        process.wait(timeout=10)
++        ledger.check(
++            "fd hygiene: clean shutdown",
++            process.returncode == 0,
++            process.returncode)
++    finally:
++        if process.poll() is None:
++            process.kill()
++            process.wait(timeout=10)
++
++
++def startup_sources():
++    paths = []
++    for entry in STARTUP_SOURCES:
++        if entry.is_dir():
++            paths.extend(sorted(
++                path for path in entry.rglob("*")
++                if path.suffix in (".cpp", ".h", ".mm")))
++        else:
++            paths.append(entry)
++    return paths
++
++
++def check_no_startup_host(ledger):
++    missing = [
++        str(path.relative_to(ROOT)) for path in STARTUP_SOURCES
++        if not path.exists()
++    ]
++    ledger.check("startup: sources found", not missing, missing)
++    offenders = []
++    for path in startup_sources():
++        text = path.read_text(encoding="utf-8", errors="ignore")
++        for marker in STARTUP_HOST_MARKERS:
++            if marker in text:
++                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
++    ledger.check(
++        "startup: no Runtime::Start or Runtime::Instance in app startup",
++        not offenders,
++        offenders)
++    application = (
++        ROOT / "Telegram" / "SourceFiles" / "core" / "application.cpp")
++    text = application.read_text(encoding="utf-8", errors="ignore")
++    ledger.check(
++        "startup: application stops the runtime on exit",
++        "Runtime::Stop" in text,
++        str(application.relative_to(ROOT)))
++
++
++def check_timeout(ledger, cli, work):
++    _, plugins, audit = workspace(work, "timeout")
++    fixture = copy_fixture(plugins, "infinite-loop.plugin")
++    started = time.monotonic()
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "infinite_loop", str(fixture)], work / "data",
++        timeout=60)
++    elapsed = time.monotonic() - started
++    ledger.check("timeout: load failed", data.get("ok") is False, data)
++    ledger.check(
++        "timeout: timed out error",
++        "timed out" in data.get("error", "").lower(),
++        data.get("error"))
++    ledger.check(
++        "timeout: elapsed about 10s",
++        8 <= elapsed <= 20,
++        f"{elapsed:.1f}s")
++    ledger.check(
++        "timeout: no host left",
++        host_pids(plugins) == [],
++        host_pids(plugins))
++
++    valid = copy_fixture(plugins, "valid.plugin")
++    restarted = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(valid)], work / "data")
++    pid = restarted.get("pid")
++    ledger.check("timeout: restart ok", restarted.get("ok") is True, restarted)
++    ledger.check(
++        "timeout: restart new pid",
++        isinstance(pid, int) and pid > 0 and pid != data.get("pid"),
++        pid)
++
++
++def check_single_host(ledger, cli, work):
++    _, plugins, audit = workspace(work, "single-host")
++    first = copy_fixture(plugins, "valid.plugin")
++    second = copy_fixture(plugins, "valid-second.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_runtime", "path": str(first)},
++                {"op": "enable", "id": "demo_second", "path": str(second)},
++            ]),
++        ],
++        work / "data")
++    ledger.check("single host: two results", len(data) == 2, data)
++    if len(data) == 2:
++        ledger.check("single host: first loaded", data[0].get("loaded") is True)
++        ledger.check("single host: second loaded", data[1].get("loaded") is True)
++        ledger.check(
++            "single host: same pid",
++            data[0].get("pid") == data[1].get("pid")
++            and isinstance(data[0].get("pid"), int)
++            and data[0].get("pid") > 0,
++            [data[0].get("pid"), data[1].get("pid")])
++    records = audit_records(audit)
++    ledger.check(
++        "single host: both plugins logged",
++        has_log(records, "demo_runtime", "demo loaded")
++        and has_log(records, "demo_second", "second loaded"),
++        records)
++
++
++def check_stop(ledger, cli, work):
++    _, plugins, audit = workspace(work, "stop")
++    valid = copy_fixture(plugins, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_runtime", "path": str(valid)},
++                {"op": "stop"},
++            ]),
++        ],
++        work / "data")
++    ledger.check("stop: two results", len(data) == 2, data)
++    pid = data[0].get("pid") if data else 0
++    if len(data) == 2:
++        ledger.check("stop: enable pid", isinstance(pid, int) and pid > 0, pid)
++        ledger.check("stop: ok", data[1].get("ok") is True, data[1])
++        ledger.check("stop: pid zero", data[1].get("pid") == 0, data[1])
++        ledger.check(
++            "stop: not loaded",
++            data[1].get("loaded") is False,
++            data[1])
++    if isinstance(pid, int) and pid > 0:
++        ledger.check(
++            f"stop: process {pid} gone",
++            not Path(f"/proc/{pid}").exists())
++
++
++def check_state(ledger, cli, work):
++    _, plugins, audit = workspace(work, "state")
++    data_home = work / "state-data"
++    data = run_cli(
++        cli, plugins, audit, ["state-get", "unknown_id"], data_home)
++    ledger.check("state default: ok", data.get("ok") is True, data)
++    ledger.check("state default: false", data.get("enabled") is False, data)
++
++    data = run_cli(
++        cli, plugins, audit, ["state-set", "demo_runtime", "true"], data_home)
++    ledger.check("state set: ok", data.get("ok") is True, data)
++    ledger.check("state set: true", data.get("enabled") is True, data)
++    data = run_cli(
++        cli, plugins, audit, ["state-get", "demo_runtime"], data_home)
++    ledger.check("state persistence: true", data.get("enabled") is True, data)
++
++    config_path = (
++        data_home / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    ledger.check("state persistence: config file", config_path.is_file())
++    if config_path.is_file():
++        stored = json.loads(config_path.read_text(encoding="utf-8"))
++        states = stored.get("exteraconfig", {}).get("OEPluginStates", {})
++        ledger.check(
++            "state persistence: stored state",
++            states == {"demo_runtime": True},
++            states)
++
++
++def check_config_whitelist(ledger, cli, work):
++    _, plugins, audit = workspace(work, "whitelist")
++    data_home = work / "whitelist-data"
++    import_path = work / "import-state.json"
++    import_path.write_text(
++        json.dumps({
++            "exteraconfig": {
++                "OEPluginStates": {
++                    "demo_runtime": True,
++                    "demo_second": False,
++                    "demo_off": "true",
++                    "demo_num": 1,
++                    "1bad": True,
++                    "bad id": True,
++                    "-leading": True,
++                    "toolongtoolongtoolongtoolongtoolong": True,
++                },
++                "OEBogus": True,
++            },
++        }),
++        encoding="utf-8")
++    data = run_cli(
++        cli, plugins, audit, ["import-state", str(import_path)], data_home)
++    ledger.check("import state: ok", data.get("ok") is True, data)
++    ledger.check(
++        "import state: unknown key reported",
++        data.get("unknown") == ["OEBogus"],
++        data.get("unknown"))
++    for plugin_id in (
++            "demo_second", "demo_off", "demo_num", "1bad", "-leading",
++            "toolongtoolongtoolongtoolongtoolong"):
++        state = run_cli(
++            cli, plugins, audit, ["state-get", plugin_id], data_home)
++        ledger.check(
++            f"import state: {plugin_id} false",
++            state.get("enabled") is False,
++            state)
++    state = run_cli(
++        cli, plugins, audit, ["state-get", "demo_runtime"], data_home)
++    ledger.check("import state: valid true kept", state.get("enabled") is True)
++
++    config_path = (
++        data_home / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    stored = json.loads(config_path.read_text(encoding="utf-8"))
++    states = stored.get("exteraconfig", {}).get("OEPluginStates", {})
++    ledger.check(
++        "import state: only clean state stored",
++        states == {"demo_runtime": True},
++        states)
++
++
++def check_missing_python(ledger, cli, work):
++    _, plugins, audit = workspace(work, "missing-python")
++    valid = copy_fixture(plugins, "valid.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(valid)], work / "data",
++        extra_env={"PATH": "/nonexistent"})
++    ledger.check("missing python: failed", data.get("ok") is False, data)
++    ledger.check(
++        "missing python: error",
++        data.get("error") == "Python 3 was not found.",
++        data.get("error"))
++
++
++def check_crash(ledger, cli, work):
++    _, plugins, audit = workspace(work, "crash")
++    crash = copy_fixture(plugins, "crash.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "crash_plugin", str(crash)], work / "data")
++    ledger.check("crash: load failed", data.get("ok") is False, data)
++    valid = copy_fixture(plugins, "valid.plugin")
++    restarted = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(valid)], work / "data")
++    pid = restarted.get("pid")
++    ledger.check("crash: restart ok", restarted.get("ok") is True, restarted)
++    ledger.check(
++        "crash: restart pid",
++        isinstance(pid, int) and pid > 0,
++        pid)
++    ledger.check(
++        "crash: no host left",
++        host_pids(plugins) == [],
++        host_pids(plugins))
++
++
++def check_missing_base(ledger, cli, work):
++    _, plugins, audit = workspace(work, "missing-base")
++    fixture = copy_fixture(plugins, "missing-base.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "missing_base", str(fixture)], work / "data")
++    ledger.check("missing base: failed", data.get("ok") is False, data)
++    ledger.check(
++        "missing base: base plugin in error",
++        "BasePlugin" in data.get("error", ""),
++        data.get("error"))
++
++
++def check_id_mismatch(ledger, cli, work):
++    _, plugins, audit = workspace(work, "id-mismatch")
++    fixture = copy_fixture(plugins, "id-mismatch.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        ["enable", "demo_runtime", str(fixture)], work / "data")
++    ledger.check("id mismatch: failed", data.get("ok") is False, data)
++    ledger.check(
++        "id mismatch: id in error",
++        "id" in data.get("error", "").lower(),
++        data.get("error"))
++
++
++def main():
++    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
++    if not cli.is_file():
++        print(f"FAIL host CLI is missing at {cli}")
++        return 2
++    ledger = Ledger()
++    work = Path(tempfile.mkdtemp(prefix="exteraless-plugin-host-checks-"))
++    try:
++        check_static(ledger)
++        check_bwrap_environment(ledger, work)
++        check_keyring(ledger, work)
++        check_no_startup_host(ledger)
++        check_valid_load(ledger, cli, work)
++        check_sandbox_observe(ledger, cli, work)
++        check_unload(ledger, cli, work)
++        check_deny_write(ledger, cli, work)
++        check_escape_write(ledger, cli, work)
++        check_fork_escape(ledger, cli, work)
++        check_escape_xattr(ledger, cli, work)
++        check_deny_socket(ledger, cli, work)
++        check_deny_subprocess(ledger, cli, work)
++        check_deny_ctypes(ledger, cli, work)
++        check_deny_exec(ledger, cli, work)
++        check_escape_exec(ledger, cli, work)
++        check_escape_child_markers(ledger, cli, work)
++        check_deny_import(ledger, cli, work)
++        check_foreign_import(ledger, cli, work)
++        check_keyring_plugin(ledger, cli, work)
++        check_print_noise(ledger, cli, work)
++        check_paths(ledger, cli, work)
++        check_bwrap_unavailable(ledger, cli, work)
++        check_bwrap_override(ledger, cli, work)
++        check_bwrap_failure(ledger, cli, work)
++        check_protocol(ledger, cli, work)
++        check_fd_hygiene(ledger, work)
++        check_timeout(ledger, cli, work)
++        check_single_host(ledger, cli, work)
++        check_stop(ledger, cli, work)
++        check_state(ledger, cli, work)
++        check_config_whitelist(ledger, cli, work)
++        check_missing_python(ledger, cli, work)
++        check_crash(ledger, cli, work)
++        check_missing_base(ledger, cli, work)
++        check_id_mismatch(ledger, cli, work)
++    finally:
++        shutil.rmtree(work, ignore_errors=True)
++    print()
++    if ledger.failures:
++        print(
++            f"RESULT: FAIL ({len(ledger.failures)} of "
++            f"{ledger.checks} checks)")
++        for name in ledger.failures:
++            print(f"  - {name}")
++        return 1
++    skipped = f", {len(ledger.skips)} skipped" if ledger.skips else ""
++    print(f"RESULT: PASS ({ledger.checks} checks{skipped})")
 +    return 0
 +
 +

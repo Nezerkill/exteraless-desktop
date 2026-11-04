@@ -1,0 +1,21 @@
+from base_plugin import BasePlugin
+
+import __main__
+
+__id__ = "protocol_ok_false"
+__name__ = "Protocol Ok False"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class OkFalse(BasePlugin):
+    def on_load(self):
+        __main__._send({
+            "seq": __main__._CURRENT_SEQ[0],
+            "type": "loaded",
+            "ok": False,
+        })
+        self.log("false ok sent")
+
+
+plugin = OkFalse()

@@ -83,6 +83,8 @@ target_sources(Telegram PRIVATE
     SourceFiles/exteraless/pill_stack.h
     SourceFiles/exteraless/plugins_box.cpp
     SourceFiles/exteraless/plugins_box.h
+    SourceFiles/exteraless/plugin_runtime.cpp
+    SourceFiles/exteraless/plugin_runtime.h
 )
 
 target_link_libraries(Telegram

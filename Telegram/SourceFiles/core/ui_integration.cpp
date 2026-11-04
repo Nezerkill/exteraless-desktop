@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/click_handler_types.h"
 #include "data/stickers/data_custom_emoji.h"
 #include "data/data_session.h"
+#include "exteraless/config.h"
+#include "exteraless/links.h"
 #include "iv/iv_instance.h"
 #include "ui/text/text_custom_emoji.h"
 #include "ui/text/text_utilities.h"
@@ -417,9 +419,13 @@ bool UiIntegration::handleUrlClick(
 		const QVariant &context) {
 	// Only our own token may be added below, never one that came with it,
 	// unless the url itself was given to us by the server for this login.
+	const auto clickUrl = Exteraless::Config::Instance()
+		.chatsSettings().stripTrackingOnOpen
+		? Exteraless::StripTracking(original)
+		: original;
 	const auto url = context.value<ClickHandlerContext>().keepWebAuthTokens
-		? original
-		: UrlWithoutWebAuthTokens(original);
+		? clickUrl
+		: UrlWithoutWebAuthTokens(clickUrl);
 	const auto local = Core::TryConvertUrlToLocal(url);
 	if (Core::InternalPassportOrOAuthLink(local)) {
 		return true;

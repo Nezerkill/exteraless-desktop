@@ -56,13 +56,50 @@
   LLD 21.1.8 (GNU ld упирается в debug-info overflow), `out/bin/Telegram`
   sha256 `7559fd57…`, `ninja -C out -n Telegram` не показывает compile/link
   edges кроме glob/CMake re-run.
+- Плагины, этап 2, backend: `exteraless/tests/plugins/run_host_checks.py` —
+  213 проверок PASS на текущем CLI; покрыты bwrap-профиль (read-only `/` и
+  `/plugins`, скрытый HOME, `/tmp`, минимальный environment, нет сети,
+  capabilities сброшены), best-effort join session keyring,
+  path/symlink/canonical root, protocol `seq`/`ok` и violation, timeout около
+  10 с, single host, state persistence, sandbox unavailable/override/failure и
+  отсутствие host при старте приложения.
+- Плагины, этап 2, UI под Xvfb: при старте с включёнными в `OEPluginStates`
+  плагинами host и маркер отсутствуют; открытие Plugins загружает включённые
+  плагины (`Plugin host: running`, `Enabled (running)`), toggle OFF/ON,
+  close/reopen с тем же host; timeout показывает
+  `Enabled (not running): Plugin host timed out.`; выход из приложения
+  останавливает host.
+- Плагины, этап 2, сборка: итоговый `out/bin/Telegram` sha256 `a7d1c6d9…`,
+  mtime 2026-11-04 14:57; `ninja -C out -n Telegram` не показывает
+  compile/link edges (только glob/CMake re-run).
 - `nix/patches/exteraless.patch` применяется к чистому tdesktop 7.3.1.
+- Nix-пакет, `postFixup`: upstream D-Bus `substituteInPlace` не дублируется,
+  `nix eval --raw .#packages.x86_64-linux.default.postFixup` содержит один
+  вызов substitution и один `wrapProgram`; `bash -n` и shellcheck проходят
+  (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
+  подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
+  дублированный вариант падал на `--replace-fail`.
+- Chats: `exteraless/tests/chats/run_checks.py` — 79 проверок PASS
+  (38 strip, 10 reactions, 2 CLI, 7 config, 22 backup); плагины без
+  изменений — 32 и 213 проверок.
+- Chats, Xvfb smoke: подсекция `Chats` с пятью тумблерами, tail on/off в
+  личном чате, реакции скрыты в канале и группе; личного чата с реакциями в
+  профиле не было, поэтому реакции в личных чатах проверены только CLI.
+  После включения настройки уже открытый чат сохраняет старые tail/reactions,
+  реакции в pinned bar обновляются только после перезапуска.
+- Chats, сборка: итоговый `out/bin/Telegram` sha256 `d88ddc7c…`, mtime
+  2026-11-04 17:19; `ninja -C out -n Telegram` не показывает compile/link
+  edges (только glob/CMake re-run).
+- Chats, патч: `nix/patches/exteraless.patch` перегенерирован, `apply
+  --check` и apply на чистом v7.3.1 проходят; `nix flake check --no-build`
+  проходит, полная Nix-сборка не запускалась.
 
 ### Артефакты
 
 - История разработки — в git репозитория.
-- Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль, drawer order и drawer accounts.
+- Nix-пакет не пересобран после per-chat Ghost exclusions, выбора пилюль, drawer order, drawer accounts, плагинов этапа 2 и батча Chats; `nix flake check --no-build` и `postFixup` проверены без полной сборки.
 - Nix-пакет: локальная сборка flake (`./result`), store-путь не фиксируется.
+- `nix/package.nix` и `flake.nix` не входят в `nix/patches/exteraless.patch` by design: пакет применяет патч к upstream tdesktop, а wrapper/devShell живут в flake.
 - Локальная Debug-сборка: `out/bin/Telegram`.
 
 ## В работе / дальше
@@ -76,11 +113,21 @@
 - [x] Drawer: пункты Exteraless в главном меню (Ghost, Pill Stack, proxy, cache).
 - [x] Drawer: порядок пунктов в главном меню (`OEMainMenuOrder`, drag-and-drop).
 - [x] Drawer: аккаунты и unread-бейджи.
+- [x] Chats: хвост пузыря, скрытие реакций в каналах/группах/личных чатах и
+  вырезание tracking-параметров при открытии http/https-ссылок; настройки
+  применяются после повторного открытия чата, реакции в pinned bar — после
+  перезапуска.
 
 ### MVP3
 
-- [ ] Python-плагины: отдельный host-процесс, манифест, разрешения, аудит, sandbox.
+- [ ] Python-плагины: установка/удаление, репозиторий и обновления.
 - [x] Плагины, этап 1: манифест и просмотр (`tdata/plugins`, AST без исполнения, разрешения, ошибки, бокс).
+- [x] Плагины, этап 2: контролируемый host-процесс `bwrap` + `python3 -I -B -c`,
+  JSON-lines IPC с `seq`/`ok`, load/unload, audit-лог
+  `tdata/plugins-audit.log`, persistent `OEPluginStates`, тумблеры и
+  автозагрузка при открытии Plugins; запуск приложения код плагинов не
+  исполняет, выход из приложения останавливает host.
+- [ ] Просмотр audit-лога в UI.
 - [ ] Совместимость с частью Android-плагинов через shim.
 
 ### После MVP
@@ -99,6 +146,28 @@
 - `exteraless.json` сейчас привязан к `QStandardPaths::AppLocalDataLocation`
   и не учитывает `-workdir`.
 - Плагины Android-версии несовместимы: нужен новый desktop API.
+- Плагины этапа 2, известные ограничения:
+  - `bwrap` доступен только на Linux; без него host fail closed
+    (`Plugin sandbox is unavailable.`), плагины не запускаются. Это
+    единственная фактическая граница этапа.
+  - Python audit hook — best-effort policy layer, а не security boundary.
+    Плагин может отключить его целиком: скрипт host исполняется в
+    `__main__`, и `import __main__; __main__._IN_AUDIT[0] = True` выключает
+    все проверки (`socket()` после этого создаётся). Deny-by-default —
+    только про набор известных audit-событий, не про изоляцию.
+  - Потоки сейчас разрешены: `threading.Thread` в Python 3.14 стартует через
+    `_thread.start_joinable_thread`, которого нет в deny-наборе; запись
+    `threading.Thread` в deny-наборе — мёртвая (такого audit-события нет).
+    Запрещён только прямой `_thread.start_new_thread`.
+  - Нет seccomp/landlock: bwrap ограничивает namespaces, mounts, network и
+    capabilities, но не syscall-поверхность; `/nix` доступен read-only.
+  - Session keyring отделяется best-effort и не изолируется полностью.
+  - Один host на приложение: timeout или crash убивает его и выгружает все
+    плагины; загрузка из UI синхронная (до 10 с).
+  - Nix-пакет добавляет `bubblewrap` и `python3` в `PATH` через
+    `wrapProgram`; полная сборка пакета после этапа 2 ещё не выполнялась
+    (проверены только `postFixup`, `nix flake check --no-build` и
+    применение патча).
 
 ## Сборка с ограничением ОЗУ
 

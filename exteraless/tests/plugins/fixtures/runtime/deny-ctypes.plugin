@@ -1,0 +1,31 @@
+from base_plugin import BasePlugin
+
+import ctypes
+import os
+
+__id__ = "deny_ctypes"
+__name__ = "Deny Ctypes"
+__version__ = "1.0.0"
+__permissions__ = ["native"]
+
+
+class DenyCtypes(BasePlugin):
+    def on_load(self):
+        target = os.path.join(
+            os.path.dirname(__file__), "..", "marker-ctypes")
+        try:
+            libc = ctypes.CDLL(None)
+            libc.open.restype = ctypes.c_int
+            descriptor = libc.open(
+                target.encode(), os.O_WRONLY | os.O_CREAT, 0o600)
+            if descriptor < 0:
+                raise OSError("libc.open failed")
+            libc.write(descriptor, b"bad", 3)
+            libc.close(descriptor)
+        except (PermissionError, OSError):
+            self.log("ctypes denied")
+        else:
+            self.log("ctypes allowed")
+
+
+plugin = DenyCtypes()

@@ -1,10 +1,14 @@
 add_library(exteraless STATIC
     backup.cpp
     backup.h
+    chats.cpp
+    chats.h
     config.cpp
     config.h
     exteraless.cpp
     exteraless.h
+    links.cpp
+    links.h
     network.cpp
     network.h
     plugins/scanner.cpp
@@ -24,3 +28,4 @@ PUBLIC
 )
 
 add_subdirectory(tests/plugins)
+add_subdirectory(tests/chats)

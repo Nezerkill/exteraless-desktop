@@ -21,21 +21,50 @@ New `Exteraless` section in tdesktop Settings with subsections:
 - **General**
   - relative last seen (`OERelativeLastSeen`, default `false`);
   - comma after mention (`OEAddCommaAfterMention`, default `true`).
-- **Appearance**
-  - avatar corners (`OEAppearanceAvatarCorners`);
-  - square FAB (`OEAppearanceSquareFab`, default `true`);
-  - section radius (`OEAppearanceSectionRadius`);
-  - separate headers (`OEAppearanceSeparateHeaders`);
-  - navigation drawer — not implemented as a setting: tdesktop's main menu is
-    the drawer itself (see Drawer below), there is no
-    `OEAppearanceNavigationDrawer` key.
+- **Appearance** — not ported: section radius, separate headers and square FAB
+  have no desktop analog, because tdesktop rounds and arranges those surfaces
+  with its own styles, and no `OEAppearance*` key is implemented. Avatar
+  corners are not implemented either, and the navigation drawer is not a
+  setting: tdesktop's main menu is the drawer itself (see Drawer below), there
+  is no `OEAppearanceNavigationDrawer` key.
 - **Chats**
-  - wide channel posts (`OEChatsWideChannelPosts`, default `false`);
   - remove message tail (`OEChatsRemoveMessageTail`, default `true`);
-  - hide reactions in channels/groups/private (`OEChatsHideReactions*`);
-  - strip tracking on open/paste (`OEChatsStripTrackingOnOpen/Paste`, default `true`).
+  - hide reactions in channels (`OEChatsHideReactionsChannels`, default
+    `false`), in groups and supergroups (`OEChatsHideReactionsGroups`, default
+    `false`) and in private chats and bots (`OEChatsHideReactionsPrivate`,
+    default `false`);
+  - strip tracking on open (`OEChatsStripTrackingOnOpen`, default `true`).
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`.
+
+Desktop behavior of the Chats keys:
+
+- `OEChatsRemoveMessageTail` and `OEChatsHideReactions*` are read when a chat
+  view is built, so a change applies after the chat is closed and reopened, or
+  after a restart. Reactions in the pinned bar can keep their old state until
+  a restart. Hiding reactions removes the reactions list and its click target;
+  server-side reactions and counters are not changed, and no overlay or extra
+  box is added.
+- `OEChatsStripTrackingOnOpen` applies only to clicked `http`/`https` links;
+  stripping pasted text is not implemented. It is a desktop-only key: the
+  `.extera` backup neither exports nor imports it.
+- The tracking allowlist is conservative: the `utm_*` family plus `fbclid`,
+  `gclid`, `dclid`, `gbraid`, `wbraid`, `msclkid`, `yclid`, `twclid`,
+  `ttclid`, `igshid`, `li_fat_id`, `mc_cid`, `mc_eid`, `_hsenc`, `_hsmi`,
+  `mkt_tok`, `rb_clickid`, `s_cid`, `vero_id`, `wickedid`, `oly_anon_id` and
+  `oly_enc_id`. Ambiguous parameters such as `ref`, `source`, `s`, `si`,
+  `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
+  `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
+  names are never decoded.
+- `.extera` backup carries `removeMessageTail`, `hideReactionsInChannels`,
+  `hideReactionsInGroups` and `hideReactionsInPrivateChats`; the old
+  `hideReactionsInPrivate` name is reported as unknown on import.
+- `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
+- Verification: the chats runner has 79 checks, the plugin manifest runner 32
+  and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
+  tail on/off and reactions hidden in a channel and in a group. Private-chat
+  reactions were verified only by the CLI, because the smoke profile had no
+  private chat with reactions.
 
 All keys keep their `OE*` names. On import, unknown keys are reported, not
 silently dropped. Existing tdesktop settings remain untouched.
@@ -126,7 +155,9 @@ order, login, logout and the account switcher stay upstream.
 ## Not ported
 
 `glyph`, `appicons`, `shortcuts`, `updater`, `camera` (CameraX), Android crash
-and jank tooling. Desktop equivalents are separate tasks.
+and jank tooling. Desktop equivalents are separate tasks. The `OEAppearance*`
+keys (section radius, separate headers, square FAB, avatar corners) have no
+desktop analog and are not ported.
 
 ## Plugins
 
@@ -148,12 +179,79 @@ Stage 1 (MVP3): manifest and inspection only.
 - Files larger than 2 MiB are rejected per file; process failures (no
   `python3`, timeout, invalid JSON, non-zero exit) become one global error.
 - UI: a `Plugins` subsection in the Exteraless settings opens a box with the
-  plugin count, metadata, per-file errors or an empty-state message. The box
-  has only `Open folder` and `Close`.
+  plugin count, metadata, per-file errors or an empty-state message.
 
-Out of scope for stage 1: the separate Python host process, install/uninstall
-and enable/disable, IPC between the app and plugins, audit journal, OS
-sandbox, the Android compatibility shim, and any `.elyx`/`.eaf` runtime.
-Android plugins that use `from java import ...` or Xposed hooks stay
-incompatible; the shared Python code (`base_plugin.py`, metadata/capability
-scan, audit policy) is reused only when the host process is designed.
+Stage 2 (MVP3): controlled host for enabled plugins.
+
+- `OEPluginStates` in `tdata/exteraless.json` is the preference: `id -> true`,
+  default `false`, only valid ids and boolean `true` survive sanitizing. The
+  runtime status is shown separately from the toggle.
+- One host process per application: `bwrap` runs `python3 -I -B -c <embedded
+  script> /plugins`, with no shell and no per-plugin process. IPC is UTF-8
+  JSON lines with `seq` and `ok`: `load`/`unload`/`shutdown`, host
+  `ready`/`loaded`/`unloaded`/`error`/`audit`/`log`. Responses must carry the
+  request `seq` and `ok: true`, otherwise the host is treated as broken.
+- bwrap profile: `--unshare-all --unshare-user --disable-userns
+  --die-with-parent --new-session --cap-drop ALL`, private `/proc`, `/dev` and
+  `/tmp`, `--clearenv`, read-only `/` and `/plugins`, read-only `/nix`,
+  `/run/current-system/sw`, `/usr`, `/bin`, `/lib` and selected `/etc` files,
+  `HOME=/tmp`, a minimal `PATH`, and no network. The plugins directory is
+  bound read-only at `/plugins`; plugin paths in IPC are `/plugins/<file>`.
+- Before installing the audit hook the host joins its own session keyring
+  (`KEYCTL_JOIN_SESSION_KEYRING`) best-effort; reading `/proc/keys` from a
+  plugin is denied, so the inherited host keyring is not exposed.
+- The Python audit hook is a best-effort policy layer over a known set of
+  audit events, not a security boundary: network, subprocess, `os.system`,
+  exec/fork/spawn, `ctypes`, `mmap`, explicit file descriptors, writes outside
+  `/plugins`, reads outside `/plugins` and the Python stdlib, `sys.addaudithook`,
+  `gc` introspection, trace/profile, `fcntl`, foreign imports and host keyring
+  access. Denied events are appended to `tdata/plugins-audit.log` as JSON
+  lines (`time`, `kind`, `plugin`, `event`, `detail`) and raise
+  `PermissionError`. The hook can be disabled by a plugin: the host script
+  runs as `__main__`, so `import __main__; __main__._IN_AUDIT[0] = True`
+  turns every check off, and a plugin may also mutate other host globals.
+  bwrap remains the actual boundary.
+- Opening the Plugins box loads persisted enabled plugins; app startup never
+  starts the host, closing the box keeps it running, and app exit stops it.
+  Toggles call load/unload first and then persist the preference, so a failed
+  load is shown as `Enabled (not running): <error>` and retried on the next
+  open.
+- Path rules: only a direct regular child of `tdata/plugins`, only
+  `.plugin`/`.py`, canonical path required, no symlinks or `..`; C++ validates
+  the path and the host re-checks the parent, `O_NOFOLLOW`, `fstat` and the
+  2 MiB limit before reading the file.
+- Manifest permissions (`network`, `native`, `files`, ...) are informational
+  in stage 2 and grant no capabilities; one audit policy applies to every
+  plugin.
+
+### Plugin security boundaries
+
+- bwrap is Linux-only; when `bwrap` is unavailable the host fails closed with
+  `Plugin sandbox is unavailable.` and no plugin code runs. There is no
+  non-Linux fallback.
+- The audit hook is a best-effort policy layer, not an OS sandbox and not a
+  security boundary: native code, inherited descriptors, non-audited C paths
+  and best-effort stdlib filename exceptions can bypass it. A plugin can also
+  disable it outright, because the host script is `__main__` and exposes its
+  state: `import __main__; __main__._IN_AUDIT[0] = True` makes the hook return
+  immediately (after that a plugin can create sockets or write files that the
+  hook would have denied; the bwrap mounts and network namespace still apply).
+  Do not treat deny-by-default as an enforced guarantee.
+- Threads are currently allowed: `threading.Thread` is not an audit event,
+  and Python 3.14 starts threads through `_thread.start_joinable_thread`,
+  which is not in the deny set. The `threading.Thread` deny entry is dead,
+  and only a direct `_thread.start_new_thread` call is denied.
+- No seccomp or landlock profile is applied, `/nix` stays readable read-only
+  inside the sandbox, and the keyring join is best-effort rather than full
+  keyring isolation.
+- One host serves all plugins: a timeout or crash kills it and unloads every
+  plugin. UI load/unload calls are synchronous and can block the main thread
+  for up to 10 seconds; there is no background queue.
+- The Nix package wraps `bin/Telegram` with `wrapProgram` so `bubblewrap` and
+  `python3` are on `PATH`; it does not yet have a full build after stage 2,
+  only `postFixup` evaluation, `nix flake check --no-build` and patch-apply
+  checks.
+- Out of scope: install/remove, repository/updates, audit log viewer and
+  rotation, permissions enforcement, multi-file plugin packages, and the
+  Android `.elyx`/`.eaf` shim. Android plugins using `from java import ...` or
+  Xposed hooks stay incompatible.

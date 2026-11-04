@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_forum_topic.h"
 #include "data/data_message_reactions.h"
+#include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "mainwidget.h"
 #include "main/main_session.h"
@@ -6611,7 +6612,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
 			&& !edges.infoBelow
 			&& (rich->article.edgeBlocks().bottom == Block::VisualMedia);
 	};
-	const auto skipTail = smallBottom
+	const auto skipTail = Exteraless::Config::Instance()
+		.chatsSettings().removeMessageTail
+		|| smallBottom
 		|| (media && media->skipBubbleTail())
 		|| (rich && richMediaAtBottom())
 		|| (keyboard != nullptr)

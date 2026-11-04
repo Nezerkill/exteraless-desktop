@@ -19,6 +19,10 @@ constexpr auto kVersion = 1;
 constexpr auto kRelativeLastSeen = "relativeLastSeen";
 constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
+constexpr auto kRemoveMessageTail = "removeMessageTail";
+constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
+constexpr auto kHideReactionsInGroups = "hideReactionsInGroups";
+constexpr auto kHideReactionsInPrivateChats = "hideReactionsInPrivateChats";
 
 [[nodiscard]] QString ToBase11(int value) {
 	auto result = QString();
@@ -84,10 +88,15 @@ QByteArray DecodeInvisible(const QString &text) {
 }
 
 QString BuildBackup() {
+	const auto chats = Config::Instance().chatsSettings();
 	auto extera = QJsonObject();
 	extera[kRelativeLastSeen] = Config::Instance().relativeLastSeen();
 	extera[kAddCommaAfterMention] = Config::Instance().addCommaAfterMention();
 	extera[kDoNotUseProxy] = Config::Instance().proxyDisableConditions();
+	extera[kRemoveMessageTail] = chats.removeMessageTail;
+	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
+	extera[kHideReactionsInGroups] = chats.hideReactionsGroups;
+	extera[kHideReactionsInPrivateChats] = chats.hideReactionsPrivate;
 
 	auto root = QJsonObject();
 	root["version"] = kVersion;
@@ -127,6 +136,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 			&& value.toInt() >= 0
 			&& value.toInt() <= 7) {
 			config.setProxyDisableConditions(value.toInt());
+			++result.applied;
+		} else if (key == kRemoveMessageTail && value.isBool()) {
+			config.setChatsRemoveMessageTail(value.toBool());
+			++result.applied;
+		} else if (key == kHideReactionsInChannels && value.isBool()) {
+			config.setChatsHideReactionsChannels(value.toBool());
+			++result.applied;
+		} else if (key == kHideReactionsInGroups && value.isBool()) {
+			config.setChatsHideReactionsGroups(value.toBool());
+			++result.applied;
+		} else if (key == kHideReactionsInPrivateChats && value.isBool()) {
+			config.setChatsHideReactionsPrivate(value.toBool());
 			++result.applied;
 		} else {
 			result.unknown.push_back(key);

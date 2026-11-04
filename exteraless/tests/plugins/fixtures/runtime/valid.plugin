@@ -1,0 +1,17 @@
+from base_plugin import BasePlugin
+
+__id__ = "demo_runtime"
+__name__ = "Demo Runtime"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Demo(BasePlugin):
+    def on_load(self):
+        self.log("demo loaded")
+
+    def on_unload(self):
+        self.log("demo unloaded")
+
+
+plugin = Demo()

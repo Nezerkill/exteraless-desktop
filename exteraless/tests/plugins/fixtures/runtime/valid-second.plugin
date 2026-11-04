@@ -1,0 +1,17 @@
+from base_plugin import BasePlugin
+
+__id__ = "demo_second"
+__name__ = "Demo Second"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Second(BasePlugin):
+    def on_load(self):
+        self.log("second loaded")
+
+    def on_unload(self):
+        self.log("second unloaded")
+
+
+plugin = Second()

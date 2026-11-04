@@ -1,5 +1,7 @@
 #pragma once
 
+#include "exteraless/chats.h"
+
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
@@ -85,6 +87,17 @@ public:
 	[[nodiscard]] bool drawerAccountsExpanded() const;
 	void setDrawerAccountsExpanded(bool value);
 
+	[[nodiscard]] ChatsSettings chatsSettings() const;
+	void setChatsRemoveMessageTail(bool value);
+	void setChatsHideReactionsChannels(bool value);
+	void setChatsHideReactionsGroups(bool value);
+	void setChatsHideReactionsPrivate(bool value);
+	void setChatsStripTrackingOnOpen(bool value);
+
+	[[nodiscard]] bool pluginEnabled(const QString &id) const;
+	void setPluginEnabled(const QString &id, bool enabled);
+	[[nodiscard]] QJsonObject pluginStates() const;
+
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
 
@@ -92,6 +105,7 @@ private:
 	Config() = default;
 
 	void ensureLoaded() const;
+	void refreshChats() const;
 	[[nodiscard]] bool boolValue(const char *key, bool fallback) const;
 	[[nodiscard]] int intValue(const char *key, int fallback) const;
 	[[nodiscard]] QString stringValue(
@@ -102,6 +116,7 @@ private:
 	mutable QJsonObject _values;
 	mutable QString _path;
 	mutable bool _loaded = false;
+	mutable ChatsSettings _chats;
 };
 
 } // namespace Exteraless

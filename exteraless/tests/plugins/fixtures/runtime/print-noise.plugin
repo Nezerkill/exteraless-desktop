@@ -1,0 +1,19 @@
+from base_plugin import BasePlugin
+
+import sys
+
+__id__ = "print_noise"
+__name__ = "Print Noise"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class PrintNoise(BasePlugin):
+    def on_load(self):
+        print("noise from plugin")
+        print("noise from plugin stderr", file=sys.stderr)
+        sys.stdout.write("noise written directly\n")
+        self.log("print survived")
+
+
+plugin = PrintNoise()

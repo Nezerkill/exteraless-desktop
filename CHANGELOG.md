@@ -12,8 +12,54 @@
   запуска плагинов нет, кнопки только «Open folder» и «Close».
 - Тестовый harness плагинов: CLI `exteraless-plugins-scan`, фикстуры и
   regression runner (`exteraless/tests/plugins/run_checks.py`, 32 проверки).
+- Плагины, этап 2: один host-процесс `bwrap` + `python3 -I -B -c` на всё
+  приложение с JSON-lines IPC (`seq`/`ok`, `load`/`unload`), persistent
+  `OEPluginStates` (default `false`), audit-лог `tdata/plugins-audit.log` и
+  тумблеры в боксе Plugins. Включённые плагины загружаются только при
+  открытии бокса; запуск приложения host не стартует, выход из приложения
+  останавливает его. bwrap даёт read-only корень и `/plugins`, скрытый HOME,
+  минимальный environment, без сети и сброшенные capabilities; session
+  keyring плагинов отделяется best-effort через `KEYCTL_JOIN_SESSION_KEYRING`.
+  Python audit hook остаётся policy layer, а не полной OS-изоляцией.
+- Тестовый harness этапа 2: CLI `exteraless-plugin-host-cli`, фикстуры
+  `fixtures/runtime/`, regression runner
+  (`exteraless/tests/plugins/run_host_checks.py`, 213 проверок).
+- Nix-пакет: `postFixup` сохраняет upstream-обработку D-Bus без дублирования:
+  upstream `substituteInPlace` остаётся ровно один раз, добавлен только
+  `wrapProgram`, который кладёт `bubblewrap` и `python3` в `PATH`. Прежний
+  вариант повторял подмену и падал на `--replace-fail` при повторном
+  совпадении; devShell содержит `bubblewrap` и `python3`.
+- Документация: Known Limitations этапа 2 зафиксированы явно — audit hook
+  best-effort и отключается плагином через `import __main__`
+  (`_IN_AUDIT[0] = True`), потоки сейчас разрешены (`threading.Thread` в
+  Python 3.14 идёт через `_thread.start_joinable_thread`, запись
+  `threading.Thread` в deny-наборе мёртвая), один host на все плагины,
+  bwrap только Linux, пакетный wrapper, полной Nix-сборки после этапа 2 ещё
+  не было. Deny-by-default больше не описывается как security boundary.
 - Drawer-аккаунты подтверждены на итоговом бинарнике: Debug-сборка и Xvfb
   smoke прошли, `nix flake check --no-build` проходит.
+- Chats: перенесены `OEChatsRemoveMessageTail` (default `true`) и
+  `OEChatsHideReactionsChannels/Groups/Private` (default `false`); значения
+  читаются при построении чата и применяются после его повторного открытия,
+  реакции в pinned bar могут обновиться только после перезапуска. Добавлен
+  `OEChatsStripTrackingOnOpen` (default `true`): при клике по http/https
+  удаляются `utm_*` и известные click-id (`fbclid`, `gclid`, `dclid`,
+  `gbraid`, `wbraid`, `msclkid`, `yclid`, `twclid`, `ttclid`, `igshid`,
+  `li_fat_id`, `mc_cid`, `mc_eid`, `_hsenc`, `_hsmi`, `mkt_tok`,
+  `rb_clickid`, `s_cid`, `vero_id`, `wickedid`, `oly_anon_id`, `oly_enc_id`);
+  `ref`/`source`/`s`/`si` и прочие неоднозначные параметры сохраняются,
+  percent-encoded имена не декодируются, очистки вставленного текста нет.
+  Android backup: `removeMessageTail`, `hideReactionsInChannels`,
+  `hideReactionsInGroups`, `hideReactionsInPrivateChats`; strip tracking —
+  desktop-only и в backup не входит.
+- Тесты Chats: `exteraless/tests/chats/run_checks.py` — 79 проверок PASS
+  (38 strip, 10 reactions, 2 CLI, 7 config, 22 backup); плагины без
+  изменений — 32 и 213 проверок. Xvfb smoke: подсекция Chats, tail on/off,
+  реакции скрыты в канале и группе; личного чата с реакциями в профиле не
+  было, поэтому private проверен только CLI. Итоговый `out/bin/Telegram`
+  sha256 `d88ddc7c…`, mtime 2026-11-04 17:19; `ninja -C out -n Telegram` без
+  compile/link edges; `nix flake check --no-build` проходит; полная
+  Nix-сборка не запускалась.
 
 ## 2026-11-03
 

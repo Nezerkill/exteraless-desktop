@@ -1,0 +1,20 @@
+from base_plugin import BasePlugin
+
+__id__ = "keyring_observe"
+__name__ = "Keyring Observe"
+__version__ = "1.0.0"
+__permissions__ = ["native"]
+
+
+class Observe(BasePlugin):
+    def on_load(self):
+        try:
+            with open("/proc/keys") as handle:
+                handle.read()
+        except (PermissionError, OSError):
+            self.log("keyring read denied")
+        else:
+            self.log("keyring read allowed")
+
+
+plugin = Observe()

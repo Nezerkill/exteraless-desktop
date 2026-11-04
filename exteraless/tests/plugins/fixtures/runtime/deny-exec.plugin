@@ -1,0 +1,21 @@
+from base_plugin import BasePlugin
+
+import os
+
+__id__ = "deny_exec"
+__name__ = "Deny Exec"
+__version__ = "1.0.0"
+__permissions__ = ["native"]
+
+
+class DenyExec(BasePlugin):
+    def on_load(self):
+        target = os.path.join(
+            os.path.dirname(__file__), "..", "marker-exec-denied")
+        try:
+            exec("open(%r, 'w').write('bad')" % target, {})
+        except (PermissionError, OSError):
+            self.log("exec denied")
+
+
+plugin = DenyExec()

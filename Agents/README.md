@@ -8,32 +8,70 @@ sibling-чекаутом: `../exteraless`.
 
 - `Telegram/` — upstream tdesktop; правки минимальные, точка входа `Telegram/SourceFiles`.
 - `exteraless/` — наши модули без зависимости от UI, где возможно:
-  - `config.*` — JSON-настройки `tdata/exteraless.json`;
+  - `config.*` — JSON-настройки `tdata/exteraless.json`, включая
+    `OEPluginStates` (включённость плагинов, default `false`);
   - `proxy_rules.*` — авто-отключение прокси по типу сети;
   - `ghost_mode.*` — фильтр исходящих MTProto-запросов;
   - `deleted_messages.*` — JSON-sidecar удалённых сообщений;
   - `backup.*` — формат `.extera`;
   - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам;
-  - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов.
+  - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов;
+  - `chats.*` — `ChatsSettings` и правило скрытия реакций;
+  - `links.*` — `StripTracking` для http/https-ссылок.
+- `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
+  один `QProcess` на приложение (bwrap + Python host), JSON-lines IPC,
+  проверка путей, audit-лог, load/unload и остановка host при выходе.
 - `Telegram/SourceFiles/exteraless/pill_stack.*` — полоса Pill Stack в списке чатов.
-- `Telegram/SourceFiles/exteraless/plugins_box.*` — бокс «Plugins» со списком,
-  ошибками и пустым состоянием.
-- `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan`, фикстуры и
-  regression runner; в приложение не входят.
+- `Telegram/SourceFiles/exteraless/plugins_box.*` — бокс «Plugins»: список,
+  ошибки, пустое состояние, тумблеры и статус host.
+- `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan` (stage 1),
+  CLI `exteraless-plugin-host-cli` (stage 2), фикстуры, `run_checks.py`
+  (32 проверки) и `run_host_checks.py` (213 проверок) с фикстурами
+  `fixtures/runtime/`; в приложение не входят.
+- `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
+  `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
+  (79 проверок: strip, reactions, CLI, config, backup); в приложение не
+  входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
 - Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты
   `.plugin`/`.py`, `.elyx`/`.eaf` показываются как unsupported. Сканер
-  читает метаданные через AST и не исполняет код плагина; установки,
-  включения и запуска на этом этапе нет.
+  читает метаданные через AST и не исполняет код плагина.
+- Плагины этапа 2: один host на приложение — `bwrap` + `python3 -I -B -c`
+  с JSON-lines (`seq`/`ok`, `load`/`unload`). bwrap даёт read-only `/` и
+  `/plugins`, скрытый HOME, минимальный environment, `/tmp`, без сети и со
+  сброшенными capabilities; host best-effort входит в отдельный session
+  keyring. Audit hook — best-effort policy layer, а не security boundary:
+  пишет отказы в `tdata/plugins-audit.log`, но плагин может выключить его
+  через `import __main__; __main__._IN_AUDIT[0] = True`, а потоки
+  (`threading.Thread` в Python 3.14) сейчас разрешены — deny-запись
+  `threading.Thread` мёртвая, запрещён только прямой
+  `_thread.start_new_thread`. bwrap доступен только на Linux и без него host
+  fail closed. Включённые плагины (`OEPluginStates`, default `false`)
+  загружаются только при открытии бокса Plugins, закрытие бокса host не
+  останавливает, выход из приложения — останавливает; при старте приложения
+  код плагинов не исполняется. Manifest permissions информационные и прав не
+  дают.
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
   настройках Exteraless или в главном меню. Состав пилюль — `OEPillStackPills`
   (битовая маска, по умолчанию все).
 - Per-chat Ghost exclusions хранятся в `OEGhostReadExclusions` и
   `OEGhostTypingExclusions`; меню — «Ghost Mode exclusions» в контекстном
   меню чата.
+- Подсекция `Chats` в настройках Exteraless: `OEChatsRemoveMessageTail`
+  (default `true`), `OEChatsHideReactionsChannels`/`Groups`/`Private`
+  (default `false`) и `OEChatsStripTrackingOnOpen` (default `true`). Tail и
+  reactions читаются при построении чата, поэтому применяются после его
+  повторного открытия, а реакции в pinned bar могут требовать перезапуска.
+  Strip tracking срабатывает только на клик по http/https; allowlist
+  консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
+  и прочие неоднозначные параметры сохраняются, percent-encoded имена не
+  декодируются. Backup пишет `removeMessageTail`,
+  `hideReactionsInChannels`, `hideReactionsInGroups` и
+  `hideReactionsInPrivateChats`; strip tracking — desktop-only ключ и в
+  backup не входит.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
   сохраняет новый порядок в конфиг.
@@ -69,6 +107,16 @@ Nix-пакет:
 nix build .#exteraless-desktop --cores 4 --max-jobs 1
 ./result/bin/Telegram
 ```
+
+`nix/package.nix` сохраняет upstream `postFixup` как есть и добавляет только
+`wrapProgram`, который кладёт `bubblewrap` и `python3` в `PATH`; upstream
+D-Bus `substituteInPlace` не дублируется (иначе `--replace-fail` падает на
+повторной подмене). devShell в `flake.nix` содержит те же инструменты для
+запуска host и тестов. Полная сборка пакета после этапа 2 и батча Chats ещё
+не выполнялась: проверены `postFixup` через `nix eval`, `bash -n`/shellcheck,
+`nix flake check --no-build` и применение патча. Изменения
+`flake.nix`/`nix/package.nix` не входят в `nix/patches/exteraless.patch` —
+патч применяется к upstream-исходникам, а wrapper и devShell живут в flake.
 
 ## Патч для Nix
 

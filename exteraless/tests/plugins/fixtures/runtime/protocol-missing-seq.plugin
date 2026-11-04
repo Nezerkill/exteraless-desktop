@@ -1,0 +1,20 @@
+from base_plugin import BasePlugin
+
+import __main__
+
+__id__ = "protocol_missing_seq"
+__name__ = "Protocol Missing Seq"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class MissingSeq(BasePlugin):
+    def on_load(self):
+        __main__._send({
+            "type": "loaded",
+            "ok": True,
+        })
+        self.log("missing seq sent")
+
+
+plugin = MissingSeq()

@@ -1,0 +1,13 @@
+from base_plugin import BasePlugin
+
+__id__ = "other_id"
+__name__ = "Id Mismatch"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Mismatch(BasePlugin):
+    pass
+
+
+plugin = Mismatch()

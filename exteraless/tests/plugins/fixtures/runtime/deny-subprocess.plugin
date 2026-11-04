@@ -1,0 +1,22 @@
+from base_plugin import BasePlugin
+
+import os
+import subprocess
+
+__id__ = "deny_subprocess"
+__name__ = "Deny Subprocess"
+__version__ = "1.0.0"
+__permissions__ = ["native"]
+
+
+class DenySubprocess(BasePlugin):
+    def on_load(self):
+        target = os.path.join(
+            os.path.dirname(__file__), "..", "marker-subprocess")
+        try:
+            subprocess.run(["sh", "-c", "echo bad > %s" % target])
+        except (PermissionError, OSError):
+            self.log("subprocess denied")
+
+
+plugin = DenySubprocess()
