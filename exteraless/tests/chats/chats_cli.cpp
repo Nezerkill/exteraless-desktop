@@ -36,6 +36,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-reset\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1>\n"
+		<< "  exteraless-chats-cli message-menu\n"
+		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
+		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
+		<< "<translate> <report> <deleteMsg>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -109,6 +113,46 @@ void PrintDeleted() {
 		{ QStringLiteral("saveDeletedMessages"),
 			Exteraless::Config::Instance().saveDeletedMessages() },
 	});
+}
+
+[[nodiscard]] QJsonObject MessageMenuObject(
+		const Exteraless::MessageMenuSettings &menu) {
+	return QJsonObject{
+		{ QStringLiteral("reply"), menu.reply },
+		{ QStringLiteral("edit"), menu.edit },
+		{ QStringLiteral("pin"), menu.pin },
+		{ QStringLiteral("copyText"), menu.copyText },
+		{ QStringLiteral("copyLink"), menu.copyLink },
+		{ QStringLiteral("copyImage"), menu.copyImage },
+		{ QStringLiteral("forward"), menu.forward },
+		{ QStringLiteral("select"), menu.select },
+		{ QStringLiteral("translate"), menu.translate },
+		{ QStringLiteral("report"), menu.report },
+		{ QStringLiteral("deleteMsg"), menu.deleteMsg },
+	};
+}
+
+void PrintMessageMenu() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("menu"),
+			MessageMenuObject(
+				Exteraless::Config::Instance().messageMenuSettings()) },
+	});
+}
+
+void ApplyMenuFlags(const std::array<bool, 11> &flags) {
+	auto &config = Exteraless::Config::Instance();
+	config.setChatsMenuReply(flags[0]);
+	config.setChatsMenuEdit(flags[1]);
+	config.setChatsMenuPin(flags[2]);
+	config.setChatsMenuCopyText(flags[3]);
+	config.setChatsMenuCopyLink(flags[4]);
+	config.setChatsMenuCopyImage(flags[5]);
+	config.setChatsMenuForward(flags[6]);
+	config.setChatsMenuSelect(flags[7]);
+	config.setChatsMenuTranslate(flags[8]);
+	config.setChatsMenuReport(flags[9]);
+	config.setChatsMenuDelete(flags[10]);
 }
 
 void ApplyFlags(const std::array<bool, 7> &flags) {
@@ -238,6 +282,27 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setDisableNumberRounding(value);
 		PrintGeneral();
+		return 0;
+	}
+	if (mode == QStringLiteral("message-menu")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintMessageMenu();
+		return 0;
+	}
+	if (mode == QStringLiteral("message-menu-set")) {
+		if (arguments.size() != 13) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 11>();
+		for (auto i = 0; i != 11; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		ApplyMenuFlags(flags);
+		PrintMessageMenu();
 		return 0;
 	}
 	if (mode == QStringLiteral("deleted")) {

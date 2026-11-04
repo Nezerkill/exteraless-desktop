@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **184**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **193**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -83,9 +83,10 @@ APK-обновления и plugin-only API. Полный список искл�
 
 ### Шаг 1 — безопасный UX batch
 
-- `NB-11`: видимость пунктов меню сообщения (`OEChatsMenu*`) через новый
-  `exteraless/message_menu.{h,cpp}` + `history/view/history_view_context_menu.cpp`
-  и `window/window_peer_menu.cpp`; CLI для дефолтов/fromJson, Xvfb для меню.
+- `NB-11` — ✅ закрыто 2026-11-05: подсекция «Visible message menu items»,
+  11 чекбоксов `OEChatsMenu*`, поддержка в обоих виджетах истории
+  (`history_inner_widget.cpp` и `history_view_context_menu.cpp`), CLI
+  `menu` (8 проверок), Xvfb подтвердил скрытие `Pin` в чате.
 - `NB-07`: `OEGeneralShowSeconds`, чистая функция форматирования времени +
   вызовы в bottom info и списке чатов.
 - `NB-37`: `OEGeneralHidePhone`, скрытие телефона в профиле; при выключенном
@@ -148,7 +149,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-11`, затем `NB-07`, `NB-37`).
+   (сейчас `NB-07`, затем `NB-37`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

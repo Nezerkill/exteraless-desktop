@@ -1,6 +1,7 @@
 #pragma once
 
 #include "exteraless/chats.h"
+#include "exteraless/message_menu.h"
 
 #include <QJsonObject>
 #include <QJsonValue>
@@ -105,6 +106,19 @@ public:
 	void setChatsStripTrackingOnPaste(bool value);
 	void setChatsUnreadCapsule(bool value);
 
+	[[nodiscard]] MessageMenuSettings messageMenuSettings() const;
+	void setChatsMenuReply(bool value);
+	void setChatsMenuEdit(bool value);
+	void setChatsMenuPin(bool value);
+	void setChatsMenuCopyText(bool value);
+	void setChatsMenuCopyLink(bool value);
+	void setChatsMenuCopyImage(bool value);
+	void setChatsMenuForward(bool value);
+	void setChatsMenuSelect(bool value);
+	void setChatsMenuTranslate(bool value);
+	void setChatsMenuReport(bool value);
+	void setChatsMenuDelete(bool value);
+
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;
@@ -130,6 +144,7 @@ private:
 	mutable QString _workingDir;
 	mutable bool _loaded = false;
 	mutable ChatsSettings _chats;
+	mutable MessageMenuSettings _messageMenu;
 };
 
 } // namespace Exteraless

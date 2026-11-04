@@ -39,6 +39,17 @@ constexpr auto kChatsHideReactionsPrivate = "OEChatsHideReactionsPrivate";
 constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
+constexpr auto kChatsMenuReply = "OEChatsMenuReply";
+constexpr auto kChatsMenuEdit = "OEChatsMenuEdit";
+constexpr auto kChatsMenuPin = "OEChatsMenuPin";
+constexpr auto kChatsMenuCopyText = "OEChatsMenuCopyText";
+constexpr auto kChatsMenuCopyLink = "OEChatsMenuCopyLink";
+constexpr auto kChatsMenuCopyImage = "OEChatsMenuCopyImage";
+constexpr auto kChatsMenuForward = "OEChatsMenuForward";
+constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
+constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
+constexpr auto kChatsMenuReport = "OEChatsMenuReport";
+constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -361,6 +372,55 @@ void Config::setChatsUnreadCapsule(bool value) {
 	setValue(kChatsUnreadCapsule, value);
 }
 
+MessageMenuSettings Config::messageMenuSettings() const {
+	ensureLoaded();
+	return _messageMenu;
+}
+
+void Config::setChatsMenuReply(bool value) {
+	setValue(kChatsMenuReply, value);
+}
+
+void Config::setChatsMenuEdit(bool value) {
+	setValue(kChatsMenuEdit, value);
+}
+
+void Config::setChatsMenuPin(bool value) {
+	setValue(kChatsMenuPin, value);
+}
+
+void Config::setChatsMenuCopyText(bool value) {
+	setValue(kChatsMenuCopyText, value);
+}
+
+void Config::setChatsMenuCopyLink(bool value) {
+	setValue(kChatsMenuCopyLink, value);
+}
+
+void Config::setChatsMenuCopyImage(bool value) {
+	setValue(kChatsMenuCopyImage, value);
+}
+
+void Config::setChatsMenuForward(bool value) {
+	setValue(kChatsMenuForward, value);
+}
+
+void Config::setChatsMenuSelect(bool value) {
+	setValue(kChatsMenuSelect, value);
+}
+
+void Config::setChatsMenuTranslate(bool value) {
+	setValue(kChatsMenuTranslate, value);
+}
+
+void Config::setChatsMenuReport(bool value) {
+	setValue(kChatsMenuReport, value);
+}
+
+void Config::setChatsMenuDelete(bool value) {
+	setValue(kChatsMenuDelete, value);
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -441,7 +501,18 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsHideReactionsPrivate
 			|| key == kChatsStripTrackingOnOpen
 			|| key == kChatsStripTrackingOnPaste
-			|| key == kChatsUnreadCapsule) {
+			|| key == kChatsUnreadCapsule
+			|| key == kChatsMenuReply
+			|| key == kChatsMenuEdit
+			|| key == kChatsMenuPin
+			|| key == kChatsMenuCopyText
+			|| key == kChatsMenuCopyLink
+			|| key == kChatsMenuCopyImage
+			|| key == kChatsMenuForward
+			|| key == kChatsMenuSelect
+			|| key == kChatsMenuTranslate
+			|| key == kChatsMenuReport
+			|| key == kChatsMenuDelete) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -468,10 +539,15 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 }
 
 void Config::setWorkingDir(const QString &workingDir) {
-	if (_loaded || workingDir.isEmpty()) {
+	if (workingDir.isEmpty() || _workingDir == workingDir) {
 		return;
 	}
 	_workingDir = workingDir;
+	if (_loaded) {
+		_loaded = false;
+		_values = QJsonObject();
+		ensureLoaded();
+	}
 }
 
 void Config::ensureLoaded() const {
@@ -525,6 +601,18 @@ void Config::refreshChats() const {
 	_chats.stripTrackingOnPaste
 		= boolValue(kChatsStripTrackingOnPaste, true);
 	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
+
+	_messageMenu.reply = boolValue(kChatsMenuReply, true);
+	_messageMenu.edit = boolValue(kChatsMenuEdit, true);
+	_messageMenu.pin = boolValue(kChatsMenuPin, true);
+	_messageMenu.copyText = boolValue(kChatsMenuCopyText, true);
+	_messageMenu.copyLink = boolValue(kChatsMenuCopyLink, true);
+	_messageMenu.copyImage = boolValue(kChatsMenuCopyImage, true);
+	_messageMenu.forward = boolValue(kChatsMenuForward, true);
+	_messageMenu.select = boolValue(kChatsMenuSelect, true);
+	_messageMenu.translate = boolValue(kChatsMenuTranslate, true);
+	_messageMenu.report = boolValue(kChatsMenuReport, true);
+	_messageMenu.deleteMsg = boolValue(kChatsMenuDelete, true);
 }
 
 bool Config::boolValue(const char *key, bool fallback) const {

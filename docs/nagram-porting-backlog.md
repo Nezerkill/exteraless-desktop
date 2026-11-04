@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(184 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, backup),
+(193 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -95,7 +95,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-08 | Фильтр Zalgo | `NaConfig.zalgoFilter` | `ui/text/*`, `data/data_messages.cpp` | S · средний (ломает раскладку при агрессивном фильтре) | CLI чистой функции + Xvfb: текст с комбинирующими знаками ровно рендерится, БД не меняется | ⬜ | R1 P0-6 |
 | NB-09 | Показать ID и DC в профиле | `NekoConfig.showIdAndDc`, `NaConfig.idDcType` | `info/profile/info_profile_values.cpp`, `info/profile/info_profile_top_bar.cpp` | S · низкий | Xvfb: профиль контакта и свой, значение копируется | ⬜ | R1 P0-7 |
 | NB-10 | Скрыть истории в шапке списка чатов | `NaConfig.hideStoriesFromHeader` | `dialogs/dialogs_widget.cpp` (stories strip) | S · низкий | Xvfb: полоса историй исчезает, строки не сдвигаются | ⬜ | R1 P0-8 |
-| NB-11 | Видимость пунктов меню сообщения (группа чекбоксов) | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | новый `exteraless/message_menu.{h,cpp}` + `history/view/history_view_context_menu.cpp`, `window/window_peer_menu.cpp` | M · средний (меню собирается по условиям) | CLI: дефолты и roundtrip `toJson`/`fromJson`; Xvfb: каждый тумблер убирает свой пункт, горячие клавиши не ломаются | ⬜ | R1 P0-9, R2 §6.1 |
+| NB-11 | Видимость пунктов меню сообщения (группа чекбоксов) | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | `exteraless/message_menu.h`, `exteraless/config.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_context_menu.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний (меню собирается по условиям) | CLI: дефолты и roundtrip `toJson`/`fromJson`; Xvfb: каждый тумблер убирает свой пункт, горячие клавиши не ломаются | ✅ 2026-11-05: 11 чекбоксов `OEChatsMenu*`, применены в обоих контекстных меню, CLI `menu` (8 проверок), Xvfb подтвердил скрытие Pin в чате | R1 P0-9, R2 §6.1 |
 | NB-12 | Действие двойного тапа: ответ / реакция / ничего | `NaConfig.doubleTapAction`, `doubleTapActionOut` | `history/view/history_view_list_widget.cpp`, реакции в `history_view_message.cpp` | M · средний (жест пересекается с выделением текста) | Xvfb: двойной тап даёт reply / реакцию / ничего | ⬜ | R1 P0-10 |
 | NB-13 | Широкие посты каналов и ленты | `OEChatsWideChannelPosts`, `OEChatsWideFeedPosts` | `history/view/history_view_message.cpp` (ширина баббла) | M · высокий (геометрия, хвосты, медиа) | Xvfb: пост на всю ширину, ответы и медиа не ломаются | ⬜ | R1 P0-11 |
 | NB-14 | Время на стикерах: сбоку или скрыто | `OEChatsStickerTimeSide`, `NekoConfig.hideTimeForSticker` | `history/view/history_view_element.cpp`, `history_view_message.cpp` | S · низкий | Xvfb: стикер с временем сбоку и без, обычные сообщения без изменений | ⬜ | R1 P0-12 |
@@ -233,17 +233,14 @@ NB-03 (✅).
 Все три лежат в `Telegram/SourceFiles/**` и `exteraless/**`, не требуют
 `lib_ui`, поэтому попадают в `nix/patches/exteraless.patch`.
 
-**NB-11 «Видимость пунктов меню сообщения» (`OEChatsMenu*`).**
-Ключи Android: `showCopyPhoto`, `showRepeat`, `showDetails`, `showHistory`,
-`showReport`, `showClear`, `showShareMessages`, `groupedMessageMenu`,
-`hideShareButtonInChannel`. Код: новый `exteraless/message_menu.{h,cpp}` с
-чистой структурой настроек и чтением из конфига, чтобы её тестировал CLI;
-`if (…)` вокруг существующих `addAction` в
-`history/view/history_view_context_menu.cpp` и `window/window_peer_menu.cpp`.
-Безопасность: никакой логики отправки не добавляется. Проверка: новая группа
-`menu` в `exteraless/tests/chats/chats_cli.cpp` (дефолты, roundtrip
-`toJson`/`fromJson`, наличие ключей в `.extera`) + Xvfb-скрин меню с
-выключенным и включённым флагом.
+**NB-11 «Видимость пунктов меню сообщения» (`OEChatsMenu*`) — закрыто 2026-11-05.**
+11 чекбоксов в подсекции «Visible message menu items» (`OEChatsMenuReply`,
+`Edit`, `Pin`, `CopyText`, `CopyLink`, `CopyImage`, `Forward`, `Select`,
+`Translate`, `Report`, `Delete`), поддержаны в обоих контекстных меню
+(`history_inner_widget.cpp` и `history_view_context_menu.cpp`), CLI `menu`
+(8 проверок), Xvfb подтвердил скрытие `Pin` в чате.
+
+Следующие задачи батча: NB-07, NB-37.
 
 **NB-07 «Время с секундами» (`showSeconds` → `OEGeneralShowSeconds`).**
 Код: `exteraless/format.{h,cpp}` с `FormatClock(QTime, bool withSeconds)` —

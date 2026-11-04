@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_context_menu.h"
 
+#include "exteraless/config.h"
+
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
 #include "api/api_global_privacy.h"
@@ -376,12 +378,14 @@ void AddPhotoActions(
 				&photo->session(),
 				[=] { SavePhotoToFile(photo); }),
 			&st::menuIconSaveImage);
-		menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
-			const auto item = photo->owner().message(contextId);
-			if (!list->showCopyMediaRestriction(item)) {
-				CopyImage(photo);
-			}
-		}, &st::menuIconCopy);
+		if (Exteraless::Config::Instance().messageMenuSettings().copyImage) {
+			menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
+				const auto item = photo->owner().message(contextId);
+				if (!list->showCopyMediaRestriction(item)) {
+					CopyImage(photo);
+				}
+			}, &st::menuIconCopy);
+		}
 	}
 	if (photo->hasAttachedStickers()) {
 		const auto controller = list->controller();
@@ -530,6 +534,9 @@ void AddDocumentActions(
 void AddPostLinkAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().copyLink) {
+		return;
+	}
 	const auto item = request.item;
 	if (!item
 		|| !item->hasDirectLink()
@@ -625,6 +632,9 @@ void AddForwardAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().forward) {
+		return;
+	}
 	AddForwardSelectedAction(menu, request, list);
 	AddForwardMessageAction(menu, request, list);
 }
@@ -827,6 +837,9 @@ bool AddReplyToMessageAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().reply) {
+		return false;
+	}
 	const auto context = list->elementContext();
 	const auto item = request.quote.item
 		? request.quote.item
@@ -945,6 +958,9 @@ bool AddEditMessageAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().edit) {
+		return false;
+	}
 	if (!HasEditMessageAction(request, list)) {
 		return false;
 	}
@@ -1010,6 +1026,9 @@ bool AddPinMessageAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().pin) {
+		return false;
+	}
 	const auto context = list->elementContext();
 	const auto item = request.item;
 	if (!item || !item->isRegular()) {
@@ -1206,6 +1225,9 @@ void AddDeleteAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+		return;
+	}
 	if (!AddDeleteSelectedAction(menu, request, list)) {
 		AddDeleteMessageAction(menu, request, list);
 	}
@@ -1245,6 +1267,9 @@ void AddReportAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().report) {
+		return;
+	}
 	const auto item = request.item;
 	if (!request.selectedItems.empty()) {
 		return;
@@ -1314,6 +1339,9 @@ bool AddSelectMessageAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	if (!Exteraless::Config::Instance().messageMenuSettings().select) {
+		return false;
+	}
 	const auto item = request.item;
 	if (request.overSelection && !request.selectedItems.empty()) {
 		return false;
@@ -1812,7 +1840,8 @@ void FillContextMenuItems(
 
 	if (request.overSelection
 		&& !list->hasCopyRestrictionForSelected()
-		&& !list->getSelectedText().empty()) {
+		&& !list->getSelectedText().empty()
+		&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
 		const auto text = request.selectedItems.empty()
 			? tr::lng_context_copy_selected(tr::now)
 			: tr::lng_context_copy_selected_items(tr::now);
@@ -1822,7 +1851,8 @@ void FillContextMenuItems(
 	}
 	if (request.overSelection
 		&& view
-		&& !Ui::SkipTranslate(list->getSelectedText().rich)) {
+		&& !Ui::SkipTranslate(list->getSelectedText().rich)
+		&& Exteraless::Config::Instance().messageMenuSettings().translate) {
 		const auto owner = &view->history()->owner();
 		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
 			if (const auto item = owner->message(itemId)) {
@@ -1878,7 +1908,8 @@ void FillContextMenuItems(
 			AddDocumentActions(result, document, view->data(), list);
 		}
 		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
-			if (!list->hasCopyRestriction(view->data())) {
+			if (!list->hasCopyRestriction(view->data())
+				&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
 				const auto asGroup = (request.pointState != PointState::GroupPart);
 				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
 					if (const auto item = owner->message(itemId)) {
@@ -1905,7 +1936,8 @@ void FillContextMenuItems(
 				: item->originalText();
 			if ((!item->translation() || !item->history()->translatedTo())
 				&& !translate.text.isEmpty()
-				&& !Ui::SkipTranslate(translate)) {
+				&& !Ui::SkipTranslate(translate)
+				&& Exteraless::Config::Instance().messageMenuSettings().translate) {
 				result->addAction(tr::lng_context_translate(tr::now), [=] {
 					if (const auto item = owner->message(itemId)) {
 						list->controller()->show(Box(
@@ -2367,7 +2399,8 @@ void AddPollActions(
 		for (const auto &answer : poll->answers) {
 			text.append('\n').append(radio).append(answer.text);
 		}
-		if (!Ui::SkipTranslate(text)) {
+		if (!Ui::SkipTranslate(text)
+			&& Exteraless::Config::Instance().messageMenuSettings().translate) {
 			menu->addAction(tr::lng_context_translate(tr::now), [=] {
 				controller->show(Box(
 					Ui::TranslateBox,

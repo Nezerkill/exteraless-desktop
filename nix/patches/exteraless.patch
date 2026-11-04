@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..72af6b7 100644
+index 811707d..aa6df49 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,24 @@ endif()
+@@ -70,6 +70,25 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -22,6 +22,7 @@ index 811707d..72af6b7 100644
 +    ../exteraless/deleted_messages_trim.h
 +    ../exteraless/ghost_mode.cpp
 +    ../exteraless/ghost_mode.h
++    ../exteraless/message_menu.h
 +    ../exteraless/proxy_rules.cpp
 +    ../exteraless/proxy_rules.h
 +    SourceFiles/boxes/deleted_messages_box.cpp
@@ -37,7 +38,7 @@ index 811707d..72af6b7 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +127,7 @@ PRIVATE
+@@ -109,6 +128,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -45,7 +46,7 @@ index 811707d..72af6b7 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1699,7 @@ PRIVATE
+@@ -1680,6 +1700,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -53,7 +54,7 @@ index 811707d..72af6b7 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1917,8 @@ PRIVATE
+@@ -1897,6 +1918,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -62,7 +63,7 @@ index 811707d..72af6b7 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2552,10 @@ else()
+@@ -2530,6 +2553,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -74,10 +75,10 @@ index 811707d..72af6b7 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..8047480 100644
+index ffc8ec9..10f3d98 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,53 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,65 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -129,6 +130,18 @@ index ffc8ec9..8047480 100644
 +"lng_settings_exteraless_import_done" = "Settings imported: {amount}.";
 +"lng_settings_exteraless_import_unknown" = "Unknown keys: {keys}";
 +"lng_settings_exteraless_file_filter" = "Exteraless backup (*.extera)";
++"lng_settings_exteraless_chats_menu_title" = "Visible message menu items";
++"lng_settings_exteraless_chats_menu_reply" = "Reply";
++"lng_settings_exteraless_chats_menu_edit" = "Edit";
++"lng_settings_exteraless_chats_menu_pin" = "Pin / Unpin";
++"lng_settings_exteraless_chats_menu_copy_text" = "Copy text";
++"lng_settings_exteraless_chats_menu_copy_link" = "Copy link";
++"lng_settings_exteraless_chats_menu_copy_image" = "Copy image";
++"lng_settings_exteraless_chats_menu_forward" = "Forward";
++"lng_settings_exteraless_chats_menu_select" = "Select";
++"lng_settings_exteraless_chats_menu_translate" = "Translate";
++"lng_settings_exteraless_chats_menu_report" = "Report";
++"lng_settings_exteraless_chats_menu_delete" = "Delete";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -2995,6 +3008,238 @@ index 0000000..e93ade8
 +void ShowPluginsBox(not_null<Window::SessionController*> controller);
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/history/history_inner_widget.cpp b/Telegram/SourceFiles/history/history_inner_widget.cpp
+index 391e1d3..4570f11 100644
+--- a/Telegram/SourceFiles/history/history_inner_widget.cpp
++++ b/Telegram/SourceFiles/history/history_inner_widget.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/history_inner_widget.h"
+ 
++#include "exteraless/config.h"
++
+ #include "api/api_polls.h"
+ #include "chat_helpers/stickers_emoji_pack.h"
+ #include "core/application.h"
+@@ -3015,7 +3017,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			: item->allowsEdit(t)
+ 			? item
+ 			: nullptr;
+-		if (editItem) {
++		if (editItem
++			&& Exteraless::Config::Instance().messageMenuSettings().edit) {
+ 			const auto editItemId = editItem->fullId();
+ 			_menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
+ 				if (const auto item = session->data().message(editItemId)) {
+@@ -3050,7 +3053,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 		const auto pinItem = (item->canPin() && item->isPinned())
+ 			? item
+ 			: groupLeaderOrSelf(item);
+-		if (pinItem->canPin()) {
++		if (pinItem->canPin()
++			&& Exteraless::Config::Instance().messageMenuSettings().pin) {
+ 			const auto isPinned = pinItem->isPinned();
+ 			const auto pinItemId = pinItem->fullId();
+ 			_menu->addAction(isPinned ? tr::lng_context_unpin_msg(tr::now) : tr::lng_context_pin_msg(tr::now), crl::guard(controller, [=] {
+@@ -3076,9 +3080,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			_menu->addAction(tr::lng_context_save_image(tr::now), base::fn_delayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
+ 				savePhotoToFile(photo);
+ 			}), &st::menuIconSaveImage);
+-			_menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
+-				copyContextImage(photo, itemId);
+-			}, &st::menuIconCopy);
++			if (Exteraless::Config::Instance().messageMenuSettings().copyImage) {
++				_menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
++					copyContextImage(photo, itemId);
++				}, &st::menuIconCopy);
++			}
+ 		}
+ 		if (photo->hasAttachedStickers()) {
+ 			_menu->addAction(tr::lng_context_attached_stickers(tr::now), [=] {
+@@ -3183,7 +3189,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 				Element::Moused())
+ 		) != HistoryView::PointState::GroupPart);
+ 	const auto addSelectMessageAction = [&](not_null<HistoryItem*> item) {
+-		if (item->canBeSelected() && !hasSelectRestriction()) {
++		if (item->canBeSelected()
++			&& !hasSelectRestriction()
++			&& Exteraless::Config::Instance().messageMenuSettings().select) {
+ 			const auto itemId = item->fullId();
+ 			_menu->addAction(tr::lng_context_select_msg(tr::now), [=] {
+ 				if (const auto item = session->data().message(itemId)) {
+@@ -3291,7 +3299,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 	const auto addReplyAction = [&](HistoryItem *item) {
+ 		if (!item
+ 			|| (!item->isRegular() && !CanReplyToEphemeral(item))
+-			|| IsAnchoredEphemeral(item)) {
++			|| IsAnchoredEphemeral(item)
++			|| !Exteraless::Config::Instance().messageMenuSettings().reply) {
+ 			return;
+ 		}
+ 		const auto canSendReply = CanSendReply(item);
+@@ -3341,6 +3350,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 	};
+ 
+ 	const auto addUnpinSelectedAction = [&] {
++		if (!Exteraless::Config::Instance().messageMenuSettings().pin) {
++			return;
++		}
+ 		auto ids = Window::MessagesToUnpin(session, getSelectedItems());
+ 		if (ids.empty()) {
+ 			return;
+@@ -3417,18 +3429,21 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			&& item->hasDirectLink()
+ 			&& isUponSelected != 2
+ 			&& isUponSelected != -2
+-			&& !IsAnchoredEphemeral(item)) {
++			&& !IsAnchoredEphemeral(item)
++			&& Exteraless::Config::Instance().messageMenuSettings().copyLink) {
+ 			_menu->addAction(item->history()->peer->isMegagroup() ? tr::lng_context_copy_message_link(tr::now) : tr::lng_context_copy_post_link(tr::now), [=] {
+ 				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
+ 			}, &st::menuIconLink);
+ 		}
+ 		if (isUponSelected > 1) {
+-			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count) {
++			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count
++				&& Exteraless::Config::Instance().messageMenuSettings().forward) {
+ 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
+ 					_widget->forwardSelected();
+ 				}, &st::menuIconForward);
+ 			}
+-			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
++			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count
++				&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+ 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
+ 					_widget->confirmDeleteSelected();
+ 				}, &st::menuIconDelete);
+@@ -3453,7 +3468,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			const auto itemId = item->fullId();
+ 			const auto blockSender = item->history()->peer->isRepliesChat();
+ 			if (isUponSelected != -2) {
+-				if (item->allowsForward() && !IsAnchoredEphemeral(item)) {
++				if (item->allowsForward() && !IsAnchoredEphemeral(item)
++					&& Exteraless::Config::Instance().messageMenuSettings().forward) {
+ 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
+ 						forwardItem(itemId);
+ 					}, &st::menuIconForward);
+@@ -3463,7 +3479,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
+ 					}, &st::menuIconTagSell);
+ 				}
+-				if (item->canDelete()) {
++				if (item->canDelete()
++					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+ 					const auto callback = [=] { deleteItem(itemId); };
+ 					if (item->isUploading()) {
+ 						if (item->media()
+@@ -3482,7 +3499,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 							[=] { _menu = nullptr; }));
+ 					}
+ 				}
+-				if (!blockSender && item->suggestReport()) {
++				if (!blockSender && item->suggestReport()
++					&& Exteraless::Config::Instance().messageMenuSettings().report) {
+ 					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
+ 						reportItem(itemId);
+ 					}, &st::menuIconReport);
+@@ -3547,7 +3565,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 		if (isUponSelected > 0) {
+ 			addReplyAction(item);
+ 				const auto selectedText = getSelectedText();
+-			if (!hasCopyRestrictionForSelected() && !selectedText.empty()) {
++			if (!hasCopyRestrictionForSelected()
++				&& !selectedText.empty()
++				&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
+ 				_menu->addAction(
+ 					((isUponSelected > 1)
+ 						? tr::lng_context_copy_selected_items(tr::now)
+@@ -3555,7 +3575,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 					[=] { copySelectedText(); },
+ 					&st::menuIconCopy);
+ 			}
+-			if (item && !Ui::SkipTranslate(selectedText.rich)) {
++			if (item
++				&& !Ui::SkipTranslate(selectedText.rich)
++				&& Exteraless::Config::Instance().messageMenuSettings().translate) {
+ 				const auto peer = item->history()->peer;
+ 				_menu->addAction(tr::lng_context_translate_selected({}), [=] {
+ 					_controller->show(Box(
+@@ -3654,14 +3676,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 				if (!item->isService() && view && actionText.isEmpty()) {
+ 					const auto hasRestriction = hasCopyRestriction(item);
+ 					if (!hasRestriction
+-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
++						&& (view->hasVisibleText() || mediaHasTextForCopy)
++						&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
+ 						_menu->addAction(
+ 							tr::lng_context_copy_text(tr::now),
+ 							[=] { copyContextText(itemId); },
+ 							&st::menuIconCopy);
+ 					}
+ 					if ((!item->translation() || !_history->translatedTo())
+-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
++						&& (view->hasVisibleText() || mediaHasTextForCopy)
++						&& Exteraless::Config::Instance().messageMenuSettings().translate) {
+ 						const auto peer = item->history()->peer;
+ 						const auto itemId = item->id;
+ 						const auto translate = mediaHasTextForCopy
+@@ -3695,7 +3719,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			&& item->hasDirectLink()
+ 			&& isUponSelected != 2
+ 			&& isUponSelected != -2
+-			&& !IsAnchoredEphemeral(item)) {
++			&& !IsAnchoredEphemeral(item)
++			&& Exteraless::Config::Instance().messageMenuSettings().copyLink) {
+ 			_menu->addAction(item->history()->peer->isMegagroup() ? tr::lng_context_copy_message_link(tr::now) : tr::lng_context_copy_post_link(tr::now), [=] {
+ 				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
+ 			}, &st::menuIconLink);
+@@ -3726,12 +3751,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 			}
+ 		}
+ 		if (isUponSelected > 1) {
+-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
++			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount
++				&& Exteraless::Config::Instance().messageMenuSettings().forward) {
+ 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
+ 					_widget->forwardSelected();
+ 				}, &st::menuIconForward);
+ 			}
+-			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
++			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount
++				&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+ 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
+ 					_widget->confirmDeleteSelected();
+ 				}, &st::menuIconDelete);
+@@ -3757,7 +3784,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 				|| item->isRegular()
+ 				|| item->isEphemeral())) {
+ 			if (isUponSelected != -2) {
+-				if (canForward) {
++				if (canForward
++					&& Exteraless::Config::Instance().messageMenuSettings().forward) {
+ 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
+ 						forwardAsGroup(itemId);
+ 					}, &st::menuIconForward);
+@@ -3767,7 +3795,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
+ 					}, &st::menuIconTagSell);
+ 				}
+-				if (canDelete) {
++				if (canDelete
++					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+ 					const auto callback = [=] {
+ 						deleteAsGroup(itemId);
+ 					};
+@@ -3788,7 +3817,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+ 							[=] { _menu = nullptr; }));
+ 					}
+ 				}
+-				if (!canBlockSender && canReport) {
++				if (!canBlockSender && canReport
++					&& Exteraless::Config::Instance().messageMenuSettings().report) {
+ 					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
+ 						reportAsGroup(itemId);
+ 					}, &st::menuIconReport);
 diff --git a/Telegram/SourceFiles/history/history_streamed_drafts.cpp b/Telegram/SourceFiles/history/history_streamed_drafts.cpp
 index dcb902d..5b28a1d 100644
 --- a/Telegram/SourceFiles/history/history_streamed_drafts.cpp
@@ -3015,6 +3260,170 @@ index dcb902d..5b28a1d 100644
  	_history->session().api().request(MTPmessages_SetTyping(
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
+diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
+index 3e25a13..bc91012 100644
+--- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/history_view_context_menu.h"
+ 
++#include "exteraless/config.h"
++
+ #include "api/api_attached_stickers.h"
+ #include "api/api_editing.h"
+ #include "api/api_global_privacy.h"
+@@ -376,12 +378,14 @@ void AddPhotoActions(
+ 				&photo->session(),
+ 				[=] { SavePhotoToFile(photo); }),
+ 			&st::menuIconSaveImage);
+-		menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
+-			const auto item = photo->owner().message(contextId);
+-			if (!list->showCopyMediaRestriction(item)) {
+-				CopyImage(photo);
+-			}
+-		}, &st::menuIconCopy);
++		if (Exteraless::Config::Instance().messageMenuSettings().copyImage) {
++			menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
++				const auto item = photo->owner().message(contextId);
++				if (!list->showCopyMediaRestriction(item)) {
++					CopyImage(photo);
++				}
++			}, &st::menuIconCopy);
++		}
+ 	}
+ 	if (photo->hasAttachedStickers()) {
+ 		const auto controller = list->controller();
+@@ -530,6 +534,9 @@ void AddDocumentActions(
+ void AddPostLinkAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().copyLink) {
++		return;
++	}
+ 	const auto item = request.item;
+ 	if (!item
+ 		|| !item->hasDirectLink()
+@@ -625,6 +632,9 @@ void AddForwardAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().forward) {
++		return;
++	}
+ 	AddForwardSelectedAction(menu, request, list);
+ 	AddForwardMessageAction(menu, request, list);
+ }
+@@ -827,6 +837,9 @@ bool AddReplyToMessageAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().reply) {
++		return false;
++	}
+ 	const auto context = list->elementContext();
+ 	const auto item = request.quote.item
+ 		? request.quote.item
+@@ -945,6 +958,9 @@ bool AddEditMessageAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().edit) {
++		return false;
++	}
+ 	if (!HasEditMessageAction(request, list)) {
+ 		return false;
+ 	}
+@@ -1010,6 +1026,9 @@ bool AddPinMessageAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().pin) {
++		return false;
++	}
+ 	const auto context = list->elementContext();
+ 	const auto item = request.item;
+ 	if (!item || !item->isRegular()) {
+@@ -1206,6 +1225,9 @@ void AddDeleteAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
++		return;
++	}
+ 	if (!AddDeleteSelectedAction(menu, request, list)) {
+ 		AddDeleteMessageAction(menu, request, list);
+ 	}
+@@ -1245,6 +1267,9 @@ void AddReportAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().report) {
++		return;
++	}
+ 	const auto item = request.item;
+ 	if (!request.selectedItems.empty()) {
+ 		return;
+@@ -1314,6 +1339,9 @@ bool AddSelectMessageAction(
+ 		not_null<Ui::PopupMenu*> menu,
+ 		const ContextMenuRequest &request,
+ 		not_null<ListWidget*> list) {
++	if (!Exteraless::Config::Instance().messageMenuSettings().select) {
++		return false;
++	}
+ 	const auto item = request.item;
+ 	if (request.overSelection && !request.selectedItems.empty()) {
+ 		return false;
+@@ -1812,7 +1840,8 @@ void FillContextMenuItems(
+ 
+ 	if (request.overSelection
+ 		&& !list->hasCopyRestrictionForSelected()
+-		&& !list->getSelectedText().empty()) {
++		&& !list->getSelectedText().empty()
++		&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
+ 		const auto text = request.selectedItems.empty()
+ 			? tr::lng_context_copy_selected(tr::now)
+ 			: tr::lng_context_copy_selected_items(tr::now);
+@@ -1822,7 +1851,8 @@ void FillContextMenuItems(
+ 	}
+ 	if (request.overSelection
+ 		&& view
+-		&& !Ui::SkipTranslate(list->getSelectedText().rich)) {
++		&& !Ui::SkipTranslate(list->getSelectedText().rich)
++		&& Exteraless::Config::Instance().messageMenuSettings().translate) {
+ 		const auto owner = &view->history()->owner();
+ 		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
+ 			if (const auto item = owner->message(itemId)) {
+@@ -1878,7 +1908,8 @@ void FillContextMenuItems(
+ 			AddDocumentActions(result, document, view->data(), list);
+ 		}
+ 		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
+-			if (!list->hasCopyRestriction(view->data())) {
++			if (!list->hasCopyRestriction(view->data())
++				&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
+ 				const auto asGroup = (request.pointState != PointState::GroupPart);
+ 				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
+ 					if (const auto item = owner->message(itemId)) {
+@@ -1905,7 +1936,8 @@ void FillContextMenuItems(
+ 				: item->originalText();
+ 			if ((!item->translation() || !item->history()->translatedTo())
+ 				&& !translate.text.isEmpty()
+-				&& !Ui::SkipTranslate(translate)) {
++				&& !Ui::SkipTranslate(translate)
++				&& Exteraless::Config::Instance().messageMenuSettings().translate) {
+ 				result->addAction(tr::lng_context_translate(tr::now), [=] {
+ 					if (const auto item = owner->message(itemId)) {
+ 						list->controller()->show(Box(
+@@ -2367,7 +2399,8 @@ void AddPollActions(
+ 		for (const auto &answer : poll->answers) {
+ 			text.append('\n').append(radio).append(answer.text);
+ 		}
+-		if (!Ui::SkipTranslate(text)) {
++		if (!Ui::SkipTranslate(text)
++			&& Exteraless::Config::Instance().messageMenuSettings().translate) {
+ 			menu->addAction(tr::lng_context_translate(tr::now), [=] {
+ 				controller->show(Box(
+ 					Ui::TranslateBox,
 diff --git a/Telegram/SourceFiles/history/view/history_view_element.cpp b/Telegram/SourceFiles/history/view/history_view_element.cpp
 index 057de48..2e5ac9e 100644
 --- a/Telegram/SourceFiles/history/view/history_view_element.cpp
@@ -3430,10 +3839,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..5b8e4ab
+index 0000000..03f2f46
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,556 @@
+@@ -0,0 +1,670 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3690,6 +4099,120 @@ index 0000000..5b8e4ab
 +		Exteraless::Config::Instance().saveDeletedMessages(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setSaveDeletedMessages(value);
++		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chats/menu"_q,
++		.title = tr::lng_settings_exteraless_chats_menu_title(),
++	});
++
++	const auto addMenuToggle = [&](
++			QString id,
++			rpl::producer<QString> title,
++			QStringList keywords,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto checkbox = builder.addCheckbox({
++			.id = std::move(id),
++			.title = std::move(title),
++			.checked = current,
++			.keywords = std::move(keywords),
++		});
++		if (checkbox) {
++			checkbox->checkedChanges(
++			) | rpl::on_next([=](bool checked) {
++				setter(checked);
++			}, checkbox->lifetime());
++		}
++	};
++	const auto menuSettings = Exteraless::Config::Instance().messageMenuSettings();
++	addMenuToggle(
++		u"exteraless/chats/menu/reply"_q,
++		tr::lng_settings_exteraless_chats_menu_reply(),
++		{ u"reply"_q, u"menu"_q },
++		menuSettings.reply,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuReply(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/edit"_q,
++		tr::lng_settings_exteraless_chats_menu_edit(),
++		{ u"edit"_q, u"menu"_q },
++		menuSettings.edit,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuEdit(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/pin"_q,
++		tr::lng_settings_exteraless_chats_menu_pin(),
++		{ u"pin"_q, u"menu"_q },
++		menuSettings.pin,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuPin(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/copy-text"_q,
++		tr::lng_settings_exteraless_chats_menu_copy_text(),
++		{ u"copy"_q, u"text"_q, u"menu"_q },
++		menuSettings.copyText,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuCopyText(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/copy-link"_q,
++		tr::lng_settings_exteraless_chats_menu_copy_link(),
++		{ u"copy"_q, u"link"_q, u"menu"_q },
++		menuSettings.copyLink,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuCopyLink(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/copy-image"_q,
++		tr::lng_settings_exteraless_chats_menu_copy_image(),
++		{ u"copy"_q, u"image"_q, u"photo"_q, u"menu"_q },
++		menuSettings.copyImage,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuCopyImage(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/forward"_q,
++		tr::lng_settings_exteraless_chats_menu_forward(),
++		{ u"forward"_q, u"menu"_q },
++		menuSettings.forward,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuForward(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/select"_q,
++		tr::lng_settings_exteraless_chats_menu_select(),
++		{ u"select"_q, u"menu"_q },
++		menuSettings.select,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuSelect(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/translate"_q,
++		tr::lng_settings_exteraless_chats_menu_translate(),
++		{ u"translate"_q, u"menu"_q },
++		menuSettings.translate,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuTranslate(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/report"_q,
++		tr::lng_settings_exteraless_chats_menu_report(),
++		{ u"report"_q, u"menu"_q },
++		menuSettings.report,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuReport(value);
++		});
++	addMenuToggle(
++		u"exteraless/chats/menu/delete"_q,
++		tr::lng_settings_exteraless_chats_menu_delete(),
++		{ u"delete"_q, u"menu"_q },
++		menuSettings.deleteMsg,
++		[](bool value) {
++			Exteraless::Config::Instance().setChatsMenuDelete(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -4598,10 +5121,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..1e7cb37
+index 0000000..92feef7
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,32 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -4613,6 +5136,7 @@ index 0000000..1e7cb37
 +    exteraless.h
 +    links.cpp
 +    links.h
++    message_menu.h
 +    network.cpp
 +    network.h
 +    plugins/scanner.cpp
@@ -4635,10 +5159,10 @@ index 0000000..1e7cb37
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..cb194a3
+index 0000000..e182d13
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,328 @@
+@@ -0,0 +1,378 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -4685,6 +5209,20 @@ index 0000000..cb194a3
 +constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 +constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 +constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
++constexpr auto kChatsMenuReply = "OEChatsMenuReply";
++constexpr auto kChatsMenuEdit = "OEChatsMenuEdit";
++constexpr auto kChatsMenuPin = "OEChatsMenuPin";
++constexpr auto kChatsMenuCopyText = "OEChatsMenuCopyText";
++constexpr auto kChatsMenuCopyLink = "OEChatsMenuCopyLink";
++constexpr auto kChatsMenuCopyImage = "OEChatsMenuCopyImage";
++constexpr auto kChatsMenuForward = "OEChatsMenuForward";
++constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
++constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
++constexpr auto kChatsMenuReport = "OEChatsMenuReport";
++constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
++
++constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
++constexpr auto kShowReportButton = "showReportButton";
 +
 +constexpr auto kSectionExtera = "exteraconfig";
 +constexpr auto kSectionPills = "pillstackconfig";
@@ -4813,6 +5351,18 @@ index 0000000..cb194a3
 +	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 +	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
++	const auto menu = config.messageMenuSettings();
++	extera[kChatsMenuReply] = menu.reply;
++	extera[kChatsMenuEdit] = menu.edit;
++	extera[kChatsMenuPin] = menu.pin;
++	extera[kChatsMenuCopyText] = menu.copyText;
++	extera[kChatsMenuCopyLink] = menu.copyLink;
++	extera[kChatsMenuCopyImage] = menu.copyImage;
++	extera[kChatsMenuForward] = menu.forward;
++	extera[kChatsMenuSelect] = menu.select;
++	extera[kChatsMenuTranslate] = menu.translate;
++	extera[kChatsMenuReport] = menu.report;
++	extera[kChatsMenuDelete] = menu.deleteMsg;
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -4941,6 +5491,30 @@ index 0000000..cb194a3
 +			config.setChatsStripTrackingOnPaste(value.toBool());
 +		} else if (key == kChatsUnreadCapsule && value.isBool()) {
 +			config.setChatsUnreadCapsule(value.toBool());
++		} else if (key == kChatsMenuReply && value.isBool()) {
++			config.setChatsMenuReply(value.toBool());
++		} else if (key == kChatsMenuEdit && value.isBool()) {
++			config.setChatsMenuEdit(value.toBool());
++		} else if (key == kChatsMenuPin && value.isBool()) {
++			config.setChatsMenuPin(value.toBool());
++		} else if (key == kChatsMenuCopyText && value.isBool()) {
++			config.setChatsMenuCopyText(value.toBool());
++		} else if (key == kChatsMenuCopyLink && value.isBool()) {
++			config.setChatsMenuCopyLink(value.toBool());
++		} else if ((key == kChatsMenuCopyImage || key == kShowCopyPhotoButton)
++			&& value.isBool()) {
++			config.setChatsMenuCopyImage(value.toBool());
++		} else if (key == kChatsMenuForward && value.isBool()) {
++			config.setChatsMenuForward(value.toBool());
++		} else if (key == kChatsMenuSelect && value.isBool()) {
++			config.setChatsMenuSelect(value.toBool());
++		} else if (key == kChatsMenuTranslate && value.isBool()) {
++			config.setChatsMenuTranslate(value.toBool());
++		} else if ((key == kChatsMenuReport || key == kShowReportButton)
++			&& value.isBool()) {
++			config.setChatsMenuReport(value.toBool());
++		} else if (key == kChatsMenuDelete && value.isBool()) {
++			config.setChatsMenuDelete(value.toBool());
 +		} else {
 +			return false;
 +		}
@@ -5066,10 +5640,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..a6ab0ee
+index 0000000..7ebbf90
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,560 @@
+@@ -0,0 +1,648 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -5111,6 +5685,17 @@ index 0000000..a6ab0ee
 +constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 +constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 +constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
++constexpr auto kChatsMenuReply = "OEChatsMenuReply";
++constexpr auto kChatsMenuEdit = "OEChatsMenuEdit";
++constexpr auto kChatsMenuPin = "OEChatsMenuPin";
++constexpr auto kChatsMenuCopyText = "OEChatsMenuCopyText";
++constexpr auto kChatsMenuCopyLink = "OEChatsMenuCopyLink";
++constexpr auto kChatsMenuCopyImage = "OEChatsMenuCopyImage";
++constexpr auto kChatsMenuForward = "OEChatsMenuForward";
++constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
++constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
++constexpr auto kChatsMenuReport = "OEChatsMenuReport";
++constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -5433,6 +6018,55 @@ index 0000000..a6ab0ee
 +	setValue(kChatsUnreadCapsule, value);
 +}
 +
++MessageMenuSettings Config::messageMenuSettings() const {
++	ensureLoaded();
++	return _messageMenu;
++}
++
++void Config::setChatsMenuReply(bool value) {
++	setValue(kChatsMenuReply, value);
++}
++
++void Config::setChatsMenuEdit(bool value) {
++	setValue(kChatsMenuEdit, value);
++}
++
++void Config::setChatsMenuPin(bool value) {
++	setValue(kChatsMenuPin, value);
++}
++
++void Config::setChatsMenuCopyText(bool value) {
++	setValue(kChatsMenuCopyText, value);
++}
++
++void Config::setChatsMenuCopyLink(bool value) {
++	setValue(kChatsMenuCopyLink, value);
++}
++
++void Config::setChatsMenuCopyImage(bool value) {
++	setValue(kChatsMenuCopyImage, value);
++}
++
++void Config::setChatsMenuForward(bool value) {
++	setValue(kChatsMenuForward, value);
++}
++
++void Config::setChatsMenuSelect(bool value) {
++	setValue(kChatsMenuSelect, value);
++}
++
++void Config::setChatsMenuTranslate(bool value) {
++	setValue(kChatsMenuTranslate, value);
++}
++
++void Config::setChatsMenuReport(bool value) {
++	setValue(kChatsMenuReport, value);
++}
++
++void Config::setChatsMenuDelete(bool value) {
++	setValue(kChatsMenuDelete, value);
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -5513,7 +6147,18 @@ index 0000000..a6ab0ee
 +			|| key == kChatsHideReactionsPrivate
 +			|| key == kChatsStripTrackingOnOpen
 +			|| key == kChatsStripTrackingOnPaste
-+			|| key == kChatsUnreadCapsule) {
++			|| key == kChatsUnreadCapsule
++			|| key == kChatsMenuReply
++			|| key == kChatsMenuEdit
++			|| key == kChatsMenuPin
++			|| key == kChatsMenuCopyText
++			|| key == kChatsMenuCopyLink
++			|| key == kChatsMenuCopyImage
++			|| key == kChatsMenuForward
++			|| key == kChatsMenuSelect
++			|| key == kChatsMenuTranslate
++			|| key == kChatsMenuReport
++			|| key == kChatsMenuDelete) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -5540,10 +6185,15 @@ index 0000000..a6ab0ee
 +}
 +
 +void Config::setWorkingDir(const QString &workingDir) {
-+	if (_loaded || workingDir.isEmpty()) {
++	if (workingDir.isEmpty() || _workingDir == workingDir) {
 +		return;
 +	}
 +	_workingDir = workingDir;
++	if (_loaded) {
++		_loaded = false;
++		_values = QJsonObject();
++		ensureLoaded();
++	}
 +}
 +
 +void Config::ensureLoaded() const {
@@ -5597,6 +6247,18 @@ index 0000000..a6ab0ee
 +	_chats.stripTrackingOnPaste
 +		= boolValue(kChatsStripTrackingOnPaste, true);
 +	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
++
++	_messageMenu.reply = boolValue(kChatsMenuReply, true);
++	_messageMenu.edit = boolValue(kChatsMenuEdit, true);
++	_messageMenu.pin = boolValue(kChatsMenuPin, true);
++	_messageMenu.copyText = boolValue(kChatsMenuCopyText, true);
++	_messageMenu.copyLink = boolValue(kChatsMenuCopyLink, true);
++	_messageMenu.copyImage = boolValue(kChatsMenuCopyImage, true);
++	_messageMenu.forward = boolValue(kChatsMenuForward, true);
++	_messageMenu.select = boolValue(kChatsMenuSelect, true);
++	_messageMenu.translate = boolValue(kChatsMenuTranslate, true);
++	_messageMenu.report = boolValue(kChatsMenuReport, true);
++	_messageMenu.deleteMsg = boolValue(kChatsMenuDelete, true);
 +}
 +
 +bool Config::boolValue(const char *key, bool fallback) const {
@@ -5632,13 +6294,14 @@ index 0000000..a6ab0ee
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..8b29a28
+index 0000000..8e1ff76
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,150 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
++#include "exteraless/message_menu.h"
 +
 +#include <QJsonObject>
 +#include <QJsonValue>
@@ -5743,6 +6406,19 @@ index 0000000..8b29a28
 +	void setChatsStripTrackingOnPaste(bool value);
 +	void setChatsUnreadCapsule(bool value);
 +
++	[[nodiscard]] MessageMenuSettings messageMenuSettings() const;
++	void setChatsMenuReply(bool value);
++	void setChatsMenuEdit(bool value);
++	void setChatsMenuPin(bool value);
++	void setChatsMenuCopyText(bool value);
++	void setChatsMenuCopyLink(bool value);
++	void setChatsMenuCopyImage(bool value);
++	void setChatsMenuForward(bool value);
++	void setChatsMenuSelect(bool value);
++	void setChatsMenuTranslate(bool value);
++	void setChatsMenuReport(bool value);
++	void setChatsMenuDelete(bool value);
++
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 +	void setPluginEnabled(const QString &id, bool enabled);
 +	[[nodiscard]] QJsonObject pluginStates() const;
@@ -5768,6 +6444,7 @@ index 0000000..8b29a28
 +	mutable QString _workingDir;
 +	mutable bool _loaded = false;
 +	mutable ChatsSettings _chats;
++	mutable MessageMenuSettings _messageMenu;
 +};
 +
 +} // namespace Exteraless
@@ -6531,6 +7208,31 @@ index 0000000..12c9a3e
 +[[nodiscard]] QString StripTrackingInText(const QString &text);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/message_menu.h b/exteraless/message_menu.h
+new file mode 100644
+index 0000000..ffa1cbd
+--- /dev/null
++++ b/exteraless/message_menu.h
+@@ -0,0 +1,19 @@
++#pragma once
++
++namespace Exteraless {
++
++struct MessageMenuSettings {
++	bool reply = true;
++	bool edit = true;
++	bool pin = true;
++	bool copyText = true;
++	bool copyLink = true;
++	bool copyImage = true;
++	bool forward = true;
++	bool select = true;
++	bool translate = true;
++	bool report = true;
++	bool deleteMsg = true;
++};
++
++} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp
 new file mode 100644
 index 0000000..63d9e95
@@ -7099,10 +7801,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..258652a
+index 0000000..79fab57
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,470 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -7141,6 +7843,10 @@ index 0000000..258652a
 +		<< "  exteraless-chats-cli config-reset\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1>\n"
++		<< "  exteraless-chats-cli message-menu\n"
++		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
++		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
++		<< "<translate> <report> <deleteMsg>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -7214,6 +7920,46 @@ index 0000000..258652a
 +		{ QStringLiteral("saveDeletedMessages"),
 +			Exteraless::Config::Instance().saveDeletedMessages() },
 +	});
++}
++
++[[nodiscard]] QJsonObject MessageMenuObject(
++		const Exteraless::MessageMenuSettings &menu) {
++	return QJsonObject{
++		{ QStringLiteral("reply"), menu.reply },
++		{ QStringLiteral("edit"), menu.edit },
++		{ QStringLiteral("pin"), menu.pin },
++		{ QStringLiteral("copyText"), menu.copyText },
++		{ QStringLiteral("copyLink"), menu.copyLink },
++		{ QStringLiteral("copyImage"), menu.copyImage },
++		{ QStringLiteral("forward"), menu.forward },
++		{ QStringLiteral("select"), menu.select },
++		{ QStringLiteral("translate"), menu.translate },
++		{ QStringLiteral("report"), menu.report },
++		{ QStringLiteral("deleteMsg"), menu.deleteMsg },
++	};
++}
++
++void PrintMessageMenu() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("menu"),
++			MessageMenuObject(
++				Exteraless::Config::Instance().messageMenuSettings()) },
++	});
++}
++
++void ApplyMenuFlags(const std::array<bool, 11> &flags) {
++	auto &config = Exteraless::Config::Instance();
++	config.setChatsMenuReply(flags[0]);
++	config.setChatsMenuEdit(flags[1]);
++	config.setChatsMenuPin(flags[2]);
++	config.setChatsMenuCopyText(flags[3]);
++	config.setChatsMenuCopyLink(flags[4]);
++	config.setChatsMenuCopyImage(flags[5]);
++	config.setChatsMenuForward(flags[6]);
++	config.setChatsMenuSelect(flags[7]);
++	config.setChatsMenuTranslate(flags[8]);
++	config.setChatsMenuReport(flags[9]);
++	config.setChatsMenuDelete(flags[10]);
 +}
 +
 +void ApplyFlags(const std::array<bool, 7> &flags) {
@@ -7343,6 +8089,27 @@ index 0000000..258652a
 +		}
 +		Exteraless::Config::Instance().setDisableNumberRounding(value);
 +		PrintGeneral();
++		return 0;
++	}
++	if (mode == QStringLiteral("message-menu")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintMessageMenu();
++		return 0;
++	}
++	if (mode == QStringLiteral("message-menu-set")) {
++		if (arguments.size() != 13) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 11>();
++		for (auto i = 0; i != 11; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		ApplyMenuFlags(flags);
++		PrintMessageMenu();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("deleted")) {
@@ -7572,10 +8339,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..693d403
+index 0000000..8b82185
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1192 @@
+@@ -0,0 +1,1325 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -7724,6 +8491,8 @@ index 0000000..693d403
 +        ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
 +        ("config-set with five values",
 +         ["config-set", "0", "1", "0", "1", "0"]),
++        ("message-menu-set with wrong count",
++         ["message-menu-set", "0", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
@@ -7958,7 +8727,7 @@ index 0000000..693d403
 +            section.get("OEPluginStates"))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 21,
++            len(section) == 32,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -7977,7 +8746,7 @@ index 0000000..693d403
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 25,
++            sum(len(value) for value in exported.values()) == 36,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -7997,7 +8766,7 @@ index 0000000..693d403
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 25,
++                data.get("applied") == 36,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -8052,6 +8821,17 @@ index 0000000..693d403
 +            "OEChatsStripTrackingOnOpen": False,
 +            "OEChatsStripTrackingOnPaste": False,
 +            "OEChatsUnreadCapsule": True,
++            "OEChatsMenuReply": False,
++            "OEChatsMenuEdit": True,
++            "OEChatsMenuPin": False,
++            "OEChatsMenuCopyText": True,
++            "OEChatsMenuCopyLink": False,
++            "OEChatsMenuCopyImage": True,
++            "OEChatsMenuForward": False,
++            "OEChatsMenuSelect": True,
++            "OEChatsMenuTranslate": False,
++            "OEChatsMenuReport": True,
++            "OEChatsMenuDelete": False,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -8072,7 +8852,7 @@ index 0000000..693d403
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 25,
++            data.get("applied") == 36,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -8213,10 +8993,10 @@ index 0000000..693d403
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 25",
++            "backup legacy eight completed to 36",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (21, 2, 2),
++             len(sections["mainconfig"])) == (32, 2, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -8730,6 +9510,124 @@ index 0000000..693d403
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_message_menu(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "menu-defaults")
++    data = json_call(ledger, cli, ["message-menu"], env, "menu defaults")
++    expected_defaults = {
++        "reply": True,
++        "edit": True,
++        "pin": True,
++        "copyText": True,
++        "copyLink": True,
++        "copyImage": True,
++        "forward": True,
++        "select": True,
++        "translate": True,
++        "report": True,
++        "deleteMsg": True,
++    }
++    if data is not None:
++        ledger.check(
++            "menu defaults all true",
++            data.get("menu") == expected_defaults,
++            data.get("menu"))
++
++    env = make_env(work / "menu-set")
++    data = json_call(
++        ledger, cli,
++        ["message-menu-set", "0", "1", "0", "1", "0", "1", "0", "1", "0", "1", "0"],
++        env, "menu set")
++    custom = {
++        "reply": False,
++        "edit": True,
++        "pin": False,
++        "copyText": True,
++        "copyLink": False,
++        "copyImage": True,
++        "forward": False,
++        "select": True,
++        "translate": False,
++        "report": True,
++        "deleteMsg": False,
++    }
++    if data is not None:
++        ledger.check(
++            "menu set matches",
++            data.get("menu") == custom,
++            data.get("menu"))
++    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu reload")
++    if reloaded is not None:
++        ledger.check(
++            "menu reload matches",
++            reloaded.get("menu") == custom,
++            reloaded.get("menu"))
++
++    env = make_env(work / "menu-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsMenuCopyImage": False,
++            "OEChatsMenuReport": False,
++            "OEChatsMenuTranslate": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "menu fromJson")
++    if data is not None:
++        ledger.check(
++            "menu fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu fromJson read")
++    if reloaded is not None:
++        menu = reloaded.get("menu") or {}
++        ledger.check(
++            "menu fromJson values",
++            menu.get("copyImage") is False
++            and menu.get("report") is False
++            and menu.get("translate") is False
++            and menu.get("reply") is True,
++            menu)
++
++    env = make_env(work / "menu-backup-aliases")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "showCopyPhotoButton": False,
++            "showReportButton": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "menu backup aliases")
++    if data is not None:
++        ledger.check(
++            "menu backup aliases applied",
++            data.get("applied") == 2,
++            data.get("applied"))
++        ledger.check(
++            "menu backup aliases unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu aliases read")
++    if reloaded is not None:
++        menu = reloaded.get("menu") or {}
++        ledger.check(
++            "menu aliases applied to config",
++            menu.get("copyImage") is False
++            and menu.get("report") is False
++            and menu.get("reply") is True,
++            menu)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -8747,6 +9645,7 @@ index 0000000..693d403
 +        deleted = check_deleted(ledger, cli, work)
 +        reset = check_reset(ledger, cli, work)
 +        workdir = check_workdir(ledger, cli, work)
++        menu = check_message_menu(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -8756,6 +9655,7 @@ index 0000000..693d403
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
 +    print(f"reset: {reset[0] - reset[1]} passed")
 +    print(f"workdir: {workdir[0] - workdir[1]} passed")
++    print(f"menu: {menu[0] - menu[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

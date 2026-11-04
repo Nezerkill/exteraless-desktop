@@ -44,6 +44,20 @@ constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
 constexpr auto kChatsStripTrackingOnPaste = "OEChatsStripTrackingOnPaste";
 constexpr auto kChatsUnreadCapsule = "OEChatsUnreadCapsule";
+constexpr auto kChatsMenuReply = "OEChatsMenuReply";
+constexpr auto kChatsMenuEdit = "OEChatsMenuEdit";
+constexpr auto kChatsMenuPin = "OEChatsMenuPin";
+constexpr auto kChatsMenuCopyText = "OEChatsMenuCopyText";
+constexpr auto kChatsMenuCopyLink = "OEChatsMenuCopyLink";
+constexpr auto kChatsMenuCopyImage = "OEChatsMenuCopyImage";
+constexpr auto kChatsMenuForward = "OEChatsMenuForward";
+constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
+constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
+constexpr auto kChatsMenuReport = "OEChatsMenuReport";
+constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
+
+constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
+constexpr auto kShowReportButton = "showReportButton";
 
 constexpr auto kSectionExtera = "exteraconfig";
 constexpr auto kSectionPills = "pillstackconfig";
@@ -172,6 +186,18 @@ QString BuildBackup() {
 	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
+	const auto menu = config.messageMenuSettings();
+	extera[kChatsMenuReply] = menu.reply;
+	extera[kChatsMenuEdit] = menu.edit;
+	extera[kChatsMenuPin] = menu.pin;
+	extera[kChatsMenuCopyText] = menu.copyText;
+	extera[kChatsMenuCopyLink] = menu.copyLink;
+	extera[kChatsMenuCopyImage] = menu.copyImage;
+	extera[kChatsMenuForward] = menu.forward;
+	extera[kChatsMenuSelect] = menu.select;
+	extera[kChatsMenuTranslate] = menu.translate;
+	extera[kChatsMenuReport] = menu.report;
+	extera[kChatsMenuDelete] = menu.deleteMsg;
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -300,6 +326,30 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setChatsStripTrackingOnPaste(value.toBool());
 		} else if (key == kChatsUnreadCapsule && value.isBool()) {
 			config.setChatsUnreadCapsule(value.toBool());
+		} else if (key == kChatsMenuReply && value.isBool()) {
+			config.setChatsMenuReply(value.toBool());
+		} else if (key == kChatsMenuEdit && value.isBool()) {
+			config.setChatsMenuEdit(value.toBool());
+		} else if (key == kChatsMenuPin && value.isBool()) {
+			config.setChatsMenuPin(value.toBool());
+		} else if (key == kChatsMenuCopyText && value.isBool()) {
+			config.setChatsMenuCopyText(value.toBool());
+		} else if (key == kChatsMenuCopyLink && value.isBool()) {
+			config.setChatsMenuCopyLink(value.toBool());
+		} else if ((key == kChatsMenuCopyImage || key == kShowCopyPhotoButton)
+			&& value.isBool()) {
+			config.setChatsMenuCopyImage(value.toBool());
+		} else if (key == kChatsMenuForward && value.isBool()) {
+			config.setChatsMenuForward(value.toBool());
+		} else if (key == kChatsMenuSelect && value.isBool()) {
+			config.setChatsMenuSelect(value.toBool());
+		} else if (key == kChatsMenuTranslate && value.isBool()) {
+			config.setChatsMenuTranslate(value.toBool());
+		} else if ((key == kChatsMenuReport || key == kShowReportButton)
+			&& value.isBool()) {
+			config.setChatsMenuReport(value.toBool());
+		} else if (key == kChatsMenuDelete && value.isBool()) {
+			config.setChatsMenuDelete(value.toBool());
 		} else {
 			return false;
 		}

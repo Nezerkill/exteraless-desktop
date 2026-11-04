@@ -146,6 +146,8 @@ def check_cli_args(ledger, cli):
         ("hidden with five values", ["hidden", "0", "0", "0", "1", "0"]),
         ("config-set with five values",
          ["config-set", "0", "1", "0", "1", "0"]),
+        ("message-menu-set with wrong count",
+         ["message-menu-set", "0", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -380,7 +382,7 @@ def check_backup(ledger, cli, work):
             section.get("OEPluginStates"))
         ledger.check(
             "backup extera key count",
-            len(section) == 21,
+            len(section) == 32,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -399,7 +401,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 25,
+            sum(len(value) for value in exported.values()) == 36,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -419,7 +421,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 25,
+                data.get("applied") == 36,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -474,6 +476,17 @@ def check_backup(ledger, cli, work):
             "OEChatsStripTrackingOnOpen": False,
             "OEChatsStripTrackingOnPaste": False,
             "OEChatsUnreadCapsule": True,
+            "OEChatsMenuReply": False,
+            "OEChatsMenuEdit": True,
+            "OEChatsMenuPin": False,
+            "OEChatsMenuCopyText": True,
+            "OEChatsMenuCopyLink": False,
+            "OEChatsMenuCopyImage": True,
+            "OEChatsMenuForward": False,
+            "OEChatsMenuSelect": True,
+            "OEChatsMenuTranslate": False,
+            "OEChatsMenuReport": True,
+            "OEChatsMenuDelete": False,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -494,7 +507,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 25,
+            data.get("applied") == 36,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -635,10 +648,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 25",
+            "backup legacy eight completed to 36",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (21, 2, 2),
+             len(sections["mainconfig"])) == (32, 2, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1152,6 +1165,124 @@ def check_workdir(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_message_menu(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "menu-defaults")
+    data = json_call(ledger, cli, ["message-menu"], env, "menu defaults")
+    expected_defaults = {
+        "reply": True,
+        "edit": True,
+        "pin": True,
+        "copyText": True,
+        "copyLink": True,
+        "copyImage": True,
+        "forward": True,
+        "select": True,
+        "translate": True,
+        "report": True,
+        "deleteMsg": True,
+    }
+    if data is not None:
+        ledger.check(
+            "menu defaults all true",
+            data.get("menu") == expected_defaults,
+            data.get("menu"))
+
+    env = make_env(work / "menu-set")
+    data = json_call(
+        ledger, cli,
+        ["message-menu-set", "0", "1", "0", "1", "0", "1", "0", "1", "0", "1", "0"],
+        env, "menu set")
+    custom = {
+        "reply": False,
+        "edit": True,
+        "pin": False,
+        "copyText": True,
+        "copyLink": False,
+        "copyImage": True,
+        "forward": False,
+        "select": True,
+        "translate": False,
+        "report": True,
+        "deleteMsg": False,
+    }
+    if data is not None:
+        ledger.check(
+            "menu set matches",
+            data.get("menu") == custom,
+            data.get("menu"))
+    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu reload")
+    if reloaded is not None:
+        ledger.check(
+            "menu reload matches",
+            reloaded.get("menu") == custom,
+            reloaded.get("menu"))
+
+    env = make_env(work / "menu-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsMenuCopyImage": False,
+            "OEChatsMenuReport": False,
+            "OEChatsMenuTranslate": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "menu fromJson")
+    if data is not None:
+        ledger.check(
+            "menu fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu fromJson read")
+    if reloaded is not None:
+        menu = reloaded.get("menu") or {}
+        ledger.check(
+            "menu fromJson values",
+            menu.get("copyImage") is False
+            and menu.get("report") is False
+            and menu.get("translate") is False
+            and menu.get("reply") is True,
+            menu)
+
+    env = make_env(work / "menu-backup-aliases")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "showCopyPhotoButton": False,
+            "showReportButton": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "menu backup aliases")
+    if data is not None:
+        ledger.check(
+            "menu backup aliases applied",
+            data.get("applied") == 2,
+            data.get("applied"))
+        ledger.check(
+            "menu backup aliases unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    reloaded = json_call(ledger, cli, ["message-menu"], env, "menu aliases read")
+    if reloaded is not None:
+        menu = reloaded.get("menu") or {}
+        ledger.check(
+            "menu aliases applied to config",
+            menu.get("copyImage") is False
+            and menu.get("report") is False
+            and menu.get("reply") is True,
+            menu)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1169,6 +1300,7 @@ def main():
         deleted = check_deleted(ledger, cli, work)
         reset = check_reset(ledger, cli, work)
         workdir = check_workdir(ledger, cli, work)
+        menu = check_message_menu(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1178,6 +1310,7 @@ def main():
     print(f"deleted: {deleted[0] - deleted[1]} passed")
     print(f"reset: {reset[0] - reset[1]} passed")
     print(f"workdir: {workdir[0] - workdir[1]} passed")
+    print(f"menu: {menu[0] - menu[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -9230,5 +9230,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_import_done" = "Settings imported: {amount}.";
 "lng_settings_exteraless_import_unknown" = "Unknown keys: {keys}";
 "lng_settings_exteraless_file_filter" = "Exteraless backup (*.extera)";
+"lng_settings_exteraless_chats_menu_title" = "Visible message menu items";
+"lng_settings_exteraless_chats_menu_reply" = "Reply";
+"lng_settings_exteraless_chats_menu_edit" = "Edit";
+"lng_settings_exteraless_chats_menu_pin" = "Pin / Unpin";
+"lng_settings_exteraless_chats_menu_copy_text" = "Copy text";
+"lng_settings_exteraless_chats_menu_copy_link" = "Copy link";
+"lng_settings_exteraless_chats_menu_copy_image" = "Copy image";
+"lng_settings_exteraless_chats_menu_forward" = "Forward";
+"lng_settings_exteraless_chats_menu_select" = "Select";
+"lng_settings_exteraless_chats_menu_translate" = "Translate";
+"lng_settings_exteraless_chats_menu_report" = "Report";
+"lng_settings_exteraless_chats_menu_delete" = "Delete";
 
 // Keys finished

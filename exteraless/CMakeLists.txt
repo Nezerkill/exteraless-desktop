@@ -9,6 +9,7 @@ add_library(exteraless STATIC
     exteraless.h
     links.cpp
     links.h
+    message_menu.h
     network.cpp
     network.h
     plugins/scanner.cpp

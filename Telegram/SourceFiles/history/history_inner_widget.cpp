@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/history_inner_widget.h"
 
+#include "exteraless/config.h"
+
 #include "api/api_polls.h"
 #include "chat_helpers/stickers_emoji_pack.h"
 #include "core/application.h"
@@ -3015,7 +3017,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			: item->allowsEdit(t)
 			? item
 			: nullptr;
-		if (editItem) {
+		if (editItem
+			&& Exteraless::Config::Instance().messageMenuSettings().edit) {
 			const auto editItemId = editItem->fullId();
 			_menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
 				if (const auto item = session->data().message(editItemId)) {
@@ -3050,7 +3053,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		const auto pinItem = (item->canPin() && item->isPinned())
 			? item
 			: groupLeaderOrSelf(item);
-		if (pinItem->canPin()) {
+		if (pinItem->canPin()
+			&& Exteraless::Config::Instance().messageMenuSettings().pin) {
 			const auto isPinned = pinItem->isPinned();
 			const auto pinItemId = pinItem->fullId();
 			_menu->addAction(isPinned ? tr::lng_context_unpin_msg(tr::now) : tr::lng_context_pin_msg(tr::now), crl::guard(controller, [=] {
@@ -3076,9 +3080,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			_menu->addAction(tr::lng_context_save_image(tr::now), base::fn_delayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
 				savePhotoToFile(photo);
 			}), &st::menuIconSaveImage);
-			_menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
-				copyContextImage(photo, itemId);
-			}, &st::menuIconCopy);
+			if (Exteraless::Config::Instance().messageMenuSettings().copyImage) {
+				_menu->addAction(tr::lng_context_copy_image(tr::now), [=] {
+					copyContextImage(photo, itemId);
+				}, &st::menuIconCopy);
+			}
 		}
 		if (photo->hasAttachedStickers()) {
 			_menu->addAction(tr::lng_context_attached_stickers(tr::now), [=] {
@@ -3183,7 +3189,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				Element::Moused())
 		) != HistoryView::PointState::GroupPart);
 	const auto addSelectMessageAction = [&](not_null<HistoryItem*> item) {
-		if (item->canBeSelected() && !hasSelectRestriction()) {
+		if (item->canBeSelected()
+			&& !hasSelectRestriction()
+			&& Exteraless::Config::Instance().messageMenuSettings().select) {
 			const auto itemId = item->fullId();
 			_menu->addAction(tr::lng_context_select_msg(tr::now), [=] {
 				if (const auto item = session->data().message(itemId)) {
@@ -3291,7 +3299,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	const auto addReplyAction = [&](HistoryItem *item) {
 		if (!item
 			|| (!item->isRegular() && !CanReplyToEphemeral(item))
-			|| IsAnchoredEphemeral(item)) {
+			|| IsAnchoredEphemeral(item)
+			|| !Exteraless::Config::Instance().messageMenuSettings().reply) {
 			return;
 		}
 		const auto canSendReply = CanSendReply(item);
@@ -3341,6 +3350,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 	};
 
 	const auto addUnpinSelectedAction = [&] {
+		if (!Exteraless::Config::Instance().messageMenuSettings().pin) {
+			return;
+		}
 		auto ids = Window::MessagesToUnpin(session, getSelectedItems());
 		if (ids.empty()) {
 			return;
@@ -3417,18 +3429,21 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			&& item->hasDirectLink()
 			&& isUponSelected != 2
 			&& isUponSelected != -2
-			&& !IsAnchoredEphemeral(item)) {
+			&& !IsAnchoredEphemeral(item)
+			&& Exteraless::Config::Instance().messageMenuSettings().copyLink) {
 			_menu->addAction(item->history()->peer->isMegagroup() ? tr::lng_context_copy_message_link(tr::now) : tr::lng_context_copy_post_link(tr::now), [=] {
 				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
 			}, &st::menuIconLink);
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count) {
+			if (selectedState.count > 0 && selectedState.canForwardCount == selectedState.count
+				&& Exteraless::Config::Instance().messageMenuSettings().forward) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
 			}
-			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count) {
+			if (selectedState.count > 0 && selectedState.canDeleteCount == selectedState.count
+				&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
 				}, &st::menuIconDelete);
@@ -3453,7 +3468,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			const auto itemId = item->fullId();
 			const auto blockSender = item->history()->peer->isRepliesChat();
 			if (isUponSelected != -2) {
-				if (item->allowsForward() && !IsAnchoredEphemeral(item)) {
+				if (item->allowsForward() && !IsAnchoredEphemeral(item)
+					&& Exteraless::Config::Instance().messageMenuSettings().forward) {
 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardItem(itemId);
 					}, &st::menuIconForward);
@@ -3463,7 +3479,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
 					}, &st::menuIconTagSell);
 				}
-				if (item->canDelete()) {
+				if (item->canDelete()
+					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
 					const auto callback = [=] { deleteItem(itemId); };
 					if (item->isUploading()) {
 						if (item->media()
@@ -3482,7 +3499,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 							[=] { _menu = nullptr; }));
 					}
 				}
-				if (!blockSender && item->suggestReport()) {
+				if (!blockSender && item->suggestReport()
+					&& Exteraless::Config::Instance().messageMenuSettings().report) {
 					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
 						reportItem(itemId);
 					}, &st::menuIconReport);
@@ -3547,7 +3565,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		if (isUponSelected > 0) {
 			addReplyAction(item);
 				const auto selectedText = getSelectedText();
-			if (!hasCopyRestrictionForSelected() && !selectedText.empty()) {
+			if (!hasCopyRestrictionForSelected()
+				&& !selectedText.empty()
+				&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
 				_menu->addAction(
 					((isUponSelected > 1)
 						? tr::lng_context_copy_selected_items(tr::now)
@@ -3555,7 +3575,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 					[=] { copySelectedText(); },
 					&st::menuIconCopy);
 			}
-			if (item && !Ui::SkipTranslate(selectedText.rich)) {
+			if (item
+				&& !Ui::SkipTranslate(selectedText.rich)
+				&& Exteraless::Config::Instance().messageMenuSettings().translate) {
 				const auto peer = item->history()->peer;
 				_menu->addAction(tr::lng_context_translate_selected({}), [=] {
 					_controller->show(Box(
@@ -3654,14 +3676,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				if (!item->isService() && view && actionText.isEmpty()) {
 					const auto hasRestriction = hasCopyRestriction(item);
 					if (!hasRestriction
-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
+						&& (view->hasVisibleText() || mediaHasTextForCopy)
+						&& Exteraless::Config::Instance().messageMenuSettings().copyText) {
 						_menu->addAction(
 							tr::lng_context_copy_text(tr::now),
 							[=] { copyContextText(itemId); },
 							&st::menuIconCopy);
 					}
 					if ((!item->translation() || !_history->translatedTo())
-						&& (view->hasVisibleText() || mediaHasTextForCopy)) {
+						&& (view->hasVisibleText() || mediaHasTextForCopy)
+						&& Exteraless::Config::Instance().messageMenuSettings().translate) {
 						const auto peer = item->history()->peer;
 						const auto itemId = item->id;
 						const auto translate = mediaHasTextForCopy
@@ -3695,7 +3719,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			&& item->hasDirectLink()
 			&& isUponSelected != 2
 			&& isUponSelected != -2
-			&& !IsAnchoredEphemeral(item)) {
+			&& !IsAnchoredEphemeral(item)
+			&& Exteraless::Config::Instance().messageMenuSettings().copyLink) {
 			_menu->addAction(item->history()->peer->isMegagroup() ? tr::lng_context_copy_message_link(tr::now) : tr::lng_context_copy_post_link(tr::now), [=] {
 				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
 			}, &st::menuIconLink);
@@ -3726,12 +3751,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 		}
 		if (isUponSelected > 1) {
-			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
+			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount
+				&& Exteraless::Config::Instance().messageMenuSettings().forward) {
 				_menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
 					_widget->forwardSelected();
 				}, &st::menuIconForward);
 			}
-			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount) {
+			if (selectedState.count > 0 && selectedState.count == selectedState.canDeleteCount
+				&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
 				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
 					_widget->confirmDeleteSelected();
 				}, &st::menuIconDelete);
@@ -3757,7 +3784,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				|| item->isRegular()
 				|| item->isEphemeral())) {
 			if (isUponSelected != -2) {
-				if (canForward) {
+				if (canForward
+					&& Exteraless::Config::Instance().messageMenuSettings().forward) {
 					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
 						forwardAsGroup(itemId);
 					}, &st::menuIconForward);
@@ -3767,7 +3795,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
 					}, &st::menuIconTagSell);
 				}
-				if (canDelete) {
+				if (canDelete
+					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
 					const auto callback = [=] {
 						deleteAsGroup(itemId);
 					};
@@ -3788,7 +3817,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 							[=] { _menu = nullptr; }));
 					}
 				}
-				if (!canBlockSender && canReport) {
+				if (!canBlockSender && canReport
+					&& Exteraless::Config::Instance().messageMenuSettings().report) {
 					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
 						reportAsGroup(itemId);
 					}, &st::menuIconReport);

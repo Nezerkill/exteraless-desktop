@@ -257,6 +257,120 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/menu"_q,
+		.title = tr::lng_settings_exteraless_chats_menu_title(),
+	});
+
+	const auto addMenuToggle = [&](
+			QString id,
+			rpl::producer<QString> title,
+			QStringList keywords,
+			bool current,
+			Fn<void(bool)> setter) {
+		const auto checkbox = builder.addCheckbox({
+			.id = std::move(id),
+			.title = std::move(title),
+			.checked = current,
+			.keywords = std::move(keywords),
+		});
+		if (checkbox) {
+			checkbox->checkedChanges(
+			) | rpl::on_next([=](bool checked) {
+				setter(checked);
+			}, checkbox->lifetime());
+		}
+	};
+	const auto menuSettings = Exteraless::Config::Instance().messageMenuSettings();
+	addMenuToggle(
+		u"exteraless/chats/menu/reply"_q,
+		tr::lng_settings_exteraless_chats_menu_reply(),
+		{ u"reply"_q, u"menu"_q },
+		menuSettings.reply,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuReply(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/edit"_q,
+		tr::lng_settings_exteraless_chats_menu_edit(),
+		{ u"edit"_q, u"menu"_q },
+		menuSettings.edit,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuEdit(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/pin"_q,
+		tr::lng_settings_exteraless_chats_menu_pin(),
+		{ u"pin"_q, u"menu"_q },
+		menuSettings.pin,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuPin(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/copy-text"_q,
+		tr::lng_settings_exteraless_chats_menu_copy_text(),
+		{ u"copy"_q, u"text"_q, u"menu"_q },
+		menuSettings.copyText,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuCopyText(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/copy-link"_q,
+		tr::lng_settings_exteraless_chats_menu_copy_link(),
+		{ u"copy"_q, u"link"_q, u"menu"_q },
+		menuSettings.copyLink,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuCopyLink(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/copy-image"_q,
+		tr::lng_settings_exteraless_chats_menu_copy_image(),
+		{ u"copy"_q, u"image"_q, u"photo"_q, u"menu"_q },
+		menuSettings.copyImage,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuCopyImage(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/forward"_q,
+		tr::lng_settings_exteraless_chats_menu_forward(),
+		{ u"forward"_q, u"menu"_q },
+		menuSettings.forward,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuForward(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/select"_q,
+		tr::lng_settings_exteraless_chats_menu_select(),
+		{ u"select"_q, u"menu"_q },
+		menuSettings.select,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuSelect(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/translate"_q,
+		tr::lng_settings_exteraless_chats_menu_translate(),
+		{ u"translate"_q, u"menu"_q },
+		menuSettings.translate,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuTranslate(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/report"_q,
+		tr::lng_settings_exteraless_chats_menu_report(),
+		{ u"report"_q, u"menu"_q },
+		menuSettings.report,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuReport(value);
+		});
+	addMenuToggle(
+		u"exteraless/chats/menu/delete"_q,
+		tr::lng_settings_exteraless_chats_menu_delete(),
+		{ u"delete"_q, u"menu"_q },
+		menuSettings.deleteMsg,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsMenuDelete(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,
 		.title = tr::lng_settings_exteraless_pill_stack(),
 	});

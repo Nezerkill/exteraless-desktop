@@ -80,9 +80,18 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 184 проверки PASS
-  (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 27 deleted, 7 reset,
-  71 backup); плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 193 проверки PASS
+  (44 strip, 10 reactions, 5 CLI, 7 config, 6 general, 27 deleted, 7 reset,
+  8 workdir, 8 menu, 71 backup); плагины без изменений — 32 и 213 проверок.
+- Visible message menu items (NB-11): подсекция «Visible message menu items»
+  в Chats с 11 чекбоксами `OEChatsMenu*` управляет видимостью пунктов
+  сообщения в обоих виджетах истории (`history_inner_widget.cpp` и
+  `history_view_context_menu.cpp`). Ключи экспортируются в `.extera`
+  (суммарно 36 ключей), импортируются с поддержкой Android-алиасов.
+  CLI-группа `menu` (8 проверок) проверяет дефолты (все `true`), сеттеры,
+  `fromJson` и алиасы. Xvfb smoke: снятие чекбокса `Pin / Unpin` пишет
+  `OEChatsMenuPin: false` в `exteraless.json`, контекстное меню сообщения в
+  чате скрывает пункт `Pin`; горячие клавиши не ломаются.
 - Exteraless settings reset: кнопка «Reset Exteraless settings» в подсекции
   Reset показывает подтверждение, очищает `_values` и перезаписывает
   `exteraless.json` пустым `exteraconfig`, возвращая дефолты; после
@@ -126,8 +135,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `1d741ac6…`,
-  mtime 2026-11-05 01:40; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `e4073d06…`,
+  mtime 2026-11-05 02:29; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

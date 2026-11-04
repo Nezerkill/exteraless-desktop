@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **25** | **25** | 25 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 25 | на момент аудита было 8, после NB-04 — все 25 desktop-ключей |
+| **Ключей форка desktop** | **36** | **36** | 36 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
+| Ключей `.extera` | 8 | 8 | 36 | на момент аудита было 8, после NB-04 и NB-11 — все 36 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -248,7 +248,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Уже перенесено | `removeMessageTail`, `hideReactions*`, `stripTrackingOnOpen/Paste`, `unreadCapsule` | ✅ |
 | Стикеры | `stickerSize`, `stickerShape`, `stickerTimeSide`, `hideTimeForSticker` | ❌ (`history/view/media/history_view_sticker.cpp`; в tdesktop уже есть `base::options::option<int> OptionStickerSize`) |
 | Ответы и цитаты | `replyColors`, `replyEmoji`, `replyBackground`, `messageColoredBackground` | ❌ (`history/view/history_view_reply.cpp`) |
-| Пункты меню сообщения | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | 🟡 пункты есть безусловно, ключей видимости нет (`history/view/history_view_context_menu.cpp`, `window/window_peer_menu.cpp`) |
+| Пункты меню сообщения | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | ✅ 11 чекбоксов видимости `OEChatsMenu*` (NB-11), поддержаны в обоих контекстных меню сообщений |
 | Пункты меню чата | 14 ключей `NaConfig.chatMenuItem*`, `shortcuts*` | ❌ (`window/window_peer_menu.cpp`) |
 | Меню медиавьюера | 6 ключей `mediaViewerMenuItem*` | ❌ (`media/view/media_view_overlay_widget.cpp`) |
 | Группировка и порядок меню | `groupedMessageMenu`, `defaultDeleteMenu`, `textStyleOrder` | ❌ |
@@ -602,9 +602,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (25)
+## 13. Приложение B. Ключи `.extera` (36)
 
-Секция `exteraconfig` (21): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (32): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
 `hideReactionsInPrivateChats`, `OEGhostSendReadPackets`,
@@ -612,7 +612,11 @@ M-нумерацию:
 `OEGhostSendOfflineAfterOnline`, `OEGhostReadExclusions`,
 `OEGhostTypingExclusions`, `OESaveDeletedMessages`, `OEProxyAutoDisabled`,
 `OEPluginStates`, `OEChatsStripTrackingOnOpen`,
-`OEChatsStripTrackingOnPaste`, `OEChatsUnreadCapsule`.
+`OEChatsStripTrackingOnPaste`, `OEChatsUnreadCapsule`,
+`OEChatsMenuReply`, `OEChatsMenuEdit`, `OEChatsMenuPin`,
+`OEChatsMenuCopyText`, `OEChatsMenuCopyLink`, `OEChatsMenuCopyImage`,
+`OEChatsMenuForward`, `OEChatsMenuSelect`, `OEChatsMenuTranslate`,
+`OEChatsMenuReport`, `OEChatsMenuDelete`.
 
 Секция `pillstackconfig` (2): `OEPillStackEnabled`, `OEPillStackPills`.
 

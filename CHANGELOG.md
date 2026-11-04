@@ -2,6 +2,13 @@
 
 ## 2026-11-05
 
+- Chats / Context menu: добавлена подсекция «Visible message menu items»
+  с 11 чекбоксами видимости пунктов меню сообщения (`Reply`, `Edit`,
+  `Pin / Unpin`, `Copy text`, `Copy link`, `Copy image`, `Forward`, `Select`,
+  `Translate`, `Report`, `Delete`). Все пункты поддержаны в обоих контекстных
+  меню (`history_inner_widget` и `history_view_context_menu`), экспортируются
+  в `.extera`, импортируются с поддержкой Android-алиасов (`showCopyPhotoButton`,
+  `showReportButton`); горячие клавиши не затрагиваются.
 - Localization: все подписи секции Exteraless (Ghost, Chats, Pill Stack,
   Reset, Plugins, диалоги экспорта/импорта бэкапа и подтверждения сброса)
   переведены на ключи `tr::lng_settings_exteraless_*`; в `lang.strings`
