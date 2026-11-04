@@ -2,6 +2,8 @@
 
 ## 2026-11-04
 
+- Chats: при скрытии реакций в канале/группе/личном чате скрывается также
+  hover-кнопка добавления реакции у сообщения.
 - Chats paste: `OEChatsStripTrackingOnPaste` (default `true`) очищает
   tracking-параметры в plain-text/URL вставке; rich-text не меняется, ключ
   desktop-only.

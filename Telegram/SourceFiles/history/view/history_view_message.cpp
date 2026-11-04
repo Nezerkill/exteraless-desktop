@@ -55,6 +55,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_channel.h"
 #include "data/data_forum_topic.h"
 #include "data/data_message_reactions.h"
+#include "exteraless/chats.h"
 #include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "mainwidget.h"
@@ -5303,6 +5304,13 @@ Reactions::ButtonParameters Message::reactionButtonParameters(
 		QPoint position,
 		const TextState &reactionState) const {
 	using namespace Reactions;
+	const auto peer = data()->history()->peer;
+	if (peer && Exteraless::HiddenReactionsFor(
+		peer->isBroadcast(),
+		peer->isChat() || peer->isMegagroup(),
+		peer->isUser())) {
+		return {};
+	}
 	auto result = ButtonParameters{ .context = data()->fullId() };
 	const auto outsideBubble = (!_comments && !embedReactionsInBubble());
 	const auto geometry = countGeometry();
