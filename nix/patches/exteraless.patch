@@ -3384,10 +3384,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..8ad5061
+index 0000000..45cedb3
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,522 @@
+@@ -0,0 +1,550 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3863,6 +3863,34 @@ index 0000000..8ad5061
 +				});
 +		},
 +		.keywords = { u"backup"_q, u"import"_q },
++	});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/reset"_q,
++		.title = rpl::single(u"Reset"_q),
++	});
++
++	builder.addButton({
++		.id = u"exteraless/reset/all"_q,
++		.title = rpl::single(u"Reset Exteraless settings"_q),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			if (!controller) {
++				return;
++			}
++			controller->show(Ui::MakeConfirmBox({
++				.text = rpl::single(
++					u"Reset all Exteraless settings to defaults? "
++					u"This cannot be undone."_q),
++				.confirmed = [=] {
++					Exteraless::Config::Instance().reset();
++					Exteraless::ApplyProxyRules();
++					controller->showSettings(ExteralessSectionId());
++				},
++				.confirmText = u"Reset"_q,
++			}));
++		},
++		.keywords = { u"reset"_q, u"defaults"_q, u"clear"_q },
 +	});
 +
 +	builder.addSubsectionTitle({
@@ -4986,10 +5014,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..c574681
+index 0000000..6c5ef8b
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,533 @@
+@@ -0,0 +1,543 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -5104,6 +5132,16 @@ index 0000000..c574681
 +void Config::load() {
 +	ensureLoaded();
 +	refreshChats();
++}
++
++void Config::reset() {
++	ensureLoaded();
++	if (_values.isEmpty()) {
++		return;
++	}
++	_values = QJsonObject();
++	refreshChats();
++	save();
 +}
 +
 +void Config::save() {
@@ -5525,10 +5563,10 @@ index 0000000..c574681
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..3d757e4
+index 0000000..f4b15d5
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,133 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -5574,6 +5612,7 @@ index 0000000..3d757e4
 +
 +	void load();
 +	void save();
++	void reset();
 +
 +	[[nodiscard]] bool relativeLastSeen() const;
 +	void setRelativeLastSeen(bool value);
@@ -6989,10 +7028,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..0f2ca4b
+index 0000000..6ec81b9
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,401 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -7028,6 +7067,7 @@ index 0000000..0f2ca4b
 +		<< "<unreadCapsule>\n"
 +		<< "  exteraless-chats-cli config-fromjson <json>\n"
 +		<< "  exteraless-chats-cli config-raw\n"
++		<< "  exteraless-chats-cli config-reset\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted\n"
@@ -7343,6 +7383,14 @@ index 0000000..0f2ca4b
 +		PrintJson(Exteraless::Config::Instance().toJson());
 +		return 0;
 +	}
++	if (mode == QStringLiteral("config-reset")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().reset();
++		PrintJson(Exteraless::Config::Instance().toJson());
++		return 0;
++	}
 +	if (mode == QStringLiteral("backup-export")) {
 +		if (arguments.size() != 9) {
 +			return PrintUsage();
@@ -7449,10 +7497,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..a63df1e
+index 0000000..57e4fa1
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1029 @@
+@@ -0,0 +1,1100 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -8448,6 +8496,75 @@ index 0000000..a63df1e
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_reset(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "reset-seed")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEGeneralDisableNumberRounding": True,
++            "OEChatsUnreadCapsule": True,
++            "OEPillStackPills": 5,
++            "OESaveDeletedMessages": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "reset seed")
++    if data is not None:
++        ledger.check(
++            "reset seed accepted",
++            data.get("accepted") is True,
++            data.get("accepted"))
++    data = json_call(ledger, cli, ["config-reset"], env, "reset")
++    if data is not None:
++        ledger.check(
++            "reset clears config",
++            data.get("exteraconfig") == {},
++            data.get("exteraconfig"))
++    data = json_call(ledger, cli, ["config-raw"], env, "reset raw")
++    if data is not None:
++        ledger.check(
++            "reset raw empty",
++            data.get("exteraconfig") == {},
++            data.get("exteraconfig"))
++    data = json_call(ledger, cli, ["config-loaded"], env, "reset reload")
++    if data is not None:
++        ledger.check(
++            "reset defaults",
++            data.get("chats") == EXPECTED_DEFAULTS,
++            data.get("chats"))
++    data = json_call(ledger, cli, ["deleted"], env, "reset deleted")
++    if data is not None:
++        ledger.check(
++            "reset deleted default",
++            data.get("saveDeletedMessages") is False,
++            data)
++    data = json_call(ledger, cli, ["general"], env, "reset general")
++    if data is not None:
++        ledger.check(
++            "reset rounding default",
++            data.get("disableNumberRounding") is False,
++            data)
++    saved_path = (
++        Path(env["XDG_DATA_HOME"])
++        / "ExteralessDesktop" / "tdata" / "exteraless.json")
++    if saved_path.is_file():
++        saved = json.loads(saved_path.read_text(encoding="utf-8"))
++        ledger.check(
++            "reset file without keys",
++            saved.get("exteraconfig") == {},
++            saved)
++    else:
++        ledger.check("reset file without keys", False, str(saved_path))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -8463,6 +8580,7 @@ index 0000000..a63df1e
 +        config = check_config(ledger, cli, work)
 +        general = check_general(ledger, cli, work)
 +        deleted = check_deleted(ledger, cli, work)
++        reset = check_reset(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -8470,6 +8588,7 @@ index 0000000..a63df1e
 +    print(f"config: {config[0] - config[1]} passed")
 +    print(f"general: {general[0] - general[1]} passed")
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
++    print(f"reset: {reset[0] - reset[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

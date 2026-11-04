@@ -114,6 +114,16 @@ void Config::load() {
 	refreshChats();
 }
 
+void Config::reset() {
+	ensureLoaded();
+	if (_values.isEmpty()) {
+		return;
+	}
+	_values = QJsonObject();
+	refreshChats();
+	save();
+}
+
 void Config::save() {
 	ensureLoaded();
 

@@ -993,6 +993,75 @@ def check_deleted(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_reset(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "reset-seed")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGeneralDisableNumberRounding": True,
+            "OEChatsUnreadCapsule": True,
+            "OEPillStackPills": 5,
+            "OESaveDeletedMessages": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "reset seed")
+    if data is not None:
+        ledger.check(
+            "reset seed accepted",
+            data.get("accepted") is True,
+            data.get("accepted"))
+    data = json_call(ledger, cli, ["config-reset"], env, "reset")
+    if data is not None:
+        ledger.check(
+            "reset clears config",
+            data.get("exteraconfig") == {},
+            data.get("exteraconfig"))
+    data = json_call(ledger, cli, ["config-raw"], env, "reset raw")
+    if data is not None:
+        ledger.check(
+            "reset raw empty",
+            data.get("exteraconfig") == {},
+            data.get("exteraconfig"))
+    data = json_call(ledger, cli, ["config-loaded"], env, "reset reload")
+    if data is not None:
+        ledger.check(
+            "reset defaults",
+            data.get("chats") == EXPECTED_DEFAULTS,
+            data.get("chats"))
+    data = json_call(ledger, cli, ["deleted"], env, "reset deleted")
+    if data is not None:
+        ledger.check(
+            "reset deleted default",
+            data.get("saveDeletedMessages") is False,
+            data)
+    data = json_call(ledger, cli, ["general"], env, "reset general")
+    if data is not None:
+        ledger.check(
+            "reset rounding default",
+            data.get("disableNumberRounding") is False,
+            data)
+    saved_path = (
+        Path(env["XDG_DATA_HOME"])
+        / "ExteralessDesktop" / "tdata" / "exteraless.json")
+    if saved_path.is_file():
+        saved = json.loads(saved_path.read_text(encoding="utf-8"))
+        ledger.check(
+            "reset file without keys",
+            saved.get("exteraconfig") == {},
+            saved)
+    else:
+        ledger.check("reset file without keys", False, str(saved_path))
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1008,6 +1077,7 @@ def main():
         config = check_config(ledger, cli, work)
         general = check_general(ledger, cli, work)
         deleted = check_deleted(ledger, cli, work)
+        reset = check_reset(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1015,6 +1085,7 @@ def main():
     print(f"config: {config[0] - config[1]} passed")
     print(f"general: {general[0] - general[1]} passed")
     print(f"deleted: {deleted[0] - deleted[1]} passed")
+    print(f"reset: {reset[0] - reset[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

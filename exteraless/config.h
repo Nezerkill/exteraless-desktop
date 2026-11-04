@@ -43,6 +43,7 @@ public:
 
 	void load();
 	void save();
+	void reset();
 
 	[[nodiscard]] bool relativeLastSeen() const;
 	void setRelativeLastSeen(bool value);

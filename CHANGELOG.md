@@ -2,6 +2,9 @@
 
 ## 2026-11-05
 
+- Exteraless settings: кнопка «Reset Exteraless settings» с подтверждением
+  очищает все `OE*`-ключи, возвращает дефолты и переприменяет proxy rules;
+  секция пересоздаётся, чтобы тумблеры сразу показывали новые значения.
 - Backup `.extera`: экспорт/импорт всех 25 desktop-ключей в секциях
   `exteraconfig`, `pillstackconfig` и `mainconfig`; импорт валидирует типы и
   диапазоны, санитизирует Ghost-exclusions и plugin states, принимает старый

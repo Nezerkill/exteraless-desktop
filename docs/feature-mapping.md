@@ -41,7 +41,8 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - compact unread messages label (`OEChatsUnreadCapsule`, default `false`);
   - save deleted messages (`OESaveDeletedMessages`, default `false`).
 - **Proxy** — see below.
-- **Backup** — import/export `.extera`.
+- **Backup** — import/export `.extera`, plus reset of all Exteraless settings
+  with confirmation.
 
 `OEGeneralDisableNumberRounding` affects counters formatted through
 `Lang::FormatCountToShort`, so views, replies, reaction counts and other shared
@@ -79,7 +80,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig`, `pillstackconfig`, `mainconfig`); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 169 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 176 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

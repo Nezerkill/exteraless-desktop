@@ -476,6 +476,34 @@ const auto kMeta = Builder::BuildHelper({
 	});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/reset"_q,
+		.title = rpl::single(u"Reset"_q),
+	});
+
+	builder.addButton({
+		.id = u"exteraless/reset/all"_q,
+		.title = rpl::single(u"Reset Exteraless settings"_q),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			if (!controller) {
+				return;
+			}
+			controller->show(Ui::MakeConfirmBox({
+				.text = rpl::single(
+					u"Reset all Exteraless settings to defaults? "
+					u"This cannot be undone."_q),
+				.confirmed = [=] {
+					Exteraless::Config::Instance().reset();
+					Exteraless::ApplyProxyRules();
+					controller->showSettings(ExteralessSectionId());
+				},
+				.confirmText = u"Reset"_q,
+			}));
+		},
+		.keywords = { u"reset"_q, u"defaults"_q, u"clear"_q },
+	});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/plugins"_q,
 		.title = rpl::single(u"Plugins"_q),
 	});

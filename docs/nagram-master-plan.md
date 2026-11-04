@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **169**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **176**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -71,7 +71,8 @@ APK-обновления и plugin-only API. Полный список искл�
   1000/100 и ротация sidecar, тумблер в Chats.
 - `NB-04` — ✅ закрыто 2026-11-05: все 25 ключей `.extera` в трёх секциях,
   валидация импорта, отчёт unknown с префиксом секции.
-- `NB-05`: сброс настроек Exteraless с подтверждением.
+- `NB-05` — ✅ закрыто 2026-11-05: `Config::reset()`, кнопка Reset с
+  подтверждением, пересоздание секции, CLI-группа `reset`.
 - `NB-06`: путь `exteraless.json` через `cWorkingDir()`, совместимый с
   `-workdir`, с миграцией старого профиля.
 - `NB-03`: локализовать захардкоженные подписи Exteraless через
@@ -144,7 +145,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-05`, затем `NB-06`, `NB-03`, `NB-11`, `NB-07`, `NB-37`).
+   (сейчас `NB-06`, затем `NB-03`, `NB-11`, `NB-07`, `NB-37`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

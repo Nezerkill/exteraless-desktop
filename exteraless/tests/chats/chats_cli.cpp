@@ -33,6 +33,7 @@ using Exteraless::ChatsSettings;
 		<< "<unreadCapsule>\n"
 		<< "  exteraless-chats-cli config-fromjson <json>\n"
 		<< "  exteraless-chats-cli config-raw\n"
+		<< "  exteraless-chats-cli config-reset\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted\n"
@@ -345,6 +346,14 @@ int main(int argc, char *argv[]) {
 		if (arguments.size() != 2) {
 			return PrintUsage();
 		}
+		PrintJson(Exteraless::Config::Instance().toJson());
+		return 0;
+	}
+	if (mode == QStringLiteral("config-reset")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().reset();
 		PrintJson(Exteraless::Config::Instance().toJson());
 		return 0;
 	}

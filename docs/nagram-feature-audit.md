@@ -223,6 +223,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 
 | Функция | Android-ключ | Desktop |
 |---|---|---|
+| Сброс настроек Exteraless | `resetSettings` | ✅ кнопка Reset с подтверждением (NB-05) |
 | Точные счётчики | `OEGeneralDisableNumberRounding` | ✅ `lang/lang_tag.cpp` |
 | Относительное «был в сети» | `OERelativeLastSeen` | ✅ `data/data_peer_values.cpp` |
 | Время с секундами | `NekoConfig.showSeconds` | ❌ (`history/view/history_view_bottom_info.cpp`, `dialogs/ui/dialogs_layout.cpp`) |
@@ -270,7 +271,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Не отправлять просмотры историй | `sendReadStoriesPackets` | ✅ `data/data_stories.cpp` |
 | Не отправлять online | `sendOnlinePackets` | ✅ `api/api_updates.cpp` |
 | Не отправлять typing/upload | `sendUploadProgress` | ✅ `api/api_send_progress.cpp`, `chat_helpers/emoji_interactions.cpp`, `history/history_streamed_drafts.cpp` |
-| Offline после online | `sendOfflinePacketAfterOnline` | 🟡 ключ `OEGhostSendOfflineAfterOnline` объявлен, но не читается и не экспортируется |
+| Offline после online | `sendOfflinePacketAfterOnline` | 🟡 ключ `OEGhostSendOfflineAfterOnline` объявлен и экспортируется, но не читается |
 | Per-chat исключения | `ghostModeReadExclusion_<id>`, `ghostModeTypingExclusion_<id>` | ✅/🟡 UI и запись есть, сетевой эффект не измерялся |
 | Пакетный переключатель и статус | `setGhostMode`/`toggleGhostMode`, `showGhostModeStatus`, `showGhostInDrawer` | ❌ (пункт меню Ghost есть, статуса и тумблера «всё сразу» нет) |
 | «Locked» тумблеры | `*Locked` (5 ключей) | ❌ |

@@ -79,9 +79,16 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 169 проверок PASS
-  (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 27 deleted, 71 backup);
-  плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 176 проверок PASS
+  (44 strip, 10 reactions, 4 CLI, 7 config, 6 general, 27 deleted, 7 reset,
+  71 backup); плагины без изменений — 32 и 213 проверок.
+- Exteraless settings reset: кнопка «Reset Exteraless settings» в подсекции
+  Reset показывает подтверждение, очищает `_values` и перезаписывает
+  `exteraless.json` пустым `exteraconfig`, возвращая дефолты; после
+  подтверждения секция пересоздаётся и вызывает `ApplyProxyRules()`.
+  CLI-группа `reset` проверяет очистку, дефолты, persisted-файл и отсутствие
+  OE-ключей. Xvfb smoke на профиле с аккаунтом: кнопка видна, подтверждение
+  открывается, Reset очищает файл до `{}` и секция показывает дефолты.
 - Backup `.extera`: экспортируются все 25 desktop-ключей в трёх секциях —
   `exteraconfig` (21), `pillstackconfig` (2), `mainconfig` (2). Импорт
   проверяет тип, целочисленность и диапазон, санитизирует Ghost-exclusions и
@@ -111,8 +118,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `359d8dbc…`,
-  mtime 2026-11-05 00:57; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `25b19465…`,
+  mtime 2026-11-05 01:07; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
