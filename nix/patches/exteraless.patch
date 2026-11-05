@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..937a4cc 100644
+index ffc8ec9..12c7c12 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,96 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,98 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -160,6 +160,8 @@ index ffc8ec9..937a4cc 100644
 +"lng_settings_exteraless_pill_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_pill_last_seen" = "Last seen";
 +"lng_settings_exteraless_pill_order_hint" = "Drag pills on the strip above the chat list to reorder them.";
++"lng_settings_exteraless_pill_order_reset" = "Reset pill order";
++"lng_settings_exteraless_pill_order_reset_done" = "Pill order reset.";
 +"lng_settings_exteraless_reset" = "Reset";
 +"lng_settings_exteraless_reset_settings" = "Reset Exteraless settings";
 +"lng_settings_exteraless_reset_confirm" = "Reset all Exteraless settings to defaults? This cannot be undone.";
@@ -4649,10 +4651,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..b1b4aab
+index 0000000..dfa6ecd
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1028 @@
+@@ -0,0 +1,1043 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5472,6 +5474,21 @@ index 0000000..b1b4aab
 +		{ u"last seen"_q, u"pill"_q });
 +
 +	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
++
++	const auto resetPillOrder = builder.addButton({
++		.id = u"exteraless/pill-stack/reset-order"_q,
++		.title = tr::lng_settings_exteraless_pill_order_reset(),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			Exteraless::Config::Instance().setPillStackOrder(QString());
++			if (const auto controller = builder.controller()) {
++				controller->showToast(
++					tr::lng_settings_exteraless_pill_order_reset_done(
++						tr::now));
++			}
++		},
++		.keywords = { u"pill"_q, u"order"_q, u"reset"_q },
++	});
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/proxy"_q,
@@ -10048,10 +10065,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..31b1f8e
+index 0000000..9c2bba6
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,983 @@
+@@ -0,0 +1,992 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10109,6 +10126,7 @@ index 0000000..31b1f8e
 +		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
 +		<< "  exteraless-chats-cli pillorder\n"
 +		<< "  exteraless-chats-cli pillorder-set <csv>\n"
++		<< "  exteraless-chats-cli pillorder-reset\n"
 +		<< "  exteraless-chats-cli ghost\n"
 +		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 +		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -10823,6 +10841,14 @@ index 0000000..31b1f8e
 +		PrintPillOrder();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("pillorder-reset")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setPillStackOrder(QString());
++		PrintPillOrder();
++		return 0;
++	}
 +	if (mode == QStringLiteral("pillorder-set")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -11099,10 +11125,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..18242cd
+index 0000000..d45289c
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2638 @@
+@@ -0,0 +1,2659 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -11257,6 +11283,7 @@ index 0000000..18242cd
 +        ("doubletap-resolve without value", ["doubletap-resolve"]),
 +        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
 +        ("pillorder-set without order", ["pillorder-set"]),
++        ("pillorder-reset with args", ["pillorder-reset", "x"]),
 +        ("ghost-set with wrong count", ["ghost-set"]),
 +        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
 +        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
@@ -12849,6 +12876,26 @@ index 0000000..18242cd
 +        ledger.check(
 +            "pillorder custom persisted",
 +            reloaded.get("order") == custom,
++            reloaded)
++
++    env = make_env(work / "pillorder-reset")
++    json_call(
++        ledger, cli,
++        ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
++        env, "pillorder reset setup")
++    data = json_call(
++        ledger, cli, ["pillorder-reset"], env, "pillorder reset")
++    if data is not None:
++        ledger.check(
++            "pillorder reset default",
++            data.get("order") == default,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["pillorder"], env, "pillorder reset reload")
++    if reloaded is not None:
++        ledger.check(
++            "pillorder reset persisted",
++            reloaded.get("order") == default,
 +            reloaded)
 +
 +    env = make_env(work / "pillorder-sanitize")

@@ -55,6 +55,7 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
 		<< "  exteraless-chats-cli pillorder\n"
 		<< "  exteraless-chats-cli pillorder-set <csv>\n"
+		<< "  exteraless-chats-cli pillorder-reset\n"
 		<< "  exteraless-chats-cli ghost\n"
 		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -766,6 +767,14 @@ int main(int argc, char *argv[]) {
 		if (arguments.size() != 2) {
 			return PrintUsage();
 		}
+		PrintPillOrder();
+		return 0;
+	}
+	if (mode == QStringLiteral("pillorder-reset")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setPillStackOrder(QString());
 		PrintPillOrder();
 		return 0;
 	}

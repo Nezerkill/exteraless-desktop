@@ -152,6 +152,7 @@ def check_cli_args(ledger, cli):
         ("doubletap-resolve without value", ["doubletap-resolve"]),
         ("stickertime-set with wrong count", ["stickertime-set", "1"]),
         ("pillorder-set without order", ["pillorder-set"]),
+        ("pillorder-reset with args", ["pillorder-reset", "x"]),
         ("ghost-set with wrong count", ["ghost-set"]),
         ("ghost-lock with wrong count", ["ghost-lock", "1"]),
         ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
@@ -1744,6 +1745,26 @@ def check_pill_order(ledger, cli, work):
         ledger.check(
             "pillorder custom persisted",
             reloaded.get("order") == custom,
+            reloaded)
+
+    env = make_env(work / "pillorder-reset")
+    json_call(
+        ledger, cli,
+        ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
+        env, "pillorder reset setup")
+    data = json_call(
+        ledger, cli, ["pillorder-reset"], env, "pillorder reset")
+    if data is not None:
+        ledger.check(
+            "pillorder reset default",
+            data.get("order") == default,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["pillorder"], env, "pillorder reset reload")
+    if reloaded is not None:
+        ledger.check(
+            "pillorder reset persisted",
+            reloaded.get("order") == default,
             reloaded)
 
     env = make_env(work / "pillorder-sanitize")

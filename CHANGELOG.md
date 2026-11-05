@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Pill Stack: кнопка «Reset pill order» возвращает стандартный порядок
+  (`OEPillStackOrder`), показывает тост; CLI `pillorder-reset` (3 проверки).
+  Бесконечная прокрутка не переносится: полоса пилюль переносит элементы на
+  новую строку вместо постраничного листания.
 - Appearance: `OEAppearanceHideAiEditor` (default `false`) скрывает кнопку
   AI-редактора в поле ввода и caption-боксах; Android-алиас `hideAiEditor`
   поддержан в `.extera` (всего 58 ключей). AI-саммари IV/сообщений в этой

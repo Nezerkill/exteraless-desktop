@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(360 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup),
+(363 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -120,7 +120,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-28 | UI-просмотр audit-лога плагинов | `PluginActivityLog`, `PluginActivityExport` | `Telegram/SourceFiles/exteraless/plugins_box.cpp`, `plugin_runtime.cpp` | M · средний | строки `tdata/plugins-audit.log` видны в боксе, экспорт работает | ⬜ | R1 P1-10 |
 | NB-29 | Установка и удаление плагина из файла | `PluginsInstallFromFile`, `PluginsDelete` | `Telegram/SourceFiles/exteraless/plugins_box.cpp`, `exteraless/plugins/scanner.cpp` | M · средний (копирование в `tdata/plugins`) | установить `.plugin`, он в списке; удалить | ⬜ | R1 P1-11 |
 | NB-30 | Меню плагина в главном меню | `plugins/menus`, `PluginMenuItem` | `window/window_main_menu.cpp`, IPC в `plugin_runtime.cpp` | L · высокий (IPC и жизненный цикл) | плагин добавляет пункт, клик вызывает host | ⬜ | R1 P1-12 |
-| NB-31 | Pill Stack: бесконечная прокрутка и сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | `Telegram/SourceFiles/exteraless/pill_stack.cpp` | S · низкий | колесо/скролл листает пилюли по кругу, сброс возвращает дефолт | ⬜ | R1 P1-13 |
+| NB-31 | Pill Stack: бесконечная прокрутка и сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` (reset) | S · низкий | колесо/скролл листает пилюли по кругу, сброс возвращает дефолт | ✅ 2026-11-05: кнопка «Reset pill order» сбрасывает `OEPillStackOrder` в дефолт (CLI `pillorder-reset`, 3 проверки, Xvfb). Бесконечная прокрутка не применима: пилюли переносятся на новую строку, а не листаются | R1 P1-13 |
 | NB-32 | Внешние субтитры к видео | `OESubtitles`, `OEChooseSubtitles`, `OEDisableSubtitles` | `media/view/media_view_overlay_widget.cpp` | M · средний (парсинг SRT/ASS) | загрузить `.srt`: субтитры видны и отключаются | ⬜ | R1 P1-14 |
 | NB-33 | Ответ на удалённое сообщение цитатой | `NaConfig.replyToDeletedAsQuote` | `history/view/history_view_context_menu.cpp`, `window/window_peer_menu.cpp` | S · средний (текст уже хранится) | reply на удалённое подставляет цитату | ⬜ | R1 P1-15 |
 | NB-34 | Тихая отправка по умолчанию | `NaConfig.silentMessageByDefault` | `exteraless/config.{h,cpp}`, `history/history_widget.cpp`, `history/view/history_view_chat_section.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | отправка без звука по умолчанию | ✅ 2026-11-05: `OEChatsSilentByDefault` (default false) выставляет `SendOptions.silent` в `prepareSendAction` обоих виджетов, тумблер в Chats, CLI `silent` (5 проверок), Xvfb toggle | R1 P1-16 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 360 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 363 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

@@ -56,7 +56,8 @@ New `Exteraless` section in tdesktop Settings with subsections:
     (`OEChatsStickerTimeSide`, `OEChatsHideStickerTime`, both default
     `false`); the side timestamp stays clickable;
   - pill order: drag pills on the strip above the chat list; the order is
-    saved in `OEPillStackOrder` and survives a restart;
+    saved in `OEPillStackOrder` and survives a restart; a Reset button restores
+    the default order;
   - Pangu: insert spaces between CJK and Latin/digits when sending
     (`OEChatsPanguOnSending`, default `false`, `EnablePanguOnSending` in
     `.extera`); text-tag offsets are corrected;
@@ -109,7 +110,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 53, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 360 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 363 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

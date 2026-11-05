@@ -818,6 +818,21 @@ const auto kMeta = Builder::BuildHelper({
 
 	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
 
+	const auto resetPillOrder = builder.addButton({
+		.id = u"exteraless/pill-stack/reset-order"_q,
+		.title = tr::lng_settings_exteraless_pill_order_reset(),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			Exteraless::Config::Instance().setPillStackOrder(QString());
+			if (const auto controller = builder.controller()) {
+				controller->showToast(
+					tr::lng_settings_exteraless_pill_order_reset_done(
+						tr::now));
+			}
+		},
+		.keywords = { u"pill"_q, u"order"_q, u"reset"_q },
+	});
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/proxy"_q,
 		.title = tr::lng_settings_exteraless_proxy(),

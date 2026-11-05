@@ -32,7 +32,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (360 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup);
+  (363 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
@@ -87,7 +87,8 @@ sibling-чекаутом: `../exteraless`.
   `OEChatsHideStickerTime` (скрыто), отрисовка и hit-test в `UnwrappedMedia`
   через `Element::drawSideInfo`/`sideInfoRect`/`sideInfoTextState`.
 - Порядок пилюль: drag на полосе `PillStack`, сохраняется в `OEPillStackOrder`
-  (CSV из `cpu,ram,net,dc,proxy,cache,ghost,lastseen`).
+  (CSV из `cpu,ram,net,dc,proxy,cache,ghost,lastseen`); кнопка Reset
+  возвращает дефолт.
 - Ghost: пункт главного меню включает/выключает все четыре тумблера и
   показывает `On`/`Off`/`Partial` при `OEGhostShowStatus`; статусные функции —
   `exteraless/ghost_status.{h,cpp}`. Пять `OEGhostSend*Locked` защищают
