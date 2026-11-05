@@ -30,6 +30,7 @@ constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
+constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -306,6 +307,14 @@ bool Config::saveToChatSubfolder() const {
 
 void Config::setSaveToChatSubfolder(bool value) {
 	setValue(kSaveToChatSubfolder, value);
+}
+
+bool Config::ghostScheduledSend() const {
+	return boolValue(kGhostScheduledSend, false);
+}
+
+void Config::setGhostScheduledSend(bool value) {
+	setValue(kGhostScheduledSend, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -720,6 +729,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kHideSendAsPeer
 			|| key == kInlineMathResult
 			|| key == kSaveToChatSubfolder
+			|| key == kGhostScheduledSend
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

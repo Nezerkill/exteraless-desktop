@@ -8,6 +8,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_chat_section.h"
 
 #include "exteraless/config.h"
+#include "exteraless/ghost_schedule.h"
+
+#include "base/unixtime.h"
 #include "exteraless/pangu.h"
 
 #include "history/admin_log/history_admin_log_section.h"
@@ -2569,6 +2572,23 @@ void ChatWidget::sendTextWithTags(
 		Fn<void()> done) {
 	if (!options.scheduled) {
 		_cornerButtons.clearReplyReturns();
+	}
+
+	if (options.scheduled == 0
+		&& Exteraless::Config::Instance().ghostScheduledSend()) {
+		const auto peer = _history->peer.get();
+		if (peer && Exteraless::ShouldGhostSchedule({
+				.enabled = true,
+				.sendOnlinePackets
+					= Exteraless::Config::Instance().ghostSendOnline(),
+				.self = peer->isSelf(),
+				.secret = false,
+				.bot = peer->isBot(),
+				.user = peer->isUser(),
+			})) {
+			options.scheduled = base::unixtime::now()
+				+ Exteraless::kGhostScheduleDelay;
+		}
 	}
 
 	if (Exteraless::Config::Instance().panguOnSending()) {

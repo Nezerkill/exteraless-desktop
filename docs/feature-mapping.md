@@ -123,7 +123,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 51, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 445 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 460 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -187,7 +187,9 @@ Desktop implementation: an outbound MTP request filter before
 non-Ghost requests. The main menu item toggles all four switches in one click
 and shows `On` / `Off` / `Partial` when `OEGhostShowStatus` is enabled
 (`showGhostModeStatus` in `.extera`); `IsGhostActive` is strict (all four).
-Each of the four switches has a lock
+When online packets are suppressed and `OEGhostScheduledSend` is on, new text
+messages are sent as scheduled for `now + 12` seconds, except in self chats,
+bots and secret chats. Each of the four switches has a lock
 (`OEGhostSend*Locked`): a locked switch is skipped by the batch toggle and
 excluded from the `On/Off/Partial` calculation.
 

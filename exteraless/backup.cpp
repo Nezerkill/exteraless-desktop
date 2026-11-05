@@ -33,6 +33,8 @@ constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
+constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
+constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 constexpr auto kInlineMathAlias = "inlineMathResult";
 constexpr auto kHideSendAsAlias = "hideSendAsChannel";
@@ -250,6 +252,7 @@ QString BuildBackup() {
 	extera[kHideSendAsPeer] = config.hideSendAsPeer();
 	extera[kInlineMathResult] = config.inlineMathResult();
 	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
+	extera[kGhostScheduledSend] = config.ghostScheduledSend();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -453,6 +456,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kSaveToChatSubfolderAlias)
 			&& value.isBool()) {
 			config.setSaveToChatSubfolder(value.toBool());
+		} else if ((key == kGhostScheduledSend
+			|| key == kGhostScheduledSendAlias)
+			&& value.isBool()) {
+			config.setGhostScheduledSend(value.toBool());
 		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 			&& value.isBool()) {
 			config.setUseDeletedIcon(value.toBool());

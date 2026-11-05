@@ -13,6 +13,8 @@ add_library(exteraless STATIC
     exteraless.h
     format.cpp
     format.h
+    ghost_schedule.cpp
+    ghost_schedule.h
     ghost_status.cpp
     ghost_status.h
     links.cpp

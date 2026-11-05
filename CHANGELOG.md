@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Ghost Mode / Schedule: настройка `OEGhostScheduledSend` (default `false`)
+  отправляет новые текстовые сообщения как отложенные на 12 секунд, когда
+  online-ghost активен; личные чаты с ботом, self и секретные чаты исключены
+  (`exteraless/ghost_schedule.{h,cpp}`); Android-алиас `GhostScheduledSend`
+  поддержан в `.extera` (всего 60 ключей).
 - General / Files: настройка `OEGeneralSaveToChatSubfolder` (default `false`)
   сохраняет автоматически скачиваемые файлы в подпапку с именем чата внутри
   папки загрузок (`exteraless/save_path.{h,cpp}`, безопасные имена, суффикс

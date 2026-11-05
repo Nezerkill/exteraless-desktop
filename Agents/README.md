@@ -21,6 +21,7 @@ sibling-чекаутом: `../exteraless`.
   - `plugins/installer.*` — установка/удаление файлов плагинов;
   - `math.*` — оценка inline-математики (`2+2=` → `4`);
   - `save_path.*` — подпапка чата при автосохранении файлов;
+  - `ghost_schedule.*` — решение об отложенной Ghost-отправке (+12 с);
   - `chats.*` — `ChatsSettings`, правило скрытия реакций и unread capsule;
   - `links.*` — `StripTracking` для http/https-ссылок.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
@@ -37,7 +38,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (445 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, backup);
+  (460 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых

@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..b48de0d 100644
+index ffc8ec9..1c1a865 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,100 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,101 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -116,6 +116,7 @@ index ffc8ec9..b48de0d 100644
 +"lng_settings_exteraless_ghost_online" = "Don't send online status";
 +"lng_settings_exteraless_ghost_typing" = "Don't send typing status";
 +"lng_settings_exteraless_ghost_show_status" = "Show Ghost Mode status in menu";
++"lng_settings_exteraless_ghost_scheduled_send" = "Schedule ghost messages (12 s delay)";
 +"lng_settings_exteraless_ghost_locks" = "Locked Ghost settings";
 +"lng_settings_exteraless_ghost_lock_read" = "Lock read receipts";
 +"lng_settings_exteraless_ghost_lock_stories" = "Lock story views";
@@ -3750,21 +3751,22 @@ index dcb902d..5b28a1d 100644
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
 diff --git a/Telegram/SourceFiles/history/history_widget.cpp b/Telegram/SourceFiles/history/history_widget.cpp
-index 43b2003..ee9cc3e 100644
+index 43b2003..184bd64 100644
 --- a/Telegram/SourceFiles/history/history_widget.cpp
 +++ b/Telegram/SourceFiles/history/history_widget.cpp
-@@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/history_widget.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/ghost_schedule.h"
 +#include "exteraless/math.h"
 +#include "exteraless/pangu.h"
 +
  #include "api/api_compose_with_ai.h"
  #include "api/api_editing.h"
  #include "api/api_bot.h"
-@@ -5778,6 +5782,9 @@ Api::SendAction HistoryWidget::prepareSendAction(
+@@ -5778,6 +5783,9 @@ Api::SendAction HistoryWidget::prepareSendAction(
  		}
  	}
  
@@ -3774,10 +3776,27 @@ index 43b2003..ee9cc3e 100644
  	result.options.suggest = suggestOptions();
  	result.options.sendAs = _sendAs
  		? _history->session().sendAsPeers().resolveChosen(
-@@ -5974,6 +5981,25 @@ void HistoryWidget::sendTextWithTags(
+@@ -5974,6 +5982,42 @@ void HistoryWidget::sendTextWithTags(
  		_cornerButtons.clearReplyReturns();
  	}
  
++	if (options.scheduled == 0
++		&& Exteraless::Config::Instance().ghostScheduledSend()) {
++		const auto peer = _peer;
++		if (peer && Exteraless::ShouldGhostSchedule({
++				.enabled = true,
++				.sendOnlinePackets
++					= Exteraless::Config::Instance().ghostSendOnline(),
++				.self = peer->isSelf(),
++				.secret = false,
++				.bot = peer->isBot(),
++				.user = peer->isUser(),
++			})) {
++			options.scheduled = base::unixtime::now()
++				+ Exteraless::kGhostScheduleDelay;
++		}
++	}
++
 +	if (Exteraless::Config::Instance().panguOnSending()) {
 +		auto pangu = Exteraless::ApplyPanguWithMap(textWithTags.text);
 +		if (pangu.text != textWithTags.text) {
@@ -3800,7 +3819,7 @@ index 43b2003..ee9cc3e 100644
  	auto message = Api::MessageToSend(prepareSendAction(options));
  	message.textWithTags = textWithTags;
  	if (useWebPageDraft && _preview) {
-@@ -6764,6 +6790,30 @@ void HistoryWidget::insertTextAtCursor(const QString &text) {
+@@ -6764,6 +6808,30 @@ void HistoryWidget::insertTextAtCursor(const QString &text) {
  bool HistoryWidget::eventFilter(QObject *obj, QEvent *e) {
  	if (e->type() == QEvent::KeyPress) {
  		const auto k = static_cast<QKeyEvent*>(e);
@@ -3959,20 +3978,23 @@ index 9971a38..58cec9f 100644
  	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
  	const auto authorWidth = st::msgDateFont->width(author);
 diff --git a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
-index 28e423b..5ac3489 100644
+index 28e423b..d8bb89a 100644
 --- a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
-@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_chat_section.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/ghost_schedule.h"
++
++#include "base/unixtime.h"
 +#include "exteraless/pangu.h"
 +
  #include "history/admin_log/history_admin_log_section.h"
  #include "history/view/controls/history_view_top_controls.h"
  #include "history/view/controls/history_view_bottom_controls.h"
-@@ -2326,6 +2329,9 @@ Api::SendAction ChatWidget::prepareSendAction(
+@@ -2326,6 +2332,9 @@ Api::SendAction ChatWidget::prepareSendAction(
  	}
  
  	result.options.sendAs = _composeControls->sendAsPeer();
@@ -3982,10 +4004,27 @@ index 28e423b..5ac3489 100644
  	result.options.suggest = suggestOptions();
  	result.clearDraft = !Iv::Editor::IsComposeBoxOpen(
  		&session(),
-@@ -2565,6 +2571,25 @@ void ChatWidget::sendTextWithTags(
+@@ -2565,6 +2574,42 @@ void ChatWidget::sendTextWithTags(
  		_cornerButtons.clearReplyReturns();
  	}
  
++	if (options.scheduled == 0
++		&& Exteraless::Config::Instance().ghostScheduledSend()) {
++		const auto peer = _history->peer.get();
++		if (peer && Exteraless::ShouldGhostSchedule({
++				.enabled = true,
++				.sendOnlinePackets
++					= Exteraless::Config::Instance().ghostSendOnline(),
++				.self = peer->isSelf(),
++				.secret = false,
++				.bot = peer->isBot(),
++				.user = peer->isUser(),
++			})) {
++			options.scheduled = base::unixtime::now()
++				+ Exteraless::kGhostScheduleDelay;
++		}
++	}
++
 +	if (Exteraless::Config::Instance().panguOnSending()) {
 +		auto pangu = Exteraless::ApplyPanguWithMap(textWithTags.text);
 +		if (pangu.text != textWithTags.text) {
@@ -4948,10 +4987,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..7a4c76f
+index 0000000..4537487
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1068 @@
+@@ -0,0 +1,1076 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5221,6 +5260,14 @@ index 0000000..7a4c76f
 +		!Exteraless::Config::Instance().ghostSendUploadProgress(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setGhostSendUploadProgress(!value);
++		});
++	addGhostToggle(
++		u"exteraless/ghost/scheduled-send"_q,
++		tr::lng_settings_exteraless_ghost_scheduled_send(),
++		{ u"ghost"_q, u"scheduled"_q, u"send"_q },
++		Exteraless::Config::Instance().ghostScheduledSend(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostScheduledSend(value);
 +		});
 +	addGhostToggle(
 +		u"exteraless/ghost/status"_q,
@@ -6701,10 +6748,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..f3e2567
+index 0000000..ef68146
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,52 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6720,6 +6767,8 @@ index 0000000..f3e2567
 +    exteraless.h
 +    format.cpp
 +    format.h
++    ghost_schedule.cpp
++    ghost_schedule.h
 +    ghost_status.cpp
 +    ghost_status.h
 +    links.cpp
@@ -6757,10 +6806,10 @@ index 0000000..f3e2567
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..a13c2c2
+index 0000000..1694ad4
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,540 @@
+@@ -0,0 +1,547 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6796,6 +6845,8 @@ index 0000000..a13c2c2
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
++constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
++constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 +constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 +constexpr auto kInlineMathAlias = "inlineMathResult";
 +constexpr auto kHideSendAsAlias = "hideSendAsChannel";
@@ -7013,6 +7064,7 @@ index 0000000..a13c2c2
 +	extera[kHideSendAsPeer] = config.hideSendAsPeer();
 +	extera[kInlineMathResult] = config.inlineMathResult();
 +	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
++	extera[kGhostScheduledSend] = config.ghostScheduledSend();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7216,6 +7268,10 @@ index 0000000..a13c2c2
 +			|| key == kSaveToChatSubfolderAlias)
 +			&& value.isBool()) {
 +			config.setSaveToChatSubfolder(value.toBool());
++		} else if ((key == kGhostScheduledSend
++			|| key == kGhostScheduledSendAlias)
++			&& value.isBool()) {
++			config.setGhostScheduledSend(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -7402,10 +7458,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..7f65baf
+index 0000000..d800928
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,916 @@
+@@ -0,0 +1,926 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7438,6 +7494,7 @@ index 0000000..7f65baf
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
++constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7714,6 +7771,14 @@ index 0000000..7f65baf
 +
 +void Config::setSaveToChatSubfolder(bool value) {
 +	setValue(kSaveToChatSubfolder, value);
++}
++
++bool Config::ghostScheduledSend() const {
++	return boolValue(kGhostScheduledSend, false);
++}
++
++void Config::setGhostScheduledSend(bool value) {
++	setValue(kGhostScheduledSend, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8128,6 +8193,7 @@ index 0000000..7f65baf
 +			|| key == kHideSendAsPeer
 +			|| key == kInlineMathResult
 +			|| key == kSaveToChatSubfolder
++			|| key == kGhostScheduledSend
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8324,10 +8390,10 @@ index 0000000..7f65baf
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..dfee4b4
+index 0000000..1ad739e
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,197 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8405,6 +8471,8 @@ index 0000000..dfee4b4
 +	void setInlineMathResult(bool value);
 +	[[nodiscard]] bool saveToChatSubfolder() const;
 +	void setSaveToChatSubfolder(bool value);
++	[[nodiscard]] bool ghostScheduledSend() const;
++	void setGhostScheduledSend(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -9395,6 +9463,53 @@ index 0000000..d87ffc2
 +};
 +
 +void InstallGhostMode(MTP::Instance &instance);
++
++} // namespace Exteraless
+diff --git a/exteraless/ghost_schedule.cpp b/exteraless/ghost_schedule.cpp
+new file mode 100644
+index 0000000..8f46e0e
+--- /dev/null
++++ b/exteraless/ghost_schedule.cpp
+@@ -0,0 +1,15 @@
++#include "exteraless/ghost_schedule.h"
++
++namespace Exteraless {
++
++bool ShouldGhostSchedule(const GhostScheduleInput &input) {
++	if (!input.enabled || input.sendOnlinePackets) {
++		return false;
++	}
++	if (input.self || input.secret) {
++		return false;
++	}
++	return !input.user || !input.bot;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/ghost_schedule.h b/exteraless/ghost_schedule.h
+new file mode 100644
+index 0000000..b2c7972
+--- /dev/null
++++ b/exteraless/ghost_schedule.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include <QtGlobal>
++
++namespace Exteraless {
++
++struct GhostScheduleInput {
++	bool enabled = false;
++	bool sendOnlinePackets = true;
++	bool self = false;
++	bool secret = false;
++	bool bot = false;
++	bool user = false;
++};
++
++[[nodiscard]] bool ShouldGhostSchedule(const GhostScheduleInput &input);
++
++constexpr auto kGhostScheduleDelay = 12;
 +
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_status.cpp b/exteraless/ghost_status.cpp
@@ -10954,10 +11069,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..94ffdd1
+index 0000000..1e7af6a
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1132 @@
+@@ -0,0 +1,1182 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10965,6 +11080,7 @@ index 0000000..94ffdd1
 +#include "exteraless/deleted_messages_trim.h"
 +#include "exteraless/doubletap.h"
 +#include "exteraless/format.h"
++#include "exteraless/ghost_schedule.h"
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
 +#include "exteraless/math.h"
@@ -11024,6 +11140,10 @@ index 0000000..94ffdd1
 +		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
 +		<< "<typing>\n"
 +		<< "  exteraless-chats-cli ghost-show <0|1>\n"
++		<< "  exteraless-chats-cli ghost-schedule\n"
++		<< "  exteraless-chats-cli ghost-schedule-set <0|1>\n"
++		<< "  exteraless-chats-cli ghost-schedule-decide <enabled> "
++		<< "<sendOnline> <self> <secret> <bot> <user>\n"
 +		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 +		<< "<typing>\n"
 +		<< "  exteraless-chats-cli deletedmark\n"
@@ -11211,6 +11331,8 @@ index 0000000..94ffdd1
 +		{ QStringLiteral("typingLocked"),
 +			config.ghostSendUploadProgressLocked() },
 +		{ QStringLiteral("unlocked"), Exteraless::GhostUnlockedCount() },
++		{ QStringLiteral("scheduledSend"),
++			config.ghostScheduledSend() },
 +	});
 +}
 +
@@ -11851,6 +11973,49 @@ index 0000000..94ffdd1
 +		PrintGhost();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("ghost-schedule")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().ghostScheduledSend() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("ghost-schedule-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setGhostScheduledSend(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("ghost-schedule-decide")) {
++		if (arguments.size() != 8) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 6>();
++		for (auto i = 0; i != 6; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		const auto schedule = Exteraless::ShouldGhostSchedule({
++			.enabled = flags[0],
++			.sendOnlinePackets = flags[1],
++			.self = flags[2],
++			.secret = flags[3],
++			.bot = flags[4],
++			.user = flags[5],
++		});
++		std::cout << (schedule ? "1" : "0") << '\n';
++		return 0;
++	}
 +	if (mode == QStringLiteral("ghost-show")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -12154,10 +12319,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..505498f
+index 0000000..a443805
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3016 @@
+@@ -0,0 +1,3095 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12327,6 +12492,9 @@ index 0000000..505498f
 +        ("send-as-set with wrong count", ["send-as-set"]),
 +        ("inline-math-set with wrong count", ["inline-math-set"]),
 +        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
++        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
++        ("ghost-schedule-decide with wrong count",
++         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
 +        ("chat-subfolder without args", ["chat-subfolder"]),
 +        ("math-eval without expression", ["math-eval"]),
@@ -12637,7 +12805,7 @@ index 0000000..505498f
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 54,
++            len(section) == 55,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -12658,7 +12826,7 @@ index 0000000..505498f
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 59,
++            sum(len(value) for value in exported.values()) == 60,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -12678,7 +12846,7 @@ index 0000000..505498f
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 59,
++                data.get("applied") == 60,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -12766,6 +12934,7 @@ index 0000000..505498f
 +            "OEChatsHideSendAsPeer": True,
 +            "OEChatsInlineMathResult": True,
 +            "OEGeneralSaveToChatSubfolder": True,
++            "OEGhostScheduledSend": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -12787,7 +12956,7 @@ index 0000000..505498f
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 59,
++            data.get("applied") == 60,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -12862,6 +13031,10 @@ index 0000000..505498f
 +            "backup full save subfolder",
 +            section.get("OEGeneralSaveToChatSubfolder") is True,
 +            section.get("OEGeneralSaveToChatSubfolder"))
++        ledger.check(
++            "backup full ghost schedule",
++            section.get("OEGhostScheduledSend") is True,
++            section.get("OEGhostScheduledSend"))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -12991,10 +13164,10 @@ index 0000000..505498f
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 59",
++            "backup legacy eight completed to 60",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (54, 3, 2),
++             len(sections["mainconfig"])) == (55, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -13821,6 +13994,7 @@ index 0000000..505498f
 +            "OEChatsHideSendAsPeer": True,
 +            "OEChatsInlineMathResult": True,
 +            "OEGeneralSaveToChatSubfolder": True,
++            "OEGhostScheduledSend": True,
 +        },
 +    }
 +    data = json_call(
@@ -15102,6 +15276,74 @@ index 0000000..505498f
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_ghost_schedule(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "ghost-schedule-defaults")
++    data = json_call(
++        ledger, cli, ["ghost-schedule"], env, "ghost-schedule defaults")
++    if data is not None:
++        ledger.check(
++            "ghost schedule default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["ghost-schedule-set", "1"], env, "ghost-schedule set")
++    if data is not None:
++        ledger.check("ghost schedule set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["ghost-schedule"], env, "ghost-schedule reload")
++    if reloaded is not None:
++        ledger.check(
++            "ghost schedule persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    # enabled sendOnline self secret bot user -> schedule?
++    cases = [
++        ("private user", ["1", "0", "0", "0", "0", "1"], "1"),
++        ("group", ["1", "0", "0", "0", "0", "0"], "1"),
++        ("online packets still sent", ["1", "1", "0", "0", "0", "1"], "0"),
++        ("feature disabled", ["0", "0", "0", "0", "0", "1"], "0"),
++        ("self chat", ["1", "0", "1", "0", "0", "1"], "0"),
++        ("secret chat", ["1", "0", "0", "1", "0", "1"], "0"),
++        ("bot user", ["1", "0", "0", "0", "1", "1"], "0"),
++    ]
++    for name, arguments, expected in cases:
++        result = run(cli, ["ghost-schedule-decide", *arguments])
++        actual = result.stdout.strip()
++        ledger.check(
++            f"ghost schedule {name}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    env = make_env(work / "ghost-schedule-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"GhostScheduledSend": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "ghost-schedule alias")
++    if data is not None:
++        ledger.check(
++            "ghost schedule alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["ghost-schedule"], env, "ghost-schedule alias read")
++    if reloaded is not None:
++        ledger.check(
++            "ghost schedule alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -15136,6 +15378,7 @@ index 0000000..505498f
 +        send_as = check_send_as(ledger, cli, work)
 +        inline_math = check_inline_math(ledger, cli, work)
 +        save_subfolder = check_save_subfolder(ledger, cli, work)
++        ghost_schedule = check_ghost_schedule(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -15162,6 +15405,7 @@ index 0000000..505498f
 +    print(f"send-as: {send_as[0] - send_as[1]} passed")
 +    print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
 +    print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
++    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

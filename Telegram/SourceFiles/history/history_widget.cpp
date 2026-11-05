@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_widget.h"
 
 #include "exteraless/config.h"
+#include "exteraless/ghost_schedule.h"
 #include "exteraless/math.h"
 #include "exteraless/pangu.h"
 
@@ -5979,6 +5980,23 @@ void HistoryWidget::sendTextWithTags(
 		Fn<void()> done) {
 	if (!options.scheduled) {
 		_cornerButtons.clearReplyReturns();
+	}
+
+	if (options.scheduled == 0
+		&& Exteraless::Config::Instance().ghostScheduledSend()) {
+		const auto peer = _peer;
+		if (peer && Exteraless::ShouldGhostSchedule({
+				.enabled = true,
+				.sendOnlinePackets
+					= Exteraless::Config::Instance().ghostSendOnline(),
+				.self = peer->isSelf(),
+				.secret = false,
+				.bot = peer->isBot(),
+				.user = peer->isUser(),
+			})) {
+			options.scheduled = base::unixtime::now()
+				+ Exteraless::kGhostScheduleDelay;
+		}
 	}
 
 	if (Exteraless::Config::Instance().panguOnSending()) {

@@ -167,6 +167,9 @@ def check_cli_args(ledger, cli):
         ("send-as-set with wrong count", ["send-as-set"]),
         ("inline-math-set with wrong count", ["inline-math-set"]),
         ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
+        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
+        ("ghost-schedule-decide with wrong count",
+         ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
         ("chat-subfolder without args", ["chat-subfolder"]),
         ("math-eval without expression", ["math-eval"]),
@@ -477,7 +480,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 54,
+            len(section) == 55,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -498,7 +501,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 59,
+            sum(len(value) for value in exported.values()) == 60,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -518,7 +521,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 59,
+                data.get("applied") == 60,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -606,6 +609,7 @@ def check_backup(ledger, cli, work):
             "OEChatsHideSendAsPeer": True,
             "OEChatsInlineMathResult": True,
             "OEGeneralSaveToChatSubfolder": True,
+            "OEGhostScheduledSend": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -627,7 +631,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 59,
+            data.get("applied") == 60,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -702,6 +706,10 @@ def check_backup(ledger, cli, work):
             "backup full save subfolder",
             section.get("OEGeneralSaveToChatSubfolder") is True,
             section.get("OEGeneralSaveToChatSubfolder"))
+        ledger.check(
+            "backup full ghost schedule",
+            section.get("OEGhostScheduledSend") is True,
+            section.get("OEGhostScheduledSend"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -831,10 +839,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 59",
+            "backup legacy eight completed to 60",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (54, 3, 2),
+             len(sections["mainconfig"])) == (55, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1661,6 +1669,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsHideSendAsPeer": True,
             "OEChatsInlineMathResult": True,
             "OEGeneralSaveToChatSubfolder": True,
+            "OEGhostScheduledSend": True,
         },
     }
     data = json_call(
@@ -2942,6 +2951,74 @@ def check_save_subfolder(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ghost_schedule(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "ghost-schedule-defaults")
+    data = json_call(
+        ledger, cli, ["ghost-schedule"], env, "ghost-schedule defaults")
+    if data is not None:
+        ledger.check(
+            "ghost schedule default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["ghost-schedule-set", "1"], env, "ghost-schedule set")
+    if data is not None:
+        ledger.check("ghost schedule set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["ghost-schedule"], env, "ghost-schedule reload")
+    if reloaded is not None:
+        ledger.check(
+            "ghost schedule persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    # enabled sendOnline self secret bot user -> schedule?
+    cases = [
+        ("private user", ["1", "0", "0", "0", "0", "1"], "1"),
+        ("group", ["1", "0", "0", "0", "0", "0"], "1"),
+        ("online packets still sent", ["1", "1", "0", "0", "0", "1"], "0"),
+        ("feature disabled", ["0", "0", "0", "0", "0", "1"], "0"),
+        ("self chat", ["1", "0", "1", "0", "0", "1"], "0"),
+        ("secret chat", ["1", "0", "0", "1", "0", "1"], "0"),
+        ("bot user", ["1", "0", "0", "0", "1", "1"], "0"),
+    ]
+    for name, arguments, expected in cases:
+        result = run(cli, ["ghost-schedule-decide", *arguments])
+        actual = result.stdout.strip()
+        ledger.check(
+            f"ghost schedule {name}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    env = make_env(work / "ghost-schedule-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"GhostScheduledSend": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ghost-schedule alias")
+    if data is not None:
+        ledger.check(
+            "ghost schedule alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ghost-schedule"], env, "ghost-schedule alias read")
+    if reloaded is not None:
+        ledger.check(
+            "ghost schedule alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2976,6 +3053,7 @@ def main():
         send_as = check_send_as(ledger, cli, work)
         inline_math = check_inline_math(ledger, cli, work)
         save_subfolder = check_save_subfolder(ledger, cli, work)
+        ghost_schedule = check_ghost_schedule(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3002,6 +3080,7 @@ def main():
     print(f"send-as: {send_as[0] - send_as[1]} passed")
     print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
     print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
+    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

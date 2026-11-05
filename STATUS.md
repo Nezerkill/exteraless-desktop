@@ -99,12 +99,19 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 445 проверок PASS
-  (44 strip, 10 reactions, 29 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 460 проверок PASS
+  (44 strip, 10 reactions, 31 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
-  15 save-subfolder, 84 backup); плагины без изменений — 32 и 213 проверок.
+  15 save-subfolder, 12 ghost-schedule, 85 backup); плагины без изменений —
+  32 и 213 проверок.
+- Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
+  активном online-ghost отправляет новые текстовые сообщения как отложенные
+  на 12 секунд (`SendOptions.scheduled`), исключая self, ботов и секретные
+  чаты; решение — `ShouldGhostSchedule` в `exteraless/ghost_schedule.{h,cpp}`,
+  CLI `ghost-schedule`/`ghost-schedule-decide` (12 проверок). Xvfb: тумблер в
+  Ghost Mode. Реальная отправка не выполнялась, чтобы не писать в чужие чаты.
 - Save to chat subfolder (NB-26): `OEGeneralSaveToChatSubfolder` (default
   `false`) добавляет подпапку с именем чата к автоматическим сохранениям в
   `DocumentSaveClickHandler` (имена санитизируются, коллизии получают
@@ -297,8 +304,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f16db153…`,
-  mtime 2026-11-05 11:49; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `04ea2653…`,
+  mtime 2026-11-05 12:06; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

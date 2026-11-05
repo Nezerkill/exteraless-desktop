@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **59** | **59** | 59 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; NB-35/NB-24/NB-26 добавили `OEChatsHideSendAsPeer`, `OEChatsInlineMathResult`, `OEGeneralSaveToChatSubfolder` |
-| Ключей `.extera` | 8 | 8 | 59 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26 — все 59 desktop-ключей |
+| **Ключей форка desktop** | **60** | **60** | 60 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; NB-35/NB-24/NB-26/NB-23 добавили `OEChatsHideSendAsPeer`, `OEChatsInlineMathResult`, `OEGeneralSaveToChatSubfolder`, `OEGhostScheduledSend` |
+| Ключей `.extera` | 8 | 8 | 60 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26, NB-23 — все 60 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -604,9 +604,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (59)
+## 13. Приложение B. Ключи `.extera` (60)
 
-Секция `exteraconfig` (54): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (55): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
@@ -627,7 +627,7 @@ M-нумерацию:
 `OEChatsUseDeletedIcon`, `OEChatsCustomDeletedMark`,
 `OEChatsDeletedMarkColor`, `OEChatsPanguOnSending`,
 `OEChatsSilentByDefault`, `OEChatsHideSendAsPeer`, `OEChatsInlineMathResult`,
-`OEGeneralSaveToChatSubfolder`, `OESettingsHidePremium`,
+`OEGeneralSaveToChatSubfolder`, `OEGhostScheduledSend`, `OESettingsHidePremium`,
 `OESettingsHideHelp`,
 `OEAppearanceHideAiEditor`.
 

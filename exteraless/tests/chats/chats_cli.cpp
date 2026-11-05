@@ -5,6 +5,7 @@
 #include "exteraless/deleted_messages_trim.h"
 #include "exteraless/doubletap.h"
 #include "exteraless/format.h"
+#include "exteraless/ghost_schedule.h"
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
 #include "exteraless/math.h"
@@ -64,6 +65,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
 		<< "<typing>\n"
 		<< "  exteraless-chats-cli ghost-show <0|1>\n"
+		<< "  exteraless-chats-cli ghost-schedule\n"
+		<< "  exteraless-chats-cli ghost-schedule-set <0|1>\n"
+		<< "  exteraless-chats-cli ghost-schedule-decide <enabled> "
+		<< "<sendOnline> <self> <secret> <bot> <user>\n"
 		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 		<< "<typing>\n"
 		<< "  exteraless-chats-cli deletedmark\n"
@@ -251,6 +256,8 @@ void PrintGhost() {
 		{ QStringLiteral("typingLocked"),
 			config.ghostSendUploadProgressLocked() },
 		{ QStringLiteral("unlocked"), Exteraless::GhostUnlockedCount() },
+		{ QStringLiteral("scheduledSend"),
+			config.ghostScheduledSend() },
 	});
 }
 
@@ -889,6 +896,49 @@ int main(int argc, char *argv[]) {
 		config.setGhostSendOnlineLocked(flags[2]);
 		config.setGhostSendUploadProgressLocked(flags[3]);
 		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-schedule")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().ghostScheduledSend() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-schedule-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setGhostScheduledSend(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-schedule-decide")) {
+		if (arguments.size() != 8) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 6>();
+		for (auto i = 0; i != 6; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		const auto schedule = Exteraless::ShouldGhostSchedule({
+			.enabled = flags[0],
+			.sendOnlinePackets = flags[1],
+			.self = flags[2],
+			.secret = flags[3],
+			.bot = flags[4],
+			.user = flags[5],
+		});
+		std::cout << (schedule ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("ghost-show")) {

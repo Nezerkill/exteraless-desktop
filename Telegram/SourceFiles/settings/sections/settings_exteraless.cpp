@@ -269,6 +269,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setGhostSendUploadProgress(!value);
 		});
 	addGhostToggle(
+		u"exteraless/ghost/scheduled-send"_q,
+		tr::lng_settings_exteraless_ghost_scheduled_send(),
+		{ u"ghost"_q, u"scheduled"_q, u"send"_q },
+		Exteraless::Config::Instance().ghostScheduledSend(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostScheduledSend(value);
+		});
+	addGhostToggle(
 		u"exteraless/ghost/status"_q,
 		tr::lng_settings_exteraless_ghost_show_status(),
 		{ u"ghost"_q, u"status"_q, u"menu"_q },

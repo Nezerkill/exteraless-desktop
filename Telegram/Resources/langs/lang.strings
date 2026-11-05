@@ -9206,6 +9206,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_ghost_online" = "Don't send online status";
 "lng_settings_exteraless_ghost_typing" = "Don't send typing status";
 "lng_settings_exteraless_ghost_show_status" = "Show Ghost Mode status in menu";
+"lng_settings_exteraless_ghost_scheduled_send" = "Schedule ghost messages (12 s delay)";
 "lng_settings_exteraless_ghost_locks" = "Locked Ghost settings";
 "lng_settings_exteraless_ghost_lock_read" = "Lock read receipts";
 "lng_settings_exteraless_ghost_lock_stories" = "Lock story views";
