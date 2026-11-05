@@ -82,6 +82,9 @@
   дублированный вариант падал на `--replace-fail`.
 - Config: неиспользуемый `Config::load()` удалён, поведение ленивой загрузки
   не изменилось.
+- Патч: база закреплена `nix/upstream-base` (tree-хеш `4cf9e0e1…`, upstream
+  `6fed91f`, локальный коммит `aa09910`); `./nix/update-patch.sh --check`
+  применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
 - Chats: `exteraless/tests/chats/run_checks.py` — 322 проверки PASS

@@ -39,6 +39,8 @@ sibling-чекаутом: `../exteraless`.
   сообщений, показывает реакции и метки reply/forward/edited, а также
   значок/кастомную метку, прозрачность и цвет (NB-20); inline-показ в чате —
   NB-92.
+- `nix/upstream-base` — закреплённая база патча: локальный коммит, tree-хеш и
+  upstream-коммит; `nix/update-patch.sh --check` проверяет применимость.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
 - Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты

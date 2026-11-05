@@ -55,7 +55,7 @@ APK-обновления и plugin-only API. Полный список искл�
 5. Собрать затронутые TU, обновить `libexteraless.a`, выполнить LLD-релинк
    при известном GNU ld overflow (см. раздел 6).
 6. Прогнать все три раннера, `nix flake check --no-build`, обновить патч и
-   проверить его на чистом v7.3.1.
+   проверить его на чистом v7.3.1 (`./nix/update-patch.sh --check`).
 7. Обновить `CHANGELOG.md`, `STATUS.md`, `Agents/README.md` и соответствующие
    строки бэклога/аудита.
 8. Сделать отдельный commit и push в `origin/main`. Сообщение — по стилю
@@ -155,7 +155,9 @@ nix flake check --no-build
 ```
 
 Перед коммитом обновить `nix/patches/exteraless.patch` через
-`./nix/update-patch.sh` и проверить `patch -p1 --dry-run` на чистом v7.3.1.
+`./nix/update-patch.sh --check`: база закреплена в `nix/upstream-base`
+(коммит + tree-хеш, upstream `6fed91f`), скрипт применяет патч к чистому
+worktree и печатает sha256.
 Полную Nix-сборку выполнять только когда дерево стабильно; она долгая и
 может конкурировать за память с Debug-сборкой.
 
