@@ -2986,19 +2986,21 @@ index 0000000..520432e
 +} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugins_box.cpp b/Telegram/SourceFiles/exteraless/plugins_box.cpp
 new file mode 100644
-index 0000000..586767e
+index 0000000..4b2ad2a
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugins_box.cpp
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,402 @@
 +#include "exteraless/plugins_box.h"
 +
 +#include "exteraless/config.h"
 +#include "exteraless/plugin_runtime.h"
++#include "exteraless/plugins/installer.h"
 +#include "exteraless/plugins/scanner.h"
 +#include "core/application.h"
 +#include "core/file_utilities.h"
 +#include "settings.h"
 +#include "lang/lang_keys.h"
++#include "ui/boxes/confirm_box.h"
 +#include "ui/layers/generic_box.h"
 +#include "ui/widgets/buttons.h"
 +#include "ui/widgets/labels.h"
@@ -3115,6 +3117,15 @@ index 0000000..586767e
 +		: tail.join('\n');
 +}
 +
++void ReopenPluginsBox(
++		not_null<Window::SessionController*> controller,
++		not_null<Ui::GenericBox*> box) {
++	box->closeBox();
++	crl::on_main(controller, [=] {
++		ShowPluginsBox(controller);
++	});
++}
++
 +void ExportAuditLog(
 +		not_null<Window::SessionController*> controller,
 +		const QString &path) {
@@ -3206,6 +3217,34 @@ index 0000000..586767e
 +		auditButton->setClickedCallback([=] {
 +			ShowAuditLogBox(controller, auditLog);
 +		});
++		const auto installButton = layout->add(
++			object_ptr<Ui::SettingsButton>(
++				box,
++				rpl::single(u"Install plugin..."_q),
++				st::settingsButtonNoIcon));
++		installButton->setClickedCallback([=] {
++			FileDialog::GetOpenPath(
++				Core::App().getFileDialogParent(),
++				u"Install plugin"_q,
++				u"Plugin files (*.plugin *.py);;"_q
++					+ FileDialog::AllFilesFilter(),
++				[=](FileDialog::OpenResult &&result) {
++					if (result.paths.isEmpty()) {
++						return;
++					}
++					const auto installed = Plugins::InstallPluginFile(
++						result.paths.front(),
++						directory);
++					if (installed.isEmpty()) {
++						controller->showToast(
++							u"Could not install "_q
++								+ QFileInfo(
++									result.paths.front()).fileName());
++						return;
++					}
++					ReopenPluginsBox(controller, box);
++				});
++		});
 +
 +		if (!result.error.isEmpty()) {
 +			layout->add(
@@ -3249,6 +3288,39 @@ index 0000000..586767e
 +					rpl::single(DetailsText(entry, StateText(*row))),
 +					st::boxLabel),
 +				st::boxRowPadding);
++			const auto deleteLink = layout->add(
++				object_ptr<Ui::LinkButton>(box, u"Delete plugin"_q),
++				st::boxRowPadding);
++			const auto deleteEntry = entry;
++			deleteLink->setClickedCallback([=] {
++				controller->show(Ui::MakeConfirmBox({
++					.text = u"Delete plugin \"%1\"?"_q.arg(
++						deleteEntry.name.isEmpty()
++							? deleteEntry.file
++							: deleteEntry.name),
++					.confirmed = [=](Fn<void()> &&close) {
++						close();
++						if (!Plugins::DeletePluginFile(
++								directory,
++								deleteEntry.file)) {
++							controller->showToast(
++								u"Could not delete the plugin file."_q);
++							return;
++						}
++						const auto runtime
++							= Plugins::Runtime::Instance();
++						if (runtime
++							&& runtime->isLoaded(deleteEntry.id)) {
++							runtime->disable(deleteEntry.id);
++						}
++						Config::Instance().setPluginEnabled(
++							deleteEntry.id,
++							false);
++						ReopenPluginsBox(controller, box);
++					},
++					.confirmText = u"Delete"_q,
++				}));
++			});
 +			row->button->setClickedCallback([=] {
 +				const auto runtime = Plugins::Runtime::Instance();
 +				if (!runtime) {
@@ -6442,10 +6514,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..87623c5
+index 0000000..04214df
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,46 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6470,6 +6542,8 @@ index 0000000..87623c5
 +    network.h
 +    pangu.cpp
 +    pangu.h
++    plugins/installer.cpp
++    plugins/installer.h
 +    plugins/scanner.cpp
 +    proxy_rules_state.cpp
 +    proxy_rules_state.h
@@ -9563,6 +9637,164 @@ index 0000000..137db0c
 +[[nodiscard]] QString ApplyPangu(const QString &text);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/plugins/installer.cpp b/exteraless/plugins/installer.cpp
+new file mode 100644
+index 0000000..7f54adf
+--- /dev/null
++++ b/exteraless/plugins/installer.cpp
+@@ -0,0 +1,126 @@
++#include "exteraless/plugins/installer.h"
++
++#include <QDir>
++#include <QFile>
++#include <QFileInfo>
++
++#include <algorithm>
++
++namespace Exteraless::Plugins {
++namespace {
++
++[[nodiscard]] bool ValidExtension(const QString &extension) {
++	const auto lower = extension.toLower();
++	return (lower == QStringLiteral("plugin"))
++		|| (lower == QStringLiteral("py"));
++}
++
++[[nodiscard]] QString SanitizeStem(const QString &stem) {
++	auto result = QString();
++	result.reserve(std::min(int(stem.size()), 64));
++	for (const auto ch : stem) {
++		if (result.size() == 64) {
++			break;
++		}
++		if (ch.isLetterOrNumber() || ch == '.' || ch == '_' || ch == '-') {
++			result += ch;
++		} else {
++			result += '_';
++		}
++	}
++	while (!result.isEmpty()
++		&& (result.front() == '.' || result.front() == '-')) {
++		result.remove(0, 1);
++	}
++	return result;
++}
++
++} // namespace
++
++QString SanitizePluginFileName(const QString &name) {
++	const auto base = QFileInfo(name).fileName();
++	const auto info = QFileInfo(base);
++	const auto extension = info.suffix();
++	if (!ValidExtension(extension)) {
++		return {};
++	}
++	const auto stem = SanitizeStem(info.completeBaseName());
++	if (stem.isEmpty()) {
++		return {};
++	}
++	return stem + u'.' + extension.toLower();
++}
++
++QString InstallPluginFile(
++		const QString &sourcePath,
++		const QString &directory) {
++	const auto source = QFileInfo(sourcePath);
++	if (!source.isFile()
++		|| source.isSymLink()
++		|| source.size() <= 0
++		|| source.size() > kMaxPluginFileSize) {
++		return {};
++	}
++	const auto name = SanitizePluginFileName(source.fileName());
++	if (name.isEmpty() || directory.isEmpty()) {
++		return {};
++	}
++	if (!QDir().mkpath(directory)) {
++		return {};
++	}
++	const auto base = QFileInfo(name);
++	for (auto attempt = 0; attempt != 100; ++attempt) {
++		const auto candidate = attempt
++			? (base.completeBaseName()
++				+ QStringLiteral("-%1.").arg(attempt + 1)
++				+ base.suffix())
++			: name;
++		const auto target = QDir(directory).filePath(candidate);
++		if (QFileInfo::exists(target)) {
++			continue;
++		}
++		auto input = QFile(sourcePath);
++		if (!input.open(QIODevice::ReadOnly)) {
++			return {};
++		}
++		auto output = QFile(target);
++		if (!output.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
++			continue;
++		}
++		const auto bytes = input.readAll();
++		const auto written = output.write(bytes);
++		output.close();
++		if (written != bytes.size()) {
++			QFile::remove(target);
++			return {};
++		}
++		return candidate;
++	}
++	return {};
++}
++
++bool DeletePluginFile(const QString &directory, const QString &file) {
++	if (directory.isEmpty() || file.isEmpty()) {
++		return false;
++	}
++	const auto base = QFileInfo(file).fileName();
++	if (base != file) {
++		return false;
++	}
++	const auto sanitized = SanitizePluginFileName(base);
++	if (sanitized.compare(base, Qt::CaseInsensitive) != 0) {
++		return false;
++	}
++	auto path = QDir(directory).filePath(base);
++	auto info = QFileInfo(path);
++	if (!info.isFile() && sanitized != base) {
++		path = QDir(directory).filePath(sanitized);
++		info = QFileInfo(path);
++	}
++	if (!info.isFile() || info.isSymLink()) {
++		return false;
++	}
++	return QFile::remove(path);
++}
++
++} // namespace Exteraless::Plugins
+diff --git a/exteraless/plugins/installer.h b/exteraless/plugins/installer.h
+new file mode 100644
+index 0000000..c345b6e
+--- /dev/null
++++ b/exteraless/plugins/installer.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include <QtGlobal>
++#include <QString>
++
++namespace Exteraless::Plugins {
++
++constexpr auto kMaxPluginFileSize = qint64(2) * 1024 * 1024;
++
++[[nodiscard]] QString SanitizePluginFileName(const QString &name);
++
++[[nodiscard]] QString InstallPluginFile(
++	const QString &sourcePath,
++	const QString &directory);
++
++[[nodiscard]] bool DeletePluginFile(
++	const QString &directory,
++	const QString &file);
++
++} // namespace Exteraless::Plugins
 diff --git a/exteraless/plugins/scanner.cpp b/exteraless/plugins/scanner.cpp
 new file mode 100644
 index 0000000..29539cb
@@ -10088,10 +10320,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..2729429
+index 0000000..2d2b821
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,989 @@
+@@ -0,0 +1,1024 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10103,6 +10335,7 @@ index 0000000..2729429
 +#include "exteraless/links.h"
 +#include "exteraless/network.h"
 +#include "exteraless/pangu.h"
++#include "exteraless/plugins/installer.h"
 +#include "exteraless/proxy_rules.h"
 +
 +#include <QByteArray>
@@ -10174,6 +10407,9 @@ index 0000000..2729429
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli plugin-filename <name>\n"
++		<< "  exteraless-chats-cli plugin-install <source> <directory>\n"
++		<< "  exteraless-chats-cli plugin-delete <directory> <file>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10593,6 +10829,37 @@ index 0000000..2729429
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("plugin-filename")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto name = Exteraless::Plugins::SanitizePluginFileName(
++			arguments[2]);
++		std::cout << (name.isEmpty() ? QStringLiteral("invalid") : name).toUtf8().constData()
++			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("plugin-install")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		const auto installed = Exteraless::Plugins::InstallPluginFile(
++			arguments[2],
++			arguments[3]);
++		std::cout << (installed.isEmpty() ? QStringLiteral("failed") : installed)
++			.toUtf8().constData() << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("plugin-delete")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		const auto removed = Exteraless::Plugins::DeletePluginFile(
++			arguments[2],
++			arguments[3]);
++		std::cout << (removed ? "1" : "0") << '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("ai-editor")) {
@@ -11145,10 +11412,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..de7a824
+index 0000000..e055346
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2654 @@
+@@ -0,0 +1,2764 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -11314,6 +11581,9 @@ index 0000000..de7a824
 +        ("settings-sections-set with wrong count",
 +         ["settings-sections-set", "1"]),
 +        ("ai-editor-set with wrong count", ["ai-editor-set"]),
++        ("plugin-filename without name", ["plugin-filename"]),
++        ("plugin-install without args", ["plugin-install"]),
++        ("plugin-delete without args", ["plugin-delete"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -13739,6 +14009,111 @@ index 0000000..de7a824
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_plugin_installer(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    cases = [
++        ("My Plugin.plugin", "My_Plugin.plugin"),
++        ("../evil.plugin", "evil.plugin"),
++        ("a/b/../../x.py", "x.py"),
++        ("plugin.exe", "invalid"),
++        ("noext", "invalid"),
++        (".plugin", "invalid"),
++        ("x.PLUGIN", "x.plugin"),
++        ("\u0442\u0435\u0441\u0442.py", "\u0442\u0435\u0441\u0442.py"),
++        ("", "invalid"),
++    ]
++    for name, expected in cases:
++        result = run(cli, ["plugin-filename", name])
++        actual = result.stdout.strip()
++        ledger.check(
++            f"plugin filename {name or 'empty'}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    source = work / "plugin-source"
++    source.mkdir(parents=True, exist_ok=True)
++    note = source / "note.plugin"
++    note.write_text("__id__ = 'note'\n", encoding="utf-8")
++    install_dir = work / "plugin-install"
++
++    result = run(cli, ["plugin-install", str(note), str(install_dir)])
++    installed = result.stdout.strip()
++    ledger.check(
++        "plugin install first",
++        result.returncode == 0 and installed == "note.plugin",
++        f"exit {result.returncode}, got {installed!r}")
++    target = install_dir / "note.plugin"
++    ledger.check(
++        "plugin install content",
++        target.is_file()
++        and target.read_text(encoding="utf-8") == note.read_text(encoding="utf-8"),
++        target)
++
++    result = run(cli, ["plugin-install", str(note), str(install_dir)])
++    second = result.stdout.strip()
++    ledger.check(
++        "plugin install dedup",
++        result.returncode == 0
++        and second == "note-2.plugin"
++        and (install_dir / "note-2.plugin").is_file(),
++        second)
++
++    bad = source / "bad.exe"
++    bad.write_text("nope", encoding="utf-8")
++    result = run(cli, ["plugin-install", str(bad), str(install_dir)])
++    ledger.check(
++        "plugin install rejects bad extension",
++        result.stdout.strip() == "failed",
++        result.stdout.strip())
++
++    big = source / "big.plugin"
++    big.write_bytes(b"x" * (2 * 1024 * 1024 + 1))
++    result = run(cli, ["plugin-install", str(big), str(install_dir)])
++    ledger.check(
++        "plugin install rejects oversize",
++        result.stdout.strip() == "failed",
++        result.stdout.strip())
++
++    link = source / "link.plugin"
++    link.symlink_to(note)
++    result = run(cli, ["plugin-install", str(link), str(install_dir)])
++    ledger.check(
++        "plugin install rejects symlink",
++        result.stdout.strip() == "failed",
++        result.stdout.strip())
++
++    result = run(cli, ["plugin-delete", str(install_dir), "note.PLUGIN"])
++    ledger.check(
++        "plugin delete case insensitive",
++        result.stdout.strip() == "1" and not target.is_file(),
++        result.stdout.strip())
++
++    result = run(cli, ["plugin-delete", str(install_dir), "note.plugin"])
++    ledger.check(
++        "plugin delete missing",
++        result.stdout.strip() == "0",
++        result.stdout.strip())
++
++    result = run(cli, ["plugin-delete", str(install_dir), "../note.plugin"])
++    ledger.check(
++        "plugin delete rejects traversal",
++        result.stdout.strip() == "0",
++        result.stdout.strip())
++
++    (install_dir / "folder.plugin").mkdir(exist_ok=True)
++    result = run(cli, ["plugin-delete", str(install_dir), "folder.plugin"])
++    ledger.check(
++        "plugin delete rejects directory",
++        result.stdout.strip() == "0",
++        result.stdout.strip())
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -13769,6 +14144,7 @@ index 0000000..de7a824
 +        silent = check_silent(ledger, cli, work)
 +        sections = check_settings_sections(ledger, cli, work)
 +        ai_editor = check_ai_editor(ledger, cli, work)
++        pluginops = check_plugin_installer(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -13791,6 +14167,7 @@ index 0000000..de7a824
 +    print(f"silent: {silent[0] - silent[1]} passed")
 +    print(f"sections: {sections[0] - sections[1]} passed")
 +    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
++    print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

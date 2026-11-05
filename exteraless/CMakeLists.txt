@@ -22,6 +22,8 @@ add_library(exteraless STATIC
     network.h
     pangu.cpp
     pangu.h
+    plugins/installer.cpp
+    plugins/installer.h
     plugins/scanner.cpp
     proxy_rules_state.cpp
     proxy_rules_state.h

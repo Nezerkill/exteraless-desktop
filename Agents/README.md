@@ -18,6 +18,7 @@ sibling-чекаутом: `../exteraless`.
   - `backup.*` — формат `.extera`;
   - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам;
   - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов;
+  - `plugins/installer.*` — установка/удаление файлов плагинов;
   - `chats.*` — `ChatsSettings`, правило скрытия реакций и unread capsule;
   - `links.*` — `StripTracking` для http/https-ссылок.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
@@ -26,14 +27,15 @@ sibling-чекаутом: `../exteraless`.
 - `Telegram/SourceFiles/exteraless/pill_stack.*` — полоса Pill Stack в списке чатов.
 - `Telegram/SourceFiles/exteraless/plugins_box.*` — бокс «Plugins»: список,
   ошибки, пустое состояние, тумблеры, статус host, просмотр последних строк
-  `plugins-audit.log` и экспорт лога.
+  `plugins-audit.log`, экспорт лога, установка `.plugin`/`.py` из файла
+  и удаление плагина.
 - `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan` (stage 1),
   CLI `exteraless-plugin-host-cli` (stage 2), фикстуры, `run_checks.py`
   (32 проверки) и `run_host_checks.py` (213 проверок) с фикстурами
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (363 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup);
+  (385 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых

@@ -9,6 +9,7 @@
 #include "exteraless/links.h"
 #include "exteraless/network.h"
 #include "exteraless/pangu.h"
+#include "exteraless/plugins/installer.h"
 #include "exteraless/proxy_rules.h"
 
 #include <QByteArray>
@@ -80,6 +81,9 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli plugin-filename <name>\n"
+		<< "  exteraless-chats-cli plugin-install <source> <directory>\n"
+		<< "  exteraless-chats-cli plugin-delete <directory> <file>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -499,6 +503,37 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("plugin-filename")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto name = Exteraless::Plugins::SanitizePluginFileName(
+			arguments[2]);
+		std::cout << (name.isEmpty() ? QStringLiteral("invalid") : name).toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("plugin-install")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		const auto installed = Exteraless::Plugins::InstallPluginFile(
+			arguments[2],
+			arguments[3]);
+		std::cout << (installed.isEmpty() ? QStringLiteral("failed") : installed)
+			.toUtf8().constData() << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("plugin-delete")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		const auto removed = Exteraless::Plugins::DeletePluginFile(
+			arguments[2],
+			arguments[3]);
+		std::cout << (removed ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("ai-editor")) {

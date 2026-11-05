@@ -99,12 +99,19 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 363 проверки PASS
-  (44 strip, 10 reactions, 19 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 385 проверок PASS
+  (44 strip, 10 reactions, 22 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  5 silent, 5 sections, 5 ai-editor, 81 backup); плагины без изменений —
-  32 и 213 проверок.
+  5 silent, 5 sections, 5 ai-editor, 19 pluginops, 81 backup); плагины без
+  изменений — 32 и 213 проверок.
+- Plugins install/delete (NB-29): `Install plugin...` копирует `.plugin`/`.py`
+  в `tdata/plugins` (санитайз имени, суффикс `-2` при коллизии, лимит 2 МиБ,
+  отказ для symlink и чужих расширений), `Delete plugin` удаляет файл после
+  подтверждения и отключает плагин. Логика — `exteraless/plugins/installer.*`,
+  CLI `plugin-install`/`plugin-delete`/`plugin-filename` (19 проверок).
+  Xvfb: установка через файловый диалог появилаcь в списке, удаление убрало
+  файл и перестроило бокс.
 - Pill Stack reset (NB-31): кнопка «Reset pill order» сбрасывает
   `OEPillStackOrder` в дефолт и показывает тост; CLI `pillorder-reset`
   (3 проверки). Xvfb: порядок вернулся к `cpu,ram,net,dc,proxy,cache,ghost,
@@ -271,8 +278,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `50a7102a…`,
-  mtime 2026-11-05 09:49; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `7f7306e2…`,
+  mtime 2026-11-05 10:00; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

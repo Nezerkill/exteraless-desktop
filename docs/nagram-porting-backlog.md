@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(363 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, backup),
+(385 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -118,7 +118,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-26 | Свой путь сохранения и подпапка на чат | `NekoConfig.customSavePath`, `NaConfig.saveToChatSubfolder` | `data/data_download_manager.cpp`, `settings/sections/settings_advanced.cpp` | M · средний (пути ФС) | файл сохраняется в выбранную папку и подпапку | ⬜ | R1 P1-8 |
 | NB-27 | Скрыть кнопки AI-редактора и саммари | `OEAppearanceHideAiEditor`, `HideIvSummary`, `HideMessageSummary` | `exteraless/config.{h,cpp}`, `history/view/controls/history_view_compose_controls.cpp`, `boxes/edit_caption_box.cpp`, `boxes/send_files_box.cpp` | S · низкий | Xvfb: кнопка скрыта, остальное работает | ✅ 2026-11-05: `OEAppearanceHideAiEditor` скрывает кнопку AI-редактора в compose и caption-боксах; `HideIvSummary`/`HideMessageSummary` не переносились — в этой версии tdesktop нет соответствующих AI-саммари (зафиксировано в аудите), CLI `ai-editor` (5 проверок), Xvfb toggle | R1 P1-9 |
 | NB-28 | UI-просмотр audit-лога плагинов | `PluginActivityLog`, `PluginActivityExport` | `Telegram/SourceFiles/exteraless/plugins_box.cpp` | M · средний | строки `tdata/plugins-audit.log` видны в боксе, экспорт работает | ✅ 2026-11-05: кнопка «Audit log» в боксе плагинов показывает последние 24 строки, «Export» открывает файловый диалог с именем `plugins-audit.log`; Xvfb подтвердил строки и диалог | R1 P1-10 |
-| NB-29 | Установка и удаление плагина из файла | `PluginsInstallFromFile`, `PluginsDelete` | `Telegram/SourceFiles/exteraless/plugins_box.cpp`, `exteraless/plugins/scanner.cpp` | M · средний (копирование в `tdata/plugins`) | установить `.plugin`, он в списке; удалить | ⬜ | R1 P1-11 |
+| NB-29 | Установка и удаление плагина из файла | `PluginsInstallFromFile`, `PluginsDelete` | `exteraless/plugins/installer.{h,cpp}`, `Telegram/SourceFiles/exteraless/plugins_box.cpp` | M · средний (копирование в `tdata/plugins`) | установить `.plugin`, он в списке; удалить | ✅ 2026-11-05: «Install plugin...» копирует `.plugin`/`.py` с санитайзом имени, дедупликацией и лимитом 2 МиБ, «Delete plugin» удаляет с подтверждением; CLI `plugin-install`/`plugin-delete`/`plugin-filename` (19 проверок), Xvfb: установка через файловый диалог и удаление работают | R1 P1-11 |
 | NB-30 | Меню плагина в главном меню | `plugins/menus`, `PluginMenuItem` | `window/window_main_menu.cpp`, IPC в `plugin_runtime.cpp` | L · высокий (IPC и жизненный цикл) | плагин добавляет пункт, клик вызывает host | ⬜ | R1 P1-12 |
 | NB-31 | Pill Stack: бесконечная прокрутка и сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` (reset) | S · низкий | колесо/скролл листает пилюли по кругу, сброс возвращает дефолт | ✅ 2026-11-05: кнопка «Reset pill order» сбрасывает `OEPillStackOrder` в дефолт (CLI `pillorder-reset`, 3 проверки, Xvfb). Бесконечная прокрутка не применима: пилюли переносятся на новую строку, а не листаются | R1 P1-13 |
 | NB-32 | Внешние субтитры к видео | `OESubtitles`, `OEChooseSubtitles`, `OEDisableSubtitles` | `media/view/media_view_overlay_widget.cpp` | M · средний (парсинг SRT/ASS) | загрузить `.srt`: субтитры видны и отключаются | ⬜ | R1 P1-14 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 363 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 385 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

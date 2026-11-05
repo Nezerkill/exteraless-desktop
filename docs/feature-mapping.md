@@ -112,7 +112,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 51, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 363 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 385 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -262,6 +262,10 @@ Stage 1 (MVP3): manifest and inspection only.
   plugin count, metadata, per-file errors or an empty-state message. The box
   has an `Audit log` button that shows the last 24 lines of
   `tdata/plugins-audit.log` and can export the whole log through a file dialog.
+  `Install plugin...` copies a `.plugin`/`.py` file into `tdata/plugins`
+  (sanitized name, `-2` suffix on collision, 2 MiB limit, symlinks and other
+  extensions rejected), and each valid entry has a `Delete plugin` link with a
+  confirmation; both reload the box.
 
 Stage 2 (MVP3): controlled host for enabled plugins.
 

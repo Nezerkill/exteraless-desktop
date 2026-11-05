@@ -2,11 +2,13 @@
 
 #include "exteraless/config.h"
 #include "exteraless/plugin_runtime.h"
+#include "exteraless/plugins/installer.h"
 #include "exteraless/plugins/scanner.h"
 #include "core/application.h"
 #include "core/file_utilities.h"
 #include "settings.h"
 #include "lang/lang_keys.h"
+#include "ui/boxes/confirm_box.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/labels.h"
@@ -123,6 +125,15 @@ struct Row {
 		: tail.join('\n');
 }
 
+void ReopenPluginsBox(
+		not_null<Window::SessionController*> controller,
+		not_null<Ui::GenericBox*> box) {
+	box->closeBox();
+	crl::on_main(controller, [=] {
+		ShowPluginsBox(controller);
+	});
+}
+
 void ExportAuditLog(
 		not_null<Window::SessionController*> controller,
 		const QString &path) {
@@ -214,6 +225,34 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 		auditButton->setClickedCallback([=] {
 			ShowAuditLogBox(controller, auditLog);
 		});
+		const auto installButton = layout->add(
+			object_ptr<Ui::SettingsButton>(
+				box,
+				rpl::single(u"Install plugin..."_q),
+				st::settingsButtonNoIcon));
+		installButton->setClickedCallback([=] {
+			FileDialog::GetOpenPath(
+				Core::App().getFileDialogParent(),
+				u"Install plugin"_q,
+				u"Plugin files (*.plugin *.py);;"_q
+					+ FileDialog::AllFilesFilter(),
+				[=](FileDialog::OpenResult &&result) {
+					if (result.paths.isEmpty()) {
+						return;
+					}
+					const auto installed = Plugins::InstallPluginFile(
+						result.paths.front(),
+						directory);
+					if (installed.isEmpty()) {
+						controller->showToast(
+							u"Could not install "_q
+								+ QFileInfo(
+									result.paths.front()).fileName());
+						return;
+					}
+					ReopenPluginsBox(controller, box);
+				});
+		});
 
 		if (!result.error.isEmpty()) {
 			layout->add(
@@ -257,6 +296,39 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 					rpl::single(DetailsText(entry, StateText(*row))),
 					st::boxLabel),
 				st::boxRowPadding);
+			const auto deleteLink = layout->add(
+				object_ptr<Ui::LinkButton>(box, u"Delete plugin"_q),
+				st::boxRowPadding);
+			const auto deleteEntry = entry;
+			deleteLink->setClickedCallback([=] {
+				controller->show(Ui::MakeConfirmBox({
+					.text = u"Delete plugin \"%1\"?"_q.arg(
+						deleteEntry.name.isEmpty()
+							? deleteEntry.file
+							: deleteEntry.name),
+					.confirmed = [=](Fn<void()> &&close) {
+						close();
+						if (!Plugins::DeletePluginFile(
+								directory,
+								deleteEntry.file)) {
+							controller->showToast(
+								u"Could not delete the plugin file."_q);
+							return;
+						}
+						const auto runtime
+							= Plugins::Runtime::Instance();
+						if (runtime
+							&& runtime->isLoaded(deleteEntry.id)) {
+							runtime->disable(deleteEntry.id);
+						}
+						Config::Instance().setPluginEnabled(
+							deleteEntry.id,
+							false);
+						ReopenPluginsBox(controller, box);
+					},
+					.confirmText = u"Delete"_q,
+				}));
+			});
 			row->button->setClickedCallback([=] {
 				const auto runtime = Plugins::Runtime::Instance();
 				if (!runtime) {

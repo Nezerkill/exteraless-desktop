@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Plugins: в боксе плагинов появились «Install plugin...» (копирование
+  `.plugin`/`.py` в `tdata/plugins` с дедупликацией имени и лимитом 2 МиБ) и
+  «Delete plugin» с подтверждением; установка и удаление проверены в Xvfb.
+  Логика вынесена в `exteraless/plugins/installer.{h,cpp}` и покрыта CLI
+  `plugin-install`/`plugin-delete`/`plugin-filename` (19 проверок).
 - Plugins: в боксе плагинов появилась кнопка «Audit log» — последние 24
   строки `tdata/plugins-audit.log` с возможностью экспорта через файловый
   диалог; Xvfb подтвердил отображение и диалог.

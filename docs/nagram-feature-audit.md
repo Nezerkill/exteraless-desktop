@@ -411,7 +411,7 @@ shuffle в upstream есть. System media controls (MPRIS) — upstream
 | Capability scan | `capability_scan.py` | ❌ (сканер читает только метаданные) |
 | Audit-журнал | `PluginActivityLog`, `PluginActivityExport` | 🟡 пишется `tdata/plugins-audit.log`, просмотра в UI нет |
 | Watchdog, safe/unsafe, авто-safe-mode | `PluginsWatchdog`, `PluginsSafeMode`, `PluginsAutoSafeMode` | ❌ |
-| Установка / удаление / обновление | `PluginsInstallFromFile`, `PluginsDelete`, `PluginsUpdate` | ❌ |
+| Установка / удаление / обновление | `PluginsInstallFromFile`, `PluginsDelete`, `PluginsUpdate` | 🟡 установка и удаление — NB-29 (`installer.*`, кнопки в боксе); обновление не перенесено |
 | Меню и настройки плагина | `plugins/menus`, `PluginSettingsActivity` | ❌ |
 | Intents, бэкап плагинов, Python SDK | `plugins/intents`, `PluginsBackup`, `src/main/python/*` | ❌ |
 | Xposed-хуки, DEX, `.elyx`, шим `ExteraConfig` | `plugins/xposed/*`, `elyx_runtime/*`, `ExteraConfig.java` | ⛔ нет ART и совместимого API |

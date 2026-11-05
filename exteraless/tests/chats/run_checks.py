@@ -163,6 +163,9 @@ def check_cli_args(ledger, cli):
         ("settings-sections-set with wrong count",
          ["settings-sections-set", "1"]),
         ("ai-editor-set with wrong count", ["ai-editor-set"]),
+        ("plugin-filename without name", ["plugin-filename"]),
+        ("plugin-install without args", ["plugin-install"]),
+        ("plugin-delete without args", ["plugin-delete"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -2588,6 +2591,111 @@ def check_ai_editor(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_plugin_installer(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    cases = [
+        ("My Plugin.plugin", "My_Plugin.plugin"),
+        ("../evil.plugin", "evil.plugin"),
+        ("a/b/../../x.py", "x.py"),
+        ("plugin.exe", "invalid"),
+        ("noext", "invalid"),
+        (".plugin", "invalid"),
+        ("x.PLUGIN", "x.plugin"),
+        ("\u0442\u0435\u0441\u0442.py", "\u0442\u0435\u0441\u0442.py"),
+        ("", "invalid"),
+    ]
+    for name, expected in cases:
+        result = run(cli, ["plugin-filename", name])
+        actual = result.stdout.strip()
+        ledger.check(
+            f"plugin filename {name or 'empty'}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    source = work / "plugin-source"
+    source.mkdir(parents=True, exist_ok=True)
+    note = source / "note.plugin"
+    note.write_text("__id__ = 'note'\n", encoding="utf-8")
+    install_dir = work / "plugin-install"
+
+    result = run(cli, ["plugin-install", str(note), str(install_dir)])
+    installed = result.stdout.strip()
+    ledger.check(
+        "plugin install first",
+        result.returncode == 0 and installed == "note.plugin",
+        f"exit {result.returncode}, got {installed!r}")
+    target = install_dir / "note.plugin"
+    ledger.check(
+        "plugin install content",
+        target.is_file()
+        and target.read_text(encoding="utf-8") == note.read_text(encoding="utf-8"),
+        target)
+
+    result = run(cli, ["plugin-install", str(note), str(install_dir)])
+    second = result.stdout.strip()
+    ledger.check(
+        "plugin install dedup",
+        result.returncode == 0
+        and second == "note-2.plugin"
+        and (install_dir / "note-2.plugin").is_file(),
+        second)
+
+    bad = source / "bad.exe"
+    bad.write_text("nope", encoding="utf-8")
+    result = run(cli, ["plugin-install", str(bad), str(install_dir)])
+    ledger.check(
+        "plugin install rejects bad extension",
+        result.stdout.strip() == "failed",
+        result.stdout.strip())
+
+    big = source / "big.plugin"
+    big.write_bytes(b"x" * (2 * 1024 * 1024 + 1))
+    result = run(cli, ["plugin-install", str(big), str(install_dir)])
+    ledger.check(
+        "plugin install rejects oversize",
+        result.stdout.strip() == "failed",
+        result.stdout.strip())
+
+    link = source / "link.plugin"
+    link.symlink_to(note)
+    result = run(cli, ["plugin-install", str(link), str(install_dir)])
+    ledger.check(
+        "plugin install rejects symlink",
+        result.stdout.strip() == "failed",
+        result.stdout.strip())
+
+    result = run(cli, ["plugin-delete", str(install_dir), "note.PLUGIN"])
+    ledger.check(
+        "plugin delete case insensitive",
+        result.stdout.strip() == "1" and not target.is_file(),
+        result.stdout.strip())
+
+    result = run(cli, ["plugin-delete", str(install_dir), "note.plugin"])
+    ledger.check(
+        "plugin delete missing",
+        result.stdout.strip() == "0",
+        result.stdout.strip())
+
+    result = run(cli, ["plugin-delete", str(install_dir), "../note.plugin"])
+    ledger.check(
+        "plugin delete rejects traversal",
+        result.stdout.strip() == "0",
+        result.stdout.strip())
+
+    (install_dir / "folder.plugin").mkdir(exist_ok=True)
+    result = run(cli, ["plugin-delete", str(install_dir), "folder.plugin"])
+    ledger.check(
+        "plugin delete rejects directory",
+        result.stdout.strip() == "0",
+        result.stdout.strip())
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2618,6 +2726,7 @@ def main():
         silent = check_silent(ledger, cli, work)
         sections = check_settings_sections(ledger, cli, work)
         ai_editor = check_ai_editor(ledger, cli, work)
+        pluginops = check_plugin_installer(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2640,6 +2749,7 @@ def main():
     print(f"silent: {silent[0] - silent[1]} passed")
     print(f"sections: {sections[0] - sections[1]} passed")
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
+    print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(
