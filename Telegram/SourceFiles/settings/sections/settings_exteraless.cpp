@@ -438,6 +438,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setSilentByDefault(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/hide-send-as"_q,
+		tr::lng_settings_exteraless_chats_hide_send_as(),
+		{ u"send as"_q, u"channel"_q, u"hide"_q },
+		Exteraless::Config::Instance().hideSendAsPeer(),
+		[](bool value) {
+			Exteraless::Config::Instance().setHideSendAsPeer(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,

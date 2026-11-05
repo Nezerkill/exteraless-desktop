@@ -81,6 +81,8 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli send-as\n"
+		<< "  exteraless-chats-cli send-as-set <0|1>\n"
 		<< "  exteraless-chats-cli plugin-filename <name>\n"
 		<< "  exteraless-chats-cli plugin-install <source> <directory>\n"
 		<< "  exteraless-chats-cli plugin-delete <directory> <file>\n"
@@ -503,6 +505,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("send-as")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance().hideSendAsPeer() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("send-as-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setHideSendAsPeer(value);
+		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("plugin-filename")) {

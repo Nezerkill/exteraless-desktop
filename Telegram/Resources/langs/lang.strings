@@ -9226,6 +9226,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_use_deleted_icon" = "Use icon for deleted messages";
 "lng_settings_exteraless_chats_pangu" = "Add spaces between CJK and Latin on send";
 "lng_settings_exteraless_chats_silent_by_default" = "Send messages silently by default";
+"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 "lng_settings_exteraless_double_tap_title" = "Double tap action";
 "lng_settings_exteraless_double_tap_in" = "On incoming messages";
 "lng_settings_exteraless_double_tap_out" = "On outgoing messages";

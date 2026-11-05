@@ -5652,6 +5652,7 @@ bool ComposeControls::updateSendAsButton(
 		? Main::SendAsType::VideoStream
 		: Main::SendAsType::Message;
 	if (!_features.sendAs
+		|| Exteraless::Config::Instance().hideSendAsPeer()
 		|| !peer
 		|| isEditingMessage()
 		|| !session().sendAsPeers().shouldChoose({ peer, type })) {

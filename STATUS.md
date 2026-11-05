@@ -99,12 +99,17 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 385 проверок PASS
-  (44 strip, 10 reactions, 22 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 392 проверки PASS
+  (44 strip, 10 reactions, 24 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  5 silent, 5 sections, 5 ai-editor, 19 pluginops, 81 backup); плагины без
-  изменений — 32 и 213 проверок.
+  5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 82 backup);
+  плагины без изменений — 32 и 213 проверок.
+- Channels / Send as (NB-35, частично): `OEChatsHideSendAsPeer` (default
+  `false`) убирает кнопку «Send as...» в каналах; Android-алиас
+  `hideSendAsChannel`, тумблер в Chats, CLI `send-as` (5 проверок). Xvfb:
+  тумблер записывает ключ. `hideCameraTile` не применим (в attach-меню
+  tdesktop камеры нет), `hideShareButtonInChannel` — профиль (NB-73).
 - Plugins install/delete (NB-29): `Install plugin...` копирует `.plugin`/`.py`
   в `tdata/plugins` (санитайз имени, суффикс `-2` при коллизии, лимит 2 МиБ,
   отказ для symlink и чужих расширений), `Delete plugin` удаляет файл после
@@ -278,8 +283,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `7f7306e2…`,
-  mtime 2026-11-05 10:00; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `058f7e9d…`,
+  mtime 2026-11-05 10:13; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

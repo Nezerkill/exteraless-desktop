@@ -30,6 +30,8 @@ constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
 constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
+constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
+constexpr auto kHideSendAsAlias = "hideSendAsChannel";
 constexpr auto kHideAiEditorAlias = "hideAiEditor";
 constexpr auto kHidePremiumAlias = "hidePremiumSection";
 constexpr auto kHideHelpAlias = "hideHelpSection";
@@ -241,6 +243,7 @@ QString BuildBackup() {
 	extera[kHidePremiumSection] = config.hidePremiumSection();
 	extera[kHideHelpSection] = config.hideHelpSection();
 	extera[kHideAiEditor] = config.hideAiEditor();
+	extera[kHideSendAsPeer] = config.hideSendAsPeer();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -434,6 +437,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHideAiEditor || key == kHideAiEditorAlias)
 			&& value.isBool()) {
 			config.setHideAiEditor(value.toBool());
+		} else if ((key == kHideSendAsPeer || key == kHideSendAsAlias)
+			&& value.isBool()) {
+			config.setHideSendAsPeer(value.toBool());
 		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 			&& value.isBool()) {
 			config.setUseDeletedIcon(value.toBool());

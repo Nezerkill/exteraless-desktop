@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Chats / Channels: настройка `OEChatsHideSendAsPeer` (default `false`)
+  скрывает кнопку «Send as...» в каналах; Android-алиас
+  `hideSendAsChannel` поддержан в `.extera` (всего 57 ключей). Из трёх
+  ключей NB-35 перенесён только этот: камеры в attach-меню tdesktop нет, а
+  «Share» в канале относится к профилю (NB-73).
 - Plugins: в боксе плагинов появились «Install plugin...» (копирование
   `.plugin`/`.py` в `tdata/plugins` с дедупликацией имени и лимитом 2 МиБ) и
   «Delete plugin» с подтверждением; установка и удаление проверены в Xvfb.

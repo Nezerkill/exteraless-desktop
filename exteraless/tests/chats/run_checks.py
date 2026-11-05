@@ -164,6 +164,7 @@ def check_cli_args(ledger, cli):
          ["settings-sections-set", "1"]),
         ("ai-editor-set with wrong count", ["ai-editor-set"]),
         ("plugin-filename without name", ["plugin-filename"]),
+        ("send-as-set with wrong count", ["send-as-set"]),
         ("plugin-install without args", ["plugin-install"]),
         ("plugin-delete without args", ["plugin-delete"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
@@ -471,7 +472,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 51,
+            len(section) == 52,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -492,7 +493,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 56,
+            sum(len(value) for value in exported.values()) == 57,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -512,7 +513,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 56,
+                data.get("applied") == 57,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -597,6 +598,7 @@ def check_backup(ledger, cli, work):
             "OESettingsHidePremium": True,
             "OESettingsHideHelp": True,
             "OEAppearanceHideAiEditor": True,
+            "OEChatsHideSendAsPeer": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -618,7 +620,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 56,
+            data.get("applied") == 57,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -681,6 +683,10 @@ def check_backup(ledger, cli, work):
             "backup full ai editor",
             section.get("OEAppearanceHideAiEditor") is True,
             section.get("OEAppearanceHideAiEditor"))
+        ledger.check(
+            "backup full hide send as",
+            section.get("OEChatsHideSendAsPeer") is True,
+            section.get("OEChatsHideSendAsPeer"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -810,10 +816,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 56",
+            "backup legacy eight completed to 57",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (51, 3, 2),
+             len(sections["mainconfig"])) == (52, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1637,6 +1643,7 @@ def check_sticker_time(ledger, cli, work):
             "OESettingsHidePremium": True,
             "OESettingsHideHelp": True,
             "OEAppearanceHideAiEditor": True,
+            "OEChatsHideSendAsPeer": True,
         },
     }
     data = json_call(
@@ -2696,6 +2703,52 @@ def check_plugin_installer(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_send_as(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "send-as-defaults")
+    data = json_call(ledger, cli, ["send-as"], env, "send-as defaults")
+    if data is not None:
+        ledger.check(
+            "send as default shown",
+            data.get("hidden") is False,
+            data)
+    data = json_call(ledger, cli, ["send-as-set", "1"], env, "send-as set")
+    if data is not None:
+        ledger.check("send as set hidden", data == 1, data)
+    reloaded = json_call(ledger, cli, ["send-as"], env, "send-as reload")
+    if reloaded is not None:
+        ledger.check(
+            "send as persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    env = make_env(work / "send-as-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"hideSendAsChannel": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "send-as alias")
+    if data is not None:
+        ledger.check(
+            "send as alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(ledger, cli, ["send-as"], env, "send-as alias read")
+    if reloaded is not None:
+        ledger.check(
+            "send as alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2727,6 +2780,7 @@ def main():
         sections = check_settings_sections(ledger, cli, work)
         ai_editor = check_ai_editor(ledger, cli, work)
         pluginops = check_plugin_installer(ledger, cli, work)
+        send_as = check_send_as(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2750,6 +2804,7 @@ def main():
     print(f"sections: {sections[0] - sections[1]} passed")
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
     print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
+    print(f"send-as: {send_as[0] - send_as[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(
