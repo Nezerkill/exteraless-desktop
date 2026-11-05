@@ -9210,7 +9210,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_ghost_lock_stories" = "Lock story views";
 "lng_settings_exteraless_ghost_lock_online" = "Lock online status";
 "lng_settings_exteraless_ghost_lock_typing" = "Lock typing status";
-"lng_settings_exteraless_ghost_lock_offline" = "Lock offline after online";
 "lng_settings_exteraless_ghost_status_on" = "On";
 "lng_settings_exteraless_ghost_status_off" = "Off";
 "lng_settings_exteraless_ghost_status_partial" = "Partial";

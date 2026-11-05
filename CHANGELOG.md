@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Ghost: мёртвые ключи `OEGhostSendOfflineAfterOnline` и
+  `OEGhostSendOfflineAfterOnlineLocked` удалены из конфига, `.extera` и UI;
+  `.extera` теперь содержит 56 ключей. Семантика Android-настройки требует
+  прямого управления статусом и в desktop не реализована.
 - Pill Stack: кнопка «Reset pill order» возвращает стандартный порядок
   (`OEPillStackOrder`), показывает тост; CLI `pillorder-reset` (3 проверки).
   Бесконечная прокрутка не переносится: полоса пилюль переносит элементы на

@@ -311,15 +311,6 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance()
 				.setGhostSendUploadProgressLocked(value);
 		});
-	addGhostLock(
-		u"exteraless/ghost/lock/offline"_q,
-		tr::lng_settings_exteraless_ghost_lock_offline(),
-		Exteraless::Config::Instance().ghostSendOfflineAfterOnlineLocked(),
-		[](bool value) {
-			Exteraless::Config::Instance()
-				.setGhostSendOfflineAfterOnlineLocked(value);
-		});
-
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats"_q,
 		.title = tr::lng_settings_exteraless_chats(),

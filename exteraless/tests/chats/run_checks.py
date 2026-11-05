@@ -439,8 +439,7 @@ def check_backup(ledger, cli, work):
                 "OEGhostSendReadPackets",
                 "OEGhostSendReadStories",
                 "OEGhostSendOnline",
-                "OEGhostSendUploadProgress"))
-            and section.get("OEGhostSendOfflineAfterOnline") is False,
+                "OEGhostSendUploadProgress")),
             {key: section.get(key) for key in section
              if key.startswith("OEGhostSend")})
         ledger.check(
@@ -469,7 +468,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 53,
+            len(section) == 51,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -490,7 +489,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 58,
+            sum(len(value) for value in exported.values()) == 56,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -510,7 +509,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 58,
+                data.get("applied") == 56,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -548,7 +547,6 @@ def check_backup(ledger, cli, work):
             "OEGhostSendReadStories": False,
             "OEGhostSendOnline": False,
             "OEGhostSendUploadProgress": False,
-            "OEGhostSendOfflineAfterOnline": True,
             "OEGhostReadExclusions": {
                 "123": True,
                 "-456": True,
@@ -587,7 +585,6 @@ def check_backup(ledger, cli, work):
             "OEGhostSendStoriesLocked": False,
             "OEGhostSendOnlineLocked": False,
             "OEGhostSendUploadProgressLocked": False,
-            "OEGhostSendOfflineAfterOnlineLocked": False,
             "OEChatsTranslucentDeleted": False,
             "OEChatsUseDeletedIcon": False,
             "OEChatsCustomDeletedMark": "del",
@@ -618,7 +615,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 58,
+            data.get("applied") == 56,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -635,8 +632,7 @@ def check_backup(ledger, cli, work):
                 "OEGhostSendReadPackets",
                 "OEGhostSendReadStories",
                 "OEGhostSendOnline",
-                "OEGhostSendUploadProgress"))
-            and section.get("OEGhostSendOfflineAfterOnline") is True,
+                "OEGhostSendUploadProgress")),
             {key: section.get(key) for key in section
              if key.startswith("OEGhostSend")})
         ledger.check(
@@ -811,10 +807,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 58",
+            "backup legacy eight completed to 56",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (53, 3, 2),
+             len(sections["mainconfig"])) == (51, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1629,7 +1625,6 @@ def check_sticker_time(ledger, cli, work):
             "OEGhostSendStoriesLocked": False,
             "OEGhostSendOnlineLocked": False,
             "OEGhostSendUploadProgressLocked": False,
-            "OEGhostSendOfflineAfterOnlineLocked": False,
             "OEChatsTranslucentDeleted": False,
             "OEChatsUseDeletedIcon": False,
             "OEChatsCustomDeletedMark": "del",
@@ -1909,7 +1904,7 @@ def check_ghost(ledger, cli, work):
 
     env = make_env(work / "ghost-lock")
     data = json_call(
-        ledger, cli, ["ghost-lock", "1", "0", "0", "0", "0"], env,
+        ledger, cli, ["ghost-lock", "1", "0", "0", "0"], env,
         "ghost lock read")
     if data is not None:
         ledger.check(
@@ -1934,7 +1929,7 @@ def check_ghost(ledger, cli, work):
             and data.get("count") == 3,
             data)
     data = json_call(
-        ledger, cli, ["ghost-lock", "0", "0", "0", "0", "0"], env,
+        ledger, cli, ["ghost-lock", "0", "0", "0", "0"], env,
         "ghost unlock read")
     data = json_call(
         ledger, cli, ["ghost-set", "0"], env, "ghost locked batch off")

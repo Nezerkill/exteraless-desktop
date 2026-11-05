@@ -77,7 +77,7 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 58 desktop-ключей в секциях `exteraconfig`,
+  декодируются. Backup пишет все 56 desktop-ключей в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние.
 - Двойной тап по сообщению: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
@@ -91,7 +91,7 @@ sibling-чекаутом: `../exteraless`.
   возвращает дефолт.
 - Ghost: пункт главного меню включает/выключает все четыре тумблера и
   показывает `On`/`Off`/`Partial` при `OEGhostShowStatus`; статусные функции —
-  `exteraless/ghost_status.{h,cpp}`. Пять `OEGhostSend*Locked` защищают
+  `exteraless/ghost_status.{h,cpp}`. Четыре `OEGhostSend*Locked` защищают
   отдельные тумблеры от пакетного переключения и исключаются из статуса.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop

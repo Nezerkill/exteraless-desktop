@@ -93,8 +93,6 @@ public:
 	void setGhostSendOnline(bool value);
 	[[nodiscard]] bool ghostSendUploadProgress() const;
 	void setGhostSendUploadProgress(bool value);
-	[[nodiscard]] bool ghostSendOfflineAfterOnline() const;
-	void setGhostSendOfflineAfterOnline(bool value);
 	[[nodiscard]] bool ghostShowStatus() const;
 	void setGhostShowStatus(bool value);
 	[[nodiscard]] bool ghostSendReadLocked() const;
@@ -105,8 +103,6 @@ public:
 	void setGhostSendOnlineLocked(bool value);
 	[[nodiscard]] bool ghostSendUploadProgressLocked() const;
 	void setGhostSendUploadProgressLocked(bool value);
-	[[nodiscard]] bool ghostSendOfflineAfterOnlineLocked() const;
-	void setGhostSendOfflineAfterOnlineLocked(bool value);
 
 	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
 	void setGhostReadExcluded(qint64 peerId, bool value);

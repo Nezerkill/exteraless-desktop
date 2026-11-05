@@ -106,8 +106,8 @@ Desktop behavior of the Chats keys:
   `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
   `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
   names are never decoded.
-- `.extera` backup carries all 58 desktop keys in three sections
-  (`exteraconfig` 53, `pillstackconfig` 3, `mainconfig` 2); the old
+- `.extera` backup carries all 56 desktop keys in three sections
+  (`exteraconfig` 51, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
 - Verification: the chats runner has 363 checks, the plugin manifest runner 32,
@@ -143,7 +143,7 @@ inactive and the setting UI says so.
 ### Backup
 
 `.extera` is a JSON document wrapped in invisible Unicode characters. It
-contains all 58 desktop keys in three sections: `exteraconfig` (53 keys),
+contains all 56 desktop keys in three sections: `exteraconfig` (51 keys),
 `pillstackconfig` (3 keys) and `mainconfig` (2 keys). Import validates every
 known key, applies only the right type and range, and reports the rest as
 unknown; entries in `pillstackconfig`/`mainconfig` and unknown top-level
@@ -163,8 +163,7 @@ Android toggles from `NekoConfig`:
 - `sendReadMessagePackets` — read receipts and message contents;
 - `sendReadStoriesPackets` — story views;
 - `sendOnlinePackets` — online/offline status;
-- `sendUploadProgress` — typing and upload progress;
-- `sendOfflinePacketAfterOnline` — return offline after sending.
+- `sendUploadProgress` — typing and upload progress.
 
 Per-chat exclusions: `ghostModeReadExclusion_<id>` and
 `ghostModeTypingExclusion_<id>`.
@@ -175,7 +174,7 @@ Desktop implementation: an outbound MTP request filter before
 non-Ghost requests. The main menu item toggles all four switches in one click
 and shows `On` / `Off` / `Partial` when `OEGhostShowStatus` is enabled
 (`showGhostModeStatus` in `.extera`); `IsGhostActive` is strict (all four).
-Each of the four switches (plus the offline-after-online one) has a lock
+Each of the four switches has a lock
 (`OEGhostSend*Locked`): a locked switch is skipped by the batch toggle and
 excluded from the `On/Off/Partial` calculation.
 

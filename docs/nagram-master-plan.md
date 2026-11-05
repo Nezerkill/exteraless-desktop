@@ -166,7 +166,7 @@ worktree и печатает sha256.
 - `exteraless.json` лежит в `<workdir>/tdata` и следует `-workdir`; при
   первом запуске с другим workdir старый файл копируется, если нового ещё
   нет. CLI-тесты используют `EXTERALESS_WORKDIR` для изоляции.
-- Ghost: 4 из 5 функций; `OEGhostSendOfflineAfterOnline` мёртв (NB-38).
+- Ghost: 4/4 функции; мёртвый `OEGhostSendOfflineAfterOnline` удалён в NB-38.
   Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
 - Deleted messages: sidecar v2 с 17 полями (реакции, reply, forward,
   entities, дата правки, флаг прочтения); гейт, лимит и ротация закрыты в

@@ -53,7 +53,6 @@ constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 constexpr auto kGhostSendOnline = "OEGhostSendOnline";
 constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
-constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 constexpr auto kGhostShowStatus = "OEGhostShowStatus";
 constexpr auto kShowGhostModeStatus = "showGhostModeStatus";
 constexpr auto kGhostSendReadLocked = "OEGhostSendReadLocked";
@@ -61,16 +60,12 @@ constexpr auto kGhostSendStoriesLocked = "OEGhostSendStoriesLocked";
 constexpr auto kGhostSendOnlineLocked = "OEGhostSendOnlineLocked";
 constexpr auto kGhostSendUploadProgressLocked
 	= "OEGhostSendUploadProgressLocked";
-constexpr auto kGhostSendOfflineAfterOnlineLocked
-	= "OEGhostSendOfflineAfterOnlineLocked";
 constexpr auto kSendReadMessagePacketsLocked
 	= "sendReadMessagePacketsLocked";
 constexpr auto kSendReadStoriesPacketsLocked
 	= "sendReadStoriesPacketsLocked";
 constexpr auto kSendOnlinePacketsLocked = "sendOnlinePacketsLocked";
 constexpr auto kSendUploadProgressLocked = "sendUploadProgressLocked";
-constexpr auto kSendOfflinePacketAfterOnlineLocked
-	= "sendOfflinePacketAfterOnlineLocked";
 constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -226,16 +221,12 @@ QString BuildBackup() {
 	extera[kGhostSendReadStories] = config.ghostSendReadStories();
 	extera[kGhostSendOnline] = config.ghostSendOnline();
 	extera[kGhostSendUploadProgress] = config.ghostSendUploadProgress();
-	extera[kGhostSendOfflineAfterOnline]
-		= config.ghostSendOfflineAfterOnline();
 	extera[kGhostShowStatus] = config.ghostShowStatus();
 	extera[kGhostSendReadLocked] = config.ghostSendReadLocked();
 	extera[kGhostSendStoriesLocked] = config.ghostSendStoriesLocked();
 	extera[kGhostSendOnlineLocked] = config.ghostSendOnlineLocked();
 	extera[kGhostSendUploadProgressLocked]
 		= config.ghostSendUploadProgressLocked();
-	extera[kGhostSendOfflineAfterOnlineLocked]
-		= config.ghostSendOfflineAfterOnlineLocked();
 	extera[kGhostReadExclusions] = config.ghostReadExclusions();
 	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
 	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
@@ -387,8 +378,6 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setGhostSendOnline(value.toBool());
 		} else if (key == kGhostSendUploadProgress && value.isBool()) {
 			config.setGhostSendUploadProgress(value.toBool());
-		} else if (key == kGhostSendOfflineAfterOnline && value.isBool()) {
-			config.setGhostSendOfflineAfterOnline(value.toBool());
 		} else if ((key == kGhostShowStatus || key == kShowGhostModeStatus)
 			&& value.isBool()) {
 			config.setGhostShowStatus(value.toBool());
@@ -408,10 +397,6 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kSendUploadProgressLocked)
 			&& value.isBool()) {
 			config.setGhostSendUploadProgressLocked(value.toBool());
-		} else if ((key == kGhostSendOfflineAfterOnlineLocked
-			|| key == kSendOfflinePacketAfterOnlineLocked)
-			&& value.isBool()) {
-			config.setGhostSendOfflineAfterOnlineLocked(value.toBool());
 		} else if (key == kGhostReadExclusions && value.isObject()) {
 			config.setGhostReadExclusions(value.toObject());
 		} else if (key == kGhostTypingExclusions && value.isObject()) {

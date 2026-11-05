@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **58** | **58** | 58 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 58 | на момент аудита было 8; после NB-04…NB-36, NB-27 — все 58 desktop-ключей |
+| **Ключей форка desktop** | **56** | **56** | 56 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38 |
+| Ключей `.extera` | 8 | 8 | 56 | на момент аудита было 8; после NB-04…NB-38 — все 56 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -139,7 +139,7 @@ A–F. Это одно и то же деление, и ниже использу
 | 2 | Comma after mention | `OEAddCommaAfterMention` | `chat_helpers/field_autocomplete.cpp`, `window/window_peer_menu.cpp` | ✅ |
 | 3 | Exact counters | `OEGeneralDisableNumberRounding` | `lang/lang_tag.cpp` (`FormatCountToShort`) | ✅ для всех коротких счётчиков |
 | 4 | Proxy auto-disable (VPN / mobile / Wi-Fi) | `OEProxyDisableConditions`, `OEProxyAutoDisabled` | `exteraless/proxy_rules.cpp`, `exteraless/network.cpp`, `core/application.cpp` (`StartProxyRulesWatcher`) | ✅ |
-| 5 | Ghost: read / stories / online / typing | `OEGhostSendReadPackets`, `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress` | `exteraless/ghost_mode.cpp`, `exteraless/ghost_status.{h,cpp}` + `mtproto/mtproto_request_filter.h`, вызовы в `apiwrap.cpp`, `api/api_views.cpp`, `api/api_updates.cpp`, `api/api_send_progress.cpp`, `data/data_stories.cpp` | 🟡 4 из 5; пакетный тумблер и статус в меню — NB-17; пятый ключ мёртв |
+| 5 | Ghost: read / stories / online / typing | `OEGhostSendReadPackets`, `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress` | `exteraless/ghost_mode.cpp`, `exteraless/ghost_status.{h,cpp}` + `mtproto/mtproto_request_filter.h`, вызовы в `apiwrap.cpp`, `api/api_views.cpp`, `api/api_updates.cpp`, `api/api_send_progress.cpp`, `data/data_stories.cpp` | ✅ 4/4; пакетный тумблер и статус — NB-17; мёртвый offline-ключ удалён в NB-38 |
 | 6 | Ghost per-chat exclusions | `OEGhostReadExclusions`, `OEGhostTypingExclusions` | `exteraless/config.cpp`, подменю в `window/window_peer_menu.cpp` | 🟡 UI и запись есть, сетевой эффект не измерялся |
 | 7 | Deleted messages | `OESaveDeletedMessages` (default `false`) | `exteraless/deleted_entry.{h,cpp}`, `exteraless/deleted_messages.cpp`, `exteraless/deleted_messages_trim.h`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | ✅ схема v2 (17 полей) в NB-19; гейт, лимит и ротация — NB-02; метка — NB-20 (бокс), inline — NB-92 |
 | 8 | Remove message tail | `OEChatsRemoveMessageTail` | `history/view/history_view_message.cpp` (`skipTail` → `BubbleRounding`) | ✅ |
@@ -271,7 +271,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Не отправлять просмотры историй | `sendReadStoriesPackets` | ✅ `data/data_stories.cpp` |
 | Не отправлять online | `sendOnlinePackets` | ✅ `api/api_updates.cpp` |
 | Не отправлять typing/upload | `sendUploadProgress` | ✅ `api/api_send_progress.cpp`, `chat_helpers/emoji_interactions.cpp`, `history/history_streamed_drafts.cpp` |
-| Offline после online | `sendOfflinePacketAfterOnline` | 🟡 ключ `OEGhostSendOfflineAfterOnline` объявлен и экспортируется, но не читается |
+| Offline после online | `sendOfflinePacketAfterOnline` | ❌ ключ удалён в NB-38: семантика Android не реализуема без прямого управления статусом |
 | Per-chat исключения | `ghostModeReadExclusion_<id>`, `ghostModeTypingExclusion_<id>` | ✅/🟡 UI и запись есть, сетевой эффект не измерялся |
 | Пакетный переключатель и статус | `setGhostMode`/`toggleGhostMode`, `showGhostModeStatus`, `showGhostInDrawer` | ❌ (пункт меню Ghost есть, статуса и тумблера «всё сразу» нет) |
 | «Locked» тумблеры | `*Locked` (5 ключей) | ❌ |
@@ -522,7 +522,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 | M2 | Deleted messages: мёртвый ключ, всегда включено, без лимита | `exteraless/config.cpp` (`saveDeletedMessages`), `exteraless/deleted_messages.cpp`, `core/application.cpp` (`attach`) | было: `OESaveDeletedMessages` записан и принимается `fromJson`, но не читается; запись шла всегда; `save()` синхронно перезаписывает весь JSON на каждое удаление, без cap и ротации | 🔧 закрыто: NB-02 (гейт/лимит/ротация) и NB-19 (схема v2, 17 полей, совместимость с v1) |
 | M3 | docs: «UI: a deleted-message mark in the chat» | `docs/feature-mapping.md`, раздел Deleted messages | метки в чате нет: `DeletedMessages` используется только в `window/window_peer_menu.cpp` (счётчик и бокс), `history/view/**` о ней не знает | открыто, P1 |
 | M4 | docs: «On `UpdateDeleteMessages`, the message is saved before the local history is cleared» | там же | реализация висит на `session->data().itemsAboutToBeDestroyed`, то есть ловит любое уничтожение элемента (очистка истории, выход из канала, сброс кэша), а не только серверное удаление | открыто, P1 |
-| M5 | `OEGhostSendOfflineAfterOnline` — мёртвый ключ | `exteraless/config.cpp` | объявлен, но нигде не читается и нет в UI; в `.extera` экспортируется для полноты, семантика Android `sendOfflinePacketAfterOnline` не реализована | открыто, P1 |
+| M5 | `OEGhostSendOfflineAfterOnline` — мёртвый ключ | `exteraless/config.cpp` | объявлен, но нигде не читается; в `.extera` экспортировался | ✅ закрыто в NB-38: ключ и его lock удалены |
 | M6 | docs: «Reactions in the pinned bar can keep their old state until a restart» | `docs/feature-mapping.md`, Chats | в 7.3.1 нет pinned-reactions бара: поиск по `pinnedReactions` и `ReactionsStrip` по `Telegram/SourceFiles` пуст, файлов `history_view_reactions*` нет | устаревшее утверждение, P2 |
 | M7 | `result/` устарел | `result/bin/.Telegram-wrapped` (симлинк/деривация от 2026-11-01) против `out/bin/Telegram` (2026-11-04) | в Nix-бинарнике нет `Plugin sandbox is unavailable` и новых строк; `STATUS.md` признаёт, что пакет не пересобран, но в «Проверках» всё ещё ссылается на старый `result` как на проверенный | открыто, P1 |
 | M8 | `nix/smoke-test.sh` запускает каталог | `nix/smoke-test.sh` | запускается `./out/Telegram`, а это build-каталог; реальный бинарник — `out/bin/Telegram` | открыто, P1 |
@@ -553,7 +553,7 @@ M-нумерацию:
 
 | Пункт | Отчёт 1 | Отчёт 2 | Проверка в дереве | Вывод |
 |---|---|---|---|---|
-| Ghost-полнота | 5 из 5 ключей ✅, включая `OEGhostSendOfflineAfterOnline` | 4 из 5: offline-ключ мёртв | ключ встречается только в `exteraless/config.{h,cpp}` | 4 из 5, ключ мёртв |
+| Ghost-полнота | 5 из 5 ключей ✅, включая `OEGhostSendOfflineAfterOnline` | 4 из 5: offline-ключ мёртв | ключ удалён в NB-38 | 4/4, мёртвых ключей нет |
 | Deleted messages | ✅ реализовано (`OESaveDeletedMessages` + модуль) | P0: ключ не читается, запись всегда включена, нет лимита | гейт/лимит/ротация — NB-02, схема v2 — NB-19, метка в боксе — NB-20; inline-показ — NB-92 | частично: inline открыт |
 | `NaConfig` | 242 ключа | 267 `val` | 250 `addConfig` | 242–250 пользовательских настроек |
 | `NekoConfig` | 97 | 98 `addConfig` | 98 `addConfig` | 98 |
@@ -592,7 +592,7 @@ M-нумерацию:
 `OERelativeLastSeen`, `OEAddCommaAfterMention`, `OEGeneralDisableNumberRounding`,
 `OEProxyDisableConditions`, `OEProxyAutoDisabled`, `OEGhostSendReadPackets`,
 `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress`,
-`OEGhostSendOfflineAfterOnline` (мёртвый), `OEGhostReadExclusions`,
+`OEGhostReadExclusions`,
 `OEGhostTypingExclusions`, `OESaveDeletedMessages`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEMainMenuOrder`,
 `OEDrawerAccountsExpanded`, `OEPluginStates`, `OEChatsRemoveMessageTail`,
@@ -604,15 +604,15 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (58)
+## 13. Приложение B. Ключи `.extera` (56)
 
-Секция `exteraconfig` (53): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (51): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
 `hideReactionsInPrivateChats`, `OEGhostSendReadPackets`,
 `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress`,
-`OEGhostSendOfflineAfterOnline`, `OEGhostReadExclusions`,
+`OEGhostReadExclusions`,
 `OEGhostTypingExclusions`, `OESaveDeletedMessages`, `OEProxyAutoDisabled`,
 `OEPluginStates`, `OEChatsStripTrackingOnOpen`,
 `OEChatsStripTrackingOnPaste`, `OEChatsUnreadCapsule`,
@@ -623,7 +623,7 @@ M-нумерацию:
 `OEChatsDoubleTapOut`, `OEChatsStickerTimeSide`, `OEChatsHideStickerTime`,
 `OEGhostShowStatus`, `OEGhostSendReadLocked`, `OEGhostSendStoriesLocked`,
 `OEGhostSendOnlineLocked`, `OEGhostSendUploadProgressLocked`,
-`OEGhostSendOfflineAfterOnlineLocked`, `OEChatsTranslucentDeleted`,
+`OEChatsTranslucentDeleted`,
 `OEChatsUseDeletedIcon`, `OEChatsCustomDeletedMark`,
 `OEChatsDeletedMarkColor`, `OEChatsPanguOnSending`,
 `OEChatsSilentByDefault`, `OESettingsHidePremium`, `OESettingsHideHelp`,

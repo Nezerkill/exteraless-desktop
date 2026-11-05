@@ -38,15 +38,12 @@ constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 constexpr auto kGhostSendOnline = "OEGhostSendOnline";
 constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
-constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 constexpr auto kGhostShowStatus = "OEGhostShowStatus";
 constexpr auto kGhostSendReadLocked = "OEGhostSendReadLocked";
 constexpr auto kGhostSendStoriesLocked = "OEGhostSendStoriesLocked";
 constexpr auto kGhostSendOnlineLocked = "OEGhostSendOnlineLocked";
 constexpr auto kGhostSendUploadProgressLocked
 	= "OEGhostSendUploadProgressLocked";
-constexpr auto kGhostSendOfflineAfterOnlineLocked
-	= "OEGhostSendOfflineAfterOnlineLocked";
 constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -368,14 +365,6 @@ void Config::setGhostSendUploadProgress(bool value) {
 	setValue(kGhostSendUploadProgress, value);
 }
 
-bool Config::ghostSendOfflineAfterOnline() const {
-	return boolValue(kGhostSendOfflineAfterOnline, false);
-}
-
-void Config::setGhostSendOfflineAfterOnline(bool value) {
-	setValue(kGhostSendOfflineAfterOnline, value);
-}
-
 bool Config::ghostShowStatus() const {
 	return boolValue(kGhostShowStatus, false);
 }
@@ -414,14 +403,6 @@ bool Config::ghostSendUploadProgressLocked() const {
 
 void Config::setGhostSendUploadProgressLocked(bool value) {
 	setValue(kGhostSendUploadProgressLocked, value);
-}
-
-bool Config::ghostSendOfflineAfterOnlineLocked() const {
-	return boolValue(kGhostSendOfflineAfterOnlineLocked, false);
-}
-
-void Config::setGhostSendOfflineAfterOnlineLocked(bool value) {
-	setValue(kGhostSendOfflineAfterOnlineLocked, value);
 }
 
 bool Config::ghostReadExcluded(qint64 peerId) const {
@@ -719,13 +700,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGhostSendReadStories
 			|| key == kGhostSendOnline
 			|| key == kGhostSendUploadProgress
-			|| key == kGhostSendOfflineAfterOnline
 			|| key == kGhostShowStatus
 			|| key == kGhostSendReadLocked
 			|| key == kGhostSendStoriesLocked
 			|| key == kGhostSendOnlineLocked
 			|| key == kGhostSendUploadProgressLocked
-			|| key == kGhostSendOfflineAfterOnlineLocked
 			|| key == kGhostReadExclusions
 			|| key == kGhostTypingExclusions
 			|| key == kSaveDeletedMessages

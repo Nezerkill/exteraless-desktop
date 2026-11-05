@@ -87,6 +87,10 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
+- Ghost offline-ключ (NB-38): мёртвые `OEGhostSendOfflineAfterOnline` и
+  `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
+  в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
+  изменение только удаляет неиспользуемую настройку.
 - Chats: `exteraless/tests/chats/run_checks.py` — 363 проверки PASS
   (44 strip, 10 reactions, 19 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
@@ -138,10 +142,10 @@
   messages» показывает реакцию и метку reply; попутно исправлен use-after-free
   захвата `controller`/`peer` в `window_peer_menu.cpp` (раньше бокс мог не
   открыться или упасть).
-- Ghost locked-тумблеры (NB-18): пять настроек `OEGhostSendReadLocked`,
+- Ghost locked-тумблеры (NB-18): четыре настройки `OEGhostSendReadLocked`,
   `OEGhostSendStoriesLocked`, `OEGhostSendOnlineLocked`,
-  `OEGhostSendUploadProgressLocked`, `OEGhostSendOfflineAfterOnlineLocked`
-  (суммарно 49 ключей) исключают отдельные тумблеры из пакетного переключения
+  `OEGhostSendUploadProgressLocked` исключают отдельные тумблеры из пакетного
+  переключения
   и из расчёта `On/Off/Partial`; в настройках появилась подсекция
   «Locked Ghost settings». CLI `ghost-lock` и `ghost` (19 проверок) проверяют
   установку, пропуск locked в batch, `fromJson` и Android-алиасы
@@ -259,8 +263,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `818bc7a1…`,
-  mtime 2026-11-05 08:59; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `cd12defe…`,
+  mtime 2026-11-05 09:10; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
