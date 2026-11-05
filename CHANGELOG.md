@@ -2,6 +2,9 @@
 
 ## 2026-11-05
 
+- Docs: `feature-mapping.md` сверен с кодом — Deleted messages описывает
+  схему v2 и метку в боксе, удалено несуществующее `pinnedReactions`-
+  утверждение; hook-раздел соответствует `plugin_runtime.cpp`.
 - Ghost: мёртвые ключи `OEGhostSendOfflineAfterOnline` и
   `OEGhostSendOfflineAfterOnlineLocked` удалены из конфига, `.extera` и UI;
   `.extera` теперь содержит 56 ключей. Семантика Android-настройки требует

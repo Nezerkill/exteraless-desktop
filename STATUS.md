@@ -87,6 +87,9 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
+- Docs (NB-39): `docs/feature-mapping.md` сверен с кодом, убрано
+  несуществующее утверждение о `pinnedReactions`; Deleted messages описывает
+  схему v2 и метку в боксе (inline — NB-92).
 - Ghost offline-ключ (NB-38): мёртвые `OEGhostSendOfflineAfterOnline` и
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —

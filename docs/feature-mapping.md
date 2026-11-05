@@ -85,8 +85,10 @@ Desktop behavior of the Chats keys:
 
 - `OEChatsRemoveMessageTail` and `OEChatsHideReactions*` are read when a chat
   view is built, so a change applies after the chat is closed and reopened, or
-  after a restart. Reactions in the pinned bar can keep their old state until
-  a restart. Hiding reactions removes the reactions list and its click target;
+  after a restart. There is no dedicated pinned-bar refresh hook
+  (`pinnedReactions` does not exist in the tree); the pinned bar is rebuilt
+  together with the chat view. Hiding reactions removes the reactions list and
+  its click target;
   server-side reactions and counters are not changed, and no overlay or extra
   box is added. The unread capsule is read on every paint and applies without
   reopening the chat.
