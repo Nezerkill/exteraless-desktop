@@ -80,6 +80,8 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
+- Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
+  путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
 - Chats: `exteraless/tests/chats/run_checks.py` — 304 проверки PASS
   (44 strip, 10 reactions, 13 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,

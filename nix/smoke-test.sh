@@ -8,7 +8,10 @@ mkdir -p .smoke
 
 set +e
 timeout 30s nix develop --command bash -c '
-  LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./out/Telegram -workdir "$PWD/.smoke" -noupdate
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(echo "$NIX_LDFLAGS" \
+    | sed -E "s/-rpath [^ ]+//g; s/-L([^ ]+)/\1/g" \
+    | tr -s " " ":" | sed "s/^://; s/:$//")"
+  LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ./out/bin/Telegram -workdir "$PWD/.smoke" -noupdate
 '
 status=$?
 set -e

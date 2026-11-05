@@ -2,6 +2,8 @@
 
 ## 2026-11-05
 
+- Сборка: `nix/smoke-test.sh` запускает `out/bin/Telegram` и собирает
+  `LD_LIBRARY_PATH` из `NIX_LDFLAGS`, smoke-тест проходит (30 с).
 - Deleted messages / Mark: настройки `OEChatsTranslucentDeleted` (default
   `true`), `OEChatsUseDeletedIcon` (default `true`), `OEChatsCustomDeletedMark`
   (default пусто) и `OEChatsDeletedMarkColor` (default `0`); бокс удалённых
