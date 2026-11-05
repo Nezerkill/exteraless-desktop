@@ -96,6 +96,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli always-show-download-set <0|1>\n"
 		<< "  exteraless-chats-cli false-bottom\n"
 		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
+		<< "  exteraless-chats-cli decoration\n"
+		<< "  exteraless-chats-cli decoration-set <0|1|2|3>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -631,6 +633,28 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setFalseBottom(value);
 		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("decoration")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("value"),
+				Exteraless::Config::Instance().decoration() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("decoration-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto value = arguments[2].toInt();
+		if (value < 0 || value > 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setDecoration(value);
+		std::cout << value << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("chat-menu")) {

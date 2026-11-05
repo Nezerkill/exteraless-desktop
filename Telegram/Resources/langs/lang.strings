@@ -9243,6 +9243,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_false_bottom_passcode" = "Local passcode";
 "lng_settings_exteraless_false_bottom_lock" = "Lock now";
 "lng_settings_exteraless_false_bottom_no_passcode" = "Set a local passcode to protect this section.";
+"lng_settings_exteraless_decoration" = "Chat decoration";
+"lng_settings_exteraless_decoration_off" = "Off";
+"lng_settings_exteraless_decoration_snow" = "Snowflakes";
+"lng_settings_exteraless_decoration_fireworks" = "Fireworks";
+"lng_settings_exteraless_decoration_date" = "Depends on date";
 "lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 "lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 "lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";

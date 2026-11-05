@@ -214,6 +214,55 @@ const auto kMeta = Builder::BuildHelper({
 		}, hideAi->lifetime());
 	}
 
+	const auto decorationLabel = [](int value) {
+		switch (value) {
+		case 1: return tr::lng_settings_exteraless_decoration_snow(tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_decoration_fireworks(tr::now);
+		case 3:
+			return tr::lng_settings_exteraless_decoration_date(tr::now);
+		}
+		return tr::lng_settings_exteraless_decoration_off(tr::now);
+	};
+	const auto decoration = std::make_shared<rpl::variable<QString>>(
+		decorationLabel(Exteraless::Config::Instance().decoration()));
+	builder.addButton({
+		.id = u"exteraless/chat-decoration"_q,
+		.title = tr::lng_settings_exteraless_decoration(),
+		.st = &st::settingsButtonNoIcon,
+		.label = decoration->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().decoration());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_decoration());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 4; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							decorationLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance().setDecoration(value);
+					decoration->force_assign(decorationLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"decoration"_q, u"snow"_q, u"fireworks"_q },
+	});
+
 	const auto saveSubfolder = builder.addButton({
 		.id = u"exteraless/save-chat-subfolder"_q,
 		.title = tr::lng_settings_exteraless_save_chat_subfolder(),

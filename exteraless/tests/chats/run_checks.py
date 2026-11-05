@@ -180,6 +180,8 @@ def check_cli_args(ledger, cli):
         ("always-show-download-set with wrong count",
          ["always-show-download-set"]),
         ("false-bottom-set with wrong count", ["false-bottom-set"]),
+        ("decoration-set with wrong count", ["decoration-set"]),
+        ("decoration-set out of range", ["decoration-set", "7"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -492,7 +494,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 71,
+            len(section) == 72,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -513,7 +515,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 76,
+            sum(len(value) for value in exported.values()) == 77,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -533,7 +535,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 76,
+                data.get("applied") == 77,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -638,6 +640,7 @@ def check_backup(ledger, cli, work):
             "OEChatsHideAllChatsFolder": True,
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
+            "OEAppearanceChatDecoration": 1,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -659,7 +662,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 76,
+            data.get("applied") == 77,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -754,6 +757,10 @@ def check_backup(ledger, cli, work):
             "backup full false bottom",
             section.get("OEPrivacyFalseBottom") is True,
             section.get("OEPrivacyFalseBottom"))
+        ledger.check(
+            "backup full decoration",
+            section.get("OEAppearanceChatDecoration") == 1,
+            section.get("OEAppearanceChatDecoration"))
         ledger.check(
             "backup full disable link preview",
             section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -917,10 +924,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 76",
+            "backup legacy eight completed to 77",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (71, 3, 2),
+             len(sections["mainconfig"])) == (72, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1764,6 +1771,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsHideAllChatsFolder": True,
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
+            "OEAppearanceChatDecoration": 1,
         },
     }
     data = json_call(
@@ -3686,6 +3694,61 @@ def check_false_bottom(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_decoration(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "decoration-defaults")
+    data = json_call(
+        ledger, cli, ["decoration"], env,
+        "decoration defaults")
+    if data is not None:
+        ledger.check("decoration default off", data.get("value") == 0, data)
+
+    data = json_call(
+        ledger, cli, ["decoration-set", "1"], env,
+        "decoration set")
+    if data is not None:
+        ledger.check("decoration set snow", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["decoration"], env,
+        "decoration reload")
+    if reloaded is not None:
+        ledger.check(
+            "decoration persisted",
+            reloaded.get("value") == 1,
+            reloaded)
+
+    env = make_env(work / "decoration-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "actionBarDecoration": 2,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "decoration alias")
+    if data is not None:
+        ledger.check(
+            "decoration alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["decoration"], env,
+        "decoration alias read")
+    if reloaded is not None:
+        ledger.check(
+            "decoration alias value",
+            reloaded.get("value") == 2,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3730,6 +3793,7 @@ def main():
         hide_all_chats = check_hide_all_chats(ledger, cli, work)
         always_show_download = check_always_show_download(ledger, cli, work)
         false_bottom = check_false_bottom(ledger, cli, work)
+        decoration = check_decoration(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3769,6 +3833,7 @@ def main():
     print(f"always-show-download: "
           f"{always_show_download[0] - always_show_download[1]} passed")
     print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
+    print(f"decoration: {decoration[0] - decoration[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

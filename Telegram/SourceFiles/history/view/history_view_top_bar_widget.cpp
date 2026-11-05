@@ -58,6 +58,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_changes.h"
 #include "data/data_forum_topic.h"
 #include "data/data_send_action.h"
+#include "exteraless/config.h"
+#include "ui/effects/animations.h"
+
+#include <QDate>
+#include <cmath>
 #include "dialogs/dialogs_main_list.h"
 #include "chat_helpers/emoji_interactions.h"
 #include "base/call_delayed.h"
@@ -97,6 +102,118 @@ QString TopBarNameText(
 	}
 	return peer->topBarNameText();
 }
+
+enum class DecorationMode {
+	None,
+	Snow,
+	Fireworks,
+};
+
+[[nodiscard]] DecorationMode ResolveDecorationMode() {
+	switch (Exteraless::Config::Instance().decoration()) {
+	case 1: return DecorationMode::Snow;
+	case 2: return DecorationMode::Fireworks;
+	case 3: {
+		const auto month = QDate::currentDate().month();
+		return (month == 12 || month == 1)
+			? DecorationMode::Snow
+			: DecorationMode::None;
+	}
+	}
+	return DecorationMode::None;
+}
+
+void PaintSnowflakes(Painter &p, const QRect &rect, crl::time now) {
+	const auto width = std::max(rect.width(), 1);
+	const auto height = std::max(rect.height(), 1);
+	const auto t = float64(now);
+	p.setPen(Qt::NoPen);
+	for (auto i = 0; i != 16; ++i) {
+		const auto seed = quint32(i) * 2654435761u;
+		const auto speed = 14. + float64(seed % 7) * 5.;
+		const auto y0 = float64((seed >> 8) % quint32(height + 20));
+		const auto y = std::fmod(
+			y0 + t * speed / 1000.,
+			float64(height + 20)) - 10.;
+		const auto x = float64(seed % quint32(width))
+			+ std::sin(t / 700. + float64(i)) * 5.;
+		const auto radius = 1.6 + float64(seed % 3) * 0.9;
+		auto color = st::windowActiveTextFg->c;
+		color.setAlphaF(0.30 + 0.45 * float64((seed >> 4) % 5) / 4.);
+		p.setBrush(color);
+		p.drawEllipse(QPointF(x, y), radius, radius);
+	}
+}
+
+void PaintFireworks(Painter &p, const QRect &rect, crl::time now) {
+	const auto width = std::max(rect.width() - 80, 1);
+	const auto height = std::max(rect.height() - 24, 1);
+	constexpr auto kCycle = crl::time(1600);
+	p.setPen(Qt::NoPen);
+	for (auto burst = 0; burst != 3; ++burst) {
+		const auto start = (now / kCycle) * kCycle
+			+ crl::time(burst * (int(kCycle) / 3));
+		const auto age = float64(now - start) / float64(kCycle);
+		if (age < 0. || age > 1.) {
+			continue;
+		}
+		const auto seed = quint32(burst * 97)
+			+ quint32(now / kCycle) * 131;
+		const auto center = QPointF(
+			40. + float64(seed % quint32(width)),
+			12. + float64((seed >> 7) % quint32(height)));
+		const auto alpha = (1. - age);
+		for (auto i = 0; i != 12; ++i) {
+			const auto angle = i * (2. * M_PI / 12.);
+			const auto distance = age * 24.;
+			const auto x = center.x() + std::cos(angle) * distance;
+			const auto y = center.y()
+				+ std::sin(angle) * distance
+				+ age * age * 8.;
+			auto color = st::windowActiveTextFg->c;
+			color.setAlphaF(alpha * 0.8);
+			p.setBrush(color);
+			p.drawEllipse(QPointF(x, y), 1.5, 1.5);
+		}
+	}
+}
+
+class DecorationLayer final : public Ui::RpWidget {
+public:
+	explicit DecorationLayer(Ui::RpWidget *parent)
+	: RpWidget(parent) {
+		setAttribute(Qt::WA_TransparentForMouseEvents);
+		_animation.init([=] { update(); });
+		parent->sizeValue(
+		) | rpl::on_next([=](QSize size) {
+			setGeometry(QRect(QPoint(), size));
+		}, lifetime());
+	}
+
+protected:
+	void paintEvent(QPaintEvent *e) override {
+		const auto mode = ResolveDecorationMode();
+		if (mode == DecorationMode::None) {
+			if (_animation.animating()) {
+				_animation.stop();
+			}
+			return;
+		} else if (!_animation.animating()) {
+			_animation.start();
+		}
+		auto p = Painter(this);
+		const auto now = crl::now();
+		if (mode == DecorationMode::Snow) {
+			PaintSnowflakes(p, rect(), now);
+		} else {
+			PaintFireworks(p, rect(), now);
+		}
+	}
+
+private:
+	Ui::Animations::Basic _animation;
+
+};
 
 } // namespace
 
@@ -265,6 +382,10 @@ TopBarWidget::TopBarWidget(
 	_menuToggle->setAccessibleName(tr::lng_chat_menu(tr::now));
 	_back->setAccessibleName(tr::lng_go_back(tr::now));
 	_cancelChoose->setAccessibleName(tr::lng_cancel(tr::now));
+
+	const auto decoration = Ui::CreateChild<DecorationLayer>(this);
+	decoration->raise();
+	decoration->show();
 }
 
 TopBarWidget::~TopBarWidget() = default;

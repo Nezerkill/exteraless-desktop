@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Appearance / Chat decoration: настройка `OEAppearanceChatDecoration`
+  (default `0` = выключено) рисует снежинки (`1`), фейерверк (`2`) или декор
+  по дате (`3`, снежинки в декабре и январе) поверх шапки чата; слой прозрачен
+  для мыши и не меняет геометрию шапки. Android-алиасы `actionBarDecoration`
+  и `chatDecoration` конвертируются в `.extera` (всего 77 ключей).
 - Privacy / False bottom: настройка `OEPrivacyFalseBottom` (default `false`)
   добавляет в конец раздела Exteraless скрытую секцию «Двойное дно». Если
   задан локальный пароль, секция открывается только после его ввода; неверный

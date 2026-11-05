@@ -3,6 +3,7 @@
 #include "exteraless/doubletap.h"
 
 #include <QDir>
+#include <algorithm>
 #include <array>
 #include <QFile>
 #include <QFileInfo>
@@ -47,6 +48,7 @@ constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefaul
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
+constexpr auto kDecoration = "OEAppearanceChatDecoration";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -472,6 +474,14 @@ bool Config::falseBottom() const {
 
 void Config::setFalseBottom(bool value) {
 	setValue(kFalseBottom, value);
+}
+
+int Config::decoration() const {
+	return std::clamp(intValue(kDecoration, 0), 0, 3);
+}
+
+void Config::setDecoration(int value) {
+	setValue(kDecoration, std::clamp(value, 0, 3));
 }
 
 bool Config::useDeletedIcon() const {
@@ -903,6 +913,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kHideAllChatsFolder
 			|| key == kAlwaysShowDownloadIcon
 			|| key == kFalseBottom
+			|| key == kDecoration
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

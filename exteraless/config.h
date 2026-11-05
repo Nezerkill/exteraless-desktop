@@ -109,6 +109,8 @@ public:
 	void setAlwaysShowDownloadIcon(bool value);
 	[[nodiscard]] bool falseBottom() const;
 	void setFalseBottom(bool value);
+	[[nodiscard]] int decoration() const;
+	void setDecoration(int value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

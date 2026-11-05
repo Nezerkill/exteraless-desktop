@@ -50,6 +50,7 @@ constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefaul
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
+constexpr auto kDecoration = "OEAppearanceChatDecoration";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -71,6 +72,8 @@ constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
 constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
 constexpr auto kFalseBottomAlias = "falseBottom";
 constexpr auto kFalseBottomAliasUpper = "FalseBottom";
+constexpr auto kActionBarDecorationAlias = "actionBarDecoration";
+constexpr auto kChatDecorationAlias = "chatDecoration";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -310,6 +313,7 @@ QString BuildBackup() {
 	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
 	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 	extera[kFalseBottom] = config.falseBottom();
+	extera[kDecoration] = config.decoration();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -584,6 +588,23 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kFalseBottomAliasUpper)
 			&& value.isBool()) {
 			config.setFalseBottom(value.toBool());
+		} else if (key == kActionBarDecorationAlias
+			&& value.isDouble()
+			&& value.toInt() >= 0
+			&& value.toInt() <= 3) {
+			const auto map = std::array{ 3, 1, 2, 0 };
+			config.setDecoration(map[value.toInt()]);
+		} else if (key == kChatDecorationAlias
+			&& value.isDouble()
+			&& value.toInt() >= 0
+			&& value.toInt() <= 2) {
+			const auto map = std::array{ 3, 1, 0 };
+			config.setDecoration(map[value.toInt()]);
+		} else if (key == kDecoration
+			&& value.isDouble()
+			&& value.toInt() >= 0
+			&& value.toInt() <= 3) {
+			config.setDecoration(value.toInt());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0
