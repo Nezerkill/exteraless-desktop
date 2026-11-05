@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(460 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, backup),
+(470 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -166,7 +166,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-69 | Размер и форма стикеров | `NekoConfig.stickerSize`, `OEChatsStickerShape` | `history/view/media/history_view_sticker.cpp`; уже есть `base::options::option<int> OptionStickerSize` | S–M · низкий | Xvfb: ползунок 8..20 и три формы | ⬜ | R2 §3.2 |
 | NB-70 | Оформление цитаты ответа | `replyColors`, `replyEmoji`, `replyBackground`, `messageColoredBackground` | `history/view/history_view_reply.cpp` | M · средний | Xvfb: цитата в трёх режимах, ширина не ломается | ⬜ | R2 §3.2 |
 | NB-71 | Результаты опроса до голосования | `OEChatsShowResultsBeforeVoting` | `data/data_poll.cpp`, `history/view/media/history_view_poll.cpp` | M · средний | Xvfb: проценты видны до голоса, после голоса поведение как раньше | ⬜ | R2 §3.2 |
-| NB-72 | Длительность перемотки двойным тапом | `OEChatsDoubleTapSeekDuration` | `core/core_settings.cpp` (действие уже есть) + seek круглого видео | S · низкий | Xvfb: 5/10/15/30 с | ⬜ | R2 §3.2 |
+| NB-72 | Длительность перемотки двойным тапом | `OEChatsDoubleTapSeekDuration` | `exteraless/config.{h,cpp}`, `media/view/media_view_overlay_widget.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: 5/10/15/30 с | ✅ 2026-11-05: `OEChatsSeekDuration` (5/10/15/30, default 5) задаёт шаг перемотки стрелками, J/L — двойной шаг; Android-индекс `doubleTapSeekDuration` конвертируется; CLI `seek-duration` (8 проверок), Xvfb: селектор в Chats | R2 §3.2 |
 | NB-73 | Скрыть кнопки профиля: gift, money, call, share, search | `hideGiftButton`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton` | `info/profile/info_profile_top_bar.cpp`, `history/view/history_view_top_bar_widget.cpp` | S–M · низкий | Xvfb: кнопки скрыты в канале и в профиле, действия доступны из меню | ⬜ | R2 §3.2 (дополняет NB-35: там compose, здесь профиль) |
 | NB-74 | Отключить превью ссылок по умолчанию | `NekoConfig.disableLinkPreviewByDefault` | `chat_helpers/compose/*`, `chat_helpers/message_field.cpp` | M · средний | Xvfb: toggle превью выключен при вставке ссылки | ⬜ | R2 §3.1 |
 | NB-75 | Всегда показывать иконку скачивания | `NaConfig.alwaysShowDownloadIcon` | `history/view/media/*`, `dialogs/` | M · средний | Xvfb: иконка есть у незагруженного и загруженного медиа | ⬜ | R2 §3.1 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 460 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 470 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

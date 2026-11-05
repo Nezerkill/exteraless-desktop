@@ -472,6 +472,45 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setHideSendAsPeer(value);
 		});
+	const auto seekDuration = std::make_shared<rpl::variable<QString>>(
+		u"%1 s"_q.arg(Exteraless::Config::Instance().seekDuration()));
+	builder.addButton({
+		.id = u"exteraless/chats/seek-duration"_q,
+		.title = tr::lng_settings_exteraless_chats_seek_duration(),
+		.st = &st::settingsButtonNoIcon,
+		.label = seekDuration->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().seekDuration());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_seek_duration());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (const auto seconds : { 5, 10, 15, 30 }) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							seconds,
+							u"%1 s"_q.arg(seconds),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int seconds) {
+					Exteraless::Config::Instance().setSeekDuration(seconds);
+					seekDuration->force_assign(u"%1 s"_q.arg(seconds));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"seek"_q, u"duration"_q, u"player"_q },
+	});
 	addChatsToggle(
 		u"exteraless/chats/inline-math"_q,
 		tr::lng_settings_exteraless_chats_inline_math(),

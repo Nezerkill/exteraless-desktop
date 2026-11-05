@@ -88,6 +88,8 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli seek-duration\n"
+		<< "  exteraless-chats-cli seek-duration-set <seconds>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
 		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -521,6 +523,32 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("seek-duration")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("seconds"),
+				Exteraless::Config::Instance().seekDuration() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("seek-duration-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSeekDuration(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("seconds"),
+				Exteraless::Config::Instance().seekDuration() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("save-subfolder")) {

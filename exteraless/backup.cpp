@@ -34,6 +34,8 @@ constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
+constexpr auto kSeekDuration = "OEChatsSeekDuration";
+constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
 constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 constexpr auto kInlineMathAlias = "inlineMathResult";
@@ -253,6 +255,7 @@ QString BuildBackup() {
 	extera[kInlineMathResult] = config.inlineMathResult();
 	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 	extera[kGhostScheduledSend] = config.ghostScheduledSend();
+	extera[kSeekDuration] = config.seekDuration();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -460,6 +463,19 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kGhostScheduledSendAlias)
 			&& value.isBool()) {
 			config.setGhostScheduledSend(value.toBool());
+		} else if (key == kSeekDuration
+			&& value.isDouble()
+			&& (value.toInt() == 5
+				|| value.toInt() == 10
+				|| value.toInt() == 15
+				|| value.toInt() == 30)) {
+			config.setSeekDuration(value.toInt());
+		} else if (key == kSeekDurationAlias
+			&& value.isDouble()
+			&& value.toInt() >= 0
+			&& value.toInt() <= 3) {
+			const auto durations = std::array{ 5, 10, 15, 30 };
+			config.setSeekDuration(durations[value.toInt()]);
 		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 			&& value.isBool()) {
 			config.setUseDeletedIcon(value.toBool());

@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..1c1a865 100644
+index ffc8ec9..7b9a131 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,101 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,102 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -140,6 +140,7 @@ index ffc8ec9..1c1a865 100644
 +"lng_settings_exteraless_chats_silent_by_default" = "Send messages silently by default";
 +"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 +"lng_settings_exteraless_chats_inline_math" = "Inline math: press Space after \"2+2=\"";
++"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_double_tap_title" = "Double tap action";
 +"lng_settings_exteraless_double_tap_in" = "On incoming messages";
 +"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
@@ -4759,6 +4760,61 @@ index 2721c7a..6bfa900 100644
  	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
  	_mtp->writeKeysRequests(
  	) | rpl::filter([=] {
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
+index 2acbe80..573f0d7 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
+@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "boxes/premium_preview_box.h"
+ #include "calls/calls_instance.h"
+ #include "core/application.h"
++#include "exteraless/config.h"
+ #include "core/click_handler_types.h"
+ #include "core/core_screenshot_protection.h"
+ #include "core/file_utilities.h"
+@@ -205,8 +206,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
+ constexpr auto kZoomToScreenLevel = 1024;
+ constexpr auto kPinchZoomStep = 0.25;
+ constexpr auto kOverlayLoaderPriority = 2;
+-constexpr auto kSeekTimeMs = 5 * crl::time(1000);
+-constexpr auto kSeekTimeMsLong = 10 * crl::time(1000);
++[[nodiscard]] crl::time SeekTimeMs() {
++	return Exteraless::Config::Instance().seekDuration() * crl::time(1000);
++}
++
++[[nodiscard]] crl::time SeekTimeMsLong() {
++	return 2 * SeekTimeMs();
++}
+ constexpr auto kFrameStepFallbackFps = 30.;
+ constexpr auto kFrameStepThrottleMs = crl::time(150);
+ 
+@@ -7328,11 +7334,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+ 			return;
+ 		} else if (key == Qt::Key_J) {
+ 			activateControls();
+-			seekRelativeTime(-kSeekTimeMsLong);
++			seekRelativeTime(-SeekTimeMsLong());
+ 			return;
+ 		} else if (key == Qt::Key_L) {
+ 			activateControls();
+-			seekRelativeTime(kSeekTimeMsLong);
++			seekRelativeTime(SeekTimeMsLong());
+ 			return;
+ 		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
+ 			&& _streamed->instance.player().paused()) {
+@@ -7384,10 +7390,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+ 				restartAtProgress(index / 10.0);
+ 			} else if (key == Qt::Key_Left) {
+ 				activateControls();
+-				seekRelativeTime(-kSeekTimeMs);
++				seekRelativeTime(-SeekTimeMs());
+ 			} else if (key == Qt::Key_Right) {
+ 				activateControls();
+-				seekRelativeTime(kSeekTimeMs);
++				seekRelativeTime(SeekTimeMs());
+ 			}
+ 			return;
+ 		}
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 index d25fe3b..59d169d 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
@@ -4987,10 +5043,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..4537487
+index 0000000..f01ae4a
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1076 @@
+@@ -0,0 +1,1115 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5465,6 +5521,45 @@ index 0000000..4537487
 +		[](bool value) {
 +			Exteraless::Config::Instance().setHideSendAsPeer(value);
 +		});
++	const auto seekDuration = std::make_shared<rpl::variable<QString>>(
++		u"%1 s"_q.arg(Exteraless::Config::Instance().seekDuration()));
++	builder.addButton({
++		.id = u"exteraless/chats/seek-duration"_q,
++		.title = tr::lng_settings_exteraless_chats_seek_duration(),
++		.st = &st::settingsButtonNoIcon,
++		.label = seekDuration->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().seekDuration());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_chats_seek_duration());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (const auto seconds : { 5, 10, 15, 30 }) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							seconds,
++							u"%1 s"_q.arg(seconds),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int seconds) {
++					Exteraless::Config::Instance().setSeekDuration(seconds);
++					seekDuration->force_assign(u"%1 s"_q.arg(seconds));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"seek"_q, u"duration"_q, u"player"_q },
++	});
 +	addChatsToggle(
 +		u"exteraless/chats/inline-math"_q,
 +		tr::lng_settings_exteraless_chats_inline_math(),
@@ -6806,10 +6901,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..1694ad4
+index 0000000..c0b077e
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,547 @@
+@@ -0,0 +1,563 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6846,6 +6941,8 @@ index 0000000..1694ad4
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 +constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
++constexpr auto kSeekDuration = "OEChatsSeekDuration";
++constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
 +constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 +constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 +constexpr auto kInlineMathAlias = "inlineMathResult";
@@ -7065,6 +7162,7 @@ index 0000000..1694ad4
 +	extera[kInlineMathResult] = config.inlineMathResult();
 +	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 +	extera[kGhostScheduledSend] = config.ghostScheduledSend();
++	extera[kSeekDuration] = config.seekDuration();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7272,6 +7370,19 @@ index 0000000..1694ad4
 +			|| key == kGhostScheduledSendAlias)
 +			&& value.isBool()) {
 +			config.setGhostScheduledSend(value.toBool());
++		} else if (key == kSeekDuration
++			&& value.isDouble()
++			&& (value.toInt() == 5
++				|| value.toInt() == 10
++				|| value.toInt() == 15
++				|| value.toInt() == 30)) {
++			config.setSeekDuration(value.toInt());
++		} else if (key == kSeekDurationAlias
++			&& value.isDouble()
++			&& value.toInt() >= 0
++			&& value.toInt() <= 3) {
++			const auto durations = std::array{ 5, 10, 15, 30 };
++			config.setSeekDuration(durations[value.toInt()]);
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -7458,10 +7569,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..d800928
+index 0000000..3280ca1
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,926 @@
+@@ -0,0 +1,946 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7495,6 +7606,17 @@ index 0000000..d800928
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 +constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
++constexpr auto kSeekDuration = "OEChatsSeekDuration";
++
++[[nodiscard]] int SanitizeSeekDuration(int value) {
++	switch (value) {
++	case 5:
++	case 10:
++	case 15:
++	case 30: return value;
++	}
++	return 5;
++}
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7779,6 +7901,14 @@ index 0000000..d800928
 +
 +void Config::setGhostScheduledSend(bool value) {
 +	setValue(kGhostScheduledSend, value);
++}
++
++int Config::seekDuration() const {
++	return SanitizeSeekDuration(intValue(kSeekDuration, 5));
++}
++
++void Config::setSeekDuration(int value) {
++	setValue(kSeekDuration, SanitizeSeekDuration(value));
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8194,6 +8324,7 @@ index 0000000..d800928
 +			|| key == kInlineMathResult
 +			|| key == kSaveToChatSubfolder
 +			|| key == kGhostScheduledSend
++			|| key == kSeekDuration
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8390,10 +8521,10 @@ index 0000000..d800928
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..1ad739e
+index 0000000..b3048b3
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,199 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8473,6 +8604,8 @@ index 0000000..1ad739e
 +	void setSaveToChatSubfolder(bool value);
 +	[[nodiscard]] bool ghostScheduledSend() const;
 +	void setGhostScheduledSend(bool value);
++	[[nodiscard]] int seekDuration() const;
++	void setSeekDuration(int value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11069,10 +11202,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..1e7af6a
+index 0000000..2d67e60
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1182 @@
+@@ -0,0 +1,1210 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11163,6 +11296,8 @@ index 0000000..1e7af6a
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli seek-duration\n"
++		<< "  exteraless-chats-cli seek-duration-set <seconds>\n"
 +		<< "  exteraless-chats-cli save-subfolder\n"
 +		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -11596,6 +11731,32 @@ index 0000000..1e7af6a
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("seek-duration")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("seconds"),
++				Exteraless::Config::Instance().seekDuration() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("seek-duration-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSeekDuration(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("seconds"),
++				Exteraless::Config::Instance().seekDuration() },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("save-subfolder")) {
@@ -12319,10 +12480,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..a443805
+index 0000000..3d7aa33
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3095 @@
+@@ -0,0 +1,3188 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12493,6 +12654,7 @@ index 0000000..a443805
 +        ("inline-math-set with wrong count", ["inline-math-set"]),
 +        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
 +        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
++        ("seek-duration-set without value", ["seek-duration-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -12805,7 +12967,7 @@ index 0000000..a443805
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 55,
++            len(section) == 56,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -12826,7 +12988,7 @@ index 0000000..a443805
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 60,
++            sum(len(value) for value in exported.values()) == 61,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -12846,7 +13008,7 @@ index 0000000..a443805
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 60,
++                data.get("applied") == 61,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -12935,6 +13097,7 @@ index 0000000..a443805
 +            "OEChatsInlineMathResult": True,
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
++            "OEChatsSeekDuration": 15,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -12956,7 +13119,7 @@ index 0000000..a443805
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 60,
++            data.get("applied") == 61,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13035,6 +13198,10 @@ index 0000000..a443805
 +            "backup full ghost schedule",
 +            section.get("OEGhostScheduledSend") is True,
 +            section.get("OEGhostScheduledSend"))
++        ledger.check(
++            "backup full seek duration",
++            section.get("OEChatsSeekDuration") == 15,
++            section.get("OEChatsSeekDuration"))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -13164,10 +13331,10 @@ index 0000000..a443805
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 60",
++            "backup legacy eight completed to 61",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (55, 3, 2),
++             len(sections["mainconfig"])) == (56, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -13995,6 +14162,7 @@ index 0000000..a443805
 +            "OEChatsInlineMathResult": True,
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
++            "OEChatsSeekDuration": 15,
 +        },
 +    }
 +    data = json_call(
@@ -15344,6 +15512,90 @@ index 0000000..a443805
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_seek_duration(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "seek-duration-defaults")
++    data = json_call(
++        ledger, cli, ["seek-duration"], env, "seek-duration defaults")
++    if data is not None:
++        ledger.check(
++            "seek duration default",
++            data.get("seconds") == 5,
++            data)
++
++    data = json_call(
++        ledger, cli, ["seek-duration-set", "15"], env, "seek-duration set")
++    if data is not None:
++        ledger.check(
++            "seek duration set",
++            data.get("seconds") == 15,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["seek-duration"], env, "seek-duration reload")
++    if reloaded is not None:
++        ledger.check(
++            "seek duration persisted",
++            reloaded.get("seconds") == 15,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["seek-duration-set", "7"], env,
++        "seek-duration invalid")
++    if data is not None:
++        ledger.check(
++            "seek duration invalid falls back",
++            data.get("seconds") == 5,
++            data)
++
++    env = make_env(work / "seek-duration-index")
++    root = {
++        "version": 1,
++        "exteraconfig": {"doubleTapSeekDuration": 2},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "seek-duration index alias")
++    if data is not None:
++        ledger.check(
++            "seek duration index applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["seek-duration"], env, "seek-duration index read")
++    if reloaded is not None:
++        ledger.check(
++            "seek duration index value",
++            reloaded.get("seconds") == 15,
++            reloaded)
++
++    env = make_env(work / "seek-duration-key")
++    root = {
++        "version": 1,
++        "exteraconfig": {"OEChatsSeekDuration": 30},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "seek-duration key")
++    if data is not None:
++        ledger.check(
++            "seek duration key applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["seek-duration"], env, "seek-duration key read")
++    if reloaded is not None:
++        ledger.check(
++            "seek duration key value",
++            reloaded.get("seconds") == 30,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -15379,6 +15631,7 @@ index 0000000..a443805
 +        inline_math = check_inline_math(ledger, cli, work)
 +        save_subfolder = check_save_subfolder(ledger, cli, work)
 +        ghost_schedule = check_ghost_schedule(ledger, cli, work)
++        seek_duration = check_seek_duration(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -15406,6 +15659,7 @@ index 0000000..a443805
 +    print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
 +    print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
 +    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
++    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

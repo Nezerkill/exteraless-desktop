@@ -168,6 +168,7 @@ def check_cli_args(ledger, cli):
         ("inline-math-set with wrong count", ["inline-math-set"]),
         ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
         ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
+        ("seek-duration-set without value", ["seek-duration-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -480,7 +481,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 55,
+            len(section) == 56,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -501,7 +502,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 60,
+            sum(len(value) for value in exported.values()) == 61,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -521,7 +522,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 60,
+                data.get("applied") == 61,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -610,6 +611,7 @@ def check_backup(ledger, cli, work):
             "OEChatsInlineMathResult": True,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
+            "OEChatsSeekDuration": 15,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -631,7 +633,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 60,
+            data.get("applied") == 61,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -710,6 +712,10 @@ def check_backup(ledger, cli, work):
             "backup full ghost schedule",
             section.get("OEGhostScheduledSend") is True,
             section.get("OEGhostScheduledSend"))
+        ledger.check(
+            "backup full seek duration",
+            section.get("OEChatsSeekDuration") == 15,
+            section.get("OEChatsSeekDuration"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -839,10 +845,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 60",
+            "backup legacy eight completed to 61",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (55, 3, 2),
+             len(sections["mainconfig"])) == (56, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1670,6 +1676,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsInlineMathResult": True,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
+            "OEChatsSeekDuration": 15,
         },
     }
     data = json_call(
@@ -3019,6 +3026,90 @@ def check_ghost_schedule(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_seek_duration(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "seek-duration-defaults")
+    data = json_call(
+        ledger, cli, ["seek-duration"], env, "seek-duration defaults")
+    if data is not None:
+        ledger.check(
+            "seek duration default",
+            data.get("seconds") == 5,
+            data)
+
+    data = json_call(
+        ledger, cli, ["seek-duration-set", "15"], env, "seek-duration set")
+    if data is not None:
+        ledger.check(
+            "seek duration set",
+            data.get("seconds") == 15,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["seek-duration"], env, "seek-duration reload")
+    if reloaded is not None:
+        ledger.check(
+            "seek duration persisted",
+            reloaded.get("seconds") == 15,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["seek-duration-set", "7"], env,
+        "seek-duration invalid")
+    if data is not None:
+        ledger.check(
+            "seek duration invalid falls back",
+            data.get("seconds") == 5,
+            data)
+
+    env = make_env(work / "seek-duration-index")
+    root = {
+        "version": 1,
+        "exteraconfig": {"doubleTapSeekDuration": 2},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "seek-duration index alias")
+    if data is not None:
+        ledger.check(
+            "seek duration index applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["seek-duration"], env, "seek-duration index read")
+    if reloaded is not None:
+        ledger.check(
+            "seek duration index value",
+            reloaded.get("seconds") == 15,
+            reloaded)
+
+    env = make_env(work / "seek-duration-key")
+    root = {
+        "version": 1,
+        "exteraconfig": {"OEChatsSeekDuration": 30},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "seek-duration key")
+    if data is not None:
+        ledger.check(
+            "seek duration key applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["seek-duration"], env, "seek-duration key read")
+    if reloaded is not None:
+        ledger.check(
+            "seek duration key value",
+            reloaded.get("seconds") == 30,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3054,6 +3145,7 @@ def main():
         inline_math = check_inline_math(ledger, cli, work)
         save_subfolder = check_save_subfolder(ledger, cli, work)
         ghost_schedule = check_ghost_schedule(ledger, cli, work)
+        seek_duration = check_seek_duration(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3081,6 +3173,7 @@ def main():
     print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
     print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
     print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
+    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/premium_preview_box.h"
 #include "calls/calls_instance.h"
 #include "core/application.h"
+#include "exteraless/config.h"
 #include "core/click_handler_types.h"
 #include "core/core_screenshot_protection.h"
 #include "core/file_utilities.h"
@@ -205,8 +206,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
 constexpr auto kZoomToScreenLevel = 1024;
 constexpr auto kPinchZoomStep = 0.25;
 constexpr auto kOverlayLoaderPriority = 2;
-constexpr auto kSeekTimeMs = 5 * crl::time(1000);
-constexpr auto kSeekTimeMsLong = 10 * crl::time(1000);
+[[nodiscard]] crl::time SeekTimeMs() {
+	return Exteraless::Config::Instance().seekDuration() * crl::time(1000);
+}
+
+[[nodiscard]] crl::time SeekTimeMsLong() {
+	return 2 * SeekTimeMs();
+}
 constexpr auto kFrameStepFallbackFps = 30.;
 constexpr auto kFrameStepThrottleMs = crl::time(150);
 
@@ -7328,11 +7334,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 			return;
 		} else if (key == Qt::Key_J) {
 			activateControls();
-			seekRelativeTime(-kSeekTimeMsLong);
+			seekRelativeTime(-SeekTimeMsLong());
 			return;
 		} else if (key == Qt::Key_L) {
 			activateControls();
-			seekRelativeTime(kSeekTimeMsLong);
+			seekRelativeTime(SeekTimeMsLong());
 			return;
 		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
 			&& _streamed->instance.player().paused()) {
@@ -7384,10 +7390,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
 				restartAtProgress(index / 10.0);
 			} else if (key == Qt::Key_Left) {
 				activateControls();
-				seekRelativeTime(-kSeekTimeMs);
+				seekRelativeTime(-SeekTimeMs());
 			} else if (key == Qt::Key_Right) {
 				activateControls();
-				seekRelativeTime(kSeekTimeMs);
+				seekRelativeTime(SeekTimeMs());
 			}
 			return;
 		}

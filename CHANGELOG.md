@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Player / Seek: настройка `OEChatsSeekDuration` (5/10/15/30 с, default 5)
+  задаёт шаг перемотки стрелками в медиавьюере (J/L — двойной шаг);
+  Android-алиас `doubleTapSeekDuration` (индекс 0–3) поддержан в `.extera`
+  (всего 61 ключ), селектор добавлен в Chats.
 - Ghost Mode / Schedule: настройка `OEGhostScheduledSend` (default `false`)
   отправляет новые текстовые сообщения как отложенные на 12 секунд, когда
   online-ghost активен; личные чаты с ботом, self и секретные чаты исключены

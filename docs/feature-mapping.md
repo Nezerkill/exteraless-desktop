@@ -67,7 +67,10 @@ New `Exteraless` section in tdesktop Settings with subsections:
     `false`, `hideSendAsChannel` in `.extera`);
   - inline math (`OEChatsInlineMathResult`, default `false`,
     `inlineMathResult` in `.extera`): typing `2+2=` and pressing Space turns
-    the field into `2+2=4 `.
+    the field into `2+2=4 `;
+  - media viewer seek step (`OEChatsSeekDuration`, 5/10/15/30 seconds,
+    default 5; `doubleTapSeekDuration` index in `.extera`). Arrow keys seek by
+    the configured step, J/L by twice that.
 - **Files** — `OEGeneralSaveToChatSubfolder` (default `false`,
   `saveToChatSubfolder` in `.extera`) puts automatically downloaded files into
   a subfolder named after the chat (sanitized, ` (2)` suffix on collision).
@@ -123,7 +126,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 51, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 460 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 470 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

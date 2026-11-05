@@ -31,6 +31,17 @@ constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
+constexpr auto kSeekDuration = "OEChatsSeekDuration";
+
+[[nodiscard]] int SanitizeSeekDuration(int value) {
+	switch (value) {
+	case 5:
+	case 10:
+	case 15:
+	case 30: return value;
+	}
+	return 5;
+}
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -315,6 +326,14 @@ bool Config::ghostScheduledSend() const {
 
 void Config::setGhostScheduledSend(bool value) {
 	setValue(kGhostScheduledSend, value);
+}
+
+int Config::seekDuration() const {
+	return SanitizeSeekDuration(intValue(kSeekDuration, 5));
+}
+
+void Config::setSeekDuration(int value) {
+	setValue(kSeekDuration, SanitizeSeekDuration(value));
 }
 
 bool Config::useDeletedIcon() const {
@@ -730,6 +749,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kInlineMathResult
 			|| key == kSaveToChatSubfolder
 			|| key == kGhostScheduledSend
+			|| key == kSeekDuration
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

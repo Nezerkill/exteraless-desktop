@@ -77,6 +77,8 @@ public:
 	void setSaveToChatSubfolder(bool value);
 	[[nodiscard]] bool ghostScheduledSend() const;
 	void setGhostScheduledSend(bool value);
+	[[nodiscard]] int seekDuration() const;
+	void setSeekDuration(int value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;
