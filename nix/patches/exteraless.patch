@@ -79,10 +79,10 @@ index 811707d..af189d1 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..f2d4610 100644
+index ffc8ec9..0127868 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,78 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,79 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -136,6 +136,7 @@ index ffc8ec9..f2d4610 100644
 +"lng_settings_exteraless_pill_cache" = "Cache";
 +"lng_settings_exteraless_pill_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_pill_last_seen" = "Last seen";
++"lng_settings_exteraless_pill_order_hint" = "Drag pills on the strip above the chat list to reorder them.";
 +"lng_settings_exteraless_reset" = "Reset";
 +"lng_settings_exteraless_reset_settings" = "Reset Exteraless settings";
 +"lng_settings_exteraless_reset_confirm" = "Reset all Exteraless settings to defaults? This cannot be undone.";
@@ -809,10 +810,10 @@ index ee8bff7..8274456 100644
  		object_ptr<Ui::IconButton> toggle;
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
 new file mode 100644
-index 0000000..bf4db60
+index 0000000..b5038fd
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.cpp
-@@ -0,0 +1,480 @@
+@@ -0,0 +1,580 @@
 +#include "exteraless/pill_stack.h"
 +
 +#include "base/unixtime.h"
@@ -837,6 +838,7 @@ index 0000000..bf4db60
 +#include <QtCore/QFile>
 +#include <QtCore/QtGlobal>
 +#include <QtGui/QMouseEvent>
++#include <QtWidgets/QApplication>
 +
 +#include <algorithm>
 +#include <optional>
@@ -997,6 +999,7 @@ index 0000000..bf4db60
 +		{ Kind::Ghost, u"Ghost …"_q },
 +		{ Kind::LastSeen, u"Seen …"_q },
 +	};
++	applySavedOrder();
 +	setMouseTracking(true);
 +	setCursor(Qt::PointingHandCursor);
 +	setFixedHeight(st::dialogsFilter.heightMin);
@@ -1039,6 +1042,10 @@ index 0000000..bf4db60
 +
 +void PillStack::updatePills() {
 +	auto changed = false;
++	if (Config::Instance().pillStackOrder() != _order) {
++		applySavedOrder();
++		changed = true;
++	}
 +	const auto setText = [&](Kind kind, QString text, bool active = false) {
 +		const auto i = ranges::find(_pills, kind, &Pill::kind);
 +		if (i == _pills.end()) {
@@ -1142,6 +1149,60 @@ index 0000000..bf4db60
 +	}
 +}
 +
++void PillStack::applySavedOrder() {
++	_order = Config::Instance().pillStackOrder();
++	auto ordered = std::vector<Pill>();
++	ordered.reserve(_pills.size());
++	for (const auto &key : _order.split(',')) {
++		if (const auto kind = KindFromKey(key)) {
++			const auto i = ranges::find(_pills, *kind, &Pill::kind);
++			if (i != _pills.end()) {
++				ordered.push_back(*i);
++			}
++		}
++	}
++	if (ordered.size() == _pills.size()) {
++		_pills = std::move(ordered);
++	}
++	updateLayout();
++}
++
++void PillStack::saveOrder() {
++	auto keys = QStringList();
++	keys.reserve(int(_pills.size()));
++	for (const auto &pill : _pills) {
++		keys.push_back(KindKey(pill.kind));
++	}
++	Config::Instance().setPillStackOrder(keys.join(','));
++	_order = Config::Instance().pillStackOrder();
++}
++
++QString PillStack::KindKey(Kind kind) {
++	switch (kind) {
++	case Kind::Cpu: return u"cpu"_q;
++	case Kind::Ram: return u"ram"_q;
++	case Kind::Net: return u"net"_q;
++	case Kind::Dc: return u"dc"_q;
++	case Kind::Proxy: return u"proxy"_q;
++	case Kind::Cache: return u"cache"_q;
++	case Kind::Ghost: return u"ghost"_q;
++	case Kind::LastSeen: return u"lastseen"_q;
++	}
++	return QString();
++}
++
++std::optional<PillStack::Kind> PillStack::KindFromKey(const QString &key) {
++	if (key == u"cpu"_q) return Kind::Cpu;
++	if (key == u"ram"_q) return Kind::Ram;
++	if (key == u"net"_q) return Kind::Net;
++	if (key == u"dc"_q) return Kind::Dc;
++	if (key == u"proxy"_q) return Kind::Proxy;
++	if (key == u"cache"_q) return Kind::Cache;
++	if (key == u"ghost"_q) return Kind::Ghost;
++	if (key == u"lastseen"_q) return Kind::LastSeen;
++	return std::nullopt;
++}
++
 +void PillStack::updateLayout() {
 +	const auto pillHeight = st::dialogsFilter.heightMin - 14;
 +	const auto rowHeight = pillHeight + 6;
@@ -1218,10 +1279,22 @@ index 0000000..bf4db60
 +		return;
 +	}
 +	_pressed = indexAt(e->pos());
++	_dragIndex = _pressed;
++	_pressPoint = e->pos();
++	_dragging = false;
 +	update();
 +}
 +
 +void PillStack::mouseReleaseEvent(QMouseEvent *e) {
++	if (e->button() == Qt::LeftButton && _dragging) {
++		saveOrder();
++		_dragging = false;
++		_dragIndex = -1;
++		_pressed = -1;
++		setCursor(Qt::PointingHandCursor);
++		update();
++		return;
++	}
 +	const auto index = indexAt(e->pos());
 +	if (e->button() == Qt::LeftButton
 +		&& index >= 0
@@ -1229,6 +1302,7 @@ index 0000000..bf4db60
 +		activate(_pills[index].kind);
 +	}
 +	_pressed = -1;
++	_dragIndex = -1;
 +	update();
 +}
 +
@@ -1238,11 +1312,38 @@ index 0000000..bf4db60
 +		_hovered = index;
 +		update();
 +	}
++	if (_pressed < 0
++		|| _dragIndex < 0
++		|| !(e->buttons() & Qt::LeftButton)) {
++		return;
++	}
++	if (!_dragging) {
++		if ((e->pos() - _pressPoint).manhattanLength()
++			< QApplication::startDragDistance()) {
++			return;
++		}
++		_dragging = true;
++		setCursor(Qt::ClosedHandCursor);
++	}
++	const auto target = indexAt(e->pos());
++	if (target < 0 || target == _dragIndex) {
++		return;
++	}
++	auto moved = _pills[_dragIndex];
++	_pills.erase(_pills.begin() + _dragIndex);
++	_pills.insert(_pills.begin() + target, std::move(moved));
++	_dragIndex = target;
++	_pressed = target;
++	updateLayout();
++	update();
 +}
 +
 +void PillStack::leaveEventHook(QEvent *e) {
 +	_hovered = -1;
-+	_pressed = -1;
++	if (!_dragging) {
++		_pressed = -1;
++		_dragIndex = -1;
++	}
 +	update();
 +}
 +
@@ -1295,18 +1396,20 @@ index 0000000..bf4db60
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.h b/Telegram/SourceFiles/exteraless/pill_stack.h
 new file mode 100644
-index 0000000..faafca7
+index 0000000..37cdfee
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,92 @@
 +#pragma once
 +
 +#include "base/timer.h"
 +#include "ui/rp_widget.h"
 +
 +#include <QElapsedTimer>
++#include <QPoint>
 +#include <rpl/event_stream.h>
 +
++#include <optional>
 +#include <vector>
 +
 +namespace Window {
@@ -1357,6 +1460,10 @@ index 0000000..faafca7
 +	void updatePills();
 +	void updateLayout();
 +	void activate(Kind kind);
++	void applySavedOrder();
++	void saveOrder();
++	[[nodiscard]] static QString KindKey(Kind kind);
++	[[nodiscard]] static std::optional<Kind> KindFromKey(const QString &key);
 +	[[nodiscard]] int indexAt(QPoint position) const;
 +	[[nodiscard]] bool isPillEnabled(Kind kind) const;
 +
@@ -1374,6 +1481,10 @@ index 0000000..faafca7
 +	qint64 _previousNetAt = 0;
 +	int _pressed = -1;
 +	int _hovered = -1;
++	int _dragIndex = -1;
++	QPoint _pressPoint;
++	QString _order;
++	bool _dragging = false;
 +	bool _cpuValid = false;
 +	bool _netValid = false;
 +	bool _enabled = false;
@@ -4286,10 +4397,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..f0df53d
+index 0000000..871bf93
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,870 @@
+@@ -0,0 +1,872 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4951,6 +5062,8 @@ index 0000000..f0df53d
 +		u"exteraless/pill-stack/last-seen"_q,
 +		tr::lng_settings_exteraless_pill_last_seen(),
 +		{ u"last seen"_q, u"pill"_q });
++
++	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/proxy"_q,
@@ -5832,10 +5945,10 @@ index 0000000..236ccf9
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..1950646
+index 0000000..5d56176
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,426 @@
+@@ -0,0 +1,431 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -5881,6 +5994,7 @@ index 0000000..1950646
 +constexpr auto kPluginStates = "OEPluginStates";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
++constexpr auto kPillStackOrder = "OEPillStackOrder";
 +constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 +constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 +constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
@@ -6058,6 +6172,7 @@ index 0000000..1950646
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
 +	pills[kPillStackPills] = config.pillStackPills();
++	pills[kPillStackOrder] = config.pillStackOrder();
 +
 +	auto main = QJsonObject();
 +	main[kMainMenuOrder] = config.mainMenuOrder();
@@ -6125,6 +6240,9 @@ index 0000000..1950646
 +				return true;
 +			} else if (key == kPillStackPills && ValidPillMask(value)) {
 +				config.setPillStackPills(value.toInt());
++				return true;
++			} else if (key == kPillStackOrder && value.isString()) {
++				config.setPillStackOrder(value.toString());
 +				return true;
 +			}
 +			return false;
@@ -6363,15 +6481,16 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..89c3c9a
+index 0000000..ff6429e
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,712 @@
+@@ -0,0 +1,755 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
 +
 +#include <QDir>
++#include <array>
 +#include <QFile>
 +#include <QFileInfo>
 +#include <QJsonDocument>
@@ -6402,6 +6521,7 @@ index 0000000..89c3c9a
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
++constexpr auto kPillStackOrder = "OEPillStackOrder";
 +constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 +constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 +constexpr auto kPluginStates = "OEPluginStates";
@@ -6430,6 +6550,32 @@ index 0000000..89c3c9a
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
++
++const auto kDefaultPillStackOrder = QStringLiteral(
++	"cpu,ram,net,dc,proxy,cache,ghost,lastseen");
++const auto kPillStackOrderKeys = std::array<const char*, 8>{
++	"cpu", "ram", "net", "dc", "proxy", "cache", "ghost", "lastseen" };
++
++[[nodiscard]] QString SanitizePillStackOrder(const QString &value) {
++	auto accepted = QStringList();
++	for (const auto &part : value.split(',')) {
++		const auto key = part.trimmed().toLower();
++		for (const auto name : kPillStackOrderKeys) {
++			const auto known = QString::fromLatin1(name);
++			if ((key == known) && !accepted.contains(known)) {
++				accepted.push_back(known);
++				break;
++			}
++		}
++	}
++	for (const auto name : kPillStackOrderKeys) {
++		const auto known = QString::fromLatin1(name);
++		if (!accepted.contains(known)) {
++			accepted.push_back(known);
++		}
++	}
++	return accepted.join(',');
++}
 +
 +[[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 +	const auto values = root.value("exteraconfig");
@@ -6716,6 +6862,15 @@ index 0000000..89c3c9a
 +	setValue(kPillStackPills, value);
 +}
 +
++QString Config::pillStackOrder() const {
++	return SanitizePillStackOrder(
++		stringValue(kPillStackOrder, kDefaultPillStackOrder));
++}
++
++void Config::setPillStackOrder(const QString &value) {
++	setValue(kPillStackOrder, SanitizePillStackOrder(value));
++}
++
 +QString Config::mainMenuOrder() const {
 +	return stringValue(kMainMenuOrder, kDefaultMainMenuOrder);
 +}
@@ -6911,6 +7066,7 @@ index 0000000..89c3c9a
 +			|| key == kSaveDeletedMessages
 +			|| key == kPillStackEnabled
 +			|| key == kPillStackPills
++			|| key == kPillStackOrder
 +			|| key == kMainMenuOrder
 +			|| key == kDrawerAccountsExpanded
 +			|| key == kPluginStates
@@ -6952,6 +7108,11 @@ index 0000000..89c3c9a
 +	}
 +	SanitizeExclusions(&accepted, kGhostReadExclusions);
 +	SanitizeExclusions(&accepted, kGhostTypingExclusions);
++	if (const auto order = accepted.value(kPillStackOrder); order.isString()) {
++		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
++	} else if (accepted.contains(kPillStackOrder)) {
++		accepted.remove(kPillStackOrder);
++	}
 +	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
 +		const auto value = accepted.value(key);
 +		if (value.isDouble()) {
@@ -7081,10 +7242,10 @@ index 0000000..89c3c9a
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..8f389a8
+index 0000000..b84bb8f
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,164 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7183,6 +7344,8 @@ index 0000000..8f389a8
 +
 +	[[nodiscard]] int pillStackPills() const;
 +	void setPillStackPills(int value);
++	[[nodiscard]] QString pillStackOrder() const;
++	void setPillStackOrder(const QString &value);
 +
 +	[[nodiscard]] QString mainMenuOrder() const;
 +	void setMainMenuOrder(const QString &value);
@@ -8726,10 +8889,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..ca00eb2
+index 0000000..fed66e8
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,635 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -8780,6 +8943,8 @@ index 0000000..ca00eb2
 +		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
 +		<< "  exteraless-chats-cli stickertime\n"
 +		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
++		<< "  exteraless-chats-cli pillorder\n"
++		<< "  exteraless-chats-cli pillorder-set <csv>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -8904,6 +9069,14 @@ index 0000000..ca00eb2
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 +		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
++	});
++}
++
++void PrintPillOrder() {
++	const auto order = Exteraless::Config::Instance().pillStackOrder();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("order"),
++			QJsonArray::fromStringList(order.split(',')) },
 +	});
 +}
 +
@@ -9161,6 +9334,21 @@ index 0000000..ca00eb2
 +		PrintStickerTime();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("pillorder")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintPillOrder();
++		return 0;
++	}
++	if (mode == QStringLiteral("pillorder-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setPillStackOrder(arguments[2]);
++		PrintPillOrder();
++		return 0;
++	}
 +	if (mode == QStringLiteral("stickertime-set")) {
 +		if (arguments.size() != 4) {
 +			return PrintUsage();
@@ -9404,10 +9592,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..4b65522
+index 0000000..57c33c4
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1672 @@
+@@ -0,0 +1,1788 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -9561,6 +9749,7 @@ index 0000000..4b65522
 +        ("doubletap-set with wrong count", ["doubletap-set", "1"]),
 +        ("doubletap-resolve without value", ["doubletap-resolve"]),
 +        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
++        ("pillorder-set without order", ["pillorder-set"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
@@ -9873,6 +10062,8 @@ index 0000000..4b65522
 +            exported["pillstackconfig"] == {
 +                "OEPillStackEnabled": False,
 +                "OEPillStackPills": 255,
++                "OEPillStackOrder":
++                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
 +            },
 +            exported["pillstackconfig"])
 +        ledger.check(
@@ -9885,7 +10076,7 @@ index 0000000..4b65522
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 42,
++            sum(len(value) for value in exported.values()) == 43,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -9905,7 +10096,7 @@ index 0000000..4b65522
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 42,
++                data.get("applied") == 43,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -9981,6 +10172,7 @@ index 0000000..4b65522
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
 +            "OEPillStackPills": 5,
++            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
 +        },
 +        "mainconfig": {
 +            "OEMainMenuOrder": "ghost,exteraless",
@@ -9997,7 +10189,7 @@ index 0000000..4b65522
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 42,
++            data.get("applied") == 43,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -10068,6 +10260,8 @@ index 0000000..4b65522
 +            sections["pillstackconfig"] == {
 +                "OEPillStackEnabled": True,
 +                "OEPillStackPills": 5,
++                "OEPillStackOrder":
++                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
 +            },
 +            sections["pillstackconfig"])
 +        ledger.check(
@@ -10150,10 +10344,10 @@ index 0000000..4b65522
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 42",
++            "backup legacy eight completed to 43",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (38, 2, 2),
++             len(sections["mainconfig"])) == (38, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -11036,6 +11230,114 @@ index 0000000..4b65522
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_pill_order(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    default = ["cpu", "ram", "net", "dc", "proxy", "cache", "ghost",
++               "lastseen"]
++
++    env = make_env(work / "pillorder-defaults")
++    data = json_call(ledger, cli, ["pillorder"], env, "pillorder defaults")
++    if data is not None:
++        ledger.check(
++            "pillorder defaults",
++            data.get("order") == default,
++            data)
++
++    env = make_env(work / "pillorder-custom")
++    data = json_call(
++        ledger, cli,
++        ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
++        env, "pillorder custom")
++    custom = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
++              "lastseen"]
++    if data is not None:
++        ledger.check(
++            "pillorder custom set",
++            data.get("order") == custom,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["pillorder"], env, "pillorder custom reload")
++    if reloaded is not None:
++        ledger.check(
++            "pillorder custom persisted",
++            reloaded.get("order") == custom,
++            reloaded)
++
++    env = make_env(work / "pillorder-sanitize")
++    data = json_call(
++        ledger, cli, ["pillorder-set", "GHOST,cpu,ghost,bogus"], env,
++        "pillorder sanitize")
++    sanitized = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
++                 "lastseen"]
++    if data is not None:
++        ledger.check(
++            "pillorder sanitized",
++            data.get("order") == sanitized,
++            data)
++
++    env = make_env(work / "pillorder-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {"OEPillStackOrder": "cache,ghost"},
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "pillorder fromJson")
++    if data is not None:
++        ledger.check(
++            "pillorder fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["pillorder"], env, "pillorder fromJson read")
++    if reloaded is not None:
++        ledger.check(
++            "pillorder fromJson values",
++            reloaded.get("order")
++            == ["cache", "ghost", "cpu", "ram", "net", "dc", "proxy",
++                "lastseen"],
++            reloaded)
++
++    env = make_env(work / "pillorder-backup")
++    data = json_call(
++        ledger, cli, ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
++        env, "pillorder backup")
++    if data is not None:
++        pills = data.get("pillstackconfig") or {}
++        ledger.check(
++            "pillorder backup default",
++            pills.get("OEPillStackOrder")
++            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
++            pills)
++    root = {
++        "version": 1,
++        "pillstackconfig": {"OEPillStackOrder": "lastseen,ghost"},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "pillorder backup import")
++    if data is not None:
++        ledger.check(
++            "pillorder backup import applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["pillorder"], env, "pillorder backup read")
++    if reloaded is not None:
++        ledger.check(
++            "pillorder backup import values",
++            reloaded.get("order")
++            == ["lastseen", "ghost", "cpu", "ram", "net", "dc", "proxy",
++                "cache"],
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -11056,6 +11358,7 @@ index 0000000..4b65522
 +        menu = check_message_menu(ledger, cli, work)
 +        doubletap = check_doubletap(ledger, cli, work)
 +        stickertime = check_sticker_time(ledger, cli, work)
++        pillorder = check_pill_order(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -11068,6 +11371,7 @@ index 0000000..4b65522
 +    print(f"menu: {menu[0] - menu[1]} passed")
 +    print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
 +    print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
++    print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

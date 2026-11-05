@@ -22,6 +22,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QtGlobal>
 #include <QtGui/QMouseEvent>
+#include <QtWidgets/QApplication>
 
 #include <algorithm>
 #include <optional>
@@ -182,6 +183,7 @@ PillStack::PillStack(
 		{ Kind::Ghost, u"Ghost …"_q },
 		{ Kind::LastSeen, u"Seen …"_q },
 	};
+	applySavedOrder();
 	setMouseTracking(true);
 	setCursor(Qt::PointingHandCursor);
 	setFixedHeight(st::dialogsFilter.heightMin);
@@ -224,6 +226,10 @@ void PillStack::tick() {
 
 void PillStack::updatePills() {
 	auto changed = false;
+	if (Config::Instance().pillStackOrder() != _order) {
+		applySavedOrder();
+		changed = true;
+	}
 	const auto setText = [&](Kind kind, QString text, bool active = false) {
 		const auto i = ranges::find(_pills, kind, &Pill::kind);
 		if (i == _pills.end()) {
@@ -327,6 +333,60 @@ void PillStack::updatePills() {
 	}
 }
 
+void PillStack::applySavedOrder() {
+	_order = Config::Instance().pillStackOrder();
+	auto ordered = std::vector<Pill>();
+	ordered.reserve(_pills.size());
+	for (const auto &key : _order.split(',')) {
+		if (const auto kind = KindFromKey(key)) {
+			const auto i = ranges::find(_pills, *kind, &Pill::kind);
+			if (i != _pills.end()) {
+				ordered.push_back(*i);
+			}
+		}
+	}
+	if (ordered.size() == _pills.size()) {
+		_pills = std::move(ordered);
+	}
+	updateLayout();
+}
+
+void PillStack::saveOrder() {
+	auto keys = QStringList();
+	keys.reserve(int(_pills.size()));
+	for (const auto &pill : _pills) {
+		keys.push_back(KindKey(pill.kind));
+	}
+	Config::Instance().setPillStackOrder(keys.join(','));
+	_order = Config::Instance().pillStackOrder();
+}
+
+QString PillStack::KindKey(Kind kind) {
+	switch (kind) {
+	case Kind::Cpu: return u"cpu"_q;
+	case Kind::Ram: return u"ram"_q;
+	case Kind::Net: return u"net"_q;
+	case Kind::Dc: return u"dc"_q;
+	case Kind::Proxy: return u"proxy"_q;
+	case Kind::Cache: return u"cache"_q;
+	case Kind::Ghost: return u"ghost"_q;
+	case Kind::LastSeen: return u"lastseen"_q;
+	}
+	return QString();
+}
+
+std::optional<PillStack::Kind> PillStack::KindFromKey(const QString &key) {
+	if (key == u"cpu"_q) return Kind::Cpu;
+	if (key == u"ram"_q) return Kind::Ram;
+	if (key == u"net"_q) return Kind::Net;
+	if (key == u"dc"_q) return Kind::Dc;
+	if (key == u"proxy"_q) return Kind::Proxy;
+	if (key == u"cache"_q) return Kind::Cache;
+	if (key == u"ghost"_q) return Kind::Ghost;
+	if (key == u"lastseen"_q) return Kind::LastSeen;
+	return std::nullopt;
+}
+
 void PillStack::updateLayout() {
 	const auto pillHeight = st::dialogsFilter.heightMin - 14;
 	const auto rowHeight = pillHeight + 6;
@@ -403,10 +463,22 @@ void PillStack::mousePressEvent(QMouseEvent *e) {
 		return;
 	}
 	_pressed = indexAt(e->pos());
+	_dragIndex = _pressed;
+	_pressPoint = e->pos();
+	_dragging = false;
 	update();
 }
 
 void PillStack::mouseReleaseEvent(QMouseEvent *e) {
+	if (e->button() == Qt::LeftButton && _dragging) {
+		saveOrder();
+		_dragging = false;
+		_dragIndex = -1;
+		_pressed = -1;
+		setCursor(Qt::PointingHandCursor);
+		update();
+		return;
+	}
 	const auto index = indexAt(e->pos());
 	if (e->button() == Qt::LeftButton
 		&& index >= 0
@@ -414,6 +486,7 @@ void PillStack::mouseReleaseEvent(QMouseEvent *e) {
 		activate(_pills[index].kind);
 	}
 	_pressed = -1;
+	_dragIndex = -1;
 	update();
 }
 
@@ -423,11 +496,38 @@ void PillStack::mouseMoveEvent(QMouseEvent *e) {
 		_hovered = index;
 		update();
 	}
+	if (_pressed < 0
+		|| _dragIndex < 0
+		|| !(e->buttons() & Qt::LeftButton)) {
+		return;
+	}
+	if (!_dragging) {
+		if ((e->pos() - _pressPoint).manhattanLength()
+			< QApplication::startDragDistance()) {
+			return;
+		}
+		_dragging = true;
+		setCursor(Qt::ClosedHandCursor);
+	}
+	const auto target = indexAt(e->pos());
+	if (target < 0 || target == _dragIndex) {
+		return;
+	}
+	auto moved = _pills[_dragIndex];
+	_pills.erase(_pills.begin() + _dragIndex);
+	_pills.insert(_pills.begin() + target, std::move(moved));
+	_dragIndex = target;
+	_pressed = target;
+	updateLayout();
+	update();
 }
 
 void PillStack::leaveEventHook(QEvent *e) {
 	_hovered = -1;
-	_pressed = -1;
+	if (!_dragging) {
+		_pressed = -1;
+		_dragIndex = -1;
+	}
 	update();
 }
 

@@ -96,6 +96,8 @@ public:
 
 	[[nodiscard]] int pillStackPills() const;
 	void setPillStackPills(int value);
+	[[nodiscard]] QString pillStackOrder() const;
+	void setPillStackOrder(const QString &value);
 
 	[[nodiscard]] QString mainMenuOrder() const;
 	void setMainMenuOrder(const QString &value);

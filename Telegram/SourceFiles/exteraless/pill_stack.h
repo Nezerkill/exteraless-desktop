@@ -4,8 +4,10 @@
 #include "ui/rp_widget.h"
 
 #include <QElapsedTimer>
+#include <QPoint>
 #include <rpl/event_stream.h>
 
+#include <optional>
 #include <vector>
 
 namespace Window {
@@ -56,6 +58,10 @@ private:
 	void updatePills();
 	void updateLayout();
 	void activate(Kind kind);
+	void applySavedOrder();
+	void saveOrder();
+	[[nodiscard]] static QString KindKey(Kind kind);
+	[[nodiscard]] static std::optional<Kind> KindFromKey(const QString &key);
 	[[nodiscard]] int indexAt(QPoint position) const;
 	[[nodiscard]] bool isPillEnabled(Kind kind) const;
 
@@ -73,6 +79,10 @@ private:
 	qint64 _previousNetAt = 0;
 	int _pressed = -1;
 	int _hovered = -1;
+	int _dragIndex = -1;
+	QPoint _pressPoint;
+	QString _order;
+	bool _dragging = false;
 	bool _cpuValid = false;
 	bool _netValid = false;
 	bool _enabled = false;

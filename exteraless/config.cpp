@@ -3,6 +3,7 @@
 #include "exteraless/doubletap.h"
 
 #include <QDir>
+#include <array>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -33,6 +34,7 @@ constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
+constexpr auto kPillStackOrder = "OEPillStackOrder";
 constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 constexpr auto kPluginStates = "OEPluginStates";
@@ -61,6 +63,32 @@ constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
+
+const auto kDefaultPillStackOrder = QStringLiteral(
+	"cpu,ram,net,dc,proxy,cache,ghost,lastseen");
+const auto kPillStackOrderKeys = std::array<const char*, 8>{
+	"cpu", "ram", "net", "dc", "proxy", "cache", "ghost", "lastseen" };
+
+[[nodiscard]] QString SanitizePillStackOrder(const QString &value) {
+	auto accepted = QStringList();
+	for (const auto &part : value.split(',')) {
+		const auto key = part.trimmed().toLower();
+		for (const auto name : kPillStackOrderKeys) {
+			const auto known = QString::fromLatin1(name);
+			if ((key == known) && !accepted.contains(known)) {
+				accepted.push_back(known);
+				break;
+			}
+		}
+	}
+	for (const auto name : kPillStackOrderKeys) {
+		const auto known = QString::fromLatin1(name);
+		if (!accepted.contains(known)) {
+			accepted.push_back(known);
+		}
+	}
+	return accepted.join(',');
+}
 
 [[nodiscard]] QJsonObject Unwrap(const QJsonObject &root) {
 	const auto values = root.value("exteraconfig");
@@ -347,6 +375,15 @@ void Config::setPillStackPills(int value) {
 	setValue(kPillStackPills, value);
 }
 
+QString Config::pillStackOrder() const {
+	return SanitizePillStackOrder(
+		stringValue(kPillStackOrder, kDefaultPillStackOrder));
+}
+
+void Config::setPillStackOrder(const QString &value) {
+	setValue(kPillStackOrder, SanitizePillStackOrder(value));
+}
+
 QString Config::mainMenuOrder() const {
 	return stringValue(kMainMenuOrder, kDefaultMainMenuOrder);
 }
@@ -542,6 +579,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kSaveDeletedMessages
 			|| key == kPillStackEnabled
 			|| key == kPillStackPills
+			|| key == kPillStackOrder
 			|| key == kMainMenuOrder
 			|| key == kDrawerAccountsExpanded
 			|| key == kPluginStates
@@ -583,6 +621,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 	}
 	SanitizeExclusions(&accepted, kGhostReadExclusions);
 	SanitizeExclusions(&accepted, kGhostTypingExclusions);
+	if (const auto order = accepted.value(kPillStackOrder); order.isString()) {
+		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
+	} else if (accepted.contains(kPillStackOrder)) {
+		accepted.remove(kPillStackOrder);
+	}
 	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
 		const auto value = accepted.value(key);
 		if (value.isDouble()) {

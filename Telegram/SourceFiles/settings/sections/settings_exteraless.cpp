@@ -660,6 +660,8 @@ const auto kMeta = Builder::BuildHelper({
 		tr::lng_settings_exteraless_pill_last_seen(),
 		{ u"last seen"_q, u"pill"_q });
 
+	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/proxy"_q,
 		.title = tr::lng_settings_exteraless_proxy(),

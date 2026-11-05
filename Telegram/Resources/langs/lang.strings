@@ -9232,6 +9232,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_pill_cache" = "Cache";
 "lng_settings_exteraless_pill_ghost" = "Ghost Mode";
 "lng_settings_exteraless_pill_last_seen" = "Last seen";
+"lng_settings_exteraless_pill_order_hint" = "Drag pills on the strip above the chat list to reorder them.";
 "lng_settings_exteraless_reset" = "Reset";
 "lng_settings_exteraless_reset_settings" = "Reset Exteraless settings";
 "lng_settings_exteraless_reset_confirm" = "Reset all Exteraless settings to defaults? This cannot be undone.";

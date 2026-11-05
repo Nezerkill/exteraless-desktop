@@ -80,10 +80,18 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 251 проверка PASS
-  (44 strip, 10 reactions, 8 CLI, 7 config, 22 general, 27 deleted, 7 reset,
-  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 74 backup); плагины без
-  изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 261 проверка PASS
+  (44 strip, 10 reactions, 9 CLI, 7 config, 22 general, 27 deleted, 7 reset,
+  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 74 backup);
+  плагины без изменений — 32 и 213 проверок.
+- Pill Stack order (NB-16): пилюли перетаскиваются прямо на полосе над
+  списком чатов; порядок хранится в `OEPillStackOrder` (CSV из
+  `cpu,ram,net,dc,proxy,cache,ghost,lastseen`), санитизируется (уникальность,
+  известные ключи, недостающие дописываются), экспортируется в
+  `pillstackconfig` `.extera` (суммарно 43 ключа) и применяется при старте.
+  CLI `pillorder` (9 проверок) проверяет дефолт, drag-эквивалент, санитайз,
+  `fromJson` и backup. Xvfb smoke: перетаскивание меняет порядок, после
+  рестарта порядок сохраняется.
 - Sticker time (NB-14): селектор `Sticker time` (`As usual`, `Beside sticker`,
   `Hidden`) хранится в `OEChatsStickerTimeSide`/`OEChatsHideStickerTime`,
   отрисовка и hit-test времени вынесены в
@@ -174,8 +182,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `5cfdc847…`,
-  mtime 2026-11-05 05:09; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `36cb6a3e…`,
+  mtime 2026-11-05 05:24; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

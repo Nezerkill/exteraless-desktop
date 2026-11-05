@@ -151,6 +151,7 @@ def check_cli_args(ledger, cli):
         ("doubletap-set with wrong count", ["doubletap-set", "1"]),
         ("doubletap-resolve without value", ["doubletap-resolve"]),
         ("stickertime-set with wrong count", ["stickertime-set", "1"]),
+        ("pillorder-set without order", ["pillorder-set"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -463,6 +464,8 @@ def check_backup(ledger, cli, work):
             exported["pillstackconfig"] == {
                 "OEPillStackEnabled": False,
                 "OEPillStackPills": 255,
+                "OEPillStackOrder":
+                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
             },
             exported["pillstackconfig"])
         ledger.check(
@@ -475,7 +478,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 42,
+            sum(len(value) for value in exported.values()) == 43,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -495,7 +498,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 42,
+                data.get("applied") == 43,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -571,6 +574,7 @@ def check_backup(ledger, cli, work):
         "pillstackconfig": {
             "OEPillStackEnabled": True,
             "OEPillStackPills": 5,
+            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
         },
         "mainconfig": {
             "OEMainMenuOrder": "ghost,exteraless",
@@ -587,7 +591,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 42,
+            data.get("applied") == 43,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -658,6 +662,8 @@ def check_backup(ledger, cli, work):
             sections["pillstackconfig"] == {
                 "OEPillStackEnabled": True,
                 "OEPillStackPills": 5,
+                "OEPillStackOrder":
+                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
             },
             sections["pillstackconfig"])
         ledger.check(
@@ -740,10 +746,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 42",
+            "backup legacy eight completed to 43",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (38, 2, 2),
+             len(sections["mainconfig"])) == (38, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1626,6 +1632,114 @@ def check_sticker_time(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_pill_order(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    default = ["cpu", "ram", "net", "dc", "proxy", "cache", "ghost",
+               "lastseen"]
+
+    env = make_env(work / "pillorder-defaults")
+    data = json_call(ledger, cli, ["pillorder"], env, "pillorder defaults")
+    if data is not None:
+        ledger.check(
+            "pillorder defaults",
+            data.get("order") == default,
+            data)
+
+    env = make_env(work / "pillorder-custom")
+    data = json_call(
+        ledger, cli,
+        ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
+        env, "pillorder custom")
+    custom = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
+              "lastseen"]
+    if data is not None:
+        ledger.check(
+            "pillorder custom set",
+            data.get("order") == custom,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["pillorder"], env, "pillorder custom reload")
+    if reloaded is not None:
+        ledger.check(
+            "pillorder custom persisted",
+            reloaded.get("order") == custom,
+            reloaded)
+
+    env = make_env(work / "pillorder-sanitize")
+    data = json_call(
+        ledger, cli, ["pillorder-set", "GHOST,cpu,ghost,bogus"], env,
+        "pillorder sanitize")
+    sanitized = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
+                 "lastseen"]
+    if data is not None:
+        ledger.check(
+            "pillorder sanitized",
+            data.get("order") == sanitized,
+            data)
+
+    env = make_env(work / "pillorder-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {"OEPillStackOrder": "cache,ghost"},
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "pillorder fromJson")
+    if data is not None:
+        ledger.check(
+            "pillorder fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["pillorder"], env, "pillorder fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "pillorder fromJson values",
+            reloaded.get("order")
+            == ["cache", "ghost", "cpu", "ram", "net", "dc", "proxy",
+                "lastseen"],
+            reloaded)
+
+    env = make_env(work / "pillorder-backup")
+    data = json_call(
+        ledger, cli, ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
+        env, "pillorder backup")
+    if data is not None:
+        pills = data.get("pillstackconfig") or {}
+        ledger.check(
+            "pillorder backup default",
+            pills.get("OEPillStackOrder")
+            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
+            pills)
+    root = {
+        "version": 1,
+        "pillstackconfig": {"OEPillStackOrder": "lastseen,ghost"},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "pillorder backup import")
+    if data is not None:
+        ledger.check(
+            "pillorder backup import applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["pillorder"], env, "pillorder backup read")
+    if reloaded is not None:
+        ledger.check(
+            "pillorder backup import values",
+            reloaded.get("order")
+            == ["lastseen", "ghost", "cpu", "ram", "net", "dc", "proxy",
+                "cache"],
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1646,6 +1760,7 @@ def main():
         menu = check_message_menu(ledger, cli, work)
         doubletap = check_doubletap(ledger, cli, work)
         stickertime = check_sticker_time(ledger, cli, work)
+        pillorder = check_pill_order(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1658,6 +1773,7 @@ def main():
     print(f"menu: {menu[0] - menu[1]} passed")
     print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
     print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
+    print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

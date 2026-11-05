@@ -48,6 +48,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
 		<< "  exteraless-chats-cli stickertime\n"
 		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
+		<< "  exteraless-chats-cli pillorder\n"
+		<< "  exteraless-chats-cli pillorder-set <csv>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -172,6 +174,14 @@ void PrintDoubleTap() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
+	});
+}
+
+void PrintPillOrder() {
+	const auto order = Exteraless::Config::Instance().pillStackOrder();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("order"),
+			QJsonArray::fromStringList(order.split(',')) },
 	});
 }
 
@@ -427,6 +437,21 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("pillorder")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintPillOrder();
+		return 0;
+	}
+	if (mode == QStringLiteral("pillorder-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setPillStackOrder(arguments[2]);
+		PrintPillOrder();
 		return 0;
 	}
 	if (mode == QStringLiteral("stickertime-set")) {

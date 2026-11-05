@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Pill Stack / Order: пилюли можно перетаскивать прямо на полосе над списком
+  чатов; порядок сохраняется в `OEPillStackOrder` (CSV), переживает рестарт и
+  экспортируется в `.extera` (всего 43 ключа), в настройках добавлена подсказка
+  о drag-сортировке.
 - Chats / Stickers: настройка `Sticker time` (`As usual`, `Beside sticker`,
   `Hidden`) управляет временем на стикерах через `OEChatsStickerTimeSide` и
   `OEChatsHideStickerTime`; Android-ключи `stickerTimeMode`/`hideStickerTime`

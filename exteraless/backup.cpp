@@ -43,6 +43,7 @@ constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kPluginStates = "OEPluginStates";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
+constexpr auto kPillStackOrder = "OEPillStackOrder";
 constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 constexpr auto kChatsStripTrackingOnOpen = "OEChatsStripTrackingOnOpen";
@@ -220,6 +221,7 @@ QString BuildBackup() {
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
 	pills[kPillStackPills] = config.pillStackPills();
+	pills[kPillStackOrder] = config.pillStackOrder();
 
 	auto main = QJsonObject();
 	main[kMainMenuOrder] = config.mainMenuOrder();
@@ -287,6 +289,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 				return true;
 			} else if (key == kPillStackPills && ValidPillMask(value)) {
 				config.setPillStackPills(value.toInt());
+				return true;
+			} else if (key == kPillStackOrder && value.isString()) {
+				config.setPillStackOrder(value.toString());
 				return true;
 			}
 			return false;
