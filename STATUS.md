@@ -110,6 +110,7 @@
   шаг перемотки стрелками в медиавьюере, J/L — двойной шаг; Android-индекс
   `doubleTapSeekDuration` конвертируется в секунды. CLI `seek-duration`
   (8 проверок), Xvfb: селектор в Chats записывает 15 с.
+- Отложены: NB-21 (нужен SQLite), NB-33 (ждёт NB-92), NB-43 (peer в MTP-фильтре).
 - Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
   активном online-ghost отправляет новые текстовые сообщения как отложенные
   на 12 секунд (`SendOptions.scheduled`), исключая self, ботов и секретные
