@@ -99,14 +99,19 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 499 проверок PASS
-  (44 strip, 10 reactions, 36 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 506 проверок PASS
+  (44 strip, 10 reactions, 37 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 6 edited-mark,
-  5 forward-date, 5 media-menu, 5 chat-menu, 90 backup); плагины без
-  изменений — 32 и 213 проверок.
+  5 forward-date, 5 media-menu, 5 chat-menu, 5 disable-link-preview,
+  91 backup); плагины без изменений — 32 и 213 проверок.
+- Link preview default (NB-74): `OEChatsDisableLinkPreviewByDefault` (default
+  `false`) отключает автоматическое определение превью ссылок в поле ввода;
+  ручное переключение остаётся по `Ctrl+R`. CLI `disable-link-preview`
+  (5 проверок). Xvfb: при включённой настройке вставка ссылки не создаёт
+  карточку превью над полем ввода.
 - Chat menu (NB-81, частично): `OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
   `OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted` (default `true`)
   управляют пунктами Boost, связанный чат, «Deleted messages» и «Clear deleted
@@ -333,8 +338,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f58eeb04…`,
-  mtime 2026-11-05 14:39; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `2e2b33ee…`,
+  mtime 2026-11-05 15:20; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

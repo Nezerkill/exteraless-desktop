@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(499 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, backup),
+(506 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -168,7 +168,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-71 | Результаты опроса до голосования | `OEChatsShowResultsBeforeVoting` | `data/data_poll.cpp`, `history/view/media/history_view_poll.cpp` | M · средний | Xvfb: проценты видны до голоса, после голоса поведение как раньше | ⬜ | R2 §3.2 |
 | NB-72 | Длительность перемотки двойным тапом | `OEChatsDoubleTapSeekDuration` | `exteraless/config.{h,cpp}`, `media/view/media_view_overlay_widget.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: 5/10/15/30 с | ✅ 2026-11-05: `OEChatsSeekDuration` (5/10/15/30, default 5) задаёт шаг перемотки стрелками, J/L — двойной шаг; Android-индекс `doubleTapSeekDuration` конвертируется; CLI `seek-duration` (8 проверок), Xvfb: селектор в Chats | R2 §3.2 |
 | NB-73 | Скрыть кнопки профиля: gift, money, call, share, search | `hideGiftButton`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton` | `info/profile/info_profile_top_bar.cpp`, `history/view/history_view_top_bar_widget.cpp` | S–M · низкий | Xvfb: кнопки скрыты в канале и в профиле, действия доступны из меню | ⬜ | R2 §3.2 (дополняет NB-35: там compose, здесь профиль) |
-| NB-74 | Отключить превью ссылок по умолчанию | `NekoConfig.disableLinkPreviewByDefault` | `chat_helpers/compose/*`, `chat_helpers/message_field.cpp` | M · средний | Xvfb: toggle превью выключен при вставке ссылки | ⬜ | R2 §3.1 |
+| NB-74 | Отключить превью ссылок по умолчанию | `NekoConfig.disableLinkPreviewByDefault` | `exteraless/config.{h,cpp}`, `history/view/controls/history_view_webpage_processor.{h,cpp}`, `settings/sections/settings_exteraless.cpp` | M · средний | Xvfb: toggle превью выключен при вставке ссылки | ✅ 2026-11-05: `OEChatsDisableLinkPreviewByDefault` (default `false`) отключает автоматическую генерацию превью ссылок; ручное переключение доступно через `Ctrl+R`; CLI `disable-link-preview` (5 проверок), Xvfb: ссылка без карточки превью при включённой настройке | R2 §3.1 |
 | NB-75 | Всегда показывать иконку скачивания | `NaConfig.alwaysShowDownloadIcon` | `history/view/media/*`, `dialogs/` | M · средний | Xvfb: иконка есть у незагруженного и загруженного медиа | ⬜ | R2 §3.1 |
 | NB-76 | Boost скачивания и загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | `mtproto/session_private.cpp`, `data/data_download_manager.cpp` | M–L · средний (сетевой smoke) | замер скорости на тестовом DC, регресс по таймаутам | ⬜ | R2 §3.1, R1 §3.5 |
 | NB-77 | IPv6 и DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | `mtproto/connection_*`, `connection_resolving.cpp` | L · высокий (свой резолвер) | сетевой smoke: подключение по IPv6 и через DoH | ⬜ | R2 §3.1 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 499 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 506 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

@@ -173,6 +173,8 @@ def check_cli_args(ledger, cli):
         ("forward-date-set with wrong count", ["forward-date-set"]),
         ("media-menu-set with wrong count", ["media-menu-set", "1"]),
         ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
+        ("disable-link-preview-set with wrong count",
+         ["disable-link-preview-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -485,7 +487,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 67,
+            len(section) == 68,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -506,7 +508,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 72,
+            sum(len(value) for value in exported.values()) == 73,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -526,7 +528,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 72,
+                data.get("applied") == 73,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -627,6 +629,7 @@ def check_backup(ledger, cli, work):
             "OEChatsChatMenuLinked": False,
             "OEChatsChatMenuViewDeleted": True,
             "OEChatsChatMenuClearDeleted": False,
+            "OEChatsDisableLinkPreviewByDefault": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -648,7 +651,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 72,
+            data.get("applied") == 73,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -731,6 +734,10 @@ def check_backup(ledger, cli, work):
             "backup full seek duration",
             section.get("OEChatsSeekDuration") == 15,
             section.get("OEChatsSeekDuration"))
+        ledger.check(
+            "backup full disable link preview",
+            section.get("OEChatsDisableLinkPreviewByDefault") is True,
+            section.get("OEChatsDisableLinkPreviewByDefault"))
         ledger.check(
             "backup full chat menu",
             section.get("OEChatsChatMenuBoost") is False
@@ -890,10 +897,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 72",
+            "backup legacy eight completed to 73",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (67, 3, 2),
+             len(sections["mainconfig"])) == (68, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1733,6 +1740,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsChatMenuLinked": False,
             "OEChatsChatMenuViewDeleted": True,
             "OEChatsChatMenuClearDeleted": False,
+            "OEChatsDisableLinkPreviewByDefault": True,
         },
     }
     data = json_call(
@@ -3423,6 +3431,64 @@ def check_chat_menu(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_disable_link_preview(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "disable-link-preview-defaults")
+    data = json_call(
+        ledger, cli, ["disable-link-preview"], env,
+        "disable-link-preview defaults")
+    if data is not None:
+        ledger.check(
+            "disable link preview default off",
+            data.get("disabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["disable-link-preview-set", "1"], env,
+        "disable-link-preview set")
+    if data is not None:
+        ledger.check("disable link preview set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["disable-link-preview"], env,
+        "disable-link-preview reload")
+    if reloaded is not None:
+        ledger.check(
+            "disable link preview persisted",
+            reloaded.get("disabled") is True,
+            reloaded)
+
+    env = make_env(work / "disable-link-preview-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "disableLinkPreviewByDefault": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "disable-link-preview alias")
+    if data is not None:
+        ledger.check(
+            "disable link preview alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["disable-link-preview"], env,
+        "disable-link-preview alias read")
+    if reloaded is not None:
+        ledger.check(
+            "disable link preview alias value",
+            reloaded.get("disabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3463,6 +3529,7 @@ def main():
         forward_date = check_forward_date(ledger, cli, work)
         media_menu = check_media_menu(ledger, cli, work)
         chat_menu = check_chat_menu(ledger, cli, work)
+        disable_link_preview = check_disable_link_preview(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3495,6 +3562,8 @@ def main():
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
     print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
+    print(f"disable-link-preview: "
+          f"{disable_link_preview[0] - disable_link_preview[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

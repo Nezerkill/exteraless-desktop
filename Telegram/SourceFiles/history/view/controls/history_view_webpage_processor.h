@@ -116,6 +116,7 @@ private:
 	QString _link;
 	WebPageData *_data = nullptr;
 	Data::WebPageDraft _draft;
+	bool _explicitAllowed = false;
 
 	rpl::event_stream<> _repaintRequests;
 	rpl::variable<WebpageParsed> _parsed;

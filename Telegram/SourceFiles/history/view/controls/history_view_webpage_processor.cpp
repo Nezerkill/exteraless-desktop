@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_origin.h"
 #include "data/data_session.h"
 #include "data/data_web_page.h"
+#include "exteraless/config.h"
 #include "history/history.h"
 #include "lang/lang_keys.h"
 #include "main/main_session.h"
@@ -261,7 +262,12 @@ QString WebpageProcessor::link() const {
 
 void WebpageProcessor::apply(Data::WebPageDraft draft, bool reparse) {
 	const auto was = _link;
+	const auto unremoving = _draft.removed && !draft.removed;
+	if (unremoving) {
+		_explicitAllowed = true;
+	}
 	if (draft.removed) {
+		_explicitAllowed = false;
 		_draft = draft;
 		_parsedLinks = _parser.list().current();
 		if (_parsedLinks.empty()) {
@@ -273,6 +279,7 @@ void WebpageProcessor::apply(Data::WebPageDraft draft, bool reparse) {
 		_parsed = WebpageParsed();
 		updateFromData();
 	} else if (draft.manual && !draft.url.isEmpty()) {
+		_explicitAllowed = true;
 		_draft = draft;
 		_parsedLinks = QStringList();
 		_links = QStringList();
@@ -356,6 +363,15 @@ void WebpageProcessor::checkPreview() {
 		&& _history->peer->amRestricted(ChatRestriction::EmbedLinks);
 	if (_parsedLinks.empty()) {
 		_draft.removed = false;
+		_explicitAllowed = false;
+	}
+	if (!_explicitAllowed
+		&& !_draft.manual
+		&& !_draft.id
+		&& Exteraless::Config::Instance().disableLinkPreviewByDefault()
+		&& !_draft.removed) {
+		apply({ .removed = true });
+		return;
 	}
 	if (_draft.removed) {
 		return;

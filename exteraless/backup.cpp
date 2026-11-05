@@ -46,6 +46,7 @@ constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
+constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -56,6 +57,10 @@ constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfileAlias
 	= "mediaViewerMenuItemSetProfilePhoto";
 constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
+constexpr auto kDisableLinkPreviewByDefaultAlias
+	= "disableLinkPreviewByDefault";
+constexpr auto kDisableLinkPreviewByDefaultAliasUpper
+	= "DisableLinkPreviewByDefault";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -290,6 +295,8 @@ QString BuildBackup() {
 	extera[kChatMenuLinked] = config.chatMenuLinked();
 	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
 	extera[kChatMenuClearDeleted] = config.chatMenuClearDeleted();
+	extera[kDisableLinkPreviewByDefault]
+		= config.disableLinkPreviewByDefault();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -543,6 +550,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kChatMenuClearDeletedAlias)
 			&& value.isBool()) {
 			config.setChatMenuClearDeleted(value.toBool());
+		} else if ((key == kDisableLinkPreviewByDefault
+			|| key == kDisableLinkPreviewByDefaultAlias
+			|| key == kDisableLinkPreviewByDefaultAliasUpper)
+			&& value.isBool()) {
+			config.setDisableLinkPreviewByDefault(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

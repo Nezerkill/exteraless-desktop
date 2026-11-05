@@ -101,6 +101,8 @@ public:
 	void setChatMenuViewDeleted(bool value);
 	[[nodiscard]] bool chatMenuClearDeleted() const;
 	void setChatMenuClearDeleted(bool value);
+	[[nodiscard]] bool disableLinkPreviewByDefault() const;
+	void setDisableLinkPreviewByDefault(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

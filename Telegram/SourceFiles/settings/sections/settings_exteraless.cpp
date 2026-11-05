@@ -584,6 +584,15 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setShowForwardDate(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/disable-link-preview"_q,
+		tr::lng_settings_exteraless_chats_disable_link_preview(),
+		{ u"link"_q, u"preview"_q },
+		Exteraless::Config::Instance().disableLinkPreviewByDefault(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setDisableLinkPreviewByDefault(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/use-edited-icon"_q,
 		tr::lng_settings_exteraless_chats_use_edited_icon(),
 		{ u"edited"_q, u"icon"_q },

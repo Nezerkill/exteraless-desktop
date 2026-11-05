@@ -88,6 +88,8 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli disable-link-preview\n"
+		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -533,6 +535,30 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("disable-link-preview")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("disabled"),
+				Exteraless::Config::Instance()
+					.disableLinkPreviewByDefault() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("disable-link-preview-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance()
+			.setDisableLinkPreviewByDefault(value);
+		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("chat-menu")) {

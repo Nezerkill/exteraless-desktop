@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- Chats / Link preview: настройка `OEChatsDisableLinkPreviewByDefault` (default
+  `false`) отключает автоматический поиск и добавление превью ссылок при вводе
+  сообщений; ручное включение/выключение остаётся доступным по комбинации
+  `Ctrl+R` (`ToggleWebPagePreview`). Android-алиасы `disableLinkPreviewByDefault`
+  и `DisableLinkPreviewByDefault` поддержаны в `.extera` (всего 73 ключа),
+  тумблер добавлен в Chats.
 - Chat / Menu: четыре настройки `OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
   `OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted` (все default
   `true`) управляют пунктами меню чата Boost, связанный чат, «Deleted

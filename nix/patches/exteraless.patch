@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..6de5540 100644
+index ffc8ec9..f162261 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,117 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,118 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -143,6 +143,7 @@ index ffc8ec9..6de5540 100644
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
++"lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
 +"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 +"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 +"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
@@ -3996,6 +3997,67 @@ index f95a351..6f65edd 100644
  		|| !peer
  		|| isEditingMessage()
  		|| !session().sendAsPeers().shouldChoose({ peer, type })) {
+diff --git a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp b/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp
+index ad09615..07f3cd9 100644
+--- a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp
++++ b/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp
+@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_file_origin.h"
+ #include "data/data_session.h"
+ #include "data/data_web_page.h"
++#include "exteraless/config.h"
+ #include "history/history.h"
+ #include "lang/lang_keys.h"
+ #include "main/main_session.h"
+@@ -261,7 +262,12 @@ QString WebpageProcessor::link() const {
+ 
+ void WebpageProcessor::apply(Data::WebPageDraft draft, bool reparse) {
+ 	const auto was = _link;
++	const auto unremoving = _draft.removed && !draft.removed;
++	if (unremoving) {
++		_explicitAllowed = true;
++	}
+ 	if (draft.removed) {
++		_explicitAllowed = false;
+ 		_draft = draft;
+ 		_parsedLinks = _parser.list().current();
+ 		if (_parsedLinks.empty()) {
+@@ -273,6 +279,7 @@ void WebpageProcessor::apply(Data::WebPageDraft draft, bool reparse) {
+ 		_parsed = WebpageParsed();
+ 		updateFromData();
+ 	} else if (draft.manual && !draft.url.isEmpty()) {
++		_explicitAllowed = true;
+ 		_draft = draft;
+ 		_parsedLinks = QStringList();
+ 		_links = QStringList();
+@@ -356,6 +363,15 @@ void WebpageProcessor::checkPreview() {
+ 		&& _history->peer->amRestricted(ChatRestriction::EmbedLinks);
+ 	if (_parsedLinks.empty()) {
+ 		_draft.removed = false;
++		_explicitAllowed = false;
++	}
++	if (!_explicitAllowed
++		&& !_draft.manual
++		&& !_draft.id
++		&& Exteraless::Config::Instance().disableLinkPreviewByDefault()
++		&& !_draft.removed) {
++		apply({ .removed = true });
++		return;
+ 	}
+ 	if (_draft.removed) {
+ 		return;
+diff --git a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.h b/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.h
+index 5aac1fd..2ea3538 100644
+--- a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.h
++++ b/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.h
+@@ -116,6 +116,7 @@ private:
+ 	QString _link;
+ 	WebPageData *_data = nullptr;
+ 	Data::WebPageDraft _draft;
++	bool _explicitAllowed = false;
+ 
+ 	rpl::event_stream<> _repaintRequests;
+ 	rpl::variable<WebpageParsed> _parsed;
 diff --git a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp b/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
 index 9971a38..6c1e80e 100644
 --- a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
@@ -5177,10 +5239,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..d4b758d
+index 0000000..d913b03
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1279 @@
+@@ -0,0 +1,1288 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5765,6 +5827,15 @@ index 0000000..d4b758d
 +		Exteraless::Config::Instance().showForwardDate(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setShowForwardDate(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/disable-link-preview"_q,
++		tr::lng_settings_exteraless_chats_disable_link_preview(),
++		{ u"link"_q, u"preview"_q },
++		Exteraless::Config::Instance().disableLinkPreviewByDefault(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setDisableLinkPreviewByDefault(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/use-edited-icon"_q,
@@ -7247,10 +7318,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..516b4cf
+index 0000000..0fa45c2
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,636 @@
+@@ -0,0 +1,648 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7299,6 +7370,7 @@ index 0000000..516b4cf
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
++constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 +constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 +constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -7309,6 +7381,10 @@ index 0000000..516b4cf
 +constexpr auto kMediaViewerMenuSetProfileAlias
 +	= "mediaViewerMenuItemSetProfilePhoto";
 +constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
++constexpr auto kDisableLinkPreviewByDefaultAlias
++	= "disableLinkPreviewByDefault";
++constexpr auto kDisableLinkPreviewByDefaultAliasUpper
++	= "DisableLinkPreviewByDefault";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -7543,6 +7619,8 @@ index 0000000..516b4cf
 +	extera[kChatMenuLinked] = config.chatMenuLinked();
 +	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
 +	extera[kChatMenuClearDeleted] = config.chatMenuClearDeleted();
++	extera[kDisableLinkPreviewByDefault]
++		= config.disableLinkPreviewByDefault();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7796,6 +7874,11 @@ index 0000000..516b4cf
 +			|| key == kChatMenuClearDeletedAlias)
 +			&& value.isBool()) {
 +			config.setChatMenuClearDeleted(value.toBool());
++		} else if ((key == kDisableLinkPreviewByDefault
++			|| key == kDisableLinkPreviewByDefaultAlias
++			|| key == kDisableLinkPreviewByDefaultAliasUpper)
++			&& value.isBool()) {
++			config.setDisableLinkPreviewByDefault(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -7988,10 +8071,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..98c0fa3
+index 0000000..233e784
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1059 @@
+@@ -0,0 +1,1069 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -8037,6 +8120,7 @@ index 0000000..98c0fa3
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
++constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8430,6 +8514,14 @@ index 0000000..98c0fa3
 +
 +void Config::setChatMenuClearDeleted(bool value) {
 +	setValue(kChatMenuClearDeleted, value);
++}
++
++bool Config::disableLinkPreviewByDefault() const {
++	return boolValue(kDisableLinkPreviewByDefault, false);
++}
++
++void Config::setDisableLinkPreviewByDefault(bool value) {
++	setValue(kDisableLinkPreviewByDefault, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8857,6 +8949,7 @@ index 0000000..98c0fa3
 +			|| key == kChatMenuLinked
 +			|| key == kChatMenuViewDeleted
 +			|| key == kChatMenuClearDeleted
++			|| key == kDisableLinkPreviewByDefault
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -9053,10 +9146,10 @@ index 0000000..98c0fa3
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..caa0818
+index 0000000..118cf7a
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,223 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -9160,6 +9253,8 @@ index 0000000..caa0818
 +	void setChatMenuViewDeleted(bool value);
 +	[[nodiscard]] bool chatMenuClearDeleted() const;
 +	void setChatMenuClearDeleted(bool value);
++	[[nodiscard]] bool disableLinkPreviewByDefault() const;
++	void setDisableLinkPreviewByDefault(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11756,10 +11851,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..d513aa5
+index 0000000..313ffa6
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1350 @@
+@@ -0,0 +1,1376 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11850,6 +11945,8 @@ index 0000000..d513aa5
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli disable-link-preview\n"
++		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-menu\n"
 +		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 +		<< "<viewDeleted> <clearDeleted>\n"
@@ -12295,6 +12392,30 @@ index 0000000..d513aa5
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("disable-link-preview")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("disabled"),
++				Exteraless::Config::Instance()
++					.disableLinkPreviewByDefault() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("disable-link-preview-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance()
++			.setDisableLinkPreviewByDefault(value);
++		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("chat-menu")) {
@@ -13174,10 +13295,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..8384566
+index 0000000..f0e6daa
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3509 @@
+@@ -0,0 +1,3578 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -13353,6 +13474,8 @@ index 0000000..8384566
 +        ("forward-date-set with wrong count", ["forward-date-set"]),
 +        ("media-menu-set with wrong count", ["media-menu-set", "1"]),
 +        ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
++        ("disable-link-preview-set with wrong count",
++         ["disable-link-preview-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13665,7 +13788,7 @@ index 0000000..8384566
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 67,
++            len(section) == 68,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13686,7 +13809,7 @@ index 0000000..8384566
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 72,
++            sum(len(value) for value in exported.values()) == 73,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13706,7 +13829,7 @@ index 0000000..8384566
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 72,
++                data.get("applied") == 73,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13807,6 +13930,7 @@ index 0000000..8384566
 +            "OEChatsChatMenuLinked": False,
 +            "OEChatsChatMenuViewDeleted": True,
 +            "OEChatsChatMenuClearDeleted": False,
++            "OEChatsDisableLinkPreviewByDefault": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13828,7 +13952,7 @@ index 0000000..8384566
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 72,
++            data.get("applied") == 73,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13911,6 +14035,10 @@ index 0000000..8384566
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full disable link preview",
++            section.get("OEChatsDisableLinkPreviewByDefault") is True,
++            section.get("OEChatsDisableLinkPreviewByDefault"))
 +        ledger.check(
 +            "backup full chat menu",
 +            section.get("OEChatsChatMenuBoost") is False
@@ -14070,10 +14198,10 @@ index 0000000..8384566
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 72",
++            "backup legacy eight completed to 73",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (67, 3, 2),
++             len(sections["mainconfig"])) == (68, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -14913,6 +15041,7 @@ index 0000000..8384566
 +            "OEChatsChatMenuLinked": False,
 +            "OEChatsChatMenuViewDeleted": True,
 +            "OEChatsChatMenuClearDeleted": False,
++            "OEChatsDisableLinkPreviewByDefault": True,
 +        },
 +    }
 +    data = json_call(
@@ -16603,6 +16732,64 @@ index 0000000..8384566
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_disable_link_preview(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "disable-link-preview-defaults")
++    data = json_call(
++        ledger, cli, ["disable-link-preview"], env,
++        "disable-link-preview defaults")
++    if data is not None:
++        ledger.check(
++            "disable link preview default off",
++            data.get("disabled") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["disable-link-preview-set", "1"], env,
++        "disable-link-preview set")
++    if data is not None:
++        ledger.check("disable link preview set on", data == 1, data)
++
++    reloaded = json_call(
++        ledger, cli, ["disable-link-preview"], env,
++        "disable-link-preview reload")
++    if reloaded is not None:
++        ledger.check(
++            "disable link preview persisted",
++            reloaded.get("disabled") is True,
++            reloaded)
++
++    env = make_env(work / "disable-link-preview-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "disableLinkPreviewByDefault": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "disable-link-preview alias")
++    if data is not None:
++        ledger.check(
++            "disable link preview alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["disable-link-preview"], env,
++        "disable-link-preview alias read")
++    if reloaded is not None:
++        ledger.check(
++            "disable link preview alias value",
++            reloaded.get("disabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -16643,6 +16830,7 @@ index 0000000..8384566
 +        forward_date = check_forward_date(ledger, cli, work)
 +        media_menu = check_media_menu(ledger, cli, work)
 +        chat_menu = check_chat_menu(ledger, cli, work)
++        disable_link_preview = check_disable_link_preview(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -16675,6 +16863,8 @@ index 0000000..8384566
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
 +    print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
++    print(f"disable-link-preview: "
++          f"{disable_link_preview[0] - disable_link_preview[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(
