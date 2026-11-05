@@ -81,10 +81,10 @@ index 811707d..882696a 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..1cfdee3 100644
+index ffc8ec9..c6f50fc 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,83 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,89 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -108,6 +108,12 @@ index ffc8ec9..1cfdee3 100644
 +"lng_settings_exteraless_ghost_online" = "Don't send online status";
 +"lng_settings_exteraless_ghost_typing" = "Don't send typing status";
 +"lng_settings_exteraless_ghost_show_status" = "Show Ghost Mode status in menu";
++"lng_settings_exteraless_ghost_locks" = "Locked Ghost settings";
++"lng_settings_exteraless_ghost_lock_read" = "Lock read receipts";
++"lng_settings_exteraless_ghost_lock_stories" = "Lock story views";
++"lng_settings_exteraless_ghost_lock_online" = "Lock online status";
++"lng_settings_exteraless_ghost_lock_typing" = "Lock typing status";
++"lng_settings_exteraless_ghost_lock_offline" = "Lock offline after online";
 +"lng_settings_exteraless_ghost_status_on" = "On";
 +"lng_settings_exteraless_ghost_status_off" = "Off";
 +"lng_settings_exteraless_ghost_status_partial" = "Partial";
@@ -4403,10 +4409,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..131ba28
+index 0000000..6a60a50
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,880 @@
+@@ -0,0 +1,941 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4612,6 +4618,67 @@ index 0000000..131ba28
 +		Exteraless::Config::Instance().ghostShowStatus(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setGhostShowStatus(value);
++		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/ghost/locks"_q,
++		.title = tr::lng_settings_exteraless_ghost_locks(),
++	});
++	const auto addGhostLock = [&](
++			QString id,
++			rpl::producer<QString> title,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto toggle = builder.addButton({
++			.id = std::move(id),
++			.title = std::move(title),
++			.st = &st::settingsButtonNoIcon,
++			.toggled = rpl::single(current),
++			.keywords = { u"ghost"_q, u"lock"_q },
++		});
++		if (toggle) {
++			toggle->toggledChanges(
++			) | rpl::on_next([=](bool value) {
++				setter(value);
++			}, toggle->lifetime());
++		}
++	};
++	addGhostLock(
++		u"exteraless/ghost/lock/read"_q,
++		tr::lng_settings_exteraless_ghost_lock_read(),
++		Exteraless::Config::Instance().ghostSendReadLocked(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendReadLocked(value);
++		});
++	addGhostLock(
++		u"exteraless/ghost/lock/stories"_q,
++		tr::lng_settings_exteraless_ghost_lock_stories(),
++		Exteraless::Config::Instance().ghostSendStoriesLocked(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendStoriesLocked(value);
++		});
++	addGhostLock(
++		u"exteraless/ghost/lock/online"_q,
++		tr::lng_settings_exteraless_ghost_lock_online(),
++		Exteraless::Config::Instance().ghostSendOnlineLocked(),
++		[](bool value) {
++			Exteraless::Config::Instance().setGhostSendOnlineLocked(value);
++		});
++	addGhostLock(
++		u"exteraless/ghost/lock/typing"_q,
++		tr::lng_settings_exteraless_ghost_lock_typing(),
++		Exteraless::Config::Instance().ghostSendUploadProgressLocked(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setGhostSendUploadProgressLocked(value);
++		});
++	addGhostLock(
++		u"exteraless/ghost/lock/offline"_q,
++		tr::lng_settings_exteraless_ghost_lock_offline(),
++		Exteraless::Config::Instance().ghostSendOfflineAfterOnlineLocked(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setGhostSendOfflineAfterOnlineLocked(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -5981,10 +6048,10 @@ index 0000000..78b1ef7
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..0ba851c
+index 0000000..5d3cf46
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,479 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6025,6 +6092,21 @@ index 0000000..0ba851c
 +constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 +constexpr auto kGhostShowStatus = "OEGhostShowStatus";
 +constexpr auto kShowGhostModeStatus = "showGhostModeStatus";
++constexpr auto kGhostSendReadLocked = "OEGhostSendReadLocked";
++constexpr auto kGhostSendStoriesLocked = "OEGhostSendStoriesLocked";
++constexpr auto kGhostSendOnlineLocked = "OEGhostSendOnlineLocked";
++constexpr auto kGhostSendUploadProgressLocked
++	= "OEGhostSendUploadProgressLocked";
++constexpr auto kGhostSendOfflineAfterOnlineLocked
++	= "OEGhostSendOfflineAfterOnlineLocked";
++constexpr auto kSendReadMessagePacketsLocked
++	= "sendReadMessagePacketsLocked";
++constexpr auto kSendReadStoriesPacketsLocked
++	= "sendReadStoriesPacketsLocked";
++constexpr auto kSendOnlinePacketsLocked = "sendOnlinePacketsLocked";
++constexpr auto kSendUploadProgressLocked = "sendUploadProgressLocked";
++constexpr auto kSendOfflinePacketAfterOnlineLocked
++	= "sendOfflinePacketAfterOnlineLocked";
 +constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 +constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -6183,6 +6265,13 @@ index 0000000..0ba851c
 +	extera[kGhostSendOfflineAfterOnline]
 +		= config.ghostSendOfflineAfterOnline();
 +	extera[kGhostShowStatus] = config.ghostShowStatus();
++	extera[kGhostSendReadLocked] = config.ghostSendReadLocked();
++	extera[kGhostSendStoriesLocked] = config.ghostSendStoriesLocked();
++	extera[kGhostSendOnlineLocked] = config.ghostSendOnlineLocked();
++	extera[kGhostSendUploadProgressLocked]
++		= config.ghostSendUploadProgressLocked();
++	extera[kGhostSendOfflineAfterOnlineLocked]
++		= config.ghostSendOfflineAfterOnlineLocked();
 +	extera[kGhostReadExclusions] = config.ghostReadExclusions();
 +	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
 +	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
@@ -6330,6 +6419,26 @@ index 0000000..0ba851c
 +		} else if ((key == kGhostShowStatus || key == kShowGhostModeStatus)
 +			&& value.isBool()) {
 +			config.setGhostShowStatus(value.toBool());
++		} else if ((key == kGhostSendReadLocked
++			|| key == kSendReadMessagePacketsLocked)
++			&& value.isBool()) {
++			config.setGhostSendReadLocked(value.toBool());
++		} else if ((key == kGhostSendStoriesLocked
++			|| key == kSendReadStoriesPacketsLocked)
++			&& value.isBool()) {
++			config.setGhostSendStoriesLocked(value.toBool());
++		} else if ((key == kGhostSendOnlineLocked
++			|| key == kSendOnlinePacketsLocked)
++			&& value.isBool()) {
++			config.setGhostSendOnlineLocked(value.toBool());
++		} else if ((key == kGhostSendUploadProgressLocked
++			|| key == kSendUploadProgressLocked)
++			&& value.isBool()) {
++			config.setGhostSendUploadProgressLocked(value.toBool());
++		} else if ((key == kGhostSendOfflineAfterOnlineLocked
++			|| key == kSendOfflinePacketAfterOnlineLocked)
++			&& value.isBool()) {
++			config.setGhostSendOfflineAfterOnlineLocked(value.toBool());
 +		} else if (key == kGhostReadExclusions && value.isObject()) {
 +			config.setGhostReadExclusions(value.toObject());
 +		} else if (key == kGhostTypingExclusions && value.isObject()) {
@@ -6523,10 +6632,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..cf5b940
+index 0000000..e4c71fb
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,765 @@
+@@ -0,0 +1,817 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6559,6 +6668,13 @@ index 0000000..cf5b940
 +constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
 +constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 +constexpr auto kGhostShowStatus = "OEGhostShowStatus";
++constexpr auto kGhostSendReadLocked = "OEGhostSendReadLocked";
++constexpr auto kGhostSendStoriesLocked = "OEGhostSendStoriesLocked";
++constexpr auto kGhostSendOnlineLocked = "OEGhostSendOnlineLocked";
++constexpr auto kGhostSendUploadProgressLocked
++	= "OEGhostSendUploadProgressLocked";
++constexpr auto kGhostSendOfflineAfterOnlineLocked
++	= "OEGhostSendOfflineAfterOnlineLocked";
 +constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 +constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -6823,6 +6939,46 @@ index 0000000..cf5b940
 +
 +void Config::setGhostShowStatus(bool value) {
 +	setValue(kGhostShowStatus, value);
++}
++
++bool Config::ghostSendReadLocked() const {
++	return boolValue(kGhostSendReadLocked, false);
++}
++
++void Config::setGhostSendReadLocked(bool value) {
++	setValue(kGhostSendReadLocked, value);
++}
++
++bool Config::ghostSendStoriesLocked() const {
++	return boolValue(kGhostSendStoriesLocked, false);
++}
++
++void Config::setGhostSendStoriesLocked(bool value) {
++	setValue(kGhostSendStoriesLocked, value);
++}
++
++bool Config::ghostSendOnlineLocked() const {
++	return boolValue(kGhostSendOnlineLocked, false);
++}
++
++void Config::setGhostSendOnlineLocked(bool value) {
++	setValue(kGhostSendOnlineLocked, value);
++}
++
++bool Config::ghostSendUploadProgressLocked() const {
++	return boolValue(kGhostSendUploadProgressLocked, false);
++}
++
++void Config::setGhostSendUploadProgressLocked(bool value) {
++	setValue(kGhostSendUploadProgressLocked, value);
++}
++
++bool Config::ghostSendOfflineAfterOnlineLocked() const {
++	return boolValue(kGhostSendOfflineAfterOnlineLocked, false);
++}
++
++void Config::setGhostSendOfflineAfterOnlineLocked(bool value) {
++	setValue(kGhostSendOfflineAfterOnlineLocked, value);
 +}
 +
 +bool Config::ghostReadExcluded(qint64 peerId) const {
@@ -7113,6 +7269,11 @@ index 0000000..cf5b940
 +			|| key == kGhostSendUploadProgress
 +			|| key == kGhostSendOfflineAfterOnline
 +			|| key == kGhostShowStatus
++			|| key == kGhostSendReadLocked
++			|| key == kGhostSendStoriesLocked
++			|| key == kGhostSendOnlineLocked
++			|| key == kGhostSendUploadProgressLocked
++			|| key == kGhostSendOfflineAfterOnlineLocked
 +			|| key == kGhostReadExclusions
 +			|| key == kGhostTypingExclusions
 +			|| key == kSaveDeletedMessages
@@ -7294,10 +7455,10 @@ index 0000000..cf5b940
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..45aa0a0
+index 0000000..b70d7c3
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,176 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7380,6 +7541,16 @@ index 0000000..45aa0a0
 +	void setGhostSendOfflineAfterOnline(bool value);
 +	[[nodiscard]] bool ghostShowStatus() const;
 +	void setGhostShowStatus(bool value);
++	[[nodiscard]] bool ghostSendReadLocked() const;
++	void setGhostSendReadLocked(bool value);
++	[[nodiscard]] bool ghostSendStoriesLocked() const;
++	void setGhostSendStoriesLocked(bool value);
++	[[nodiscard]] bool ghostSendOnlineLocked() const;
++	void setGhostSendOnlineLocked(bool value);
++	[[nodiscard]] bool ghostSendUploadProgressLocked() const;
++	void setGhostSendUploadProgressLocked(bool value);
++	[[nodiscard]] bool ghostSendOfflineAfterOnlineLocked() const;
++	void setGhostSendOfflineAfterOnlineLocked(bool value);
 +
 +	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
 +	void setGhostReadExcluded(qint64 peerId, bool value);
@@ -8173,38 +8344,54 @@ index 0000000..d87ffc2
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_status.cpp b/exteraless/ghost_status.cpp
 new file mode 100644
-index 0000000..a51c8fa
+index 0000000..2386d5d
 --- /dev/null
 +++ b/exteraless/ghost_status.cpp
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,71 @@
 +#include "exteraless/ghost_status.h"
 +
 +#include "exteraless/config.h"
 +
 +namespace Exteraless {
 +
++int GhostUnlockedCount() {
++	const auto &config = Config::Instance();
++	auto result = 0;
++	result += config.ghostSendReadLocked() ? 0 : 1;
++	result += config.ghostSendStoriesLocked() ? 0 : 1;
++	result += config.ghostSendOnlineLocked() ? 0 : 1;
++	result += config.ghostSendUploadProgressLocked() ? 0 : 1;
++	return result;
++}
++
 +int GhostEnabledCount() {
 +	const auto &config = Config::Instance();
 +	auto result = 0;
-+	result += config.ghostSendReadPackets() ? 0 : 1;
-+	result += config.ghostSendReadStories() ? 0 : 1;
-+	result += config.ghostSendOnline() ? 0 : 1;
-+	result += config.ghostSendUploadProgress() ? 0 : 1;
++	result += (config.ghostSendReadLocked()
++		|| config.ghostSendReadPackets()) ? 0 : 1;
++	result += (config.ghostSendStoriesLocked()
++		|| config.ghostSendReadStories()) ? 0 : 1;
++	result += (config.ghostSendOnlineLocked()
++		|| config.ghostSendOnline()) ? 0 : 1;
++	result += (config.ghostSendUploadProgressLocked()
++		|| config.ghostSendUploadProgress()) ? 0 : 1;
 +	return result;
 +}
 +
 +bool IsGhostActive() {
-+	return GhostEnabledCount() == 4;
++	const auto unlocked = GhostUnlockedCount();
++	return unlocked > 0 && GhostEnabledCount() == unlocked;
 +}
 +
 +bool IsGhostPartiallyActive() {
 +	const auto count = GhostEnabledCount();
-+	return count > 0 && count < 4;
++	return count > 0 && count < GhostUnlockedCount();
 +}
 +
 +GhostStatus GetGhostStatus() {
++	const auto unlocked = GhostUnlockedCount();
 +	const auto count = GhostEnabledCount();
-+	return (count == 4)
++	return (unlocked > 0 && count == unlocked)
 +		? GhostStatus::On
 +		: (count > 0)
 +		? GhostStatus::Partial
@@ -8213,10 +8400,18 @@ index 0000000..a51c8fa
 +
 +void SetGhostActive(bool active) {
 +	auto &config = Config::Instance();
-+	config.setGhostSendReadPackets(!active);
-+	config.setGhostSendReadStories(!active);
-+	config.setGhostSendOnline(!active);
-+	config.setGhostSendUploadProgress(!active);
++	if (!config.ghostSendReadLocked()) {
++		config.setGhostSendReadPackets(!active);
++	}
++	if (!config.ghostSendStoriesLocked()) {
++		config.setGhostSendReadStories(!active);
++	}
++	if (!config.ghostSendOnlineLocked()) {
++		config.setGhostSendOnline(!active);
++	}
++	if (!config.ghostSendUploadProgressLocked()) {
++		config.setGhostSendUploadProgress(!active);
++	}
 +}
 +
 +void ToggleGhostActive() {
@@ -8226,10 +8421,10 @@ index 0000000..a51c8fa
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_status.h b/exteraless/ghost_status.h
 new file mode 100644
-index 0000000..3c82241
+index 0000000..a9b564b
 --- /dev/null
 +++ b/exteraless/ghost_status.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,19 @@
 +#pragma once
 +
 +namespace Exteraless {
@@ -8240,6 +8435,7 @@ index 0000000..3c82241
 +	Partial,
 +};
 +
++[[nodiscard]] int GhostUnlockedCount();
 +[[nodiscard]] int GhostEnabledCount();
 +[[nodiscard]] bool IsGhostActive();
 +[[nodiscard]] bool IsGhostPartiallyActive();
@@ -9002,10 +9198,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..a6ac3c6
+index 0000000..c87dd90
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,704 @@
+@@ -0,0 +1,733 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9064,6 +9260,8 @@ index 0000000..a6ac3c6
 +		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
 +		<< "<typing>\n"
 +		<< "  exteraless-chats-cli ghost-show <0|1>\n"
++		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
++		<< "<typing> <offline>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -9202,6 +9400,14 @@ index 0000000..a6ac3c6
 +		{ QStringLiteral("partial"), Exteraless::IsGhostPartiallyActive() },
 +		{ QStringLiteral("count"), Exteraless::GhostEnabledCount() },
 +		{ QStringLiteral("showStatus"), config.ghostShowStatus() },
++		{ QStringLiteral("readLocked"), config.ghostSendReadLocked() },
++		{ QStringLiteral("storiesLocked"), config.ghostSendStoriesLocked() },
++		{ QStringLiteral("onlineLocked"), config.ghostSendOnlineLocked() },
++		{ QStringLiteral("typingLocked"),
++			config.ghostSendUploadProgressLocked() },
++		{ QStringLiteral("offlineLocked"),
++			config.ghostSendOfflineAfterOnlineLocked() },
++		{ QStringLiteral("unlocked"), Exteraless::GhostUnlockedCount() },
 +	});
 +}
 +
@@ -9504,6 +9710,25 @@ index 0000000..a6ac3c6
 +		PrintGhost();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("ghost-lock")) {
++		if (arguments.size() != 7) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 5>();
++		for (auto i = 0; i != 5; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setGhostSendReadLocked(flags[0]);
++		config.setGhostSendStoriesLocked(flags[1]);
++		config.setGhostSendOnlineLocked(flags[2]);
++		config.setGhostSendUploadProgressLocked(flags[3]);
++		config.setGhostSendOfflineAfterOnlineLocked(flags[4]);
++		PrintGhost();
++		return 0;
++	}
 +	if (mode == QStringLiteral("ghost-show")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -9774,10 +9999,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..198e52d
+index 0000000..3d5398c
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1943 @@
+@@ -0,0 +1,2034 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -9933,6 +10158,7 @@ index 0000000..198e52d
 +        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
 +        ("pillorder-set without order", ["pillorder-set"]),
 +        ("ghost-set with wrong count", ["ghost-set"]),
++        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
@@ -10238,7 +10464,7 @@ index 0000000..198e52d
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 39,
++            len(section) == 44,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -10259,7 +10485,7 @@ index 0000000..198e52d
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 44,
++            sum(len(value) for value in exported.values()) == 49,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -10279,7 +10505,7 @@ index 0000000..198e52d
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 44,
++                data.get("applied") == 49,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -10352,6 +10578,11 @@ index 0000000..198e52d
 +            "OEChatsStickerTimeSide": True,
 +            "OEChatsHideStickerTime": False,
 +            "OEGhostShowStatus": True,
++            "OEGhostSendReadLocked": True,
++            "OEGhostSendStoriesLocked": False,
++            "OEGhostSendOnlineLocked": False,
++            "OEGhostSendUploadProgressLocked": False,
++            "OEGhostSendOfflineAfterOnlineLocked": False,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -10373,7 +10604,7 @@ index 0000000..198e52d
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 44,
++            data.get("applied") == 49,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -10433,6 +10664,12 @@ index 0000000..198e52d
 +            "backup full ghost status",
 +            section.get("OEGhostShowStatus") is True,
 +            section.get("OEGhostShowStatus"))
++        ledger.check(
++            "backup full ghost locks",
++            section.get("OEGhostSendReadLocked") is True
++            and section.get("OEGhostSendStoriesLocked") is False,
++            (section.get("OEGhostSendReadLocked"),
++             section.get("OEGhostSendStoriesLocked")))
 +        ledger.check(
 +            "backup full generic keys",
 +            section.get("relativeLastSeen") is True
@@ -10532,10 +10769,10 @@ index 0000000..198e52d
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 44",
++            "backup legacy eight completed to 49",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (39, 3, 2),
++             len(sections["mainconfig"])) == (44, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -11346,6 +11583,11 @@ index 0000000..198e52d
 +            "OEChatsStickerTimeSide": True,
 +            "OEChatsHideStickerTime": False,
 +            "OEGhostShowStatus": True,
++            "OEGhostSendReadLocked": True,
++            "OEGhostSendStoriesLocked": False,
++            "OEGhostSendOnlineLocked": False,
++            "OEGhostSendUploadProgressLocked": False,
++            "OEGhostSendOfflineAfterOnlineLocked": False,
 +        },
 +    }
 +    data = json_call(
@@ -11594,6 +11836,73 @@ index 0000000..198e52d
 +            and data.get("count") == 2,
 +            data)
 +
++    env = make_env(work / "ghost-lock")
++    data = json_call(
++        ledger, cli, ["ghost-lock", "1", "0", "0", "0", "0"], env,
++        "ghost lock read")
++    if data is not None:
++        ledger.check(
++            "ghost lock read set",
++            data.get("readLocked") is True
++            and data.get("unlocked") == 3,
++            data)
++    data = json_call(
++        ledger, cli, ["ghost-set", "1"], env, "ghost locked batch on")
++    if data is not None:
++        ledger.check(
++            "ghost locked batch keeps read",
++            data.get("read") is True
++            and data.get("stories") is False
++            and data.get("online") is False
++            and data.get("typing") is False,
++            data)
++        ledger.check(
++            "ghost locked batch status",
++            data.get("active") is True
++            and data.get("partial") is False
++            and data.get("count") == 3,
++            data)
++    data = json_call(
++        ledger, cli, ["ghost-lock", "0", "0", "0", "0", "0"], env,
++        "ghost unlock read")
++    data = json_call(
++        ledger, cli, ["ghost-set", "0"], env, "ghost locked batch off")
++    if data is not None:
++        ledger.check(
++            "ghost unlocked batch off",
++            data.get("read") is True
++            and data.get("stories") is True
++            and data.get("online") is True
++            and data.get("typing") is True
++            and data.get("active") is False,
++            data)
++
++    env = make_env(work / "ghost-locks-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEGhostSendReadLocked": True,
++            "OEGhostSendOnlineLocked": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "ghost locks fromJson")
++    if data is not None:
++        ledger.check(
++            "ghost locks fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["ghost"], env, "ghost locks fromJson read")
++    if reloaded is not None:
++        ledger.check(
++            "ghost locks fromJson values",
++            reloaded.get("readLocked") is True
++            and reloaded.get("onlineLocked") is True
++            and reloaded.get("unlocked") == 2,
++            reloaded)
++
 +    env = make_env(work / "ghost-show")
 +    data = json_call(
 +        ledger, cli, ["ghost-show", "1"], env, "ghost show status")
@@ -11650,7 +11959,11 @@ index 0000000..198e52d
 +            section.get("OEGhostShowStatus"))
 +    root = {
 +        "version": 1,
-+        "exteraconfig": {"showGhostModeStatus": True},
++        "exteraconfig": {
++            "showGhostModeStatus": True,
++            "sendReadMessagePacketsLocked": True,
++            "sendOnlinePacketsLocked": True,
++        },
 +    }
 +    data = json_call(
 +        ledger, cli, ["backup-import-json", json.dumps(root)], env,
@@ -11658,14 +11971,17 @@ index 0000000..198e52d
 +    if data is not None:
 +        ledger.check(
 +            "ghost backup alias applied",
-+            data.get("applied") == 1 and data.get("unknown") == [],
++            data.get("applied") == 3 and data.get("unknown") == [],
 +            data)
 +    reloaded = json_call(
 +        ledger, cli, ["ghost"], env, "ghost backup alias read")
 +    if reloaded is not None:
 +        ledger.check(
 +            "ghost backup alias value",
-+            reloaded.get("showStatus") is True,
++            reloaded.get("showStatus") is True
++            and reloaded.get("readLocked") is True
++            and reloaded.get("onlineLocked") is True
++            and reloaded.get("unlocked") == 2,
 +            reloaded)
 +
 +    return (

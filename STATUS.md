@@ -80,10 +80,20 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 276 проверок PASS
-  (44 strip, 10 reactions, 10 CLI, 7 config, 22 general, 27 deleted, 7 reset,
-  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 13 ghost,
-  75 backup); плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 284 проверки PASS
+  (44 strip, 10 reactions, 11 CLI, 7 config, 22 general, 27 deleted, 7 reset,
+  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 19 ghost,
+  76 backup); плагины без изменений — 32 и 213 проверок.
+- Ghost locked-тумблеры (NB-18): пять настроек `OEGhostSendReadLocked`,
+  `OEGhostSendStoriesLocked`, `OEGhostSendOnlineLocked`,
+  `OEGhostSendUploadProgressLocked`, `OEGhostSendOfflineAfterOnlineLocked`
+  (суммарно 49 ключей) исключают отдельные тумблеры из пакетного переключения
+  и из расчёта `On/Off/Partial`; в настройках появилась подсекция
+  «Locked Ghost settings». CLI `ghost-lock` и `ghost` (19 проверок) проверяют
+  установку, пропуск locked в batch, `fromJson` и Android-алиасы
+  `send*Locked`. Xvfb smoke: включённый lock read сохраняет
+  `OEGhostSendReadPackets = true` при Ghost On, остальные три выключаются,
+  статус в меню — `On`.
 - Ghost Mode batch/status (NB-17): пункт главного меню включает или выключает
   все четыре тумблера одним кликом и показывает `On` / `Off` / `Partial`
   при включённой настройке `OEGhostShowStatus` (Android-ключ
@@ -195,8 +205,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `7d29b5b9…`,
-  mtime 2026-11-05 05:58; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `bff0503c…`,
+  mtime 2026-11-05 06:18; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

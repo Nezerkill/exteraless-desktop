@@ -30,6 +30,13 @@ constexpr auto kGhostSendOnline = "OEGhostSendOnline";
 constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
 constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
 constexpr auto kGhostShowStatus = "OEGhostShowStatus";
+constexpr auto kGhostSendReadLocked = "OEGhostSendReadLocked";
+constexpr auto kGhostSendStoriesLocked = "OEGhostSendStoriesLocked";
+constexpr auto kGhostSendOnlineLocked = "OEGhostSendOnlineLocked";
+constexpr auto kGhostSendUploadProgressLocked
+	= "OEGhostSendUploadProgressLocked";
+constexpr auto kGhostSendOfflineAfterOnlineLocked
+	= "OEGhostSendOfflineAfterOnlineLocked";
 constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -294,6 +301,46 @@ bool Config::ghostShowStatus() const {
 
 void Config::setGhostShowStatus(bool value) {
 	setValue(kGhostShowStatus, value);
+}
+
+bool Config::ghostSendReadLocked() const {
+	return boolValue(kGhostSendReadLocked, false);
+}
+
+void Config::setGhostSendReadLocked(bool value) {
+	setValue(kGhostSendReadLocked, value);
+}
+
+bool Config::ghostSendStoriesLocked() const {
+	return boolValue(kGhostSendStoriesLocked, false);
+}
+
+void Config::setGhostSendStoriesLocked(bool value) {
+	setValue(kGhostSendStoriesLocked, value);
+}
+
+bool Config::ghostSendOnlineLocked() const {
+	return boolValue(kGhostSendOnlineLocked, false);
+}
+
+void Config::setGhostSendOnlineLocked(bool value) {
+	setValue(kGhostSendOnlineLocked, value);
+}
+
+bool Config::ghostSendUploadProgressLocked() const {
+	return boolValue(kGhostSendUploadProgressLocked, false);
+}
+
+void Config::setGhostSendUploadProgressLocked(bool value) {
+	setValue(kGhostSendUploadProgressLocked, value);
+}
+
+bool Config::ghostSendOfflineAfterOnlineLocked() const {
+	return boolValue(kGhostSendOfflineAfterOnlineLocked, false);
+}
+
+void Config::setGhostSendOfflineAfterOnlineLocked(bool value) {
+	setValue(kGhostSendOfflineAfterOnlineLocked, value);
 }
 
 bool Config::ghostReadExcluded(qint64 peerId) const {
@@ -584,6 +631,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGhostSendUploadProgress
 			|| key == kGhostSendOfflineAfterOnline
 			|| key == kGhostShowStatus
+			|| key == kGhostSendReadLocked
+			|| key == kGhostSendStoriesLocked
+			|| key == kGhostSendOnlineLocked
+			|| key == kGhostSendUploadProgressLocked
+			|| key == kGhostSendOfflineAfterOnlineLocked
 			|| key == kGhostReadExclusions
 			|| key == kGhostTypingExclusions
 			|| key == kSaveDeletedMessages

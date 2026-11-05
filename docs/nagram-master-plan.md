@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **276**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **284**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -114,7 +114,12 @@ APK-обновления и plugin-only API. Полный список искл�
   главного меню, `OEGhostShowStatus`, строгий `IsGhostActive`, CLI `ghost`
   (13 проверок), Xvfb подтвердил пакетный переключатель и статус.
 
-`NB-18` (Ghost locked), затем P1 из бэклога.
+- `NB-18` — ✅ закрыто 2026-11-05: пять `OEGhostSend*Locked`, подсекция
+  «Locked Ghost settings», пакетный `SetGhostActive` пропускает locked, CLI
+  `ghost-lock` (19 ghost-проверок), Xvfb подтвердил сохранение read при
+  Ghost On.
+
+Дальше — P1 бэклога, начиная с NB-19.
 `NB-13` (wide posts), `NB-15` (sort unread), feed, AI, player, Vosk и
 regex-фильтры — отдельными архитектурными этапами после стабилизации P0/P1.
 
@@ -168,7 +173,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-18`).
+   (сейчас `NB-19`, P1).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

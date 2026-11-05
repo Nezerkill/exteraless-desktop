@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- Ghost Mode / Locks: пять «locked»-тумблеров (`OEGhostSendReadLocked`,
+  `OEGhostSendStoriesLocked`, `OEGhostSendOnlineLocked`,
+  `OEGhostSendUploadProgressLocked`, `OEGhostSendOfflineAfterOnlineLocked`;
+  всего 49 ключей) защищают отдельные настройки Ghost от пакетного
+  переключателя; Android-алиасы `send*Locked` поддержаны в `.extera`,
+  подсекция «Locked Ghost settings» добавлена в настройки.
 - Ghost Mode: пункт главного меню показывает статус `On` / `Off` / `Partial`
   (настройка `OEGhostShowStatus`, Android-ключ `showGhostModeStatus` в
   `.extera`, всего 44 ключа), один клик включает или выключает все четыре

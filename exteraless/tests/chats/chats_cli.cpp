@@ -56,6 +56,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
 		<< "<typing>\n"
 		<< "  exteraless-chats-cli ghost-show <0|1>\n"
+		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
+		<< "<typing> <offline>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -194,6 +196,14 @@ void PrintGhost() {
 		{ QStringLiteral("partial"), Exteraless::IsGhostPartiallyActive() },
 		{ QStringLiteral("count"), Exteraless::GhostEnabledCount() },
 		{ QStringLiteral("showStatus"), config.ghostShowStatus() },
+		{ QStringLiteral("readLocked"), config.ghostSendReadLocked() },
+		{ QStringLiteral("storiesLocked"), config.ghostSendStoriesLocked() },
+		{ QStringLiteral("onlineLocked"), config.ghostSendOnlineLocked() },
+		{ QStringLiteral("typingLocked"),
+			config.ghostSendUploadProgressLocked() },
+		{ QStringLiteral("offlineLocked"),
+			config.ghostSendOfflineAfterOnlineLocked() },
+		{ QStringLiteral("unlocked"), Exteraless::GhostUnlockedCount() },
 	});
 }
 
@@ -493,6 +503,25 @@ int main(int argc, char *argv[]) {
 		config.setGhostSendReadStories(!flags[1]);
 		config.setGhostSendOnline(!flags[2]);
 		config.setGhostSendUploadProgress(!flags[3]);
+		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-lock")) {
+		if (arguments.size() != 7) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 5>();
+		for (auto i = 0; i != 5; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setGhostSendReadLocked(flags[0]);
+		config.setGhostSendStoriesLocked(flags[1]);
+		config.setGhostSendOnlineLocked(flags[2]);
+		config.setGhostSendUploadProgressLocked(flags[3]);
+		config.setGhostSendOfflineAfterOnlineLocked(flags[4]);
 		PrintGhost();
 		return 0;
 	}

@@ -80,6 +80,16 @@ public:
 	void setGhostSendOfflineAfterOnline(bool value);
 	[[nodiscard]] bool ghostShowStatus() const;
 	void setGhostShowStatus(bool value);
+	[[nodiscard]] bool ghostSendReadLocked() const;
+	void setGhostSendReadLocked(bool value);
+	[[nodiscard]] bool ghostSendStoriesLocked() const;
+	void setGhostSendStoriesLocked(bool value);
+	[[nodiscard]] bool ghostSendOnlineLocked() const;
+	void setGhostSendOnlineLocked(bool value);
+	[[nodiscard]] bool ghostSendUploadProgressLocked() const;
+	void setGhostSendUploadProgressLocked(bool value);
+	[[nodiscard]] bool ghostSendOfflineAfterOnlineLocked() const;
+	void setGhostSendOfflineAfterOnlineLocked(bool value);
 
 	[[nodiscard]] bool ghostReadExcluded(qint64 peerId) const;
 	void setGhostReadExcluded(qint64 peerId, bool value);

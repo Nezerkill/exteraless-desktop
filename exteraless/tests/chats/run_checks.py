@@ -153,6 +153,7 @@ def check_cli_args(ledger, cli):
         ("stickertime-set with wrong count", ["stickertime-set", "1"]),
         ("pillorder-set without order", ["pillorder-set"]),
         ("ghost-set with wrong count", ["ghost-set"]),
+        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -458,7 +459,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 39,
+            len(section) == 44,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -479,7 +480,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 44,
+            sum(len(value) for value in exported.values()) == 49,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -499,7 +500,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 44,
+                data.get("applied") == 49,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -572,6 +573,11 @@ def check_backup(ledger, cli, work):
             "OEChatsStickerTimeSide": True,
             "OEChatsHideStickerTime": False,
             "OEGhostShowStatus": True,
+            "OEGhostSendReadLocked": True,
+            "OEGhostSendStoriesLocked": False,
+            "OEGhostSendOnlineLocked": False,
+            "OEGhostSendUploadProgressLocked": False,
+            "OEGhostSendOfflineAfterOnlineLocked": False,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -593,7 +599,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 44,
+            data.get("applied") == 49,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -653,6 +659,12 @@ def check_backup(ledger, cli, work):
             "backup full ghost status",
             section.get("OEGhostShowStatus") is True,
             section.get("OEGhostShowStatus"))
+        ledger.check(
+            "backup full ghost locks",
+            section.get("OEGhostSendReadLocked") is True
+            and section.get("OEGhostSendStoriesLocked") is False,
+            (section.get("OEGhostSendReadLocked"),
+             section.get("OEGhostSendStoriesLocked")))
         ledger.check(
             "backup full generic keys",
             section.get("relativeLastSeen") is True
@@ -752,10 +764,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 44",
+            "backup legacy eight completed to 49",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (39, 3, 2),
+             len(sections["mainconfig"])) == (44, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1566,6 +1578,11 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsStickerTimeSide": True,
             "OEChatsHideStickerTime": False,
             "OEGhostShowStatus": True,
+            "OEGhostSendReadLocked": True,
+            "OEGhostSendStoriesLocked": False,
+            "OEGhostSendOnlineLocked": False,
+            "OEGhostSendUploadProgressLocked": False,
+            "OEGhostSendOfflineAfterOnlineLocked": False,
         },
     }
     data = json_call(
@@ -1814,6 +1831,73 @@ def check_ghost(ledger, cli, work):
             and data.get("count") == 2,
             data)
 
+    env = make_env(work / "ghost-lock")
+    data = json_call(
+        ledger, cli, ["ghost-lock", "1", "0", "0", "0", "0"], env,
+        "ghost lock read")
+    if data is not None:
+        ledger.check(
+            "ghost lock read set",
+            data.get("readLocked") is True
+            and data.get("unlocked") == 3,
+            data)
+    data = json_call(
+        ledger, cli, ["ghost-set", "1"], env, "ghost locked batch on")
+    if data is not None:
+        ledger.check(
+            "ghost locked batch keeps read",
+            data.get("read") is True
+            and data.get("stories") is False
+            and data.get("online") is False
+            and data.get("typing") is False,
+            data)
+        ledger.check(
+            "ghost locked batch status",
+            data.get("active") is True
+            and data.get("partial") is False
+            and data.get("count") == 3,
+            data)
+    data = json_call(
+        ledger, cli, ["ghost-lock", "0", "0", "0", "0", "0"], env,
+        "ghost unlock read")
+    data = json_call(
+        ledger, cli, ["ghost-set", "0"], env, "ghost locked batch off")
+    if data is not None:
+        ledger.check(
+            "ghost unlocked batch off",
+            data.get("read") is True
+            and data.get("stories") is True
+            and data.get("online") is True
+            and data.get("typing") is True
+            and data.get("active") is False,
+            data)
+
+    env = make_env(work / "ghost-locks-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGhostSendReadLocked": True,
+            "OEGhostSendOnlineLocked": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "ghost locks fromJson")
+    if data is not None:
+        ledger.check(
+            "ghost locks fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ghost"], env, "ghost locks fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "ghost locks fromJson values",
+            reloaded.get("readLocked") is True
+            and reloaded.get("onlineLocked") is True
+            and reloaded.get("unlocked") == 2,
+            reloaded)
+
     env = make_env(work / "ghost-show")
     data = json_call(
         ledger, cli, ["ghost-show", "1"], env, "ghost show status")
@@ -1870,7 +1954,11 @@ def check_ghost(ledger, cli, work):
             section.get("OEGhostShowStatus"))
     root = {
         "version": 1,
-        "exteraconfig": {"showGhostModeStatus": True},
+        "exteraconfig": {
+            "showGhostModeStatus": True,
+            "sendReadMessagePacketsLocked": True,
+            "sendOnlinePacketsLocked": True,
+        },
     }
     data = json_call(
         ledger, cli, ["backup-import-json", json.dumps(root)], env,
@@ -1878,14 +1966,17 @@ def check_ghost(ledger, cli, work):
     if data is not None:
         ledger.check(
             "ghost backup alias applied",
-            data.get("applied") == 1 and data.get("unknown") == [],
+            data.get("applied") == 3 and data.get("unknown") == [],
             data)
     reloaded = json_call(
         ledger, cli, ["ghost"], env, "ghost backup alias read")
     if reloaded is not None:
         ledger.check(
             "ghost backup alias value",
-            reloaded.get("showStatus") is True,
+            reloaded.get("showStatus") is True
+            and reloaded.get("readLocked") is True
+            and reloaded.get("onlineLocked") is True
+            and reloaded.get("unlocked") == 2,
             reloaded)
 
     return (

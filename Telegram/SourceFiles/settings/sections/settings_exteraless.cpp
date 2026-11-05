@@ -206,6 +206,67 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/ghost/locks"_q,
+		.title = tr::lng_settings_exteraless_ghost_locks(),
+	});
+	const auto addGhostLock = [&](
+			QString id,
+			rpl::producer<QString> title,
+			bool current,
+			Fn<void(bool)> setter) {
+		const auto toggle = builder.addButton({
+			.id = std::move(id),
+			.title = std::move(title),
+			.st = &st::settingsButtonNoIcon,
+			.toggled = rpl::single(current),
+			.keywords = { u"ghost"_q, u"lock"_q },
+		});
+		if (toggle) {
+			toggle->toggledChanges(
+			) | rpl::on_next([=](bool value) {
+				setter(value);
+			}, toggle->lifetime());
+		}
+	};
+	addGhostLock(
+		u"exteraless/ghost/lock/read"_q,
+		tr::lng_settings_exteraless_ghost_lock_read(),
+		Exteraless::Config::Instance().ghostSendReadLocked(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendReadLocked(value);
+		});
+	addGhostLock(
+		u"exteraless/ghost/lock/stories"_q,
+		tr::lng_settings_exteraless_ghost_lock_stories(),
+		Exteraless::Config::Instance().ghostSendStoriesLocked(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendStoriesLocked(value);
+		});
+	addGhostLock(
+		u"exteraless/ghost/lock/online"_q,
+		tr::lng_settings_exteraless_ghost_lock_online(),
+		Exteraless::Config::Instance().ghostSendOnlineLocked(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostSendOnlineLocked(value);
+		});
+	addGhostLock(
+		u"exteraless/ghost/lock/typing"_q,
+		tr::lng_settings_exteraless_ghost_lock_typing(),
+		Exteraless::Config::Instance().ghostSendUploadProgressLocked(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setGhostSendUploadProgressLocked(value);
+		});
+	addGhostLock(
+		u"exteraless/ghost/lock/offline"_q,
+		tr::lng_settings_exteraless_ghost_lock_offline(),
+		Exteraless::Config::Instance().ghostSendOfflineAfterOnlineLocked(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setGhostSendOfflineAfterOnlineLocked(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/chats"_q,
 		.title = tr::lng_settings_exteraless_chats(),
 	});

@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(276 проверок: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup),
+(284 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -102,7 +102,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-15 | Скрыть архив и сортировка по непрочитанным | `NaConfig.hideArchive`, `NekoConfig.sortByUnread` | `dialogs/dialogs_widget.cpp`, `dialogs/dialogs_indexed_list.cpp` | M · средний–высокий (индексация списка) | Xvfb: архив скрыт; сортировка на тестовом профиле | ⬜ (расхождение: R1 P0-13, R2 P2 — приоритет взят по R1, риск по R2) | R1 P0-13, R2 §3.1 |
 | NB-16 | Drag-порядок пилюль | `PillStackConfig.savePillsLayout` | `Telegram/SourceFiles/exteraless/pill_stack.{h,cpp}`, `exteraless/config.{h,cpp}`, `exteraless/backup.cpp` | M · низкий | Xvfb: drag меняет порядок и переживает рестарт | ✅ 2026-11-05: drag на полосе пилюль, порядок в `OEPillStackOrder` (CSV), CLI `pillorder` (9 проверок), `.extera`; Xvfb: перетаскивание меняет порядок, после рестарта сохраняется | R1 P0-14 |
 | NB-17 | Ghost: пакетный переключатель и статус в меню | `setGhostMode`/`toggleGhostMode`, `showGhostModeStatus` | `window/window_main_menu.cpp`, `exteraless/ghost_mode.cpp`, `exteraless/ghost_status.{h,cpp}`, `settings/sections/settings_exteraless.cpp` | S · низкий | один клик переключает 4 тумблера, статус виден в меню | ✅ 2026-11-05: пункт меню «Ghost Mode (On/Off/Partial)», `OEGhostShowStatus`, строгий `IsGhostActive`, CLI `ghost` (13 проверок), Xvfb: один клик включает/выключает 4 тумблера, статус меняется | R1 P0-15 |
-| NB-18 | Ghost: «locked» тумблеры | `sendReadMessagePacketsLocked`, `sendReadStoriesPacketsLocked`, `sendOnlinePacketsLocked`, `sendUploadProgressLocked`, `sendOfflinePacketAfterOnlineLocked` | `exteraless/config.{h,cpp}`, `settings/sections/settings_exteraless.cpp` | S · низкий | locked-тумблер не меняется пакетным переключателем | ⬜ | R1 P0-16 |
+| NB-18 | Ghost: «locked» тумблеры | `sendReadMessagePacketsLocked`, `sendReadStoriesPacketsLocked`, `sendOnlinePacketsLocked`, `sendUploadProgressLocked`, `sendOfflinePacketAfterOnlineLocked` | `exteraless/config.{h,cpp}`, `exteraless/ghost_status.cpp`, `exteraless/backup.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | locked-тумблер не меняется пакетным переключателем | ✅ 2026-11-05: пять `OEGhostSend*Locked`, подсекция «Locked Ghost settings», `SetGhostActive` пропускает locked, CLI `ghost-lock` (19 ghost-проверок), Xvfb: read остаётся включённым при пакетном Ghost On | R1 P0-16 |
 
 ## 4. P1 — доверие к сборке, документация, средние подсистемы
 
@@ -267,7 +267,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 276 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 284 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

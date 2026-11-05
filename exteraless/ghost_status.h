@@ -8,6 +8,7 @@ enum class GhostStatus {
 	Partial,
 };
 
+[[nodiscard]] int GhostUnlockedCount();
 [[nodiscard]] int GhostEnabledCount();
 [[nodiscard]] bool IsGhostActive();
 [[nodiscard]] bool IsGhostPartiallyActive();
