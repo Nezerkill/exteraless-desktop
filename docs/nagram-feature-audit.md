@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **38** | **38** | 38 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 38 | на момент аудита было 8, после NB-04, NB-11, NB-07, NB-37 — все 38 desktop-ключей |
+| **Ключей форка desktop** | **40** | **40** | 40 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
+| Ключей `.extera` | 8 | 8 | 40 | на момент аудита было 8, после NB-04, NB-11, NB-07, NB-37, NB-12 — все 40 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -254,7 +254,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Группировка и порядок меню | `groupedMessageMenu`, `defaultDeleteMenu`, `textStyleOrder` | ❌ |
 | Широкие посты | `wideChannelPosts`, `wideFeedPosts` | ❌ (`history/view/history_view_message.cpp`) |
 | Дата на форварде, иконка вместо «edited» | `dateOfForwardedMsg`, `replaceEditedWithIcon`, `customEditedMessage` | ❌ (`history_view_bottom_info.cpp`) |
-| Двойной тап | `doubleTapAction`, `doubleTapActionOut` | ❌ (`history_view_list_widget.cpp`, сейчас двойной тап = reply) |
+| Двойной тап | `doubleTapAction`, `doubleTapActionOut` | 🟡 `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (NB-12): ничего/реакция/ответ, остальные действия — NB-91 |
 | Опросы | `showResultsBeforeVoting` | ❌ (`data/data_poll.cpp`, `history/view/media/history_view_poll.cpp`) |
 | Inline-математика | `inlineMathResult`, `inlineMathCurrency` | ❌ (`chat_helpers/message_field.cpp`, `field_autocomplete.cpp`) |
 | Скрытие кнопок профиля/шапки | `hideGiftButtonInChannel`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton`, `hideSendAsPeer`, `hideCameraTile` | ❌ (`info/profile/*`, `history_view_top_bar_widget.cpp`, `compose_controls`) |
@@ -602,9 +602,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (38)
+## 13. Приложение B. Ключи `.extera` (40)
 
-Секция `exteraconfig` (34): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (36): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
@@ -617,7 +617,8 @@ M-нумерацию:
 `OEChatsMenuReply`, `OEChatsMenuEdit`, `OEChatsMenuPin`,
 `OEChatsMenuCopyText`, `OEChatsMenuCopyLink`, `OEChatsMenuCopyImage`,
 `OEChatsMenuForward`, `OEChatsMenuSelect`, `OEChatsMenuTranslate`,
-`OEChatsMenuReport`, `OEChatsMenuDelete`.
+`OEChatsMenuReport`, `OEChatsMenuDelete`, `OEChatsDoubleTapIn`,
+`OEChatsDoubleTapOut`.
 
 Секция `pillstackconfig` (2): `OEPillStackEnabled`, `OEPillStackPills`.
 

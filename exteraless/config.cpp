@@ -1,5 +1,7 @@
 #include "exteraless/config.h"
 
+#include "exteraless/doubletap.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -52,6 +54,8 @@ constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
 constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
 constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
+constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
+constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -439,6 +443,22 @@ void Config::setChatsMenuDelete(bool value) {
 	setValue(kChatsMenuDelete, value);
 }
 
+int Config::chatsDoubleTapIn() const {
+	return SanitizeDoubleTapValue(intValue(kChatsDoubleTapIn, -1));
+}
+
+void Config::setChatsDoubleTapIn(int value) {
+	setValue(kChatsDoubleTapIn, SanitizeDoubleTapValue(value));
+}
+
+int Config::chatsDoubleTapOut() const {
+	return SanitizeDoubleTapValue(intValue(kChatsDoubleTapOut, -1));
+}
+
+void Config::setChatsDoubleTapOut(int value) {
+	setValue(kChatsDoubleTapOut, SanitizeDoubleTapValue(value));
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -532,7 +552,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsMenuSelect
 			|| key == kChatsMenuTranslate
 			|| key == kChatsMenuReport
-			|| key == kChatsMenuDelete) {
+			|| key == kChatsMenuDelete
+			|| key == kChatsDoubleTapIn
+			|| key == kChatsDoubleTapOut) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -549,6 +571,14 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 	}
 	SanitizeExclusions(&accepted, kGhostReadExclusions);
 	SanitizeExclusions(&accepted, kGhostTypingExclusions);
+	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
+		const auto value = accepted.value(key);
+		if (value.isDouble()) {
+			accepted[key] = SanitizeDoubleTapValue(value.toInt());
+		} else if (accepted.contains(key)) {
+			accepted.remove(key);
+		}
+	}
 	if (accepted.isEmpty()) {
 		return false;
 	}

@@ -148,6 +148,8 @@ def check_cli_args(ledger, cli):
          ["config-set", "0", "1", "0", "1", "0"]),
         ("message-menu-set with wrong count",
          ["message-menu-set", "0", "1"]),
+        ("doubletap-set with wrong count", ["doubletap-set", "1"]),
+        ("doubletap-resolve without value", ["doubletap-resolve"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -446,8 +448,14 @@ def check_backup(ledger, cli, work):
             section.get("OEPluginStates") == {},
             section.get("OEPluginStates"))
         ledger.check(
+            "backup double tap defaults",
+            section.get("OEChatsDoubleTapIn") == -1
+            and section.get("OEChatsDoubleTapOut") == -1,
+            (section.get("OEChatsDoubleTapIn"),
+             section.get("OEChatsDoubleTapOut")))
+        ledger.check(
             "backup extera key count",
-            len(section) == 34,
+            len(section) == 36,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -466,7 +474,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 38,
+            sum(len(value) for value in exported.values()) == 40,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -486,7 +494,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 38,
+                data.get("applied") == 40,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -554,6 +562,8 @@ def check_backup(ledger, cli, work):
             "OEChatsMenuTranslate": False,
             "OEChatsMenuReport": True,
             "OEChatsMenuDelete": False,
+            "OEChatsDoubleTapIn": 0,
+            "OEChatsDoubleTapOut": 4,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -574,7 +584,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 38,
+            data.get("applied") == 40,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -618,6 +628,12 @@ def check_backup(ledger, cli, work):
             "backup full proxy auto reset",
             section.get("OEProxyAutoDisabled") is False,
             section.get("OEProxyAutoDisabled"))
+        ledger.check(
+            "backup full double tap",
+            section.get("OEChatsDoubleTapIn") == 0
+            and section.get("OEChatsDoubleTapOut") == 4,
+            (section.get("OEChatsDoubleTapIn"),
+             section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup full generic keys",
             section.get("relativeLastSeen") is True
@@ -715,10 +731,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 38",
+            "backup legacy eight completed to 40",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (34, 2, 2),
+             len(sections["mainconfig"])) == (36, 2, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1350,6 +1366,140 @@ def check_message_menu(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_doubletap(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "doubletap-defaults")
+    data = json_call(ledger, cli, ["doubletap"], env, "doubletap defaults")
+    if data is not None:
+        ledger.check(
+            "doubletap defaults telegram",
+            data.get("in") == -1 and data.get("out") == -1,
+            data)
+
+    env = make_env(work / "doubletap-set")
+    data = json_call(
+        ledger, cli, ["doubletap-set", "1", "4"], env, "doubletap set")
+    if data is not None:
+        ledger.check(
+            "doubletap set values",
+            data.get("in") == 1 and data.get("out") == 4,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["doubletap"], env, "doubletap reload")
+    if reloaded is not None:
+        ledger.check(
+            "doubletap persisted",
+            reloaded.get("in") == 1 and reloaded.get("out") == 4,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["doubletap-set", "99", "-5"], env,
+        "doubletap set out of range")
+    if data is not None:
+        ledger.check(
+            "doubletap out of range falls back to telegram",
+            data.get("in") == -1 and data.get("out") == -1,
+            data)
+
+    resolve_cases = [
+        ("telegram", "-1", "telegram"),
+        ("none", "0", "none"),
+        ("reaction", "1", "reaction"),
+        ("show reactions maps to reaction", "2", "reaction"),
+        ("translate maps to none", "3", "none"),
+        ("reply", "4", "reply"),
+        ("save maps to none", "5", "none"),
+        ("repeat maps to none", "6", "none"),
+        ("edit maps to none", "8", "none"),
+        ("delete maps to none", "10", "none"),
+        ("forward maps to none", "11", "none"),
+        ("download maps to none", "12", "none"),
+    ]
+    for name, value, expected in resolve_cases:
+        result = run(cli, ["doubletap-resolve", value])
+        actual = result.stdout.strip()
+        ledger.check(
+            f"doubletap resolve {name}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    env = make_env(work / "doubletap-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsDoubleTapIn": 0,
+            "OEChatsDoubleTapOut": 1,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "doubletap fromJson")
+    if data is not None:
+        ledger.check(
+            "doubletap fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["doubletap"], env, "doubletap fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "doubletap fromJson values",
+            reloaded.get("in") == 0 and reloaded.get("out") == 1,
+            reloaded)
+
+    env = make_env(work / "doubletap-backup-aliases")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "doubleTapAction": 4,
+            "doubleTapActionOutOwner": 0,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "doubletap backup aliases")
+    if data is not None:
+        ledger.check(
+            "doubletap backup aliases applied",
+            data.get("applied") == 2,
+            data.get("applied"))
+        ledger.check(
+            "doubletap backup aliases unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    reloaded = json_call(
+        ledger, cli, ["doubletap"], env, "doubletap aliases read")
+    if reloaded is not None:
+        ledger.check(
+            "doubletap aliases applied to config",
+            reloaded.get("in") == 4 and reloaded.get("out") == 0,
+            reloaded)
+
+    env = make_env(work / "doubletap-backup-invalid")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "doubleTapAction": 42,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "doubletap backup invalid")
+    if data is not None:
+        ledger.check(
+            "doubletap backup invalid rejected",
+            data.get("ok") is True
+            and data.get("applied") == 0
+            and data.get("unknown") == ["doubleTapAction"],
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1368,6 +1518,7 @@ def main():
         reset = check_reset(ledger, cli, work)
         workdir = check_workdir(ledger, cli, work)
         menu = check_message_menu(ledger, cli, work)
+        doubletap = check_doubletap(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1378,6 +1529,7 @@ def main():
     print(f"reset: {reset[0] - reset[1]} passed")
     print(f"workdir: {workdir[0] - workdir[1]} passed")
     print(f"menu: {menu[0] - menu[1]} passed")
+    print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

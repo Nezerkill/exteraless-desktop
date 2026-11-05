@@ -2,6 +2,7 @@
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages_trim.h"
+#include "exteraless/doubletap.h"
 #include "exteraless/format.h"
 #include "exteraless/links.h"
 
@@ -42,6 +43,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
 		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
 		<< "<translate> <report> <deleteMsg>\n"
+		<< "  exteraless-chats-cli doubletap\n"
+		<< "  exteraless-chats-cli doubletap-set <in> <out>\n"
+		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -159,6 +163,32 @@ void ApplyMenuFlags(const std::array<bool, 11> &flags) {
 	config.setChatsMenuTranslate(flags[8]);
 	config.setChatsMenuReport(flags[9]);
 	config.setChatsMenuDelete(flags[10]);
+}
+
+void PrintDoubleTap() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
+		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
+	});
+}
+
+[[nodiscard]] QString DoubleTapName(int value) {
+	const auto action = Exteraless::ResolveDoubleTap(value);
+	if (!action) {
+		return QStringLiteral("telegram");
+	}
+	switch (*action) {
+	case Exteraless::DoubleTapAction::None:
+		return QStringLiteral("none");
+	case Exteraless::DoubleTapAction::SendReaction:
+		return QStringLiteral("reaction");
+	case Exteraless::DoubleTapAction::Reply:
+		return QStringLiteral("reply");
+	default:
+		break;
+	}
+	return QStringLiteral("none");
 }
 
 void ApplyFlags(const std::array<bool, 7> &flags) {
@@ -346,6 +376,40 @@ int main(int argc, char *argv[]) {
 		}
 		ApplyMenuFlags(flags);
 		PrintMessageMenu();
+		return 0;
+	}
+	if (mode == QStringLiteral("doubletap")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintDoubleTap();
+		return 0;
+	}
+	if (mode == QStringLiteral("doubletap-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto in = arguments[2].toInt(&ok);
+		if (!ok) return PrintUsage();
+		const auto out = arguments[3].toInt(&ok);
+		if (!ok) return PrintUsage();
+		auto &config = Exteraless::Config::Instance();
+		config.setChatsDoubleTapIn(in);
+		config.setChatsDoubleTapOut(out);
+		PrintDoubleTap();
+		return 0;
+	}
+	if (mode == QStringLiteral("doubletap-resolve")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		std::cout << DoubleTapName(value).toUtf8().constData() << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("deleted")) {

@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Chats / Double tap: настройки `OEChatsDoubleTapIn` и `OEChatsDoubleTapOut`
+  задают действие двойного тапа по входящим и исходящим сообщениям
+  (как в настройках Telegram, ничего, любимая реакция, ответ); Android-ключи
+  `doubleTapAction`/`doubleTapActionOutOwner` поддержаны в `.extera` (всего
+  40 ключей), добавлены два селектора в подсекцию Chats.
 - General / Privacy: настройка `OEGeneralHidePhone` (default `false`) скрывает
   строку номера телефона в профиле контакта и своём профиле; Android-ключ
   `hidePhoneNumber` поддержан в `.extera` (всего 38 ключей), тумблер

@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..032d21e 100644
+index 811707d..af189d1 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,27 @@ endif()
+@@ -70,6 +70,29 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -20,6 +20,8 @@ index 811707d..032d21e 100644
 +    ../exteraless/deleted_messages.cpp
 +    ../exteraless/deleted_messages.h
 +    ../exteraless/deleted_messages_trim.h
++    ../exteraless/doubletap.cpp
++    ../exteraless/doubletap.h
 +    ../exteraless/format.cpp
 +    ../exteraless/format.h
 +    ../exteraless/ghost_mode.cpp
@@ -40,7 +42,7 @@ index 811707d..032d21e 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +130,7 @@ PRIVATE
+@@ -109,6 +132,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -48,7 +50,7 @@ index 811707d..032d21e 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1702,7 @@ PRIVATE
+@@ -1680,6 +1704,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -56,7 +58,7 @@ index 811707d..032d21e 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1920,8 @@ PRIVATE
+@@ -1897,6 +1922,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -65,7 +67,7 @@ index 811707d..032d21e 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2555,10 @@ else()
+@@ -2530,6 +2557,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -77,10 +79,10 @@ index 811707d..032d21e 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..af89031 100644
+index ffc8ec9..2a0616c 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,67 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,74 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -112,6 +114,13 @@ index ffc8ec9..af89031 100644
 +"lng_settings_exteraless_chats_strip_paste" = "Strip tracking parameters from pasted text";
 +"lng_settings_exteraless_chats_unread_capsule" = "Compact unread messages label";
 +"lng_settings_exteraless_chats_save_deleted" = "Save deleted messages";
++"lng_settings_exteraless_double_tap_title" = "Double tap action";
++"lng_settings_exteraless_double_tap_in" = "On incoming messages";
++"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
++"lng_settings_exteraless_double_tap_telegram" = "As in Telegram settings";
++"lng_settings_exteraless_double_tap_none" = "Do nothing";
++"lng_settings_exteraless_double_tap_reaction" = "Send reaction";
++"lng_settings_exteraless_double_tap_reply" = "Reply";
 +"lng_settings_exteraless_pill_stack" = "Pill Stack";
 +"lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
 +"lng_settings_exteraless_pill_stack_visible" = "Visible pills";
@@ -3013,19 +3022,57 @@ index 0000000..e93ade8
 +
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/history/history_inner_widget.cpp b/Telegram/SourceFiles/history/history_inner_widget.cpp
-index 391e1d3..4570f11 100644
+index 391e1d3..866488c 100644
 --- a/Telegram/SourceFiles/history/history_inner_widget.cpp
 +++ b/Telegram/SourceFiles/history/history_inner_widget.cpp
-@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/history_inner_widget.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/doubletap.h"
 +
  #include "api/api_polls.h"
  #include "chat_helpers/stickers_emoji_pack.h"
  #include "core/application.h"
-@@ -3015,7 +3017,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -2731,14 +2734,28 @@ void HistoryInner::mouseDoubleClickEvent(QMouseEvent *e) {
+ 		&& e->button() == Qt::LeftButton) {
+ 		if (const auto view = Element::Moused()) {
+ 			mouseActionCancel();
+-			switch (HistoryView::CurrentQuickAction()) {
+-			case HistoryView::DoubleClickQuickAction::Reply: {
+-				_widget->replyToMessage(view->data());
+-			} break;
+-			case HistoryView::DoubleClickQuickAction::React: {
+-				toggleFavoriteReaction(view);
+-			} break;
+-			default: break;
++			const auto item = view->data();
++			if (const auto action = Exteraless::DoubleTapActionFor(
++					item->out())) {
++				switch (*action) {
++				case Exteraless::DoubleTapAction::SendReaction: {
++					toggleFavoriteReaction(view);
++				} break;
++				case Exteraless::DoubleTapAction::Reply: {
++					_widget->replyToMessage(item);
++				} break;
++				default: break;
++				}
++			} else {
++				switch (HistoryView::CurrentQuickAction()) {
++				case HistoryView::DoubleClickQuickAction::Reply: {
++					_widget->replyToMessage(item);
++				} break;
++				case HistoryView::DoubleClickQuickAction::React: {
++					toggleFavoriteReaction(view);
++				} break;
++				default: break;
++				}
+ 			}
+ 		}
+ 	}
+@@ -3015,7 +3032,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			: item->allowsEdit(t)
  			? item
  			: nullptr;
@@ -3035,7 +3082,7 @@ index 391e1d3..4570f11 100644
  			const auto editItemId = editItem->fullId();
  			_menu->addAction(tr::lng_context_edit_msg(tr::now), [=] {
  				if (const auto item = session->data().message(editItemId)) {
-@@ -3050,7 +3053,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3050,7 +3068,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  		const auto pinItem = (item->canPin() && item->isPinned())
  			? item
  			: groupLeaderOrSelf(item);
@@ -3045,7 +3092,7 @@ index 391e1d3..4570f11 100644
  			const auto isPinned = pinItem->isPinned();
  			const auto pinItemId = pinItem->fullId();
  			_menu->addAction(isPinned ? tr::lng_context_unpin_msg(tr::now) : tr::lng_context_pin_msg(tr::now), crl::guard(controller, [=] {
-@@ -3076,9 +3080,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3076,9 +3095,11 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			_menu->addAction(tr::lng_context_save_image(tr::now), base::fn_delayed(st::defaultDropdownMenu.menu.ripple.hideDuration, this, [=] {
  				savePhotoToFile(photo);
  			}), &st::menuIconSaveImage);
@@ -3060,7 +3107,7 @@ index 391e1d3..4570f11 100644
  		}
  		if (photo->hasAttachedStickers()) {
  			_menu->addAction(tr::lng_context_attached_stickers(tr::now), [=] {
-@@ -3183,7 +3189,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3183,7 +3204,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  				Element::Moused())
  		) != HistoryView::PointState::GroupPart);
  	const auto addSelectMessageAction = [&](not_null<HistoryItem*> item) {
@@ -3071,7 +3118,7 @@ index 391e1d3..4570f11 100644
  			const auto itemId = item->fullId();
  			_menu->addAction(tr::lng_context_select_msg(tr::now), [=] {
  				if (const auto item = session->data().message(itemId)) {
-@@ -3291,7 +3299,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3291,7 +3314,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  	const auto addReplyAction = [&](HistoryItem *item) {
  		if (!item
  			|| (!item->isRegular() && !CanReplyToEphemeral(item))
@@ -3081,7 +3128,7 @@ index 391e1d3..4570f11 100644
  			return;
  		}
  		const auto canSendReply = CanSendReply(item);
-@@ -3341,6 +3350,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3341,6 +3365,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  	};
  
  	const auto addUnpinSelectedAction = [&] {
@@ -3091,7 +3138,7 @@ index 391e1d3..4570f11 100644
  		auto ids = Window::MessagesToUnpin(session, getSelectedItems());
  		if (ids.empty()) {
  			return;
-@@ -3417,18 +3429,21 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3417,18 +3444,21 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			&& item->hasDirectLink()
  			&& isUponSelected != 2
  			&& isUponSelected != -2
@@ -3116,7 +3163,7 @@ index 391e1d3..4570f11 100644
  				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
  					_widget->confirmDeleteSelected();
  				}, &st::menuIconDelete);
-@@ -3453,7 +3468,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3453,7 +3483,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			const auto itemId = item->fullId();
  			const auto blockSender = item->history()->peer->isRepliesChat();
  			if (isUponSelected != -2) {
@@ -3126,7 +3173,7 @@ index 391e1d3..4570f11 100644
  					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
  						forwardItem(itemId);
  					}, &st::menuIconForward);
-@@ -3463,7 +3479,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3463,7 +3494,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  						Api::AddOfferToMessage(_controller->uiShow(), itemId);
  					}, &st::menuIconTagSell);
  				}
@@ -3136,7 +3183,7 @@ index 391e1d3..4570f11 100644
  					const auto callback = [=] { deleteItem(itemId); };
  					if (item->isUploading()) {
  						if (item->media()
-@@ -3482,7 +3499,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3482,7 +3514,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  							[=] { _menu = nullptr; }));
  					}
  				}
@@ -3146,7 +3193,7 @@ index 391e1d3..4570f11 100644
  					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
  						reportItem(itemId);
  					}, &st::menuIconReport);
-@@ -3547,7 +3565,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3547,7 +3580,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  		if (isUponSelected > 0) {
  			addReplyAction(item);
  				const auto selectedText = getSelectedText();
@@ -3157,7 +3204,7 @@ index 391e1d3..4570f11 100644
  				_menu->addAction(
  					((isUponSelected > 1)
  						? tr::lng_context_copy_selected_items(tr::now)
-@@ -3555,7 +3575,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3555,7 +3590,9 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  					[=] { copySelectedText(); },
  					&st::menuIconCopy);
  			}
@@ -3168,7 +3215,7 @@ index 391e1d3..4570f11 100644
  				const auto peer = item->history()->peer;
  				_menu->addAction(tr::lng_context_translate_selected({}), [=] {
  					_controller->show(Box(
-@@ -3654,14 +3676,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3654,14 +3691,16 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  				if (!item->isService() && view && actionText.isEmpty()) {
  					const auto hasRestriction = hasCopyRestriction(item);
  					if (!hasRestriction
@@ -3187,7 +3234,7 @@ index 391e1d3..4570f11 100644
  						const auto peer = item->history()->peer;
  						const auto itemId = item->id;
  						const auto translate = mediaHasTextForCopy
-@@ -3695,7 +3719,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3695,7 +3734,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			&& item->hasDirectLink()
  			&& isUponSelected != 2
  			&& isUponSelected != -2
@@ -3197,7 +3244,7 @@ index 391e1d3..4570f11 100644
  			_menu->addAction(item->history()->peer->isMegagroup() ? tr::lng_context_copy_message_link(tr::now) : tr::lng_context_copy_post_link(tr::now), [=] {
  				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
  			}, &st::menuIconLink);
-@@ -3726,12 +3751,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3726,12 +3766,14 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  			}
  		}
  		if (isUponSelected > 1) {
@@ -3214,7 +3261,7 @@ index 391e1d3..4570f11 100644
  				_menu->addAction(tr::lng_context_delete_selected(tr::now), [=] {
  					_widget->confirmDeleteSelected();
  				}, &st::menuIconDelete);
-@@ -3757,7 +3784,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3757,7 +3799,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  				|| item->isRegular()
  				|| item->isEphemeral())) {
  			if (isUponSelected != -2) {
@@ -3224,7 +3271,7 @@ index 391e1d3..4570f11 100644
  					_menu->addAction(tr::lng_context_forward_msg(tr::now), [=] {
  						forwardAsGroup(itemId);
  					}, &st::menuIconForward);
-@@ -3767,7 +3795,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3767,7 +3810,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  						Api::AddOfferToMessage(_controller->uiShow(), itemId);
  					}, &st::menuIconTagSell);
  				}
@@ -3234,7 +3281,7 @@ index 391e1d3..4570f11 100644
  					const auto callback = [=] {
  						deleteAsGroup(itemId);
  					};
-@@ -3788,7 +3817,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
+@@ -3788,7 +3832,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
  							[=] { _menu = nullptr; }));
  					}
  				}
@@ -3565,6 +3612,54 @@ index 057de48..2e5ac9e 100644
  	auto reactionsData = InlineListDataFromMessage(this);
  	if (reactionsData.reactions.empty()
  		|| context() == Context::MediaEditor) {
+diff --git a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
+index fdbce14..585f139 100644
+--- a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
+@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/history_view_list_widget.h"
+ 
++#include "exteraless/doubletap.h"
+ #include "history/view/history_view_about_view.h"
+ #include "base/unixtime.h"
+ #include "base/qt/qt_key_modifiers.h"
+@@ -3935,14 +3936,27 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
+ 		&& (_overElement->data()->isRegular()
+ 			|| CanReplyToEphemeral(_overElement->data()))) {
+ 		mouseActionCancel();
+-		switch (CurrentQuickAction()) {
+-		case DoubleClickQuickAction::Reply: {
+-			replyToMessageRequestNotify({ _overElement->data()->fullId() });
+-		} break;
+-		case DoubleClickQuickAction::React: {
+-			toggleFavoriteReaction(_overElement);
+-		} break;
+-		default: break;
++		const auto item = _overElement->data();
++		if (const auto action = Exteraless::DoubleTapActionFor(item->out())) {
++			switch (*action) {
++			case Exteraless::DoubleTapAction::SendReaction: {
++				toggleFavoriteReaction(_overElement);
++			} break;
++			case Exteraless::DoubleTapAction::Reply: {
++				replyToMessageRequestNotify({ item->fullId() });
++			} break;
++			default: break;
++			}
++		} else {
++			switch (CurrentQuickAction()) {
++			case DoubleClickQuickAction::Reply: {
++				replyToMessageRequestNotify({ item->fullId() });
++			} break;
++			case DoubleClickQuickAction::React: {
++				toggleFavoriteReaction(_overElement);
++			} break;
++			default: break;
++			}
+ 		}
+ 	}
+ }
 diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
 index 5152d85..b2baff4 100644
 --- a/Telegram/SourceFiles/history/view/history_view_message.cpp
@@ -3907,16 +4002,17 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..1482855
+index 0000000..1b857f6
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,704 @@
+@@ -0,0 +1,808 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
 +
 +#include "exteraless/backup.h"
 +#include "exteraless/config.h"
++#include "exteraless/doubletap.h"
 +#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
 +#include "core/file_utilities.h"
@@ -3924,6 +4020,7 @@ index 0000000..1482855
 +#include "settings/settings_builder.h"
 +#include "settings/sections/settings_main.h"
 +#include "ui/boxes/confirm_box.h"
++#include "ui/layers/generic_box.h"
 +#include "ui/rp_widget.h"
 +#include "ui/ui_utility.h"
 +#include "ui/widgets/buttons.h"
@@ -4316,6 +4413,108 @@ index 0000000..1482855
 +		[](bool value) {
 +			Exteraless::Config::Instance().setChatsMenuDelete(value);
 +		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chats/double-tap"_q,
++		.title = tr::lng_settings_exteraless_double_tap_title(),
++	});
++
++	const auto doubleTapLabel = [](int value) {
++		switch (value) {
++		case -1:
++			return tr::lng_settings_exteraless_double_tap_telegram(tr::now);
++		case 1:
++		case 2:
++			return tr::lng_settings_exteraless_double_tap_reaction(tr::now);
++		case 4:
++			return tr::lng_settings_exteraless_double_tap_reply(tr::now);
++		}
++		return tr::lng_settings_exteraless_double_tap_none(tr::now);
++	};
++	const auto doubleTapIn = std::make_shared<rpl::variable<QString>>(
++		doubleTapLabel(Exteraless::Config::Instance().chatsDoubleTapIn()));
++	const auto doubleTapOut = std::make_shared<rpl::variable<QString>>(
++		doubleTapLabel(Exteraless::Config::Instance().chatsDoubleTapOut()));
++
++	const auto addDoubleTapButton = [&](
++			QString id,
++			rpl::producer<QString> title,
++			std::shared_ptr<rpl::variable<QString>> label,
++			bool outgoing) {
++		const auto keywords = QStringList{
++			u"double"_q,
++			u"tap"_q,
++			u"click"_q,
++			u"reaction"_q,
++			u"reply"_q,
++		};
++		builder.addButton({
++			.id = std::move(id),
++			.title = std::move(title),
++			.st = &st::settingsButtonNoIcon,
++			.label = label->value(),
++			.onClick = [=] {
++				const auto controller = builder.controller();
++				if (!controller) {
++					return;
++				}
++				const auto &config = Exteraless::Config::Instance();
++				const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++					outgoing
++						? config.chatsDoubleTapOut()
++						: config.chatsDoubleTapIn());
++				controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++					box->setTitle(outgoing
++						? tr::lng_settings_exteraless_double_tap_out()
++						: tr::lng_settings_exteraless_double_tap_in());
++					const auto options = std::vector<std::pair<int, QString>>{
++						{ -1, tr::lng_settings_exteraless_double_tap_telegram(
++							tr::now) },
++						{ 0, tr::lng_settings_exteraless_double_tap_none(
++							tr::now) },
++						{ 1, tr::lng_settings_exteraless_double_tap_reaction(
++							tr::now) },
++						{ 4, tr::lng_settings_exteraless_double_tap_reply(
++							tr::now) },
++					};
++					const auto inner = box->addRow(
++						object_ptr<Ui::VerticalLayout>(box));
++					for (const auto &[value, text] : options) {
++						inner->add(
++							object_ptr<Ui::Radioenum<int>>(
++								inner,
++								group,
++								value,
++								text,
++								st::settingsSendType),
++							st::settingsSendTypePadding);
++					}
++					group->setChangedCallback([=](int value) {
++						auto &config = Exteraless::Config::Instance();
++						if (outgoing) {
++							config.setChatsDoubleTapOut(value);
++						} else {
++							config.setChatsDoubleTapIn(value);
++						}
++						label->force_assign(doubleTapLabel(value));
++						box->closeBox();
++					});
++					box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++				}));
++			},
++			.keywords = keywords,
++		});
++	};
++	addDoubleTapButton(
++		u"exteraless/chats/double-tap/in"_q,
++		tr::lng_settings_exteraless_double_tap_in(),
++		doubleTapIn,
++		false);
++	addDoubleTapButton(
++		u"exteraless/chats/double-tap/out"_q,
++		tr::lng_settings_exteraless_double_tap_out(),
++		doubleTapOut,
++		true);
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/pill-stack"_q,
@@ -5245,10 +5444,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..6f0fcb0
+index 0000000..236ccf9
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,36 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -5256,6 +5455,8 @@ index 0000000..6f0fcb0
 +    chats.h
 +    config.cpp
 +    config.h
++    doubletap.cpp
++    doubletap.h
 +    exteraless.cpp
 +    exteraless.h
 +    format.cpp
@@ -5285,10 +5486,10 @@ index 0000000..6f0fcb0
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..883c8c6
+index 0000000..ba3976c
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,390 @@
+@@ -0,0 +1,408 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -5350,6 +5551,10 @@ index 0000000..883c8c6
 +constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
 +constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 +constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
++constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
++constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
++constexpr auto kDoubleTapAction = "doubleTapAction";
++constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 +
 +constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 +constexpr auto kShowReportButton = "showReportButton";
@@ -5495,6 +5700,8 @@ index 0000000..883c8c6
 +	extera[kChatsMenuTranslate] = menu.translate;
 +	extera[kChatsMenuReport] = menu.report;
 +	extera[kChatsMenuDelete] = menu.deleteMsg;
++	extera[kChatsDoubleTapIn] = config.chatsDoubleTapIn();
++	extera[kChatsDoubleTapOut] = config.chatsDoubleTapOut();
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -5653,6 +5860,18 @@ index 0000000..883c8c6
 +			config.setChatsMenuReport(value.toBool());
 +		} else if (key == kChatsMenuDelete && value.isBool()) {
 +			config.setChatsMenuDelete(value.toBool());
++		} else if ((key == kChatsDoubleTapIn || key == kDoubleTapAction)
++			&& value.isDouble()
++			&& value.toInt() >= -1
++			&& value.toInt() <= 12) {
++			config.setChatsDoubleTapIn(value.toInt());
++		} else if ((key == kChatsDoubleTapOut
++			|| key == kDoubleTapActionOut
++			|| key == QStringLiteral("doubleTapActionOut"))
++			&& value.isDouble()
++			&& value.toInt() >= -1
++			&& value.toInt() <= 12) {
++			config.setChatsDoubleTapOut(value.toInt());
 +		} else {
 +			return false;
 +		}
@@ -5778,11 +5997,13 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..60cbe9c
+index 0000000..2820080
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,668 @@
+@@ -0,0 +1,698 @@
 +#include "exteraless/config.h"
++
++#include "exteraless/doubletap.h"
 +
 +#include <QDir>
 +#include <QFile>
@@ -5836,6 +6057,8 @@ index 0000000..60cbe9c
 +constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
 +constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 +constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
++constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
++constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -6223,6 +6446,22 @@ index 0000000..60cbe9c
 +	setValue(kChatsMenuDelete, value);
 +}
 +
++int Config::chatsDoubleTapIn() const {
++	return SanitizeDoubleTapValue(intValue(kChatsDoubleTapIn, -1));
++}
++
++void Config::setChatsDoubleTapIn(int value) {
++	setValue(kChatsDoubleTapIn, SanitizeDoubleTapValue(value));
++}
++
++int Config::chatsDoubleTapOut() const {
++	return SanitizeDoubleTapValue(intValue(kChatsDoubleTapOut, -1));
++}
++
++void Config::setChatsDoubleTapOut(int value) {
++	setValue(kChatsDoubleTapOut, SanitizeDoubleTapValue(value));
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -6316,7 +6555,9 @@ index 0000000..60cbe9c
 +			|| key == kChatsMenuSelect
 +			|| key == kChatsMenuTranslate
 +			|| key == kChatsMenuReport
-+			|| key == kChatsMenuDelete) {
++			|| key == kChatsMenuDelete
++			|| key == kChatsDoubleTapIn
++			|| key == kChatsDoubleTapOut) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -6333,6 +6574,14 @@ index 0000000..60cbe9c
 +	}
 +	SanitizeExclusions(&accepted, kGhostReadExclusions);
 +	SanitizeExclusions(&accepted, kGhostTypingExclusions);
++	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
++		const auto value = accepted.value(key);
++		if (value.isDouble()) {
++			accepted[key] = SanitizeDoubleTapValue(value.toInt());
++		} else if (accepted.contains(key)) {
++			accepted.remove(key);
++		}
++	}
 +	if (accepted.isEmpty()) {
 +		return false;
 +	}
@@ -6452,10 +6701,10 @@ index 0000000..60cbe9c
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..9cc77f1
+index 0000000..eb4badd
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,160 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -6571,6 +6820,10 @@ index 0000000..9cc77f1
 +	void setChatsUnreadCapsule(bool value);
 +
 +	[[nodiscard]] MessageMenuSettings messageMenuSettings() const;
++	[[nodiscard]] int chatsDoubleTapIn() const;
++	void setChatsDoubleTapIn(int value);
++	[[nodiscard]] int chatsDoubleTapOut() const;
++	void setChatsDoubleTapOut(int value);
 +	void setChatsMenuReply(bool value);
 +	void setChatsMenuEdit(bool value);
 +	void setChatsMenuPin(bool value);
@@ -6961,6 +7214,66 @@ index 0000000..d928e0d
 +	}
 +	*entries = std::move(result);
 +}
++
++} // namespace Exteraless
+diff --git a/exteraless/doubletap.cpp b/exteraless/doubletap.cpp
+new file mode 100644
+index 0000000..5658593
+--- /dev/null
++++ b/exteraless/doubletap.cpp
+@@ -0,0 +1,28 @@
++#include "exteraless/doubletap.h"
++
++#include "exteraless/config.h"
++
++namespace Exteraless {
++
++std::optional<DoubleTapAction> ResolveDoubleTap(int value) {
++	switch (value) {
++	case -1: return std::nullopt;
++	case 0: return DoubleTapAction::None;
++	case 1: return DoubleTapAction::SendReaction;
++	case 2: return DoubleTapAction::SendReaction;
++	case 4: return DoubleTapAction::Reply;
++	}
++	return DoubleTapAction::None;
++}
++
++std::optional<DoubleTapAction> DoubleTapActionFor(bool outgoing) {
++	const auto &config = Config::Instance();
++	return ResolveDoubleTap(
++		outgoing ? config.chatsDoubleTapOut() : config.chatsDoubleTapIn());
++}
++
++int SanitizeDoubleTapValue(int value) {
++	return (value >= -1 && value <= 12) ? value : -1;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/doubletap.h b/exteraless/doubletap.h
+new file mode 100644
+index 0000000..03f9d42
+--- /dev/null
++++ b/exteraless/doubletap.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include <optional>
++
++namespace Exteraless {
++
++enum class DoubleTapAction {
++	Telegram = -1,
++	None = 0,
++	SendReaction = 1,
++	Reply = 4,
++};
++
++[[nodiscard]] std::optional<DoubleTapAction> ResolveDoubleTap(int value);
++
++[[nodiscard]] std::optional<DoubleTapAction> DoubleTapActionFor(bool outgoing);
++
++[[nodiscard]] int SanitizeDoubleTapValue(int value);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/exteraless.cpp b/exteraless/exteraless.cpp
@@ -8031,14 +8344,15 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..473a75c
+index 0000000..97f8a67
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,513 @@
+@@ -0,0 +1,577 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
 +#include "exteraless/deleted_messages_trim.h"
++#include "exteraless/doubletap.h"
 +#include "exteraless/format.h"
 +#include "exteraless/links.h"
 +
@@ -8079,6 +8393,9 @@ index 0000000..473a75c
 +		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
 +		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
 +		<< "<translate> <report> <deleteMsg>\n"
++		<< "  exteraless-chats-cli doubletap\n"
++		<< "  exteraless-chats-cli doubletap-set <in> <out>\n"
++		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -8196,6 +8513,32 @@ index 0000000..473a75c
 +	config.setChatsMenuTranslate(flags[8]);
 +	config.setChatsMenuReport(flags[9]);
 +	config.setChatsMenuDelete(flags[10]);
++}
++
++void PrintDoubleTap() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
++		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
++	});
++}
++
++[[nodiscard]] QString DoubleTapName(int value) {
++	const auto action = Exteraless::ResolveDoubleTap(value);
++	if (!action) {
++		return QStringLiteral("telegram");
++	}
++	switch (*action) {
++	case Exteraless::DoubleTapAction::None:
++		return QStringLiteral("none");
++	case Exteraless::DoubleTapAction::SendReaction:
++		return QStringLiteral("reaction");
++	case Exteraless::DoubleTapAction::Reply:
++		return QStringLiteral("reply");
++	default:
++		break;
++	}
++	return QStringLiteral("none");
 +}
 +
 +void ApplyFlags(const std::array<bool, 7> &flags) {
@@ -8383,6 +8726,40 @@ index 0000000..473a75c
 +		}
 +		ApplyMenuFlags(flags);
 +		PrintMessageMenu();
++		return 0;
++	}
++	if (mode == QStringLiteral("doubletap")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintDoubleTap();
++		return 0;
++	}
++	if (mode == QStringLiteral("doubletap-set")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto in = arguments[2].toInt(&ok);
++		if (!ok) return PrintUsage();
++		const auto out = arguments[3].toInt(&ok);
++		if (!ok) return PrintUsage();
++		auto &config = Exteraless::Config::Instance();
++		config.setChatsDoubleTapIn(in);
++		config.setChatsDoubleTapOut(out);
++		PrintDoubleTap();
++		return 0;
++	}
++	if (mode == QStringLiteral("doubletap-resolve")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		std::cout << DoubleTapName(value).toUtf8().constData() << '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("deleted")) {
@@ -8612,10 +8989,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..b3fa16d
+index 0000000..9ea3235
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1392 @@
+@@ -0,0 +1,1544 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -8766,6 +9143,8 @@ index 0000000..b3fa16d
 +         ["config-set", "0", "1", "0", "1", "0"]),
 +        ("message-menu-set with wrong count",
 +         ["message-menu-set", "0", "1"]),
++        ("doubletap-set with wrong count", ["doubletap-set", "1"]),
++        ("doubletap-resolve without value", ["doubletap-resolve"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
@@ -9064,8 +9443,14 @@ index 0000000..b3fa16d
 +            section.get("OEPluginStates") == {},
 +            section.get("OEPluginStates"))
 +        ledger.check(
++            "backup double tap defaults",
++            section.get("OEChatsDoubleTapIn") == -1
++            and section.get("OEChatsDoubleTapOut") == -1,
++            (section.get("OEChatsDoubleTapIn"),
++             section.get("OEChatsDoubleTapOut")))
++        ledger.check(
 +            "backup extera key count",
-+            len(section) == 34,
++            len(section) == 36,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -9084,7 +9469,7 @@ index 0000000..b3fa16d
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 38,
++            sum(len(value) for value in exported.values()) == 40,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -9104,7 +9489,7 @@ index 0000000..b3fa16d
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 38,
++                data.get("applied") == 40,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -9172,6 +9557,8 @@ index 0000000..b3fa16d
 +            "OEChatsMenuTranslate": False,
 +            "OEChatsMenuReport": True,
 +            "OEChatsMenuDelete": False,
++            "OEChatsDoubleTapIn": 0,
++            "OEChatsDoubleTapOut": 4,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -9192,7 +9579,7 @@ index 0000000..b3fa16d
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 38,
++            data.get("applied") == 40,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -9236,6 +9623,12 @@ index 0000000..b3fa16d
 +            "backup full proxy auto reset",
 +            section.get("OEProxyAutoDisabled") is False,
 +            section.get("OEProxyAutoDisabled"))
++        ledger.check(
++            "backup full double tap",
++            section.get("OEChatsDoubleTapIn") == 0
++            and section.get("OEChatsDoubleTapOut") == 4,
++            (section.get("OEChatsDoubleTapIn"),
++             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup full generic keys",
 +            section.get("relativeLastSeen") is True
@@ -9333,10 +9726,10 @@ index 0000000..b3fa16d
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 38",
++            "backup legacy eight completed to 40",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (34, 2, 2),
++             len(sections["mainconfig"])) == (36, 2, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -9968,6 +10361,140 @@ index 0000000..b3fa16d
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_doubletap(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "doubletap-defaults")
++    data = json_call(ledger, cli, ["doubletap"], env, "doubletap defaults")
++    if data is not None:
++        ledger.check(
++            "doubletap defaults telegram",
++            data.get("in") == -1 and data.get("out") == -1,
++            data)
++
++    env = make_env(work / "doubletap-set")
++    data = json_call(
++        ledger, cli, ["doubletap-set", "1", "4"], env, "doubletap set")
++    if data is not None:
++        ledger.check(
++            "doubletap set values",
++            data.get("in") == 1 and data.get("out") == 4,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["doubletap"], env, "doubletap reload")
++    if reloaded is not None:
++        ledger.check(
++            "doubletap persisted",
++            reloaded.get("in") == 1 and reloaded.get("out") == 4,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["doubletap-set", "99", "-5"], env,
++        "doubletap set out of range")
++    if data is not None:
++        ledger.check(
++            "doubletap out of range falls back to telegram",
++            data.get("in") == -1 and data.get("out") == -1,
++            data)
++
++    resolve_cases = [
++        ("telegram", "-1", "telegram"),
++        ("none", "0", "none"),
++        ("reaction", "1", "reaction"),
++        ("show reactions maps to reaction", "2", "reaction"),
++        ("translate maps to none", "3", "none"),
++        ("reply", "4", "reply"),
++        ("save maps to none", "5", "none"),
++        ("repeat maps to none", "6", "none"),
++        ("edit maps to none", "8", "none"),
++        ("delete maps to none", "10", "none"),
++        ("forward maps to none", "11", "none"),
++        ("download maps to none", "12", "none"),
++    ]
++    for name, value, expected in resolve_cases:
++        result = run(cli, ["doubletap-resolve", value])
++        actual = result.stdout.strip()
++        ledger.check(
++            f"doubletap resolve {name}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    env = make_env(work / "doubletap-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsDoubleTapIn": 0,
++            "OEChatsDoubleTapOut": 1,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "doubletap fromJson")
++    if data is not None:
++        ledger.check(
++            "doubletap fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["doubletap"], env, "doubletap fromJson read")
++    if reloaded is not None:
++        ledger.check(
++            "doubletap fromJson values",
++            reloaded.get("in") == 0 and reloaded.get("out") == 1,
++            reloaded)
++
++    env = make_env(work / "doubletap-backup-aliases")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "doubleTapAction": 4,
++            "doubleTapActionOutOwner": 0,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "doubletap backup aliases")
++    if data is not None:
++        ledger.check(
++            "doubletap backup aliases applied",
++            data.get("applied") == 2,
++            data.get("applied"))
++        ledger.check(
++            "doubletap backup aliases unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    reloaded = json_call(
++        ledger, cli, ["doubletap"], env, "doubletap aliases read")
++    if reloaded is not None:
++        ledger.check(
++            "doubletap aliases applied to config",
++            reloaded.get("in") == 4 and reloaded.get("out") == 0,
++            reloaded)
++
++    env = make_env(work / "doubletap-backup-invalid")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "doubleTapAction": 42,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "doubletap backup invalid")
++    if data is not None:
++        ledger.check(
++            "doubletap backup invalid rejected",
++            data.get("ok") is True
++            and data.get("applied") == 0
++            and data.get("unknown") == ["doubleTapAction"],
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -9986,6 +10513,7 @@ index 0000000..b3fa16d
 +        reset = check_reset(ledger, cli, work)
 +        workdir = check_workdir(ledger, cli, work)
 +        menu = check_message_menu(ledger, cli, work)
++        doubletap = check_doubletap(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -9996,6 +10524,7 @@ index 0000000..b3fa16d
 +    print(f"reset: {reset[0] - reset[1]} passed")
 +    print(f"workdir: {workdir[0] - workdir[1]} passed")
 +    print(f"menu: {menu[0] - menu[1]} passed")
++    print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

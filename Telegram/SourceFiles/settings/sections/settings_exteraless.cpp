@@ -4,6 +4,7 @@
 
 #include "exteraless/backup.h"
 #include "exteraless/config.h"
+#include "exteraless/doubletap.h"
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
 #include "core/file_utilities.h"
@@ -11,6 +12,7 @@
 #include "settings/settings_builder.h"
 #include "settings/sections/settings_main.h"
 #include "ui/boxes/confirm_box.h"
+#include "ui/layers/generic_box.h"
 #include "ui/rp_widget.h"
 #include "ui/ui_utility.h"
 #include "ui/widgets/buttons.h"
@@ -403,6 +405,108 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setChatsMenuDelete(value);
 		});
+
+	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/double-tap"_q,
+		.title = tr::lng_settings_exteraless_double_tap_title(),
+	});
+
+	const auto doubleTapLabel = [](int value) {
+		switch (value) {
+		case -1:
+			return tr::lng_settings_exteraless_double_tap_telegram(tr::now);
+		case 1:
+		case 2:
+			return tr::lng_settings_exteraless_double_tap_reaction(tr::now);
+		case 4:
+			return tr::lng_settings_exteraless_double_tap_reply(tr::now);
+		}
+		return tr::lng_settings_exteraless_double_tap_none(tr::now);
+	};
+	const auto doubleTapIn = std::make_shared<rpl::variable<QString>>(
+		doubleTapLabel(Exteraless::Config::Instance().chatsDoubleTapIn()));
+	const auto doubleTapOut = std::make_shared<rpl::variable<QString>>(
+		doubleTapLabel(Exteraless::Config::Instance().chatsDoubleTapOut()));
+
+	const auto addDoubleTapButton = [&](
+			QString id,
+			rpl::producer<QString> title,
+			std::shared_ptr<rpl::variable<QString>> label,
+			bool outgoing) {
+		const auto keywords = QStringList{
+			u"double"_q,
+			u"tap"_q,
+			u"click"_q,
+			u"reaction"_q,
+			u"reply"_q,
+		};
+		builder.addButton({
+			.id = std::move(id),
+			.title = std::move(title),
+			.st = &st::settingsButtonNoIcon,
+			.label = label->value(),
+			.onClick = [=] {
+				const auto controller = builder.controller();
+				if (!controller) {
+					return;
+				}
+				const auto &config = Exteraless::Config::Instance();
+				const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+					outgoing
+						? config.chatsDoubleTapOut()
+						: config.chatsDoubleTapIn());
+				controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+					box->setTitle(outgoing
+						? tr::lng_settings_exteraless_double_tap_out()
+						: tr::lng_settings_exteraless_double_tap_in());
+					const auto options = std::vector<std::pair<int, QString>>{
+						{ -1, tr::lng_settings_exteraless_double_tap_telegram(
+							tr::now) },
+						{ 0, tr::lng_settings_exteraless_double_tap_none(
+							tr::now) },
+						{ 1, tr::lng_settings_exteraless_double_tap_reaction(
+							tr::now) },
+						{ 4, tr::lng_settings_exteraless_double_tap_reply(
+							tr::now) },
+					};
+					const auto inner = box->addRow(
+						object_ptr<Ui::VerticalLayout>(box));
+					for (const auto &[value, text] : options) {
+						inner->add(
+							object_ptr<Ui::Radioenum<int>>(
+								inner,
+								group,
+								value,
+								text,
+								st::settingsSendType),
+							st::settingsSendTypePadding);
+					}
+					group->setChangedCallback([=](int value) {
+						auto &config = Exteraless::Config::Instance();
+						if (outgoing) {
+							config.setChatsDoubleTapOut(value);
+						} else {
+							config.setChatsDoubleTapIn(value);
+						}
+						label->force_assign(doubleTapLabel(value));
+						box->closeBox();
+					});
+					box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+				}));
+			},
+			.keywords = keywords,
+		});
+	};
+	addDoubleTapButton(
+		u"exteraless/chats/double-tap/in"_q,
+		tr::lng_settings_exteraless_double_tap_in(),
+		doubleTapIn,
+		false);
+	addDoubleTapButton(
+		u"exteraless/chats/double-tap/out"_q,
+		tr::lng_settings_exteraless_double_tap_out(),
+		doubleTapOut,
+		true);
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,

@@ -80,9 +80,21 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 209 проверок PASS
-  (44 strip, 10 reactions, 5 CLI, 7 config, 22 general, 27 deleted, 7 reset,
-  8 workdir, 8 menu, 71 backup); плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 235 проверок PASS
+  (44 strip, 10 reactions, 7 CLI, 7 config, 22 general, 27 deleted, 7 reset,
+  8 workdir, 8 menu, 22 doubletap, 73 backup); плагины без изменений — 32 и
+  213 проверок.
+- Double tap action (NB-12): настройки `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
+  (-1 — как в настройках Telegram, 0 — ничего, 1/2 — любимая реакция, 4 —
+  ответ) и резолвер `exteraless/doubletap.{h,cpp}`, применённые в
+  `HistoryInner::mouseDoubleClickEvent` и `ListWidget::mouseDoubleClickEvent`.
+  Два селектора в подсекции Chats обновляют подпись на месте. Ключи
+  поддержаны в `.extera` как `doubleTapAction`/`doubleTapActionOutOwner`
+  (суммарно 40 ключей), неподдерживаемые Android-действия 3,5–12 дают
+  «ничего» (расширение — NB-91). CLI `doubletap` (22 проверки) проверяет
+  дефолты, сеттеры, диапазон, `fromJson`, алиасы и все значения резолвера.
+  Xvfb smoke: двойной тап по входящему/исходящему даёт reply, «Do nothing»
+  не делает ничего, «Send reaction» ставит любимую реакцию.
 - Hide phone number in profile (NB-37): настройка `OEGeneralHidePhone`
   (default `false`) скрывает строку мобильного телефона в профиле контакта
   и своём профиле через `PhoneValue` и `PhoneOrHiddenValue`
@@ -152,8 +164,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `b9327e47…`,
-  mtime 2026-11-05 03:15; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `fb991c9d…`,
+  mtime 2026-11-05 04:27; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

@@ -113,6 +113,10 @@ public:
 	void setChatsUnreadCapsule(bool value);
 
 	[[nodiscard]] MessageMenuSettings messageMenuSettings() const;
+	[[nodiscard]] int chatsDoubleTapIn() const;
+	void setChatsDoubleTapIn(int value);
+	[[nodiscard]] int chatsDoubleTapOut() const;
+	void setChatsDoubleTapOut(int value);
 	void setChatsMenuReply(bool value);
 	void setChatsMenuEdit(bool value);
 	void setChatsMenuPin(bool value);

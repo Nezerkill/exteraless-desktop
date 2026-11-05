@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_inner_widget.h"
 
 #include "exteraless/config.h"
+#include "exteraless/doubletap.h"
 
 #include "api/api_polls.h"
 #include "chat_helpers/stickers_emoji_pack.h"
@@ -2733,14 +2734,28 @@ void HistoryInner::mouseDoubleClickEvent(QMouseEvent *e) {
 		&& e->button() == Qt::LeftButton) {
 		if (const auto view = Element::Moused()) {
 			mouseActionCancel();
-			switch (HistoryView::CurrentQuickAction()) {
-			case HistoryView::DoubleClickQuickAction::Reply: {
-				_widget->replyToMessage(view->data());
-			} break;
-			case HistoryView::DoubleClickQuickAction::React: {
-				toggleFavoriteReaction(view);
-			} break;
-			default: break;
+			const auto item = view->data();
+			if (const auto action = Exteraless::DoubleTapActionFor(
+					item->out())) {
+				switch (*action) {
+				case Exteraless::DoubleTapAction::SendReaction: {
+					toggleFavoriteReaction(view);
+				} break;
+				case Exteraless::DoubleTapAction::Reply: {
+					_widget->replyToMessage(item);
+				} break;
+				default: break;
+				}
+			} else {
+				switch (HistoryView::CurrentQuickAction()) {
+				case HistoryView::DoubleClickQuickAction::Reply: {
+					_widget->replyToMessage(item);
+				} break;
+				case HistoryView::DoubleClickQuickAction::React: {
+					toggleFavoriteReaction(view);
+				} break;
+				default: break;
+				}
 			}
 		}
 	}

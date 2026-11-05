@@ -59,6 +59,10 @@ constexpr auto kChatsMenuSelect = "OEChatsMenuSelect";
 constexpr auto kChatsMenuTranslate = "OEChatsMenuTranslate";
 constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
+constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
+constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
+constexpr auto kDoubleTapAction = "doubleTapAction";
+constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 
 constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 constexpr auto kShowReportButton = "showReportButton";
@@ -204,6 +208,8 @@ QString BuildBackup() {
 	extera[kChatsMenuTranslate] = menu.translate;
 	extera[kChatsMenuReport] = menu.report;
 	extera[kChatsMenuDelete] = menu.deleteMsg;
+	extera[kChatsDoubleTapIn] = config.chatsDoubleTapIn();
+	extera[kChatsDoubleTapOut] = config.chatsDoubleTapOut();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -362,6 +368,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setChatsMenuReport(value.toBool());
 		} else if (key == kChatsMenuDelete && value.isBool()) {
 			config.setChatsMenuDelete(value.toBool());
+		} else if ((key == kChatsDoubleTapIn || key == kDoubleTapAction)
+			&& value.isDouble()
+			&& value.toInt() >= -1
+			&& value.toInt() <= 12) {
+			config.setChatsDoubleTapIn(value.toInt());
+		} else if ((key == kChatsDoubleTapOut
+			|| key == kDoubleTapActionOut
+			|| key == QStringLiteral("doubleTapActionOut"))
+			&& value.isDouble()
+			&& value.toInt() >= -1
+			&& value.toInt() <= 12) {
+			config.setChatsDoubleTapOut(value.toInt());
 		} else {
 			return false;
 		}

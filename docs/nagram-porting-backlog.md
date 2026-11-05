@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(209 проверок: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
+(235 проверок: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -96,7 +96,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-09 | Показать ID и DC в профиле | `NekoConfig.showIdAndDc`, `NaConfig.idDcType` | `info/profile/info_profile_values.cpp`, `info/profile/info_profile_top_bar.cpp` | S · низкий | Xvfb: профиль контакта и свой, значение копируется | ⬜ | R1 P0-7 |
 | NB-10 | Скрыть истории в шапке списка чатов | `NaConfig.hideStoriesFromHeader` | `dialogs/dialogs_widget.cpp` (stories strip) | S · низкий | Xvfb: полоса историй исчезает, строки не сдвигаются | ⬜ | R1 P0-8 |
 | NB-11 | Видимость пунктов меню сообщения (группа чекбоксов) | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | `exteraless/message_menu.h`, `exteraless/config.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_context_menu.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний (меню собирается по условиям) | CLI: дефолты и roundtrip `toJson`/`fromJson`; Xvfb: каждый тумблер убирает свой пункт, горячие клавиши не ломаются | ✅ 2026-11-05: 11 чекбоксов `OEChatsMenu*`, применены в обоих контекстных меню, CLI `menu` (8 проверок), Xvfb подтвердил скрытие Pin в чате | R1 P0-9, R2 §6.1 |
-| NB-12 | Действие двойного тапа: ответ / реакция / ничего | `NaConfig.doubleTapAction`, `doubleTapActionOut` | `history/view/history_view_list_widget.cpp`, реакции в `history_view_message.cpp` | M · средний (жест пересекается с выделением текста) | Xvfb: двойной тап даёт reply / реакцию / ничего | ⬜ | R1 P0-10 |
+| NB-12 | Действие двойного тапа: ответ / реакция / ничего | `NaConfig.doubleTapAction`, `doubleTapActionOut` | `exteraless/doubletap.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_list_widget.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний (жест пересекается с выделением текста) | Xvfb: двойной тап даёт reply / реакцию / ничего | ✅ 2026-11-05: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (-1 = настройка Telegram, 0 = ничего, 1/2 = реакция, 4 = ответ), селекторы в Chats, CLI `doubletap` (22 проверки), Xvfb подтвердил reply/reaction/nothing; остальные Android-действия — NB-91 | R1 P0-10 |
 | NB-13 | Широкие посты каналов и ленты | `OEChatsWideChannelPosts`, `OEChatsWideFeedPosts` | `history/view/history_view_message.cpp` (ширина баббла) | M · высокий (геометрия, хвосты, медиа) | Xvfb: пост на всю ширину, ответы и медиа не ломаются | ⬜ | R1 P0-11 |
 | NB-14 | Время на стикерах: сбоку или скрыто | `OEChatsStickerTimeSide`, `NekoConfig.hideTimeForSticker` | `history/view/history_view_element.cpp`, `history_view_message.cpp` | S · низкий | Xvfb: стикер с временем сбоку и без, обычные сообщения без изменений | ⬜ | R1 P0-12 |
 | NB-15 | Скрыть архив и сортировка по непрочитанным | `NaConfig.hideArchive`, `NekoConfig.sortByUnread` | `dialogs/dialogs_widget.cpp`, `dialogs/dialogs_indexed_list.cpp` | M · средний–высокий (индексация списка) | Xvfb: архив скрыт; сортировка на тестовом профиле | ⬜ (расхождение: R1 P0-13, R2 P2 — приоритет взят по R1, риск по R2) | R1 P0-13, R2 §3.1 |
@@ -185,6 +185,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-88 | Медиа-качество и форматы: HLS по умолчанию, декодер, GIF как видео, битрейт аудио, MP4 как видео | `defaultHlsVideoQuality`, `playerDecoder`, `takeGIFasVideo`, `customAudioBitrate`, `sendMp4DocumentAsVideo` | `media/streaming/*`, `media/view/*`, `chat_helpers/compose/*` | M–L · средний (сеть и кодеки) | Xvfb + ручной: видео играет в выбранном качестве, GIF уходит видео | ⬜ | R1 §3.18, R2 §3.2 |
 | NB-89 | Тулбар форматирования, markdown-парсер, спойлеры сразу, подсветка синтаксиса | `showText*` (10+), `textStyleOrder`, `markdownParser`, `showSpoilersDirectly`, `syntaxhighlight/*` | `chat_helpers/message_field.cpp`, `ui/text/*` | M · средний | Xvfb: состав и порядок кнопок сохраняются, спойлер раскрыт | ⬜ | R1 §3.19 |
 | NB-90 | WEB proxy: relay-сервер, включение в UI и документации | desktop-only; `tproxy-server` из `docs/web-proxy-plan.md` | `mtproto/web_proxy/*`, `mtproto/details/mtproto_web_proxy_socket.{h,cpp}`, `boxes/connection_box.cpp`, `docs/feature-mapping.md` | L · высокий (инфраструктура, сеть, приватность) | поднять тестовый relay, проверить соединение и fallback; обновить docs | ⬜ | R2 §6.21 |
+| NB-91 | Расширенные действия двойного тапа: translate, save, edit, delete, forward, download, repeat | `doubleTapAction` (Android 3,5,6,7,8,10,11,12) | `exteraless/doubletap.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_list_widget.cpp` | M · средний (разные API в двух виджетах) | CLI `doubletap-resolve` для всех значений; Xvfb: каждое действие срабатывает | ⬜ | NB-12 (follow-up) |
 
 ## 6. Android-only, plugin/Xposed и «не переносить»
 
@@ -254,12 +255,19 @@ Xvfb подтвердил секунды в сообщениях и списке
 
 Все задачи шага 1 закрыты: NB-11 (✅), NB-07 (✅), NB-37 (✅).
 
+**NB-12 «Действие двойного тапа» — закрыто 2026-11-05.**
+Настройки `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (-1 — как в настройках
+Telegram, 0 — ничего, 1/2 — любимая реакция, 4 — ответ), два селектора в
+подсекции Chats, resolution в `exteraless/doubletap.{h,cpp}`, CLI `doubletap`
+(22 проверки), Xvfb подтвердил reply, reaction и nothing. Остальные
+Android-действия (translate/save/repeat/edit/delete/forward/download) — NB-91.
+
 ### 7.3 Definition of done для батча
 
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 209 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 235 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

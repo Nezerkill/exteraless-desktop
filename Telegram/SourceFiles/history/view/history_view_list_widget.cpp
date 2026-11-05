@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_list_widget.h"
 
+#include "exteraless/doubletap.h"
 #include "history/view/history_view_about_view.h"
 #include "base/unixtime.h"
 #include "base/qt/qt_key_modifiers.h"
@@ -3935,14 +3936,27 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 		&& (_overElement->data()->isRegular()
 			|| CanReplyToEphemeral(_overElement->data()))) {
 		mouseActionCancel();
-		switch (CurrentQuickAction()) {
-		case DoubleClickQuickAction::Reply: {
-			replyToMessageRequestNotify({ _overElement->data()->fullId() });
-		} break;
-		case DoubleClickQuickAction::React: {
-			toggleFavoriteReaction(_overElement);
-		} break;
-		default: break;
+		const auto item = _overElement->data();
+		if (const auto action = Exteraless::DoubleTapActionFor(item->out())) {
+			switch (*action) {
+			case Exteraless::DoubleTapAction::SendReaction: {
+				toggleFavoriteReaction(_overElement);
+			} break;
+			case Exteraless::DoubleTapAction::Reply: {
+				replyToMessageRequestNotify({ item->fullId() });
+			} break;
+			default: break;
+			}
+		} else {
+			switch (CurrentQuickAction()) {
+			case DoubleClickQuickAction::Reply: {
+				replyToMessageRequestNotify({ item->fullId() });
+			} break;
+			case DoubleClickQuickAction::React: {
+				toggleFavoriteReaction(_overElement);
+			} break;
+			default: break;
+			}
 		}
 	}
 }

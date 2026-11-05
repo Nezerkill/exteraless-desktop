@@ -30,7 +30,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (209 проверок: strip, reactions, CLI, config, general, deleted, reset, workdir, menu, backup);
+  (235 проверок: strip, reactions, CLI, config, general, deleted, reset, workdir, menu, doubletap, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
@@ -70,9 +70,12 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 38 desktop-ключей в секциях `exteraconfig`,
+  декодируются. Backup пишет все 40 desktop-ключей в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние.
+- Двойной тап по сообщению: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
+  (-1 — как в настройках Telegram, 0 — ничего, 1/2 — любимая реакция, 4 —
+  ответ); резолвер — `exteraless/doubletap.{h,cpp}`.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
   сохраняет новый порядок в конфиг.
