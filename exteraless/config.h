@@ -59,6 +59,9 @@ public:
 	[[nodiscard]] bool showSeconds() const;
 	void setShowSeconds(bool value);
 
+	[[nodiscard]] bool hidePhone() const;
+	void setHidePhone(bool value);
+
 	[[nodiscard]] int proxyDisableConditions() const;
 	void setProxyDisableConditions(int value);
 

@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **37** | **37** | 37 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 37 | на момент аудита было 8, после NB-04, NB-11, NB-07 — все 37 desktop-ключей |
+| **Ключей форка desktop** | **38** | **38** | 38 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
+| Ключей `.extera` | 8 | 8 | 38 | на момент аудита было 8, после NB-04, NB-11, NB-07, NB-37 — все 38 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -230,7 +230,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Фильтр Zalgo | `NaConfig.zalgoFilter` | ❌ (`ui/text/*`, `data/data_messages.cpp`) |
 | Boost скачивания/загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | ❌ (`data/data_download_manager.cpp`, `mtproto/session_private.cpp`) |
 | IPv6 / DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | ❌ (`mtproto/connection_*`), upstream умеет IPv6 в настройках соединения |
-| Скрыть телефон, показать ID/DC | `NekoConfig.hidePhone`, `NaConfig.idDcType` | ❌ (`info/profile/info_profile_values.cpp`, `info_profile_top_bar.cpp`) |
+| Скрыть телефон, показать ID/DC | `NekoConfig.hidePhone`, `NaConfig.idDcType` | 🟡 `OEGeneralHidePhone` (NB-37) скрывает телефон в профиле; ID/DC — в NB-09 |
 | Сортировка списка чатов | `sortByUnread`, `sortByUnmuted`, `sortByUser`, `sortByContacts` | ❌ (`dialogs/dialogs_indexed_list.cpp`) |
 | Скрыть архив, свайп-архив | `hideArchive`, `openArchiveOnPull`, `doNotUnarchiveBySwipe` | ❌/➖ (`dialogs/dialogs_widget.cpp`) |
 | Папка сохранения и подпапка на чат | `customSavePath`, `saveToChatSubfolder` | 🟡/❌ (`data/data_download_manager.cpp`, `settings/sections/settings_advanced.cpp`) |
@@ -602,10 +602,11 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (37)
+## 13. Приложение B. Ключи `.extera` (38)
 
-Секция `exteraconfig` (33): `relativeLastSeen`, `addCommaAfterMention`,
-`disableNumberRounding`, `formatTimeWithSeconds`, `doNotUseProxy`, `removeMessageTail`,
+Секция `exteraconfig` (34): `relativeLastSeen`, `addCommaAfterMention`,
+`disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
+`doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
 `hideReactionsInPrivateChats`, `OEGhostSendReadPackets`,
 `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress`,

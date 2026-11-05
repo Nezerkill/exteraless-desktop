@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **204**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **209**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -90,8 +90,9 @@ APK-обновления и plugin-only API. Полный список искл�
 - `NB-07` — ✅ закрыто 2026-11-05: `OEGeneralShowSeconds`,
   `Exteraless::FormatClock`, тумблер в General, CLI `general/clock`
   (17 проверок), Xvfb показал секунды в сообщениях и списке чатов.
-- `NB-37`: `OEGeneralHidePhone`, скрытие телефона в профиле; при выключенном
-  флаге поведение upstream не меняется.
+- `NB-37` — ✅ закрыто 2026-11-05: `OEGeneralHidePhone`, скрытие в
+  `info_profile_values.cpp`, тумблер в General, CLI `general`
+  (22 проверки), Xvfb подтвердил скрытие номера в профиле.
 
 ### После batch
 
@@ -150,7 +151,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-37`).
+   (сейчас `NB-12`, затем `NB-14`, `NB-16`, `NB-17`, `NB-18`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

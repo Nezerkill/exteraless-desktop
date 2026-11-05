@@ -24,6 +24,8 @@ constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
 constexpr auto kDisableNumberRounding = "disableNumberRounding";
 constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
+constexpr auto kHidePhoneNumber = "hidePhoneNumber";
+constexpr auto kHidePhone = "OEGeneralHidePhone";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
 constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -170,6 +172,7 @@ QString BuildBackup() {
 	extera[kAddCommaAfterMention] = config.addCommaAfterMention();
 	extera[kDisableNumberRounding] = config.disableNumberRounding();
 	extera[kFormatTimeWithSeconds] = config.showSeconds();
+	extera[kHidePhoneNumber] = config.hidePhone();
 	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 	extera[kRemoveMessageTail] = chats.removeMessageTail;
 	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -294,6 +297,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kFormatTimeWithSeconds || key == kShowSeconds || key == QStringLiteral("showSeconds"))
 			&& value.isBool()) {
 			config.setShowSeconds(value.toBool());
+		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
+			&& value.isBool()) {
+			config.setHidePhone(value.toBool());
 		} else if (key == kDoNotUseProxy && ValidProxyConditions(value)) {
 			config.setProxyDisableConditions(value.toInt());
 		} else if (key == kRemoveMessageTail && value.isBool()) {

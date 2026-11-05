@@ -109,6 +109,8 @@ void PrintGeneral() {
 			Exteraless::Config::Instance().disableNumberRounding() },
 		{ QStringLiteral("showSeconds"),
 			Exteraless::Config::Instance().showSeconds() },
+		{ QStringLiteral("hidePhone"),
+			Exteraless::Config::Instance().hidePhone() },
 	});
 }
 
@@ -277,7 +279,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("general-set")) {
-		if (arguments.size() != 3 && arguments.size() != 4) {
+		if (arguments.size() < 3 || arguments.size() > 5) {
 			return PrintUsage();
 		}
 		auto value = false;
@@ -285,12 +287,19 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		Exteraless::Config::Instance().setDisableNumberRounding(value);
-		if (arguments.size() == 4) {
+		if (arguments.size() >= 4) {
 			auto seconds = false;
 			if (!ReadFlag(arguments[3], &seconds)) {
 				return PrintUsage();
 			}
 			Exteraless::Config::Instance().setShowSeconds(seconds);
+		}
+		if (arguments.size() == 5) {
+			auto hide = false;
+			if (!ReadFlag(arguments[4], &hide)) {
+				return PrintUsage();
+			}
+			Exteraless::Config::Instance().setHidePhone(hide);
 		}
 		PrintGeneral();
 		return 0;

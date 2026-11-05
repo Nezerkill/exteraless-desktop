@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- General / Privacy: настройка `OEGeneralHidePhone` (default `false`) скрывает
+  строку номера телефона в профиле контакта и своём профиле; Android-ключ
+  `hidePhoneNumber` поддержан в `.extera` (всего 38 ключей), тумблер
+  добавлен в General.
 - General / Time: настройка `OEGeneralShowSeconds` (default `false`) и
   функция `Exteraless::FormatClock` форматируют время с секундами в
   сообщениях и списке чатов с сохранением 12/24-часового формата и локали;

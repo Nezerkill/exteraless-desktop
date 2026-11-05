@@ -175,10 +175,14 @@ def check_general(ledger, cli, work):
             "general seconds default off",
             data.get("showSeconds") is False,
             data)
+        ledger.check(
+            "general hide phone default off",
+            data.get("hidePhone") is False,
+            data)
 
     env = make_env(work / "general-set")
     data = json_call(
-        ledger, cli, ["general-set", "1", "1"], env, "general set")
+        ledger, cli, ["general-set", "1", "1", "1"], env, "general set")
     if data is not None:
         ledger.check(
             "general rounding setter",
@@ -187,6 +191,10 @@ def check_general(ledger, cli, work):
         ledger.check(
             "general seconds setter",
             data.get("showSeconds") is True,
+            data)
+        ledger.check(
+            "general hide phone setter",
+            data.get("hidePhone") is True,
             data)
     data = json_call(
         ledger, cli, ["general"], env, "general reload")
@@ -198,6 +206,10 @@ def check_general(ledger, cli, work):
         ledger.check(
             "general seconds persisted",
             data.get("showSeconds") is True,
+            data)
+        ledger.check(
+            "general hide phone persisted",
+            data.get("hidePhone") is True,
             data)
 
     data = json_call(
@@ -214,6 +226,10 @@ def check_general(ledger, cli, work):
             "general backup key seconds",
             section.get("formatTimeWithSeconds") is True,
             section)
+        ledger.check(
+            "general backup key hide phone",
+            section.get("hidePhoneNumber") is True,
+            section)
 
     env = make_env(work / "general-fromjson")
     root = {
@@ -221,6 +237,7 @@ def check_general(ledger, cli, work):
         "exteraconfig": {
             "OEGeneralDisableNumberRounding": True,
             "OEGeneralShowSeconds": True,
+            "OEGeneralHidePhone": True,
         },
     }
     data = json_call(
@@ -240,6 +257,10 @@ def check_general(ledger, cli, work):
             ledger.check(
                 "general fromJson seconds",
                 data.get("showSeconds") is True,
+                data)
+            ledger.check(
+                "general fromJson hide phone",
+                data.get("hidePhone") is True,
                 data)
 
     clock_cases = [
@@ -426,7 +447,7 @@ def check_backup(ledger, cli, work):
             section.get("OEPluginStates"))
         ledger.check(
             "backup extera key count",
-            len(section) == 33,
+            len(section) == 34,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -445,7 +466,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 37,
+            sum(len(value) for value in exported.values()) == 38,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -465,7 +486,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 37,
+                data.get("applied") == 38,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -493,6 +514,7 @@ def check_backup(ledger, cli, work):
             "addCommaAfterMention": False,
             "disableNumberRounding": True,
             "formatTimeWithSeconds": True,
+            "hidePhoneNumber": True,
             "doNotUseProxy": 5,
             "removeMessageTail": True,
             "hideReactionsInChannels": False,
@@ -552,7 +574,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 37,
+            data.get("applied") == 38,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -693,10 +715,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 37",
+            "backup legacy eight completed to 38",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (33, 2, 2),
+             len(sections["mainconfig"])) == (34, 2, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",

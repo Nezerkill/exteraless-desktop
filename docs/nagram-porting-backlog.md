@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(204 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
+(209 проверок: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -126,7 +126,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-34 | Тихая отправка по умолчанию | `NaConfig.silentMessageByDefault` | `window/window_peer_menu.cpp` (SendMenu) | S · низкий | отправка без звука по умолчанию | ⬜ | R1 P1-16 |
 | NB-35 | Скрыть «Send as…» и кнопки ввода канала | `OEChatsHideSendAsPeer`, `hideShareButtonInChannel`, `hideCameraTile` | `history/view/controls/history_view_compose_controls.h`, `window/window_peer_menu.cpp` | M · средний | кнопки скрыты в канале, отправка работает | ⬜ | R1 P1-17 |
 | NB-36 | Скрыть секции настроек Premium и Help | `NaConfig.hidePremiumSection`, `hideHelpSection` | `settings/sections/settings_main.cpp` | S · низкий | секции исчезают, поиск не падает | ⬜ | R1 P1-18 |
-| NB-37 | Скрыть телефон в профиле | `NekoConfig.hidePhone` | `info/profile/info_profile_values.cpp` (`PhoneValue`, `PhoneOrHiddenValue`) | S · низкий | Xvfb: профиль контакта и свой; при off поведение как upstream | ⬜ | R2 §6.3 (у R2 P1; R1 не приоритизировал) |
+| NB-37 | Скрыть телефон в профиле | `NekoConfig.hidePhone` | `info/profile/info_profile_values.cpp` (`PhoneValue`, `PhoneOrHiddenValue`), `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: профиль контакта и свой; при off поведение как upstream | ✅ 2026-11-05: `OEGeneralHidePhone`, скрытие в `PhoneValue`/`PhoneOrHiddenValue`, тумблер в General, CLI `general` (22 проверки), Xvfb подтвердил скрытие номера в профиле | R2 §6.3 |
 | NB-38 | Ghost offline-после-online: реализовать или убрать мёртвый ключ | `sendOfflinePacketAfterOnline` | `exteraless/ghost_mode.cpp` (`IsGhostActive`), `exteraless/config.cpp`, `.extera` | S · низкий | Xvfb/CLI: ключ либо работает, либо отсутствует в конфиге и бэкапе | ⬜ | R2 M5, M15 |
 | NB-39 | Привести `docs/feature-mapping.md` в соответствие с кодом: метка удалённого, hook, pinned bar | — | `docs/feature-mapping.md` | S · низкий | сверка утверждений с `exteraless/deleted_messages.cpp`, `window/window_peer_menu.cpp`, поиском по `pinnedReactions` | ⬜ | R2 M3, M4, M6 |
 | NB-40 | Пересобрать `result/` или убрать устаревший symlink | — | `result/`, `flake.nix` | S · средний (пользователи Nix видят старый клиент) | `strings result/bin/.Telegram-wrapped` содержит новые маркеры (`Plugin sandbox is unavailable`, `Compact unread messages label`) | ⬜ | R2 M7 |
@@ -246,22 +246,20 @@ General, вызовы в `history_view_bottom_info.cpp` и `format_values.cpp`,
 ключ `formatTimeWithSeconds` в `.extera`, CLI `general/clock` (17 проверок),
 Xvfb подтвердил секунды в сообщениях и списке чатов.
 
-Следующая задача батча: NB-37.
+**NB-37 «Скрыть телефон в профиле» (`hidePhone` → `OEGeneralHidePhone`) — закрыто 2026-11-05.**
+`PhoneValue` и `PhoneOrHiddenValue` в `info_profile_values.cpp` скрывают строку
+номера при включённой настройке, тумблер добавлен в General, ключ
+`hidePhoneNumber` в `.extera`, CLI `general` (22 проверки), Xvfb подтвердил
+скрытие номера в профиле.
 
-**NB-37 «Скрыть телефон в профиле» (`hidePhone` → `OEGeneralHidePhone`).**
-Код: `info/profile/info_profile_values.cpp` (`PhoneValue`,
-`PhoneOrHiddenValue` — возвращать пустое значение при включённом флаге);
-строка «ID · DC» из NB-09 добавляется тем же паттерном, если решим делать
-NB-09 в этом же батче. Безопасность: не влияет на сеть и сохранённые данные,
-при выключенном флаге поведение идентично upstream. Проверка: Xvfb — профиль
-контакта и свой профиль; CLI — только дефолты и чтение конфига.
+Все задачи шага 1 закрыты: NB-11 (✅), NB-07 (✅), NB-37 (✅).
 
 ### 7.3 Definition of done для батча
 
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 184 проверки; `exteraless/tests/plugins/run_checks.py` и
+   существующих 209 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

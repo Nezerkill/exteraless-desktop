@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "info/profile/info_profile_values.h"
 
+#include "exteraless/config.h"
+
 #include "api/api_chat_participants.h"
 #include "apiwrap.h"
 #include "info/profile/info_profile_phone_menu.h"
@@ -133,6 +135,9 @@ rpl::producer<TextWithEntities> PhoneValue(not_null<UserData*> user) {
 			user,
 			UpdateFlag::PhoneNumber) | rpl::to_empty
 	) | rpl::map([=] {
+		if (Exteraless::Config::Instance().hidePhone()) {
+			return TextWithEntities();
+		}
 		return tr::marked(Ui::FormatPhone(user->phone()));
 	});
 }
@@ -148,6 +153,9 @@ rpl::producer<TextWithEntities> PhoneOrHiddenValue(not_null<UserData*> user) {
 			const QString &username,
 			const QString &about,
 			const QString &hidden) {
+		if (Exteraless::Config::Instance().hidePhone()) {
+			return TextWithEntities();
+		}
 		if (phone.text.isEmpty() && username.isEmpty() && about.isEmpty()) {
 			return tr::marked(hidden);
 		} else if (IsCollectiblePhone(user)) {

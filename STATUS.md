@@ -80,9 +80,17 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 204 проверки PASS
-  (44 strip, 10 reactions, 5 CLI, 7 config, 17 general, 27 deleted, 7 reset,
+- Chats: `exteraless/tests/chats/run_checks.py` — 209 проверок PASS
+  (44 strip, 10 reactions, 5 CLI, 7 config, 22 general, 27 deleted, 7 reset,
   8 workdir, 8 menu, 71 backup); плагины без изменений — 32 и 213 проверок.
+- Hide phone number in profile (NB-37): настройка `OEGeneralHidePhone`
+  (default `false`) скрывает строку мобильного телефона в профиле контакта
+  и своём профиле через `PhoneValue` и `PhoneOrHiddenValue`
+  (`info_profile_values.cpp`). Ключ поддержан в `.extera` как
+  `hidePhoneNumber` (суммарно 38 ключей). CLI `general` проверяет дефолт,
+  сеттер и `fromJson`. Xvfb smoke: включение тумблера пишет
+  `OEGeneralHidePhone: true`, в профиле пользователя строка номера телефона
+  полностью скрыта.
 - Show seconds in timestamps (NB-07): настройка `OEGeneralShowSeconds`
   (default `false`) и `Exteraless::FormatClock` форматируют время с секундами
   в сообщениях (`BottomInfo::layoutDateText`, `FormatEditedDate`) и списке
@@ -144,8 +152,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `87f89bcc…`,
-  mtime 2026-11-05 02:53; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `b9327e47…`,
+  mtime 2026-11-05 03:15; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

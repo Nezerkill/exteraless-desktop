@@ -120,6 +120,23 @@ const auto kMeta = Builder::BuildHelper({
 		}, showSeconds->lifetime());
 	}
 
+	const auto hidePhone = builder.addButton({
+		.id = u"exteraless/hide-phone"_q,
+		.title = tr::lng_settings_exteraless_hide_phone(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().hidePhone()),
+		.keywords = { u"phone"_q, u"hide"_q, u"number"_q },
+	});
+	if (hidePhone) {
+		hidePhone->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value != Exteraless::Config::Instance().hidePhone());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setHidePhone(value);
+		}, hidePhone->lifetime());
+	}
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
 		.title = tr::lng_settings_exteraless_ghost(),

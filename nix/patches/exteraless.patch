@@ -77,10 +77,10 @@ index 811707d..032d21e 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..323250d 100644
+index ffc8ec9..af89031 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,66 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,67 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -97,6 +97,7 @@ index ffc8ec9..323250d 100644
 +"lng_settings_exteraless_import" = "Import settings";
 +"lng_settings_exteraless_exact_counters" = "Show exact counters (1.23K → 1234)";
 +"lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
++"lng_settings_exteraless_hide_phone" = "Hide phone number in profile";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 +"lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -3602,6 +3603,39 @@ index 5152d85..b2baff4 100644
  		|| (media && media->skipBubbleTail())
  		|| (rich && richMediaAtBottom())
  		|| (keyboard != nullptr)
+diff --git a/Telegram/SourceFiles/info/profile/info_profile_values.cpp b/Telegram/SourceFiles/info/profile/info_profile_values.cpp
+index 366a4e3..c2f7294 100644
+--- a/Telegram/SourceFiles/info/profile/info_profile_values.cpp
++++ b/Telegram/SourceFiles/info/profile/info_profile_values.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "info/profile/info_profile_values.h"
+ 
++#include "exteraless/config.h"
++
+ #include "api/api_chat_participants.h"
+ #include "apiwrap.h"
+ #include "info/profile/info_profile_phone_menu.h"
+@@ -133,6 +135,9 @@ rpl::producer<TextWithEntities> PhoneValue(not_null<UserData*> user) {
+ 			user,
+ 			UpdateFlag::PhoneNumber) | rpl::to_empty
+ 	) | rpl::map([=] {
++		if (Exteraless::Config::Instance().hidePhone()) {
++			return TextWithEntities();
++		}
+ 		return tr::marked(Ui::FormatPhone(user->phone()));
+ 	});
+ }
+@@ -148,6 +153,9 @@ rpl::producer<TextWithEntities> PhoneOrHiddenValue(not_null<UserData*> user) {
+ 			const QString &username,
+ 			const QString &about,
+ 			const QString &hidden) {
++		if (Exteraless::Config::Instance().hidePhone()) {
++			return TextWithEntities();
++		}
+ 		if (phone.text.isEmpty() && username.isEmpty() && about.isEmpty()) {
+ 			return tr::marked(hidden);
+ 		} else if (IsCollectiblePhone(user)) {
 diff --git a/Telegram/SourceFiles/lang/lang_tag.cpp b/Telegram/SourceFiles/lang/lang_tag.cpp
 index 5537d86..8abc86c 100644
 --- a/Telegram/SourceFiles/lang/lang_tag.cpp
@@ -3873,10 +3907,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..67a89a5
+index 0000000..1482855
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,687 @@
+@@ -0,0 +1,704 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -3997,6 +4031,23 @@ index 0000000..67a89a5
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setShowSeconds(value);
 +		}, showSeconds->lifetime());
++	}
++
++	const auto hidePhone = builder.addButton({
++		.id = u"exteraless/hide-phone"_q,
++		.title = tr::lng_settings_exteraless_hide_phone(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().hidePhone()),
++		.keywords = { u"phone"_q, u"hide"_q, u"number"_q },
++	});
++	if (hidePhone) {
++		hidePhone->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value != Exteraless::Config::Instance().hidePhone());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setHidePhone(value);
++		}, hidePhone->lifetime());
 +	}
 +
 +	builder.addSubsectionTitle({
@@ -5234,10 +5285,10 @@ index 0000000..6f0fcb0
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..2975256
+index 0000000..883c8c6
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,384 @@
+@@ -0,0 +1,390 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -5264,6 +5315,8 @@ index 0000000..2975256
 +constexpr auto kDisableNumberRounding = "disableNumberRounding";
 +constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
++constexpr auto kHidePhoneNumber = "hidePhoneNumber";
++constexpr auto kHidePhone = "OEGeneralHidePhone";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
 +constexpr auto kRemoveMessageTail = "removeMessageTail";
 +constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -5410,6 +5463,7 @@ index 0000000..2975256
 +	extera[kAddCommaAfterMention] = config.addCommaAfterMention();
 +	extera[kDisableNumberRounding] = config.disableNumberRounding();
 +	extera[kFormatTimeWithSeconds] = config.showSeconds();
++	extera[kHidePhoneNumber] = config.hidePhone();
 +	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 +	extera[kRemoveMessageTail] = chats.removeMessageTail;
 +	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -5534,6 +5588,9 @@ index 0000000..2975256
 +		} else if ((key == kFormatTimeWithSeconds || key == kShowSeconds || key == QStringLiteral("showSeconds"))
 +			&& value.isBool()) {
 +			config.setShowSeconds(value.toBool());
++		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
++			&& value.isBool()) {
++			config.setHidePhone(value.toBool());
 +		} else if (key == kDoNotUseProxy && ValidProxyConditions(value)) {
 +			config.setProxyDisableConditions(value.toInt());
 +		} else if (key == kRemoveMessageTail && value.isBool()) {
@@ -5721,10 +5778,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..2536516
+index 0000000..60cbe9c
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,658 @@
+@@ -0,0 +1,668 @@
 +#include "exteraless/config.h"
 +
 +#include <QDir>
@@ -5745,6 +5802,7 @@ index 0000000..2536516
 +constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 +constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
++constexpr auto kHidePhone = "OEGeneralHidePhone";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 +constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -5913,6 +5971,14 @@ index 0000000..2536516
 +
 +void Config::setShowSeconds(bool value) {
 +	setValue(kShowSeconds, value);
++}
++
++bool Config::hidePhone() const {
++	return boolValue(kHidePhone, false);
++}
++
++void Config::setHidePhone(bool value) {
++	setValue(kHidePhone, value);
 +}
 +
 +int Config::proxyDisableConditions() const {
@@ -6217,6 +6283,7 @@ index 0000000..2536516
 +			|| key == kAddCommaAfterMention
 +			|| key == kDisableNumberRounding
 +			|| key == kShowSeconds
++			|| key == kHidePhone
 +			|| key == kProxyDisableConditions
 +			|| key == kProxyAutoDisabled
 +			|| key == kGhostSendReadPackets
@@ -6385,10 +6452,10 @@ index 0000000..2536516
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..d24e1de
+index 0000000..9cc77f1
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,156 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -6449,6 +6516,9 @@ index 0000000..d24e1de
 +
 +	[[nodiscard]] bool showSeconds() const;
 +	void setShowSeconds(bool value);
++
++	[[nodiscard]] bool hidePhone() const;
++	void setHidePhone(bool value);
 +
 +	[[nodiscard]] int proxyDisableConditions() const;
 +	void setProxyDisableConditions(int value);
@@ -7961,10 +8031,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..fbd3855
+index 0000000..473a75c
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,504 @@
+@@ -0,0 +1,513 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -8076,6 +8146,8 @@ index 0000000..fbd3855
 +			Exteraless::Config::Instance().disableNumberRounding() },
 +		{ QStringLiteral("showSeconds"),
 +			Exteraless::Config::Instance().showSeconds() },
++		{ QStringLiteral("hidePhone"),
++			Exteraless::Config::Instance().hidePhone() },
 +	});
 +}
 +
@@ -8244,7 +8316,7 @@ index 0000000..fbd3855
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("general-set")) {
-+		if (arguments.size() != 3 && arguments.size() != 4) {
++		if (arguments.size() < 3 || arguments.size() > 5) {
 +			return PrintUsage();
 +		}
 +		auto value = false;
@@ -8252,12 +8324,19 @@ index 0000000..fbd3855
 +			return PrintUsage();
 +		}
 +		Exteraless::Config::Instance().setDisableNumberRounding(value);
-+		if (arguments.size() == 4) {
++		if (arguments.size() >= 4) {
 +			auto seconds = false;
 +			if (!ReadFlag(arguments[3], &seconds)) {
 +				return PrintUsage();
 +			}
 +			Exteraless::Config::Instance().setShowSeconds(seconds);
++		}
++		if (arguments.size() == 5) {
++			auto hide = false;
++			if (!ReadFlag(arguments[4], &hide)) {
++				return PrintUsage();
++			}
++			Exteraless::Config::Instance().setHidePhone(hide);
 +		}
 +		PrintGeneral();
 +		return 0;
@@ -8533,10 +8612,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..8cd47cd
+index 0000000..b3fa16d
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1370 @@
+@@ -0,0 +1,1392 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -8714,10 +8793,14 @@ index 0000000..8cd47cd
 +            "general seconds default off",
 +            data.get("showSeconds") is False,
 +            data)
++        ledger.check(
++            "general hide phone default off",
++            data.get("hidePhone") is False,
++            data)
 +
 +    env = make_env(work / "general-set")
 +    data = json_call(
-+        ledger, cli, ["general-set", "1", "1"], env, "general set")
++        ledger, cli, ["general-set", "1", "1", "1"], env, "general set")
 +    if data is not None:
 +        ledger.check(
 +            "general rounding setter",
@@ -8726,6 +8809,10 @@ index 0000000..8cd47cd
 +        ledger.check(
 +            "general seconds setter",
 +            data.get("showSeconds") is True,
++            data)
++        ledger.check(
++            "general hide phone setter",
++            data.get("hidePhone") is True,
 +            data)
 +    data = json_call(
 +        ledger, cli, ["general"], env, "general reload")
@@ -8737,6 +8824,10 @@ index 0000000..8cd47cd
 +        ledger.check(
 +            "general seconds persisted",
 +            data.get("showSeconds") is True,
++            data)
++        ledger.check(
++            "general hide phone persisted",
++            data.get("hidePhone") is True,
 +            data)
 +
 +    data = json_call(
@@ -8753,6 +8844,10 @@ index 0000000..8cd47cd
 +            "general backup key seconds",
 +            section.get("formatTimeWithSeconds") is True,
 +            section)
++        ledger.check(
++            "general backup key hide phone",
++            section.get("hidePhoneNumber") is True,
++            section)
 +
 +    env = make_env(work / "general-fromjson")
 +    root = {
@@ -8760,6 +8855,7 @@ index 0000000..8cd47cd
 +        "exteraconfig": {
 +            "OEGeneralDisableNumberRounding": True,
 +            "OEGeneralShowSeconds": True,
++            "OEGeneralHidePhone": True,
 +        },
 +    }
 +    data = json_call(
@@ -8779,6 +8875,10 @@ index 0000000..8cd47cd
 +            ledger.check(
 +                "general fromJson seconds",
 +                data.get("showSeconds") is True,
++                data)
++            ledger.check(
++                "general fromJson hide phone",
++                data.get("hidePhone") is True,
 +                data)
 +
 +    clock_cases = [
@@ -8965,7 +9065,7 @@ index 0000000..8cd47cd
 +            section.get("OEPluginStates"))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 33,
++            len(section) == 34,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -8984,7 +9084,7 @@ index 0000000..8cd47cd
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 37,
++            sum(len(value) for value in exported.values()) == 38,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -9004,7 +9104,7 @@ index 0000000..8cd47cd
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 37,
++                data.get("applied") == 38,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -9032,6 +9132,7 @@ index 0000000..8cd47cd
 +            "addCommaAfterMention": False,
 +            "disableNumberRounding": True,
 +            "formatTimeWithSeconds": True,
++            "hidePhoneNumber": True,
 +            "doNotUseProxy": 5,
 +            "removeMessageTail": True,
 +            "hideReactionsInChannels": False,
@@ -9091,7 +9192,7 @@ index 0000000..8cd47cd
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 37,
++            data.get("applied") == 38,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -9232,10 +9333,10 @@ index 0000000..8cd47cd
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 37",
++            "backup legacy eight completed to 38",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (33, 2, 2),
++             len(sections["mainconfig"])) == (34, 2, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
