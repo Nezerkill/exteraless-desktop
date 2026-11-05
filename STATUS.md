@@ -87,11 +87,14 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
-- Chats: `exteraless/tests/chats/run_checks.py` — 339 проверок PASS
-  (44 strip, 10 reactions, 15 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 346 проверок PASS
+  (44 strip, 10 reactions, 16 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   9 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  78 backup); плагины без изменений — 32 и 213 проверок.
+  5 silent, 79 backup); плагины без изменений — 32 и 213 проверок.
+- Silent send (NB-34): `OEChatsSilentByDefault` (default `false`) выставляет
+  `SendOptions.silent` в `prepareSendAction` обоих виджетов истории; тумблер в
+  Chats, CLI `silent` (5 проверок). Xvfb: тумблер записывает ключ.
 - Pangu (NB-25): `OEChatsPanguOnSending` (default `false`) добавляет пробелы
   между CJK и латиницей/цифрами в `HistoryWidget::sendTextWithTags` и
   `ChatWidget::sendTextWithTags`; `ApplyPanguWithMap` корректирует text-tags,
@@ -243,8 +246,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `53a886b6…`,
-  mtime 2026-11-05 08:02; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `d4450dfc…`,
+  mtime 2026-11-05 08:16; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

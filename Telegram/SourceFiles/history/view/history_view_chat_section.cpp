@@ -2329,6 +2329,9 @@ Api::SendAction ChatWidget::prepareSendAction(
 	}
 
 	result.options.sendAs = _composeControls->sendAsPeer();
+	if (Exteraless::Config::Instance().silentByDefault()) {
+		result.options.silent = true;
+	}
 	result.options.suggest = suggestOptions();
 	result.clearDraft = !Iv::Editor::IsComposeBoxOpen(
 		&session(),

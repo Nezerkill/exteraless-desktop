@@ -5781,6 +5781,9 @@ Api::SendAction HistoryWidget::prepareSendAction(
 		}
 	}
 
+	if (Exteraless::Config::Instance().silentByDefault()) {
+		result.options.silent = true;
+	}
 	result.options.suggest = suggestOptions();
 	result.options.sendAs = _sendAs
 		? _history->session().sendAsPeers().resolveChosen(

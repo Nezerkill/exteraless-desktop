@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(339 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, backup),
+(346 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -123,7 +123,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-31 | Pill Stack: бесконечная прокрутка и сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | `Telegram/SourceFiles/exteraless/pill_stack.cpp` | S · низкий | колесо/скролл листает пилюли по кругу, сброс возвращает дефолт | ⬜ | R1 P1-13 |
 | NB-32 | Внешние субтитры к видео | `OESubtitles`, `OEChooseSubtitles`, `OEDisableSubtitles` | `media/view/media_view_overlay_widget.cpp` | M · средний (парсинг SRT/ASS) | загрузить `.srt`: субтитры видны и отключаются | ⬜ | R1 P1-14 |
 | NB-33 | Ответ на удалённое сообщение цитатой | `NaConfig.replyToDeletedAsQuote` | `history/view/history_view_context_menu.cpp`, `window/window_peer_menu.cpp` | S · средний (текст уже хранится) | reply на удалённое подставляет цитату | ⬜ | R1 P1-15 |
-| NB-34 | Тихая отправка по умолчанию | `NaConfig.silentMessageByDefault` | `window/window_peer_menu.cpp` (SendMenu) | S · низкий | отправка без звука по умолчанию | ⬜ | R1 P1-16 |
+| NB-34 | Тихая отправка по умолчанию | `NaConfig.silentMessageByDefault` | `exteraless/config.{h,cpp}`, `history/history_widget.cpp`, `history/view/history_view_chat_section.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | отправка без звука по умолчанию | ✅ 2026-11-05: `OEChatsSilentByDefault` (default false) выставляет `SendOptions.silent` в `prepareSendAction` обоих виджетов, тумблер в Chats, CLI `silent` (5 проверок), Xvfb toggle | R1 P1-16 |
 | NB-35 | Скрыть «Send as…» и кнопки ввода канала | `OEChatsHideSendAsPeer`, `hideShareButtonInChannel`, `hideCameraTile` | `history/view/controls/history_view_compose_controls.h`, `window/window_peer_menu.cpp` | M · средний | кнопки скрыты в канале, отправка работает | ⬜ | R1 P1-17 |
 | NB-36 | Скрыть секции настроек Premium и Help | `NaConfig.hidePremiumSection`, `hideHelpSection` | `settings/sections/settings_main.cpp` | S · низкий | секции исчезают, поиск не падает | ⬜ | R1 P1-18 |
 | NB-37 | Скрыть телефон в профиле | `NekoConfig.hidePhone` | `info/profile/info_profile_values.cpp` (`PhoneValue`, `PhoneOrHiddenValue`), `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: профиль контакта и свой; при off поведение как upstream | ✅ 2026-11-05: `OEGeneralHidePhone`, скрытие в `PhoneValue`/`PhoneOrHiddenValue`, тумблер в General, CLI `general` (22 проверки), Xvfb подтвердил скрытие номера в профиле | R2 §6.3 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 339 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 346 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

@@ -26,6 +26,8 @@ constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
+constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
+constexpr auto kSilentByDefaultAlias = "silentMessageByDefault";
 constexpr auto kPanguAlias = "EnablePanguOnSending";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
@@ -238,6 +240,7 @@ QString BuildBackup() {
 	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
 	extera[kTranslucentDeleted] = config.translucentDeletedMessages();
 	extera[kPanguOnSending] = config.panguOnSending();
+	extera[kSilentByDefault] = config.silentByDefault();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -425,6 +428,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kPanguOnSending || key == kPanguAlias)
 			&& value.isBool()) {
 			config.setPanguOnSending(value.toBool());
+		} else if ((key == kSilentByDefault || key == kSilentByDefaultAlias)
+			&& value.isBool()) {
+			config.setSilentByDefault(value.toBool());
 		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 			&& value.isBool()) {
 			config.setUseDeletedIcon(value.toBool());

@@ -158,6 +158,7 @@ def check_cli_args(ledger, cli):
         ("vpn-name without name", ["vpn-name"]),
         ("proxy-rule with wrong count", ["proxy-rule", "0"]),
         ("pangu-apply without text", ["pangu-apply"]),
+        ("silent-set with wrong count", ["silent-set"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -464,7 +465,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 49,
+            len(section) == 50,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -485,7 +486,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 54,
+            sum(len(value) for value in exported.values()) == 55,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -505,7 +506,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 54,
+                data.get("applied") == 55,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -588,6 +589,7 @@ def check_backup(ledger, cli, work):
             "OEChatsCustomDeletedMark": "del",
             "OEChatsDeletedMarkColor": 16711680,
             "OEChatsPanguOnSending": True,
+            "OEChatsSilentByDefault": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -609,7 +611,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 54,
+            data.get("applied") == 55,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -669,6 +671,10 @@ def check_backup(ledger, cli, work):
             "backup full ghost status",
             section.get("OEGhostShowStatus") is True,
             section.get("OEGhostShowStatus"))
+        ledger.check(
+            "backup full silent",
+            section.get("OEChatsSilentByDefault") is True,
+            section.get("OEChatsSilentByDefault"))
         ledger.check(
             "backup full pangu",
             section.get("OEChatsPanguOnSending") is True,
@@ -788,10 +794,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 54",
+            "backup legacy eight completed to 55",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (49, 3, 2),
+             len(sections["mainconfig"])) == (50, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1612,6 +1618,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsCustomDeletedMark": "del",
             "OEChatsDeletedMarkColor": 16711680,
             "OEChatsPanguOnSending": True,
+            "OEChatsSilentByDefault": True,
         },
     }
     data = json_call(
@@ -2389,6 +2396,53 @@ def check_pangu(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_silent(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "silent-defaults")
+    data = json_call(ledger, cli, ["silent"], env, "silent defaults")
+    if data is not None:
+        ledger.check(
+            "silent default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(ledger, cli, ["silent-set", "1"], env, "silent set")
+    if data is not None:
+        ledger.check("silent set on", data == 1, data)
+    reloaded = json_call(ledger, cli, ["silent"], env, "silent reload")
+    if reloaded is not None:
+        ledger.check(
+            "silent persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "silent-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"silentMessageByDefault": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "silent alias")
+    if data is not None:
+        ledger.check(
+            "silent alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(ledger, cli, ["silent"], env, "silent alias read")
+    if reloaded is not None:
+        ledger.check(
+            "silent alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2416,6 +2470,7 @@ def main():
         vpn = check_vpn(ledger, cli)
         proxy_rules = check_proxy_rules(ledger, cli)
         pangu = check_pangu(ledger, cli, work)
+        silent = check_silent(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2435,6 +2490,7 @@ def main():
     print(f"vpn: {vpn[0] - vpn[1]} passed")
     print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
     print(f"pangu: {pangu[0] - pangu[1]} passed")
+    print(f"silent: {silent[0] - silent[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

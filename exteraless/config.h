@@ -61,6 +61,8 @@ public:
 	void setTranslucentDeletedMessages(bool value);
 	[[nodiscard]] bool panguOnSending() const;
 	void setPanguOnSending(bool value);
+	[[nodiscard]] bool silentByDefault() const;
+	void setSilentByDefault(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

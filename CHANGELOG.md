@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Chats / Silent send: настройка `OEChatsSilentByDefault` (default `false`)
+  отправляет новые сообщения без звука через `SendOptions.silent` в
+  `prepareSendAction` (`HistoryWidget` и `ChatWidget`); Android-алиас
+  `silentMessageByDefault` поддержан в `.extera` (всего 55 ключей).
 - Chats / Pangu: настройка `OEChatsPanguOnSending` (default `false`) добавляет
   пробелы между CJK и латиницей/цифрами при отправке; реализовано в
   `exteraless/pangu.{h,cpp}`, смещения text-tags корректируются, Android-алиас

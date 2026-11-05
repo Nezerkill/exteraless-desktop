@@ -385,6 +385,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setPanguOnSending(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/silent-by-default"_q,
+		tr::lng_settings_exteraless_chats_silent_by_default(),
+		{ u"silent"_q, u"sound"_q, u"send"_q },
+		Exteraless::Config::Instance().silentByDefault(),
+		[](bool value) {
+			Exteraless::Config::Instance().setSilentByDefault(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,
