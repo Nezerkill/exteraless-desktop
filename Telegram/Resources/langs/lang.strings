@@ -9217,6 +9217,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_double_tap_none" = "Do nothing";
 "lng_settings_exteraless_double_tap_reaction" = "Send reaction";
 "lng_settings_exteraless_double_tap_reply" = "Reply";
+"lng_settings_exteraless_sticker_time" = "Sticker time";
+"lng_settings_exteraless_sticker_time_default" = "As usual";
+"lng_settings_exteraless_sticker_time_side" = "Beside sticker";
+"lng_settings_exteraless_sticker_time_hidden" = "Hidden";
 "lng_settings_exteraless_pill_stack" = "Pill Stack";
 "lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
 "lng_settings_exteraless_pill_stack_visible" = "Visible pills";

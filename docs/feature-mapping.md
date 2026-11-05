@@ -51,7 +51,10 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - double tap action separately for incoming (`OEChatsDoubleTapIn`) and
     outgoing (`OEChatsDoubleTapOut`) messages, default `-1` (use the Telegram
     setting); `0` = do nothing, `1`/`2` = send the favorite reaction, `4` =
-    reply. Other Android actions are tracked as NB-91.
+    reply. Other Android actions are tracked as NB-91;
+  - sticker time `As usual` / `Beside sticker` / `Hidden`
+    (`OEChatsStickerTimeSide`, `OEChatsHideStickerTime`, both default
+    `false`); the side timestamp stays clickable.
 - **Proxy** — see below.
 - **Backup** — import/export `.extera`, plus reset of all Exteraless settings
   with confirmation.
@@ -88,11 +91,11 @@ Desktop behavior of the Chats keys:
   `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
   `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
   names are never decoded.
-- `.extera` backup carries all 40 desktop keys in three sections
-  (`exteraconfig` 36, `pillstackconfig` 2, `mainconfig` 2); the old
+- `.extera` backup carries all 42 desktop keys in three sections
+  (`exteraconfig` 38, `pillstackconfig` 2, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 235 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 251 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -121,7 +124,7 @@ inactive and the setting UI says so.
 ### Backup
 
 `.extera` is a JSON document wrapped in invisible Unicode characters. It
-contains all 40 desktop keys in three sections: `exteraconfig` (36 keys),
+contains all 42 desktop keys in three sections: `exteraconfig` (38 keys),
 `pillstackconfig` (2 keys) and `mainconfig` (2 keys). Import validates every
 known key, applies only the right type and range, and reports the rest as
 unknown; entries in `pillstackconfig`/`mainconfig` and unknown top-level

@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/media/history_view_media_unwrapped.h"
 
+#include "exteraless/config.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/view/media/history_view_ephemeral_plate.h"
@@ -274,13 +275,17 @@ void UnwrappedMedia::drawSurrounding(
 	const auto fullRight = calculateFullRight(inner);
 	auto fullBottom = height();
 	if (needInfoDisplay()) {
-		_parent->drawInfo(
-			p,
-			context,
-			fullRight,
-			fullBottom,
-			inner.x() * 2 + inner.width(),
-			InfoDisplayType::Background);
+		if (sideStickerInfoFits(inner)) {
+			_parent->drawSideInfo(p, context, inner, rightAligned);
+		} else {
+			_parent->drawInfo(
+				p,
+				context,
+				fullRight,
+				fullBottom,
+				inner.x() * 2 + inner.width(),
+				InfoDisplayType::Background);
+		}
 	}
 	auto replyLeft = 0;
 	auto replyRight = 0;
@@ -434,6 +439,12 @@ PointState UnwrappedMedia::pointState(QPoint point) const {
 		&& point.y() > datey) {
 		return PointState::Inside;
 	}
+	if (needInfoDisplay() && sideStickerInfoFits(inner)) {
+		const auto rect = _parent->sideInfoRect(inner, rightAligned);
+		if (rect.contains(point)) {
+			return PointState::Inside;
+		}
+	}
 
 	return inner.contains(point) ? PointState::Inside : PointState::Outside;
 }
@@ -578,11 +589,13 @@ TextState UnwrappedMedia::textState(QPoint point, StateRequest request) const {
 		const auto fullRight = calculateFullRight(inner);
 		const auto rightActionSize = _parent->rightActionSize();
 		auto fullBottom = height();
-		const auto bottomInfoResult = _parent->bottomInfoTextState(
-			fullRight,
-			fullBottom,
-			point,
-			InfoDisplayType::Background);
+		const auto bottomInfoResult = sideStickerInfoFits(inner)
+			? _parent->sideInfoTextState(inner, rightAligned, point)
+			: _parent->bottomInfoTextState(
+				fullRight,
+				fullBottom,
+				point,
+				InfoDisplayType::Background);
 		if (bottomInfoResult.link
 			|| bottomInfoResult.cursor != CursorState::None
 			|| bottomInfoResult.customTooltip) {
@@ -725,6 +738,9 @@ QPoint UnwrappedMedia::calculateFastActionPosition(
 }
 
 bool UnwrappedMedia::needInfoDisplay() const {
+	if (hideStickerInfo()) {
+		return false;
+	}
 	return _parent->data()->isSending()
 		|| _parent->data()->hasFailed()
 		|| _parent->isUnderCursor()
@@ -735,8 +751,37 @@ bool UnwrappedMedia::needInfoDisplay() const {
 			&& _content->alwaysShowOutTimestamp());
 }
 
+bool UnwrappedMedia::stickerInfo() const {
+	if (_parent->media() != this) {
+		return false;
+	}
+	const auto sticker = dynamic_cast<Sticker*>(_content.get());
+	return sticker && !sticker->emojiSticker();
+}
+
+bool UnwrappedMedia::hideStickerInfo() const {
+	return stickerInfo()
+		&& Exteraless::Config::Instance().chatsSettings().hideStickerTime;
+}
+
+bool UnwrappedMedia::sideStickerInfo() const {
+	return stickerInfo()
+		&& Exteraless::Config::Instance().chatsSettings().stickerTimeSide;
+}
+
+bool UnwrappedMedia::sideStickerInfoFits(const QRect &inner) const {
+	if (!sideStickerInfo() || rtl()) {
+		return false;
+	}
+	const auto rightAligned = _parent->hasRightLayout();
+	const auto rect = _parent->sideInfoRect(inner, rightAligned);
+	return (rect.width() > 0)
+		&& (rect.left() >= st::msgMargin.left())
+		&& (rect.right() < _parent->width() - st::msgMargin.right());
+}
+
 int UnwrappedMedia::bottomInfoWidth() const {
-	return _parent->hidesBottomInfo()
+	return (hideStickerInfo() || _parent->hidesBottomInfo())
 		? 0
 		: (st::msgReplyPadding.left()
 			+ _parent->infoWidth()
@@ -744,7 +789,7 @@ int UnwrappedMedia::bottomInfoWidth() const {
 }
 
 int UnwrappedMedia::bottomInfoHeight() const {
-	return _parent->hidesBottomInfo()
+	return (hideStickerInfo() || _parent->hidesBottomInfo())
 		? 0
 		: (2 * st::msgDateImgPadding.y()
 			+ st::msgDateFont->height);

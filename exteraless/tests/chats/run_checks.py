@@ -150,6 +150,7 @@ def check_cli_args(ledger, cli):
          ["message-menu-set", "0", "1"]),
         ("doubletap-set with wrong count", ["doubletap-set", "1"]),
         ("doubletap-resolve without value", ["doubletap-resolve"]),
+        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -455,7 +456,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 36,
+            len(section) == 38,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -474,7 +475,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 40,
+            sum(len(value) for value in exported.values()) == 42,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -494,7 +495,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 40,
+                data.get("applied") == 42,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -564,6 +565,8 @@ def check_backup(ledger, cli, work):
             "OEChatsMenuDelete": False,
             "OEChatsDoubleTapIn": 0,
             "OEChatsDoubleTapOut": 4,
+            "OEChatsStickerTimeSide": True,
+            "OEChatsHideStickerTime": False,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -584,7 +587,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 40,
+            data.get("applied") == 42,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -634,6 +637,12 @@ def check_backup(ledger, cli, work):
             and section.get("OEChatsDoubleTapOut") == 4,
             (section.get("OEChatsDoubleTapIn"),
              section.get("OEChatsDoubleTapOut")))
+        ledger.check(
+            "backup full sticker time",
+            section.get("OEChatsStickerTimeSide") is True
+            and section.get("OEChatsHideStickerTime") is False,
+            (section.get("OEChatsStickerTimeSide"),
+             section.get("OEChatsHideStickerTime")))
         ledger.check(
             "backup full generic keys",
             section.get("relativeLastSeen") is True
@@ -731,10 +740,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 40",
+            "backup legacy eight completed to 42",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (36, 2, 2),
+             len(sections["mainconfig"])) == (38, 2, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1500,6 +1509,123 @@ def check_doubletap(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_sticker_time(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "stickertime-defaults")
+    data = json_call(ledger, cli, ["stickertime"], env, "stickertime defaults")
+    if data is not None:
+        ledger.check(
+            "stickertime defaults",
+            data.get("side") is False and data.get("hidden") is False,
+            data)
+
+    env = make_env(work / "stickertime-side")
+    data = json_call(
+        ledger, cli, ["stickertime-set", "1", "0"], env, "stickertime side")
+    if data is not None:
+        ledger.check(
+            "stickertime side set",
+            data.get("side") is True and data.get("hidden") is False,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["stickertime"], env, "stickertime side reload")
+    if reloaded is not None:
+        ledger.check(
+            "stickertime side persisted",
+            reloaded.get("side") is True and reloaded.get("hidden") is False,
+            reloaded)
+
+    env = make_env(work / "stickertime-hidden")
+    data = json_call(
+        ledger, cli, ["stickertime-set", "0", "1"], env,
+        "stickertime hidden")
+    if data is not None:
+        ledger.check(
+            "stickertime hidden set",
+            data.get("side") is False and data.get("hidden") is True,
+            data)
+
+    env = make_env(work / "stickertime-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsStickerTimeSide": True,
+            "OEChatsHideStickerTime": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "stickertime fromJson")
+    if data is not None:
+        ledger.check(
+            "stickertime fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["stickertime"], env, "stickertime fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "stickertime fromJson values",
+            reloaded.get("side") is True and reloaded.get("hidden") is False,
+            reloaded)
+
+    env = make_env(work / "stickertime-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"hideStickerTime": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "stickertime alias")
+    if data is not None:
+        ledger.check(
+            "stickertime alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["stickertime"], env, "stickertime alias read")
+    if reloaded is not None:
+        ledger.check(
+            "stickertime alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    mode_cases = [
+        ("0", False, False),
+        ("1", True, False),
+        ("2", False, True),
+    ]
+    for mode, side, hidden in mode_cases:
+        env = make_env(work / f"stickertime-mode-{mode}")
+        root = {
+            "version": 1,
+            "exteraconfig": {"stickerTimeMode": int(mode)},
+        }
+        data = json_call(
+            ledger, cli, ["backup-import-json", json.dumps(root)], env,
+            f"stickertime mode {mode}")
+        if data is not None:
+            ledger.check(
+                f"stickertime mode {mode} applied",
+                data.get("applied") == 1 and data.get("unknown") == [],
+                data)
+        reloaded = json_call(
+            ledger, cli, ["stickertime"], env,
+            f"stickertime mode {mode} read")
+        if reloaded is not None:
+            ledger.check(
+                f"stickertime mode {mode} values",
+                reloaded.get("side") is side
+                and reloaded.get("hidden") is hidden,
+                reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1519,6 +1645,7 @@ def main():
         workdir = check_workdir(ledger, cli, work)
         menu = check_message_menu(ledger, cli, work)
         doubletap = check_doubletap(ledger, cli, work)
+        stickertime = check_sticker_time(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1530,6 +1657,7 @@ def main():
     print(f"workdir: {workdir[0] - workdir[1]} passed")
     print(f"menu: {menu[0] - menu[1]} passed")
     print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
+    print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -61,6 +61,10 @@ constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
+constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
+constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
+constexpr auto kHideStickerTime = "hideStickerTime";
+constexpr auto kStickerTimeMode = "stickerTimeMode";
 constexpr auto kDoubleTapAction = "doubleTapAction";
 constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 
@@ -210,6 +214,8 @@ QString BuildBackup() {
 	extera[kChatsMenuDelete] = menu.deleteMsg;
 	extera[kChatsDoubleTapIn] = config.chatsDoubleTapIn();
 	extera[kChatsDoubleTapOut] = config.chatsDoubleTapOut();
+	extera[kChatsStickerTimeSide] = chats.stickerTimeSide;
+	extera[kChatsHideStickerTime] = chats.hideStickerTime;
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -380,6 +386,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 			&& value.toInt() >= -1
 			&& value.toInt() <= 12) {
 			config.setChatsDoubleTapOut(value.toInt());
+		} else if (key == kChatsStickerTimeSide && value.isBool()) {
+			config.setChatsStickerTimeSide(value.toBool());
+		} else if ((key == kChatsHideStickerTime || key == kHideStickerTime)
+			&& value.isBool()) {
+			config.setChatsHideStickerTime(value.toBool());
+		} else if (key == kStickerTimeMode
+			&& value.isDouble()
+			&& value.toInt() >= 0
+			&& value.toInt() <= 2) {
+			const auto mode = value.toInt();
+			config.setChatsHideStickerTime(mode == 2);
+			config.setChatsStickerTimeSide(mode == 1);
 		} else {
 			return false;
 		}

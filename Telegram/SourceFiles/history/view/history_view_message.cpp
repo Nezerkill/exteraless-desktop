@@ -5475,6 +5475,50 @@ TextState Message::bottomInfoTextState(
 		point - QPoint{ infoLeft, infoTop });
 }
 
+QRect Message::sideInfoRect(const QRect &inner, bool rightAligned) const {
+	if (hidesBottomInfo()) {
+		return {};
+	}
+	const auto size = _bottomInfo.currentSize();
+	const auto gap = st::msgDateImgDelta;
+	const auto x = rightAligned
+		? (inner.left() - gap - size.width())
+		: (inner.left() + inner.width() + gap);
+	const auto y = inner.top() + inner.height() - size.height();
+	return QRect(x, y, size.width(), size.height());
+}
+
+void Message::drawSideInfo(
+		Painter &p,
+		const PaintContext &context,
+		const QRect &inner,
+		bool rightAligned) const {
+	if (hidesBottomInfo()) {
+		return;
+	}
+	const auto rect = sideInfoRect(inner, rightAligned);
+	p.setFont(st::msgDateFont);
+	p.setPen(context.messageStyle()->msgDateFg);
+	_bottomInfo.paint(
+		p,
+		rect.topLeft(),
+		width(),
+		delegate()->elementShownUnread(this),
+		false,
+		context);
+}
+
+TextState Message::sideInfoTextState(
+		const QRect &inner,
+		bool rightAligned,
+		QPoint point) const {
+	if (hidesBottomInfo()) {
+		return {};
+	}
+	const auto rect = sideInfoRect(inner, rightAligned);
+	return _bottomInfo.textState(this, point - rect.topLeft());
+}
+
 int Message::infoWidth() const {
 	return hidesBottomInfo() ? 0 : _bottomInfo.maxWidth();
 }

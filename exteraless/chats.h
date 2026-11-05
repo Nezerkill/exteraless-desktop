@@ -10,6 +10,8 @@ struct ChatsSettings {
 	bool stripTrackingOnOpen = true;
 	bool stripTrackingOnPaste = true;
 	bool unreadCapsule = false;
+	bool stickerTimeSide = false;
+	bool hideStickerTime = false;
 };
 
 [[nodiscard]] bool HiddenReactionsFor(

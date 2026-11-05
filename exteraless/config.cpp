@@ -56,6 +56,8 @@ constexpr auto kChatsMenuReport = "OEChatsMenuReport";
 constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
+constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
+constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -459,6 +461,14 @@ void Config::setChatsDoubleTapOut(int value) {
 	setValue(kChatsDoubleTapOut, SanitizeDoubleTapValue(value));
 }
 
+void Config::setChatsStickerTimeSide(bool value) {
+	setValue(kChatsStickerTimeSide, value);
+}
+
+void Config::setChatsHideStickerTime(bool value) {
+	setValue(kChatsHideStickerTime, value);
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -554,7 +564,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsMenuReport
 			|| key == kChatsMenuDelete
 			|| key == kChatsDoubleTapIn
-			|| key == kChatsDoubleTapOut) {
+			|| key == kChatsDoubleTapOut
+			|| key == kChatsStickerTimeSide
+			|| key == kChatsHideStickerTime) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -651,6 +663,8 @@ void Config::refreshChats() const {
 	_chats.stripTrackingOnPaste
 		= boolValue(kChatsStripTrackingOnPaste, true);
 	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
+	_chats.stickerTimeSide = boolValue(kChatsStickerTimeSide, false);
+	_chats.hideStickerTime = boolValue(kChatsHideStickerTime, false);
 
 	_messageMenu.reply = boolValue(kChatsMenuReply, true);
 	_messageMenu.edit = boolValue(kChatsMenuEdit, true);

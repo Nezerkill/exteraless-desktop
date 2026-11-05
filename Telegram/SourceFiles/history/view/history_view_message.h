@@ -222,6 +222,18 @@ public:
 		int bottom,
 		QPoint point,
 		InfoDisplayType type) const override;
+	[[nodiscard]] QRect sideInfoRect(
+		const QRect &inner,
+		bool rightAligned) const override;
+	void drawSideInfo(
+		Painter &p,
+		const PaintContext &context,
+		const QRect &inner,
+		bool rightAligned) const override;
+	TextState sideInfoTextState(
+		const QRect &inner,
+		bool rightAligned,
+		QPoint point) const override;
 	MessageSelection selectionFromStates(
 		const TextState &anchor,
 		const TextState &current,

@@ -3266,6 +3266,13 @@ TextState Element::bottomInfoTextState(
 	return TextState();
 }
 
+TextState Element::sideInfoTextState(
+		const QRect &inner,
+		bool rightAligned,
+		QPoint point) const {
+	return TextState();
+}
+
 MessageSelection Element::selectionFromStates(
 		const TextState &anchor,
 		const TextState &current,

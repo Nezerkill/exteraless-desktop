@@ -151,6 +151,10 @@ private:
 	QSize countCurrentSize(int newWidth) override;
 
 	bool needInfoDisplay() const;
+	[[nodiscard]] bool stickerInfo() const;
+	[[nodiscard]] bool hideStickerInfo() const;
+	[[nodiscard]] bool sideStickerInfo() const;
+	[[nodiscard]] bool sideStickerInfoFits(const QRect &inner) const;
 	int bottomInfoWidth() const;
 	int bottomInfoHeight() const;
 	int additionalWidth(

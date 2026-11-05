@@ -508,6 +508,68 @@ const auto kMeta = Builder::BuildHelper({
 		doubleTapOut,
 		true);
 
+	const auto stickerTimeMode = [] {
+		const auto chats = Exteraless::Config::Instance().chatsSettings();
+		return chats.hideStickerTime ? 2 : (chats.stickerTimeSide ? 1 : 0);
+	};
+	const auto stickerTimeLabel = [](int mode) {
+		switch (mode) {
+		case 1:
+			return tr::lng_settings_exteraless_sticker_time_side(tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_sticker_time_hidden(tr::now);
+		}
+		return tr::lng_settings_exteraless_sticker_time_default(tr::now);
+	};
+	const auto stickerTime = std::make_shared<rpl::variable<QString>>(
+		stickerTimeLabel(stickerTimeMode()));
+	builder.addButton({
+		.id = u"exteraless/chats/sticker-time"_q,
+		.title = tr::lng_settings_exteraless_sticker_time(),
+		.st = &st::settingsButtonNoIcon,
+		.label = stickerTime->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				stickerTimeMode());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_sticker_time());
+				const auto options = std::vector<std::pair<int, QString>>{
+					{ 0, tr::lng_settings_exteraless_sticker_time_default(
+						tr::now) },
+					{ 1, tr::lng_settings_exteraless_sticker_time_side(
+						tr::now) },
+					{ 2, tr::lng_settings_exteraless_sticker_time_hidden(
+						tr::now) },
+				};
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (const auto &[value, text] : options) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							text,
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int mode) {
+					auto &config = Exteraless::Config::Instance();
+					config.setChatsHideStickerTime(mode == 2);
+					config.setChatsStickerTimeSide(mode == 1);
+					stickerTime->force_assign(stickerTimeLabel(mode));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"sticker"_q, u"time"_q, u"timestamp"_q },
+	});
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,
 		.title = tr::lng_settings_exteraless_pill_stack(),

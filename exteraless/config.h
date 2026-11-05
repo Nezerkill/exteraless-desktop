@@ -117,6 +117,8 @@ public:
 	void setChatsDoubleTapIn(int value);
 	[[nodiscard]] int chatsDoubleTapOut() const;
 	void setChatsDoubleTapOut(int value);
+	void setChatsStickerTimeSide(bool value);
+	void setChatsHideStickerTime(bool value);
 	void setChatsMenuReply(bool value);
 	void setChatsMenuEdit(bool value);
 	void setChatsMenuPin(bool value);

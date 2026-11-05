@@ -65,6 +65,7 @@ public:
 	bool hasTextForCopy() const override {
 		return emojiSticker();
 	}
+	[[nodiscard]] bool emojiSticker() const;
 
 	void setDiceIndex(const QString &emoji, int index);
 	void setPlayingOnce(bool once);
@@ -102,7 +103,6 @@ public:
 private:
 	[[nodiscard]] bool hasPremiumEffect() const;
 	[[nodiscard]] bool customEmojiPart() const;
-	[[nodiscard]] bool emojiSticker() const;
 	[[nodiscard]] bool webpagePart() const;
 	void paintAnimationFrame(
 		Painter &p,

@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Chats / Stickers: настройка `Sticker time` (`As usual`, `Beside sticker`,
+  `Hidden`) управляет временем на стикерах через `OEChatsStickerTimeSide` и
+  `OEChatsHideStickerTime`; Android-ключи `stickerTimeMode`/`hideStickerTime`
+  поддержаны в `.extera` (всего 42 ключа), боковое время рисуется рядом со
+  стикером и остаётся кликабельным.
 - Chats / Double tap: настройки `OEChatsDoubleTapIn` и `OEChatsDoubleTapOut`
   задают действие двойного тапа по входящим и исходящим сообщениям
   (как в настройках Telegram, ничего, любимая реакция, ответ); Android-ключи

@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(235 проверок: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, backup),
+(251 проверка: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, stickertime, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -98,7 +98,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-11 | Видимость пунктов меню сообщения (группа чекбоксов) | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | `exteraless/message_menu.h`, `exteraless/config.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_context_menu.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний (меню собирается по условиям) | CLI: дефолты и roundtrip `toJson`/`fromJson`; Xvfb: каждый тумблер убирает свой пункт, горячие клавиши не ломаются | ✅ 2026-11-05: 11 чекбоксов `OEChatsMenu*`, применены в обоих контекстных меню, CLI `menu` (8 проверок), Xvfb подтвердил скрытие Pin в чате | R1 P0-9, R2 §6.1 |
 | NB-12 | Действие двойного тапа: ответ / реакция / ничего | `NaConfig.doubleTapAction`, `doubleTapActionOut` | `exteraless/doubletap.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_list_widget.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний (жест пересекается с выделением текста) | Xvfb: двойной тап даёт reply / реакцию / ничего | ✅ 2026-11-05: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (-1 = настройка Telegram, 0 = ничего, 1/2 = реакция, 4 = ответ), селекторы в Chats, CLI `doubletap` (22 проверки), Xvfb подтвердил reply/reaction/nothing; остальные Android-действия — NB-91 | R1 P0-10 |
 | NB-13 | Широкие посты каналов и ленты | `OEChatsWideChannelPosts`, `OEChatsWideFeedPosts` | `history/view/history_view_message.cpp` (ширина баббла) | M · высокий (геометрия, хвосты, медиа) | Xvfb: пост на всю ширину, ответы и медиа не ломаются | ⬜ | R1 P0-11 |
-| NB-14 | Время на стикерах: сбоку или скрыто | `OEChatsStickerTimeSide`, `NekoConfig.hideTimeForSticker` | `history/view/history_view_element.cpp`, `history_view_message.cpp` | S · низкий | Xvfb: стикер с временем сбоку и без, обычные сообщения без изменений | ⬜ | R1 P0-12 |
+| NB-14 | Время на стикерах: сбоку или скрыто | `OEChatsStickerTimeSide`, `NekoConfig.hideTimeForSticker` | `history/view/media/history_view_media_unwrapped.cpp`, `history_view_element.{h,cpp}`, `history_view_message.{h,cpp}`, `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: стикер с временем сбоку и без, обычные сообщения без изменений | ✅ 2026-11-05: `OEChatsStickerTimeSide`/`OEChatsHideStickerTime`, селектор `Sticker time`, CLI `stickertime` (14 проверок), Xvfb: время сбоку у исходящего стикера и полностью скрыто в режиме Hidden; текст не затронут | R1 P0-12 |
 | NB-15 | Скрыть архив и сортировка по непрочитанным | `NaConfig.hideArchive`, `NekoConfig.sortByUnread` | `dialogs/dialogs_widget.cpp`, `dialogs/dialogs_indexed_list.cpp` | M · средний–высокий (индексация списка) | Xvfb: архив скрыт; сортировка на тестовом профиле | ⬜ (расхождение: R1 P0-13, R2 P2 — приоритет взят по R1, риск по R2) | R1 P0-13, R2 §3.1 |
 | NB-16 | Drag-порядок пилюль | `PillStackConfig.savePillsLayout` | `Telegram/SourceFiles/exteraless/pill_stack.{h,cpp}`, `exteraless/config.h` (маска 8 бит → нужен порядок) | M · низкий | Xvfb: drag меняет порядок и переживает рестарт | ⬜ | R1 P0-14 |
 | NB-17 | Ghost: пакетный переключатель и статус в меню | `setGhostMode`/`toggleGhostMode`, `showGhostModeStatus` | `window/window_main_menu.cpp`, `exteraless/ghost_mode.cpp`, настройки | S · низкий | один клик переключает 4 тумблера, статус виден в меню | ⬜ | R1 P0-15 |
@@ -267,7 +267,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 235 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 251 проверки; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

@@ -836,6 +836,25 @@ private:
 	virtual void invalidateTextDependentCache() {
 	}
 
+public:
+	// WHY: appended last so the vtable indices of existing virtuals stay stable.
+	[[nodiscard]] virtual QRect sideInfoRect(
+		const QRect &inner,
+		bool rightAligned) const {
+		return {};
+	}
+	virtual void drawSideInfo(
+		Painter &p,
+		const PaintContext &context,
+		const QRect &inner,
+		bool rightAligned) const {
+	}
+	virtual TextState sideInfoTextState(
+		const QRect &inner,
+		bool rightAligned,
+		QPoint point) const;
+
+private:
 	void refreshMedia(Element *replacing);
 	void setTextWithLinks(
 		const TextWithEntities &text,

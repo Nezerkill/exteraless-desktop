@@ -79,10 +79,10 @@ index 811707d..af189d1 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..2a0616c 100644
+index ffc8ec9..f2d4610 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,74 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,78 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -121,6 +121,10 @@ index ffc8ec9..2a0616c 100644
 +"lng_settings_exteraless_double_tap_none" = "Do nothing";
 +"lng_settings_exteraless_double_tap_reaction" = "Send reaction";
 +"lng_settings_exteraless_double_tap_reply" = "Reply";
++"lng_settings_exteraless_sticker_time" = "Sticker time";
++"lng_settings_exteraless_sticker_time_default" = "As usual";
++"lng_settings_exteraless_sticker_time_side" = "Beside sticker";
++"lng_settings_exteraless_sticker_time_hidden" = "Hidden";
 +"lng_settings_exteraless_pill_stack" = "Pill Stack";
 +"lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
 +"lng_settings_exteraless_pill_stack_visible" = "Visible pills";
@@ -3507,7 +3511,7 @@ index 3e25a13..bc91012 100644
  				controller->show(Box(
  					Ui::TranslateBox,
 diff --git a/Telegram/SourceFiles/history/view/history_view_element.cpp b/Telegram/SourceFiles/history/view/history_view_element.cpp
-index 057de48..2e5ac9e 100644
+index 057de48..6e24ef6 100644
 --- a/Telegram/SourceFiles/history/view/history_view_element.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_element.cpp
 @@ -70,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -3612,6 +3616,50 @@ index 057de48..2e5ac9e 100644
  	auto reactionsData = InlineListDataFromMessage(this);
  	if (reactionsData.reactions.empty()
  		|| context() == Context::MediaEditor) {
+@@ -3230,6 +3266,13 @@ TextState Element::bottomInfoTextState(
+ 	return TextState();
+ }
+ 
++TextState Element::sideInfoTextState(
++		const QRect &inner,
++		bool rightAligned,
++		QPoint point) const {
++	return TextState();
++}
++
+ MessageSelection Element::selectionFromStates(
+ 		const TextState &anchor,
+ 		const TextState &current,
+diff --git a/Telegram/SourceFiles/history/view/history_view_element.h b/Telegram/SourceFiles/history/view/history_view_element.h
+index 8b3f3d7..968d94b 100644
+--- a/Telegram/SourceFiles/history/view/history_view_element.h
++++ b/Telegram/SourceFiles/history/view/history_view_element.h
+@@ -836,6 +836,25 @@ private:
+ 	virtual void invalidateTextDependentCache() {
+ 	}
+ 
++public:
++	// WHY: appended last so the vtable indices of existing virtuals stay stable.
++	[[nodiscard]] virtual QRect sideInfoRect(
++		const QRect &inner,
++		bool rightAligned) const {
++		return {};
++	}
++	virtual void drawSideInfo(
++		Painter &p,
++		const PaintContext &context,
++		const QRect &inner,
++		bool rightAligned) const {
++	}
++	virtual TextState sideInfoTextState(
++		const QRect &inner,
++		bool rightAligned,
++		QPoint point) const;
++
++private:
+ 	void refreshMedia(Element *replacing);
+ 	void setTextWithLinks(
+ 		const TextWithEntities &text,
 diff --git a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
 index fdbce14..585f139 100644
 --- a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
@@ -3661,7 +3709,7 @@ index fdbce14..585f139 100644
  	}
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
-index 5152d85..b2baff4 100644
+index 5152d85..896cc51 100644
 --- a/Telegram/SourceFiles/history/view/history_view_message.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_message.cpp
 @@ -55,6 +55,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -3687,7 +3735,58 @@ index 5152d85..b2baff4 100644
  	auto result = ButtonParameters{ .context = data()->fullId() };
  	const auto outsideBubble = (!_comments && !embedReactionsInBubble());
  	const auto geometry = countGeometry();
-@@ -6611,7 +6620,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
+@@ -5466,6 +5475,50 @@ TextState Message::bottomInfoTextState(
+ 		point - QPoint{ infoLeft, infoTop });
+ }
+ 
++QRect Message::sideInfoRect(const QRect &inner, bool rightAligned) const {
++	if (hidesBottomInfo()) {
++		return {};
++	}
++	const auto size = _bottomInfo.currentSize();
++	const auto gap = st::msgDateImgDelta;
++	const auto x = rightAligned
++		? (inner.left() - gap - size.width())
++		: (inner.left() + inner.width() + gap);
++	const auto y = inner.top() + inner.height() - size.height();
++	return QRect(x, y, size.width(), size.height());
++}
++
++void Message::drawSideInfo(
++		Painter &p,
++		const PaintContext &context,
++		const QRect &inner,
++		bool rightAligned) const {
++	if (hidesBottomInfo()) {
++		return;
++	}
++	const auto rect = sideInfoRect(inner, rightAligned);
++	p.setFont(st::msgDateFont);
++	p.setPen(context.messageStyle()->msgDateFg);
++	_bottomInfo.paint(
++		p,
++		rect.topLeft(),
++		width(),
++		delegate()->elementShownUnread(this),
++		false,
++		context);
++}
++
++TextState Message::sideInfoTextState(
++		const QRect &inner,
++		bool rightAligned,
++		QPoint point) const {
++	if (hidesBottomInfo()) {
++		return {};
++	}
++	const auto rect = sideInfoRect(inner, rightAligned);
++	return _bottomInfo.textState(this, point - rect.topLeft());
++}
++
+ int Message::infoWidth() const {
+ 	return hidesBottomInfo() ? 0 : _bottomInfo.maxWidth();
+ }
+@@ -6611,7 +6664,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
  			&& !edges.infoBelow
  			&& (rich->article.edgeBlocks().bottom == Block::VisualMedia);
  	};
@@ -3698,6 +3797,191 @@ index 5152d85..b2baff4 100644
  		|| (media && media->skipBubbleTail())
  		|| (rich && richMediaAtBottom())
  		|| (keyboard != nullptr)
+diff --git a/Telegram/SourceFiles/history/view/history_view_message.h b/Telegram/SourceFiles/history/view/history_view_message.h
+index b907117..96203d6 100644
+--- a/Telegram/SourceFiles/history/view/history_view_message.h
++++ b/Telegram/SourceFiles/history/view/history_view_message.h
+@@ -222,6 +222,18 @@ public:
+ 		int bottom,
+ 		QPoint point,
+ 		InfoDisplayType type) const override;
++	[[nodiscard]] QRect sideInfoRect(
++		const QRect &inner,
++		bool rightAligned) const override;
++	void drawSideInfo(
++		Painter &p,
++		const PaintContext &context,
++		const QRect &inner,
++		bool rightAligned) const override;
++	TextState sideInfoTextState(
++		const QRect &inner,
++		bool rightAligned,
++		QPoint point) const override;
+ 	MessageSelection selectionFromStates(
+ 		const TextState &anchor,
+ 		const TextState &current,
+diff --git a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp b/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp
+index 269853a..19c05f6 100644
+--- a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp
++++ b/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp
+@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/media/history_view_media_unwrapped.h"
+ 
++#include "exteraless/config.h"
+ #include "data/data_session.h"
+ #include "history/history.h"
+ #include "history/view/media/history_view_ephemeral_plate.h"
+@@ -274,13 +275,17 @@ void UnwrappedMedia::drawSurrounding(
+ 	const auto fullRight = calculateFullRight(inner);
+ 	auto fullBottom = height();
+ 	if (needInfoDisplay()) {
+-		_parent->drawInfo(
+-			p,
+-			context,
+-			fullRight,
+-			fullBottom,
+-			inner.x() * 2 + inner.width(),
+-			InfoDisplayType::Background);
++		if (sideStickerInfoFits(inner)) {
++			_parent->drawSideInfo(p, context, inner, rightAligned);
++		} else {
++			_parent->drawInfo(
++				p,
++				context,
++				fullRight,
++				fullBottom,
++				inner.x() * 2 + inner.width(),
++				InfoDisplayType::Background);
++		}
+ 	}
+ 	auto replyLeft = 0;
+ 	auto replyRight = 0;
+@@ -434,6 +439,12 @@ PointState UnwrappedMedia::pointState(QPoint point) const {
+ 		&& point.y() > datey) {
+ 		return PointState::Inside;
+ 	}
++	if (needInfoDisplay() && sideStickerInfoFits(inner)) {
++		const auto rect = _parent->sideInfoRect(inner, rightAligned);
++		if (rect.contains(point)) {
++			return PointState::Inside;
++		}
++	}
+ 
+ 	return inner.contains(point) ? PointState::Inside : PointState::Outside;
+ }
+@@ -578,11 +589,13 @@ TextState UnwrappedMedia::textState(QPoint point, StateRequest request) const {
+ 		const auto fullRight = calculateFullRight(inner);
+ 		const auto rightActionSize = _parent->rightActionSize();
+ 		auto fullBottom = height();
+-		const auto bottomInfoResult = _parent->bottomInfoTextState(
+-			fullRight,
+-			fullBottom,
+-			point,
+-			InfoDisplayType::Background);
++		const auto bottomInfoResult = sideStickerInfoFits(inner)
++			? _parent->sideInfoTextState(inner, rightAligned, point)
++			: _parent->bottomInfoTextState(
++				fullRight,
++				fullBottom,
++				point,
++				InfoDisplayType::Background);
+ 		if (bottomInfoResult.link
+ 			|| bottomInfoResult.cursor != CursorState::None
+ 			|| bottomInfoResult.customTooltip) {
+@@ -725,6 +738,9 @@ QPoint UnwrappedMedia::calculateFastActionPosition(
+ }
+ 
+ bool UnwrappedMedia::needInfoDisplay() const {
++	if (hideStickerInfo()) {
++		return false;
++	}
+ 	return _parent->data()->isSending()
+ 		|| _parent->data()->hasFailed()
+ 		|| _parent->isUnderCursor()
+@@ -735,8 +751,37 @@ bool UnwrappedMedia::needInfoDisplay() const {
+ 			&& _content->alwaysShowOutTimestamp());
+ }
+ 
++bool UnwrappedMedia::stickerInfo() const {
++	if (_parent->media() != this) {
++		return false;
++	}
++	const auto sticker = dynamic_cast<Sticker*>(_content.get());
++	return sticker && !sticker->emojiSticker();
++}
++
++bool UnwrappedMedia::hideStickerInfo() const {
++	return stickerInfo()
++		&& Exteraless::Config::Instance().chatsSettings().hideStickerTime;
++}
++
++bool UnwrappedMedia::sideStickerInfo() const {
++	return stickerInfo()
++		&& Exteraless::Config::Instance().chatsSettings().stickerTimeSide;
++}
++
++bool UnwrappedMedia::sideStickerInfoFits(const QRect &inner) const {
++	if (!sideStickerInfo() || rtl()) {
++		return false;
++	}
++	const auto rightAligned = _parent->hasRightLayout();
++	const auto rect = _parent->sideInfoRect(inner, rightAligned);
++	return (rect.width() > 0)
++		&& (rect.left() >= st::msgMargin.left())
++		&& (rect.right() < _parent->width() - st::msgMargin.right());
++}
++
+ int UnwrappedMedia::bottomInfoWidth() const {
+-	return _parent->hidesBottomInfo()
++	return (hideStickerInfo() || _parent->hidesBottomInfo())
+ 		? 0
+ 		: (st::msgReplyPadding.left()
+ 			+ _parent->infoWidth()
+@@ -744,7 +789,7 @@ int UnwrappedMedia::bottomInfoWidth() const {
+ }
+ 
+ int UnwrappedMedia::bottomInfoHeight() const {
+-	return _parent->hidesBottomInfo()
++	return (hideStickerInfo() || _parent->hidesBottomInfo())
+ 		? 0
+ 		: (2 * st::msgDateImgPadding.y()
+ 			+ st::msgDateFont->height);
+diff --git a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.h b/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.h
+index c2d1b02..e06c27b 100644
+--- a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.h
++++ b/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.h
+@@ -151,6 +151,10 @@ private:
+ 	QSize countCurrentSize(int newWidth) override;
+ 
+ 	bool needInfoDisplay() const;
++	[[nodiscard]] bool stickerInfo() const;
++	[[nodiscard]] bool hideStickerInfo() const;
++	[[nodiscard]] bool sideStickerInfo() const;
++	[[nodiscard]] bool sideStickerInfoFits(const QRect &inner) const;
+ 	int bottomInfoWidth() const;
+ 	int bottomInfoHeight() const;
+ 	int additionalWidth(
+diff --git a/Telegram/SourceFiles/history/view/media/history_view_sticker.h b/Telegram/SourceFiles/history/view/media/history_view_sticker.h
+index 536e12d..691ccc2 100644
+--- a/Telegram/SourceFiles/history/view/media/history_view_sticker.h
++++ b/Telegram/SourceFiles/history/view/media/history_view_sticker.h
+@@ -65,6 +65,7 @@ public:
+ 	bool hasTextForCopy() const override {
+ 		return emojiSticker();
+ 	}
++	[[nodiscard]] bool emojiSticker() const;
+ 
+ 	void setDiceIndex(const QString &emoji, int index);
+ 	void setPlayingOnce(bool once);
+@@ -102,7 +103,6 @@ public:
+ private:
+ 	[[nodiscard]] bool hasPremiumEffect() const;
+ 	[[nodiscard]] bool customEmojiPart() const;
+-	[[nodiscard]] bool emojiSticker() const;
+ 	[[nodiscard]] bool webpagePart() const;
+ 	void paintAnimationFrame(
+ 		Painter &p,
 diff --git a/Telegram/SourceFiles/info/profile/info_profile_values.cpp b/Telegram/SourceFiles/info/profile/info_profile_values.cpp
 index 366a4e3..c2f7294 100644
 --- a/Telegram/SourceFiles/info/profile/info_profile_values.cpp
@@ -4002,10 +4286,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..1b857f6
+index 0000000..f0df53d
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,808 @@
+@@ -0,0 +1,870 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4515,6 +4799,68 @@ index 0000000..1b857f6
 +		tr::lng_settings_exteraless_double_tap_out(),
 +		doubleTapOut,
 +		true);
++
++	const auto stickerTimeMode = [] {
++		const auto chats = Exteraless::Config::Instance().chatsSettings();
++		return chats.hideStickerTime ? 2 : (chats.stickerTimeSide ? 1 : 0);
++	};
++	const auto stickerTimeLabel = [](int mode) {
++		switch (mode) {
++		case 1:
++			return tr::lng_settings_exteraless_sticker_time_side(tr::now);
++		case 2:
++			return tr::lng_settings_exteraless_sticker_time_hidden(tr::now);
++		}
++		return tr::lng_settings_exteraless_sticker_time_default(tr::now);
++	};
++	const auto stickerTime = std::make_shared<rpl::variable<QString>>(
++		stickerTimeLabel(stickerTimeMode()));
++	builder.addButton({
++		.id = u"exteraless/chats/sticker-time"_q,
++		.title = tr::lng_settings_exteraless_sticker_time(),
++		.st = &st::settingsButtonNoIcon,
++		.label = stickerTime->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				stickerTimeMode());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(tr::lng_settings_exteraless_sticker_time());
++				const auto options = std::vector<std::pair<int, QString>>{
++					{ 0, tr::lng_settings_exteraless_sticker_time_default(
++						tr::now) },
++					{ 1, tr::lng_settings_exteraless_sticker_time_side(
++						tr::now) },
++					{ 2, tr::lng_settings_exteraless_sticker_time_hidden(
++						tr::now) },
++				};
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (const auto &[value, text] : options) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							text,
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int mode) {
++					auto &config = Exteraless::Config::Instance();
++					config.setChatsHideStickerTime(mode == 2);
++					config.setChatsStickerTimeSide(mode == 1);
++					stickerTime->force_assign(stickerTimeLabel(mode));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"sticker"_q, u"time"_q, u"timestamp"_q },
++	});
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/pill-stack"_q,
@@ -5486,10 +5832,10 @@ index 0000000..236ccf9
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..ba3976c
+index 0000000..1950646
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,408 @@
+@@ -0,0 +1,426 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -5553,6 +5899,10 @@ index 0000000..ba3976c
 +constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 +constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 +constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
++constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
++constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
++constexpr auto kHideStickerTime = "hideStickerTime";
++constexpr auto kStickerTimeMode = "stickerTimeMode";
 +constexpr auto kDoubleTapAction = "doubleTapAction";
 +constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 +
@@ -5702,6 +6052,8 @@ index 0000000..ba3976c
 +	extera[kChatsMenuDelete] = menu.deleteMsg;
 +	extera[kChatsDoubleTapIn] = config.chatsDoubleTapIn();
 +	extera[kChatsDoubleTapOut] = config.chatsDoubleTapOut();
++	extera[kChatsStickerTimeSide] = chats.stickerTimeSide;
++	extera[kChatsHideStickerTime] = chats.hideStickerTime;
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -5872,6 +6224,18 @@ index 0000000..ba3976c
 +			&& value.toInt() >= -1
 +			&& value.toInt() <= 12) {
 +			config.setChatsDoubleTapOut(value.toInt());
++		} else if (key == kChatsStickerTimeSide && value.isBool()) {
++			config.setChatsStickerTimeSide(value.toBool());
++		} else if ((key == kChatsHideStickerTime || key == kHideStickerTime)
++			&& value.isBool()) {
++			config.setChatsHideStickerTime(value.toBool());
++		} else if (key == kStickerTimeMode
++			&& value.isDouble()
++			&& value.toInt() >= 0
++			&& value.toInt() <= 2) {
++			const auto mode = value.toInt();
++			config.setChatsHideStickerTime(mode == 2);
++			config.setChatsStickerTimeSide(mode == 1);
 +		} else {
 +			return false;
 +		}
@@ -5963,10 +6327,10 @@ index 0000000..c1bfde8
 +} // namespace Exteraless
 diff --git a/exteraless/chats.h b/exteraless/chats.h
 new file mode 100644
-index 0000000..b339692
+index 0000000..d6877e0
 --- /dev/null
 +++ b/exteraless/chats.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,30 @@
 +#pragma once
 +
 +namespace Exteraless {
@@ -5979,6 +6343,8 @@ index 0000000..b339692
 +	bool stripTrackingOnOpen = true;
 +	bool stripTrackingOnPaste = true;
 +	bool unreadCapsule = false;
++	bool stickerTimeSide = false;
++	bool hideStickerTime = false;
 +};
 +
 +[[nodiscard]] bool HiddenReactionsFor(
@@ -5997,10 +6363,10 @@ index 0000000..b339692
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..2820080
+index 0000000..89c3c9a
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,698 @@
+@@ -0,0 +1,712 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6059,6 +6425,8 @@ index 0000000..2820080
 +constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 +constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 +constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
++constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
++constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -6462,6 +6830,14 @@ index 0000000..2820080
 +	setValue(kChatsDoubleTapOut, SanitizeDoubleTapValue(value));
 +}
 +
++void Config::setChatsStickerTimeSide(bool value) {
++	setValue(kChatsStickerTimeSide, value);
++}
++
++void Config::setChatsHideStickerTime(bool value) {
++	setValue(kChatsHideStickerTime, value);
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -6557,7 +6933,9 @@ index 0000000..2820080
 +			|| key == kChatsMenuReport
 +			|| key == kChatsMenuDelete
 +			|| key == kChatsDoubleTapIn
-+			|| key == kChatsDoubleTapOut) {
++			|| key == kChatsDoubleTapOut
++			|| key == kChatsStickerTimeSide
++			|| key == kChatsHideStickerTime) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -6654,6 +7032,8 @@ index 0000000..2820080
 +	_chats.stripTrackingOnPaste
 +		= boolValue(kChatsStripTrackingOnPaste, true);
 +	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
++	_chats.stickerTimeSide = boolValue(kChatsStickerTimeSide, false);
++	_chats.hideStickerTime = boolValue(kChatsHideStickerTime, false);
 +
 +	_messageMenu.reply = boolValue(kChatsMenuReply, true);
 +	_messageMenu.edit = boolValue(kChatsMenuEdit, true);
@@ -6701,10 +7081,10 @@ index 0000000..2820080
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..eb4badd
+index 0000000..8f389a8
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,162 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -6824,6 +7204,8 @@ index 0000000..eb4badd
 +	void setChatsDoubleTapIn(int value);
 +	[[nodiscard]] int chatsDoubleTapOut() const;
 +	void setChatsDoubleTapOut(int value);
++	void setChatsStickerTimeSide(bool value);
++	void setChatsHideStickerTime(bool value);
 +	void setChatsMenuReply(bool value);
 +	void setChatsMenuEdit(bool value);
 +	void setChatsMenuPin(bool value);
@@ -8344,10 +8726,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..97f8a67
+index 0000000..ca00eb2
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,577 @@
+@@ -0,0 +1,610 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -8396,6 +8778,8 @@ index 0000000..97f8a67
 +		<< "  exteraless-chats-cli doubletap\n"
 +		<< "  exteraless-chats-cli doubletap-set <in> <out>\n"
 +		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
++		<< "  exteraless-chats-cli stickertime\n"
++		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -8520,6 +8904,14 @@ index 0000000..97f8a67
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 +		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
++	});
++}
++
++void PrintStickerTime() {
++	const auto chats = Exteraless::Config::Instance().chatsSettings();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("side"), chats.stickerTimeSide },
++		{ QStringLiteral("hidden"), chats.hideStickerTime },
 +	});
 +}
 +
@@ -8762,6 +9154,29 @@ index 0000000..97f8a67
 +		std::cout << DoubleTapName(value).toUtf8().constData() << '\n';
 +		return 0;
 +	}
++	if (mode == QStringLiteral("stickertime")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("stickertime-set")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto side = false;
++		auto hidden = false;
++		if (!ReadFlag(arguments[2], &side)
++			|| !ReadFlag(arguments[3], &hidden)) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setChatsStickerTimeSide(side);
++		config.setChatsHideStickerTime(hidden);
++		PrintStickerTime();
++		return 0;
++	}
 +	if (mode == QStringLiteral("deleted")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -8989,10 +9404,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..9ea3235
+index 0000000..4b65522
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,1544 @@
+@@ -0,0 +1,1672 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -9145,6 +9560,7 @@ index 0000000..9ea3235
 +         ["message-menu-set", "0", "1"]),
 +        ("doubletap-set with wrong count", ["doubletap-set", "1"]),
 +        ("doubletap-resolve without value", ["doubletap-resolve"]),
++        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +    ]
 +    before = len(ledger.failures)
@@ -9450,7 +9866,7 @@ index 0000000..9ea3235
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 36,
++            len(section) == 38,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -9469,7 +9885,7 @@ index 0000000..9ea3235
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 40,
++            sum(len(value) for value in exported.values()) == 42,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -9489,7 +9905,7 @@ index 0000000..9ea3235
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 40,
++                data.get("applied") == 42,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -9559,6 +9975,8 @@ index 0000000..9ea3235
 +            "OEChatsMenuDelete": False,
 +            "OEChatsDoubleTapIn": 0,
 +            "OEChatsDoubleTapOut": 4,
++            "OEChatsStickerTimeSide": True,
++            "OEChatsHideStickerTime": False,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -9579,7 +9997,7 @@ index 0000000..9ea3235
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 40,
++            data.get("applied") == 42,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -9629,6 +10047,12 @@ index 0000000..9ea3235
 +            and section.get("OEChatsDoubleTapOut") == 4,
 +            (section.get("OEChatsDoubleTapIn"),
 +             section.get("OEChatsDoubleTapOut")))
++        ledger.check(
++            "backup full sticker time",
++            section.get("OEChatsStickerTimeSide") is True
++            and section.get("OEChatsHideStickerTime") is False,
++            (section.get("OEChatsStickerTimeSide"),
++             section.get("OEChatsHideStickerTime")))
 +        ledger.check(
 +            "backup full generic keys",
 +            section.get("relativeLastSeen") is True
@@ -9726,10 +10150,10 @@ index 0000000..9ea3235
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 40",
++            "backup legacy eight completed to 42",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (36, 2, 2),
++             len(sections["mainconfig"])) == (38, 2, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -10495,6 +10919,123 @@ index 0000000..9ea3235
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_sticker_time(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "stickertime-defaults")
++    data = json_call(ledger, cli, ["stickertime"], env, "stickertime defaults")
++    if data is not None:
++        ledger.check(
++            "stickertime defaults",
++            data.get("side") is False and data.get("hidden") is False,
++            data)
++
++    env = make_env(work / "stickertime-side")
++    data = json_call(
++        ledger, cli, ["stickertime-set", "1", "0"], env, "stickertime side")
++    if data is not None:
++        ledger.check(
++            "stickertime side set",
++            data.get("side") is True and data.get("hidden") is False,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["stickertime"], env, "stickertime side reload")
++    if reloaded is not None:
++        ledger.check(
++            "stickertime side persisted",
++            reloaded.get("side") is True and reloaded.get("hidden") is False,
++            reloaded)
++
++    env = make_env(work / "stickertime-hidden")
++    data = json_call(
++        ledger, cli, ["stickertime-set", "0", "1"], env,
++        "stickertime hidden")
++    if data is not None:
++        ledger.check(
++            "stickertime hidden set",
++            data.get("side") is False and data.get("hidden") is True,
++            data)
++
++    env = make_env(work / "stickertime-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsStickerTimeSide": True,
++            "OEChatsHideStickerTime": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "stickertime fromJson")
++    if data is not None:
++        ledger.check(
++            "stickertime fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["stickertime"], env, "stickertime fromJson read")
++    if reloaded is not None:
++        ledger.check(
++            "stickertime fromJson values",
++            reloaded.get("side") is True and reloaded.get("hidden") is False,
++            reloaded)
++
++    env = make_env(work / "stickertime-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"hideStickerTime": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "stickertime alias")
++    if data is not None:
++        ledger.check(
++            "stickertime alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["stickertime"], env, "stickertime alias read")
++    if reloaded is not None:
++        ledger.check(
++            "stickertime alias value",
++            reloaded.get("hidden") is True,
++            reloaded)
++
++    mode_cases = [
++        ("0", False, False),
++        ("1", True, False),
++        ("2", False, True),
++    ]
++    for mode, side, hidden in mode_cases:
++        env = make_env(work / f"stickertime-mode-{mode}")
++        root = {
++            "version": 1,
++            "exteraconfig": {"stickerTimeMode": int(mode)},
++        }
++        data = json_call(
++            ledger, cli, ["backup-import-json", json.dumps(root)], env,
++            f"stickertime mode {mode}")
++        if data is not None:
++            ledger.check(
++                f"stickertime mode {mode} applied",
++                data.get("applied") == 1 and data.get("unknown") == [],
++                data)
++        reloaded = json_call(
++            ledger, cli, ["stickertime"], env,
++            f"stickertime mode {mode} read")
++        if reloaded is not None:
++            ledger.check(
++                f"stickertime mode {mode} values",
++                reloaded.get("side") is side
++                and reloaded.get("hidden") is hidden,
++                reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -10514,6 +11055,7 @@ index 0000000..9ea3235
 +        workdir = check_workdir(ledger, cli, work)
 +        menu = check_message_menu(ledger, cli, work)
 +        doubletap = check_doubletap(ledger, cli, work)
++        stickertime = check_sticker_time(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -10525,6 +11067,7 @@ index 0000000..9ea3235
 +    print(f"workdir: {workdir[0] - workdir[1]} passed")
 +    print(f"menu: {menu[0] - menu[1]} passed")
 +    print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
++    print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

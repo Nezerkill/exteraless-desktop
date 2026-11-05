@@ -46,6 +46,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli doubletap\n"
 		<< "  exteraless-chats-cli doubletap-set <in> <out>\n"
 		<< "  exteraless-chats-cli doubletap-resolve <value>\n"
+		<< "  exteraless-chats-cli stickertime\n"
+		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -170,6 +172,14 @@ void PrintDoubleTap() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
+	});
+}
+
+void PrintStickerTime() {
+	const auto chats = Exteraless::Config::Instance().chatsSettings();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("side"), chats.stickerTimeSide },
+		{ QStringLiteral("hidden"), chats.hideStickerTime },
 	});
 }
 
@@ -410,6 +420,29 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		std::cout << DoubleTapName(value).toUtf8().constData() << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("stickertime")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("stickertime-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto side = false;
+		auto hidden = false;
+		if (!ReadFlag(arguments[2], &side)
+			|| !ReadFlag(arguments[3], &hidden)) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setChatsStickerTimeSide(side);
+		config.setChatsHideStickerTime(hidden);
+		PrintStickerTime();
 		return 0;
 	}
 	if (mode == QStringLiteral("deleted")) {
