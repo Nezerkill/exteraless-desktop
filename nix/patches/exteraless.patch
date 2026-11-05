@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..f162261 100644
+index ffc8ec9..d9d1de1 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,118 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,119 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -144,6 +144,7 @@ index ffc8ec9..f162261 100644
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
 +"lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
++"lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
 +"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 +"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 +"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
@@ -769,6 +770,52 @@ index 2de2881..50a19fb 100644
  constexpr auto AppFile = "Telegram"_cs;
  constexpr auto AppVersion = 7003001;
  constexpr auto AppVersionStr = "7.3.1";
+diff --git a/Telegram/SourceFiles/data/data_chat_filters.cpp b/Telegram/SourceFiles/data/data_chat_filters.cpp
+index f85bc2d..a4547ae 100644
+--- a/Telegram/SourceFiles/data/data_chat_filters.cpp
++++ b/Telegram/SourceFiles/data/data_chat_filters.cpp
+@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "main/main_session.h"
+ #include "main/main_app_config.h"
+ #include "apiwrap.h"
++#include "exteraless/config.h"
+ 
+ namespace Data {
+ namespace {
+@@ -902,9 +903,21 @@ const std::vector<ChatFilter> &ChatFilters::list() const {
+ }
+ 
+ FilterId ChatFilters::defaultId() const {
++	if (Exteraless::Config::Instance().hideAllChatsFolder()
++		&& _list.size() > 1) {
++		for (const auto &filter : _list) {
++			if (filter.id()) {
++				return filter.id();
++			}
++		}
++	}
+ 	return lookupId(0);
+ }
+ 
++void ChatFilters::notifyListChanged() {
++	_listChanged.fire({});
++}
++
+ FilterId ChatFilters::lookupId(int index) const {
+ 	Expects(index >= 0 && index < _list.size());
+ 
+diff --git a/Telegram/SourceFiles/data/data_chat_filters.h b/Telegram/SourceFiles/data/data_chat_filters.h
+index cfba1f9..7458748 100644
+--- a/Telegram/SourceFiles/data/data_chat_filters.h
++++ b/Telegram/SourceFiles/data/data_chat_filters.h
+@@ -163,6 +163,7 @@ public:
+ 	void moveAllToFront();
+ 	[[nodiscard]] const std::vector<ChatFilter> &list() const;
+ 	[[nodiscard]] rpl::producer<> changed() const;
++	void notifyListChanged();
+ 	[[nodiscard]] rpl::producer<FilterId> isChatlistChanged() const;
+ 	[[nodiscard]] rpl::producer<TagColorChanged> tagColorChanged() const;
+ 	[[nodiscard]] bool loaded() const;
 diff --git a/Telegram/SourceFiles/data/data_file_click_handler.cpp b/Telegram/SourceFiles/data/data_file_click_handler.cpp
 index 1eb7369..105f8e6 100644
 --- a/Telegram/SourceFiles/data/data_file_click_handler.cpp
@@ -5239,10 +5286,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..d913b03
+index 0000000..2e31c61
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1288 @@
+@@ -0,0 +1,1302 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5253,6 +5300,9 @@ index 0000000..d913b03
 +#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
 +#include "core/file_utilities.h"
++#include "main/main_session.h"
++#include "data/data_session.h"
++#include "data/data_chat_filters.h"
 +#include "lang/lang_keys.h"
 +#include "settings/settings_builder.h"
 +#include "settings/sections/settings_main.h"
@@ -5836,6 +5886,17 @@ index 0000000..d913b03
 +		[](bool value) {
 +			Exteraless::Config::Instance()
 +				.setDisableLinkPreviewByDefault(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/hide-all-chats"_q,
++		tr::lng_settings_exteraless_chats_hide_all_chats(),
++		{ u"folder"_q, u"chats"_q, u"tab"_q },
++		Exteraless::Config::Instance().hideAllChatsFolder(),
++		[=](bool value) {
++			Exteraless::Config::Instance().setHideAllChatsFolder(value);
++			if (const auto controller = builder.controller()) {
++				controller->session().data().chatsFilters().notifyListChanged();
++			}
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/use-edited-icon"_q,
@@ -6757,6 +6818,41 @@ index 96a776b..75d8ea4 100644
  	} else if (std::abs(lastDate.daysTo(nowDate)) < 7) {
  		return langDayOfWeek(lastDate);
  	} else {
+diff --git a/Telegram/SourceFiles/window/window_filters_menu.cpp b/Telegram/SourceFiles/window/window_filters_menu.cpp
+index c49a9d3..f95e1e4 100644
+--- a/Telegram/SourceFiles/window/window_filters_menu.cpp
++++ b/Telegram/SourceFiles/window/window_filters_menu.cpp
+@@ -44,6 +44,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "storage/storage_media_prepare.h"
+ #include "api/api_chat_filters.h"
+ #include "apiwrap.h"
++#include "exteraless/config.h"
+ #include "styles/style_widgets.h"
+ #include "styles/style_window.h"
+ #include "styles/style_menu_icons.h"
+@@ -382,7 +383,12 @@ void FiltersMenu::refresh() {
+ 
+ 	auto now = base::flat_map<int, base::unique_qptr<Ui::SideBarButton>>();
+ 	const auto &currentFilter = _session->activeChatsFilterCurrent();
++	const auto hideAll = Exteraless::Config::Instance().hideAllChatsFolder()
++		&& (filters->list().size() > 1);
+ 	for (const auto &filter : filters->list()) {
++		if (hideAll && !filter.id()) {
++			continue;
++		}
+ 		const auto nextIsLocked = (now.size() >= premiumFrom);
+ 		if (nextIsLocked && (currentFilter == filter.id())) {
+ 			_session->setActiveChatsFilter(FilterId(0));
+@@ -395,6 +401,9 @@ void FiltersMenu::refresh() {
+ 			nextIsLocked);
+ 		now.emplace(filter.id(), std::move(button));
+ 	}
++	if (hideAll && currentFilter == 0 && !now.empty()) {
++		_session->setActiveChatsFilter(now.begin()->first);
++	}
+ 	_filters = std::move(now);
+ 	// Re-establish the list's Tab-stop on the folder that was focused (if it
+ 	// survived the rebuild), else on the active one, so a refresh - rename,
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
 index db8dcec..e96f1ac 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
@@ -7248,6 +7344,36 @@ index 56d2e56..0336afb 100644
  			} else {
  				fieldForMention->insertTag(
  					peer->shortName(),
+diff --git a/Telegram/SourceFiles/window/window_session_controller.cpp b/Telegram/SourceFiles/window/window_session_controller.cpp
+index df2166f..bbddd3c 100644
+--- a/Telegram/SourceFiles/window/window_session_controller.cpp
++++ b/Telegram/SourceFiles/window/window_session_controller.cpp
+@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "window/window_session_controller.h"
+ 
++#include "exteraless/config.h"
+ #include "apiwrap.h"
+ #include "api/api_cloud_password.h"
+ #include "api/api_text_entities.h"
+@@ -4163,9 +4164,15 @@ bool CheckAndJumpToNearChatsFilter(
+ 		return false;
+ 	}
+ 	if (jump) {
+-		controller->setActiveChatsFilter((changed >= 0)
++		const auto targetId = (changed >= 0)
+ 			? (*list)[changed].id()
+-			: 0);
++			: 0;
++		if (!targetId
++			&& Exteraless::Config::Instance().hideAllChatsFolder()
++			&& list->size() > 1) {
++			return false;
++		}
++		controller->setActiveChatsFilter(targetId);
+ 	}
+ 	return true;
+ }
 diff --git a/Telegram/cmake/td_lang.cmake b/Telegram/cmake/td_lang.cmake
 index b7b3acc..3052f11 100644
 --- a/Telegram/cmake/td_lang.cmake
@@ -7318,10 +7444,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..0fa45c2
+index 0000000..05effe5
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,648 @@
+@@ -0,0 +1,659 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7371,6 +7497,7 @@ index 0000000..0fa45c2
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
++constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 +constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 +constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 +constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -7385,6 +7512,9 @@ index 0000000..0fa45c2
 +	= "disableLinkPreviewByDefault";
 +constexpr auto kDisableLinkPreviewByDefaultAliasUpper
 +	= "DisableLinkPreviewByDefault";
++constexpr auto kHideAllChatsFolderAlias = "hideAllTab";
++constexpr auto kHideAllChatsFolderAliasUpper = "HideAllTab";
++constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -7621,6 +7751,7 @@ index 0000000..0fa45c2
 +	extera[kChatMenuClearDeleted] = config.chatMenuClearDeleted();
 +	extera[kDisableLinkPreviewByDefault]
 +		= config.disableLinkPreviewByDefault();
++	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7879,6 +8010,12 @@ index 0000000..0fa45c2
 +			|| key == kDisableLinkPreviewByDefaultAliasUpper)
 +			&& value.isBool()) {
 +			config.setDisableLinkPreviewByDefault(value.toBool());
++		} else if ((key == kHideAllChatsFolder
++			|| key == kHideAllChatsFolderAlias
++			|| key == kHideAllChatsFolderAliasUpper
++			|| key == kHideAllChatsFolderAliasChats)
++			&& value.isBool()) {
++			config.setHideAllChatsFolder(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -8071,10 +8208,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..233e784
+index 0000000..c617c43
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1069 @@
+@@ -0,0 +1,1079 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -8121,6 +8258,7 @@ index 0000000..233e784
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
++constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8522,6 +8660,14 @@ index 0000000..233e784
 +
 +void Config::setDisableLinkPreviewByDefault(bool value) {
 +	setValue(kDisableLinkPreviewByDefault, value);
++}
++
++bool Config::hideAllChatsFolder() const {
++	return boolValue(kHideAllChatsFolder, false);
++}
++
++void Config::setHideAllChatsFolder(bool value) {
++	setValue(kHideAllChatsFolder, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8950,6 +9096,7 @@ index 0000000..233e784
 +			|| key == kChatMenuViewDeleted
 +			|| key == kChatMenuClearDeleted
 +			|| key == kDisableLinkPreviewByDefault
++			|| key == kHideAllChatsFolder
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -9146,10 +9293,10 @@ index 0000000..233e784
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..118cf7a
+index 0000000..1ef5935
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,225 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -9255,6 +9402,8 @@ index 0000000..118cf7a
 +	void setChatMenuClearDeleted(bool value);
 +	[[nodiscard]] bool disableLinkPreviewByDefault() const;
 +	void setDisableLinkPreviewByDefault(bool value);
++	[[nodiscard]] bool hideAllChatsFolder() const;
++	void setHideAllChatsFolder(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11851,10 +12000,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..313ffa6
+index 0000000..a8e6662
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1376 @@
+@@ -0,0 +1,1400 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11947,6 +12096,8 @@ index 0000000..313ffa6
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
 +		<< "  exteraless-chats-cli disable-link-preview\n"
 +		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
++		<< "  exteraless-chats-cli hide-all-chats\n"
++		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-menu\n"
 +		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 +		<< "<viewDeleted> <clearDeleted>\n"
@@ -12415,6 +12566,28 @@ index 0000000..313ffa6
 +		}
 +		Exteraless::Config::Instance()
 +			.setDisableLinkPreviewByDefault(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("hide-all-chats")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("hidden"),
++				Exteraless::Config::Instance().hideAllChatsFolder() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("hide-all-chats-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setHideAllChatsFolder(value);
 +		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
@@ -13295,10 +13468,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..f0e6daa
+index 0000000..4b0a768
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3578 @@
+@@ -0,0 +1,3647 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -13476,6 +13649,8 @@ index 0000000..f0e6daa
 +        ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
 +        ("disable-link-preview-set with wrong count",
 +         ["disable-link-preview-set"]),
++        ("hide-all-chats-set with wrong count",
++         ["hide-all-chats-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13788,7 +13963,7 @@ index 0000000..f0e6daa
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 68,
++            len(section) == 69,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13809,7 +13984,7 @@ index 0000000..f0e6daa
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 73,
++            sum(len(value) for value in exported.values()) == 74,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13829,7 +14004,7 @@ index 0000000..f0e6daa
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 73,
++                data.get("applied") == 74,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13931,6 +14106,7 @@ index 0000000..f0e6daa
 +            "OEChatsChatMenuViewDeleted": True,
 +            "OEChatsChatMenuClearDeleted": False,
 +            "OEChatsDisableLinkPreviewByDefault": True,
++            "OEChatsHideAllChatsFolder": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13952,7 +14128,7 @@ index 0000000..f0e6daa
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 73,
++            data.get("applied") == 74,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -14035,6 +14211,10 @@ index 0000000..f0e6daa
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full hide all chats",
++            section.get("OEChatsHideAllChatsFolder") is True,
++            section.get("OEChatsHideAllChatsFolder"))
 +        ledger.check(
 +            "backup full disable link preview",
 +            section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -14198,10 +14378,10 @@ index 0000000..f0e6daa
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 73",
++            "backup legacy eight completed to 74",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (68, 3, 2),
++             len(sections["mainconfig"])) == (69, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -15042,6 +15222,7 @@ index 0000000..f0e6daa
 +            "OEChatsChatMenuViewDeleted": True,
 +            "OEChatsChatMenuClearDeleted": False,
 +            "OEChatsDisableLinkPreviewByDefault": True,
++            "OEChatsHideAllChatsFolder": True,
 +        },
 +    }
 +    data = json_call(
@@ -16790,6 +16971,64 @@ index 0000000..f0e6daa
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_hide_all_chats(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "hide-all-chats-defaults")
++    data = json_call(
++        ledger, cli, ["hide-all-chats"], env,
++        "hide-all-chats defaults")
++    if data is not None:
++        ledger.check(
++            "hide all chats default off",
++            data.get("hidden") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["hide-all-chats-set", "1"], env,
++        "hide-all-chats set")
++    if data is not None:
++        ledger.check("hide all chats set on", data == 1, data)
++
++    reloaded = json_call(
++        ledger, cli, ["hide-all-chats"], env,
++        "hide-all-chats reload")
++    if reloaded is not None:
++        ledger.check(
++            "hide all chats persisted",
++            reloaded.get("hidden") is True,
++            reloaded)
++
++    env = make_env(work / "hide-all-chats-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "hideAllTab": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "hide-all-chats alias")
++    if data is not None:
++        ledger.check(
++            "hide all chats alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["hide-all-chats"], env,
++        "hide-all-chats alias read")
++    if reloaded is not None:
++        ledger.check(
++            "hide all chats alias value",
++            reloaded.get("hidden") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -16831,6 +17070,7 @@ index 0000000..f0e6daa
 +        media_menu = check_media_menu(ledger, cli, work)
 +        chat_menu = check_chat_menu(ledger, cli, work)
 +        disable_link_preview = check_disable_link_preview(ledger, cli, work)
++        hide_all_chats = check_hide_all_chats(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -16865,6 +17105,8 @@ index 0000000..f0e6daa
 +    print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
 +    print(f"disable-link-preview: "
 +          f"{disable_link_preview[0] - disable_link_preview[1]} passed")
++    print(f"hide-all-chats: "
++          f"{hide_all_chats[0] - hide_all_chats[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

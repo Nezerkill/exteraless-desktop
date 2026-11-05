@@ -175,6 +175,8 @@ def check_cli_args(ledger, cli):
         ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
         ("disable-link-preview-set with wrong count",
          ["disable-link-preview-set"]),
+        ("hide-all-chats-set with wrong count",
+         ["hide-all-chats-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -487,7 +489,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 68,
+            len(section) == 69,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -508,7 +510,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 73,
+            sum(len(value) for value in exported.values()) == 74,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -528,7 +530,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 73,
+                data.get("applied") == 74,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -630,6 +632,7 @@ def check_backup(ledger, cli, work):
             "OEChatsChatMenuViewDeleted": True,
             "OEChatsChatMenuClearDeleted": False,
             "OEChatsDisableLinkPreviewByDefault": True,
+            "OEChatsHideAllChatsFolder": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -651,7 +654,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 73,
+            data.get("applied") == 74,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -734,6 +737,10 @@ def check_backup(ledger, cli, work):
             "backup full seek duration",
             section.get("OEChatsSeekDuration") == 15,
             section.get("OEChatsSeekDuration"))
+        ledger.check(
+            "backup full hide all chats",
+            section.get("OEChatsHideAllChatsFolder") is True,
+            section.get("OEChatsHideAllChatsFolder"))
         ledger.check(
             "backup full disable link preview",
             section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -897,10 +904,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 73",
+            "backup legacy eight completed to 74",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (68, 3, 2),
+             len(sections["mainconfig"])) == (69, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1741,6 +1748,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsChatMenuViewDeleted": True,
             "OEChatsChatMenuClearDeleted": False,
             "OEChatsDisableLinkPreviewByDefault": True,
+            "OEChatsHideAllChatsFolder": True,
         },
     }
     data = json_call(
@@ -3489,6 +3497,64 @@ def check_disable_link_preview(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_hide_all_chats(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "hide-all-chats-defaults")
+    data = json_call(
+        ledger, cli, ["hide-all-chats"], env,
+        "hide-all-chats defaults")
+    if data is not None:
+        ledger.check(
+            "hide all chats default off",
+            data.get("hidden") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["hide-all-chats-set", "1"], env,
+        "hide-all-chats set")
+    if data is not None:
+        ledger.check("hide all chats set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["hide-all-chats"], env,
+        "hide-all-chats reload")
+    if reloaded is not None:
+        ledger.check(
+            "hide all chats persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    env = make_env(work / "hide-all-chats-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "hideAllTab": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "hide-all-chats alias")
+    if data is not None:
+        ledger.check(
+            "hide all chats alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["hide-all-chats"], env,
+        "hide-all-chats alias read")
+    if reloaded is not None:
+        ledger.check(
+            "hide all chats alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3530,6 +3596,7 @@ def main():
         media_menu = check_media_menu(ledger, cli, work)
         chat_menu = check_chat_menu(ledger, cli, work)
         disable_link_preview = check_disable_link_preview(ledger, cli, work)
+        hide_all_chats = check_hide_all_chats(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3564,6 +3631,8 @@ def main():
     print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
     print(f"disable-link-preview: "
           f"{disable_link_preview[0] - disable_link_preview[1]} passed")
+    print(f"hide-all-chats: "
+          f"{hide_all_chats[0] - hide_all_chats[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **73** | **73** | 73 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; далее NB-35/NB-24/NB-26/NB-23/NB-72/NB-68/NB-67/NB-80/NB-81/NB-74 добавили настройки Send as, inline math, save subfolder, ghost schedule, seek duration, edited mark, forward date, меню медиавьюера/чата и отключение превью ссылок |
-| Ключей `.extera` | 8 | 8 | 73 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26, NB-23, NB-72, NB-68, NB-67, NB-80, NB-81, NB-74 — все 73 desktop-ключа |
+| **Ключей форка desktop** | **74** | **74** | 74 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; далее NB-35/NB-24/NB-26/NB-23/NB-72/NB-68/NB-67/NB-80/NB-81/NB-74/NB-84 добавили настройки Send as, inline math, save subfolder, ghost schedule, seek duration, edited mark, forward date, меню медиавьюера/чата, отключение превью ссылок и скрытие папки «Все чаты» |
+| Ключей `.extera` | 8 | 8 | 74 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26, NB-23, NB-72, NB-68, NB-67, NB-80, NB-81, NB-74, NB-84 — все 74 desktop-ключа |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -604,9 +604,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (73)
+## 13. Приложение B. Ключи `.extera` (74)
 
-Секция `exteraconfig` (68): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (69): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
@@ -634,6 +634,7 @@ M-нумерацию:
 `OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
 `OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted`,
 `OEChatsDisableLinkPreviewByDefault`,
+`OEChatsHideAllChatsFolder`,
 `OESettingsHidePremium`,
 `OESettingsHideHelp`,
 `OEAppearanceHideAiEditor`.

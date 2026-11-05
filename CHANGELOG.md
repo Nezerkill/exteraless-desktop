@@ -2,6 +2,13 @@
 
 ## 2026-11-05
 
+- Chats / Folders: настройка `OEChatsHideAllChatsFolder` (default `false`)
+  скрывает папку «Все чаты» в левой панели вкладок/фильтров при наличии
+  пользовательских папок; активный выбор автоматически переключается на первую
+  доступную папку. Android-алиасы `hideAllTab`, `HideAllTab` и `hideAllChats`
+  поддержаны в `.extera` (всего 74 ключа), тумблер добавлен в Chats.
+  Стили вкладок (`tabsTitleType`) уже присутствуют в upstream tdesktop
+  (`chatFiltersTabsMode`: текст, иконки, иконки+текст).
 - Chats / Link preview: настройка `OEChatsDisableLinkPreviewByDefault` (default
   `false`) отключает автоматический поиск и добавление превью ссылок при вводе
   сообщений; ручное включение/выключение остаётся доступным по комбинации

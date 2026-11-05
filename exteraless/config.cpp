@@ -44,6 +44,7 @@ constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
+constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -445,6 +446,14 @@ bool Config::disableLinkPreviewByDefault() const {
 
 void Config::setDisableLinkPreviewByDefault(bool value) {
 	setValue(kDisableLinkPreviewByDefault, value);
+}
+
+bool Config::hideAllChatsFolder() const {
+	return boolValue(kHideAllChatsFolder, false);
+}
+
+void Config::setHideAllChatsFolder(bool value) {
+	setValue(kHideAllChatsFolder, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -873,6 +882,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatMenuViewDeleted
 			|| key == kChatMenuClearDeleted
 			|| key == kDisableLinkPreviewByDefault
+			|| key == kHideAllChatsFolder
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

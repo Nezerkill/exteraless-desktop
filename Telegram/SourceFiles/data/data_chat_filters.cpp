@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_app_config.h"
 #include "apiwrap.h"
+#include "exteraless/config.h"
 
 namespace Data {
 namespace {
@@ -902,7 +903,19 @@ const std::vector<ChatFilter> &ChatFilters::list() const {
 }
 
 FilterId ChatFilters::defaultId() const {
+	if (Exteraless::Config::Instance().hideAllChatsFolder()
+		&& _list.size() > 1) {
+		for (const auto &filter : _list) {
+			if (filter.id()) {
+				return filter.id();
+			}
+		}
+	}
 	return lookupId(0);
+}
+
+void ChatFilters::notifyListChanged() {
+	_listChanged.fire({});
 }
 
 FilterId ChatFilters::lookupId(int index) const {

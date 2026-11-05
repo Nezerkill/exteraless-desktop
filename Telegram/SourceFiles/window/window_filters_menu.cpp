@@ -44,6 +44,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/storage_media_prepare.h"
 #include "api/api_chat_filters.h"
 #include "apiwrap.h"
+#include "exteraless/config.h"
 #include "styles/style_widgets.h"
 #include "styles/style_window.h"
 #include "styles/style_menu_icons.h"
@@ -382,7 +383,12 @@ void FiltersMenu::refresh() {
 
 	auto now = base::flat_map<int, base::unique_qptr<Ui::SideBarButton>>();
 	const auto &currentFilter = _session->activeChatsFilterCurrent();
+	const auto hideAll = Exteraless::Config::Instance().hideAllChatsFolder()
+		&& (filters->list().size() > 1);
 	for (const auto &filter : filters->list()) {
+		if (hideAll && !filter.id()) {
+			continue;
+		}
 		const auto nextIsLocked = (now.size() >= premiumFrom);
 		if (nextIsLocked && (currentFilter == filter.id())) {
 			_session->setActiveChatsFilter(FilterId(0));
@@ -394,6 +400,9 @@ void FiltersMenu::refresh() {
 			Ui::ComputeFilterIcon(filter),
 			nextIsLocked);
 		now.emplace(filter.id(), std::move(button));
+	}
+	if (hideAll && currentFilter == 0 && !now.empty()) {
+		_session->setActiveChatsFilter(now.begin()->first);
 	}
 	_filters = std::move(now);
 	// Re-establish the list's Tab-stop on the folder that was focused (if it

@@ -8,6 +8,9 @@
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
 #include "core/file_utilities.h"
+#include "main/main_session.h"
+#include "data/data_session.h"
+#include "data/data_chat_filters.h"
 #include "lang/lang_keys.h"
 #include "settings/settings_builder.h"
 #include "settings/sections/settings_main.h"
@@ -591,6 +594,17 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance()
 				.setDisableLinkPreviewByDefault(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-all-chats"_q,
+		tr::lng_settings_exteraless_chats_hide_all_chats(),
+		{ u"folder"_q, u"chats"_q, u"tab"_q },
+		Exteraless::Config::Instance().hideAllChatsFolder(),
+		[=](bool value) {
+			Exteraless::Config::Instance().setHideAllChatsFolder(value);
+			if (const auto controller = builder.controller()) {
+				controller->session().data().chatsFilters().notifyListChanged();
+			}
 		});
 	addChatsToggle(
 		u"exteraless/chats/use-edited-icon"_q,

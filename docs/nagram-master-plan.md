@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **506**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **513**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный

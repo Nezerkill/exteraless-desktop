@@ -163,6 +163,7 @@ public:
 	void moveAllToFront();
 	[[nodiscard]] const std::vector<ChatFilter> &list() const;
 	[[nodiscard]] rpl::producer<> changed() const;
+	void notifyListChanged();
 	[[nodiscard]] rpl::producer<FilterId> isChatlistChanged() const;
 	[[nodiscard]] rpl::producer<TagColorChanged> tagColorChanged() const;
 	[[nodiscard]] bool loaded() const;

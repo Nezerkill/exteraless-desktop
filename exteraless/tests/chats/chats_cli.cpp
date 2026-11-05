@@ -90,6 +90,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
 		<< "  exteraless-chats-cli disable-link-preview\n"
 		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
+		<< "  exteraless-chats-cli hide-all-chats\n"
+		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -558,6 +560,28 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance()
 			.setDisableLinkPreviewByDefault(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("hide-all-chats")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance().hideAllChatsFolder() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("hide-all-chats-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setHideAllChatsFolder(value);
 		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}

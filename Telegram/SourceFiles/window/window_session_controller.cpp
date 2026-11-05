@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "window/window_session_controller.h"
 
+#include "exteraless/config.h"
 #include "apiwrap.h"
 #include "api/api_cloud_password.h"
 #include "api/api_text_entities.h"
@@ -4163,9 +4164,15 @@ bool CheckAndJumpToNearChatsFilter(
 		return false;
 	}
 	if (jump) {
-		controller->setActiveChatsFilter((changed >= 0)
+		const auto targetId = (changed >= 0)
 			? (*list)[changed].id()
-			: 0);
+			: 0;
+		if (!targetId
+			&& Exteraless::Config::Instance().hideAllChatsFolder()
+			&& list->size() > 1) {
+			return false;
+		}
+		controller->setActiveChatsFilter(targetId);
 	}
 	return true;
 }
