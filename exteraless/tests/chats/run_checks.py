@@ -152,6 +152,7 @@ def check_cli_args(ledger, cli):
         ("doubletap-resolve without value", ["doubletap-resolve"]),
         ("stickertime-set with wrong count", ["stickertime-set", "1"]),
         ("pillorder-set without order", ["pillorder-set"]),
+        ("ghost-set with wrong count", ["ghost-set"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
     ]
     before = len(ledger.failures)
@@ -457,7 +458,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 38,
+            len(section) == 39,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -478,7 +479,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 43,
+            sum(len(value) for value in exported.values()) == 44,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -498,7 +499,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 43,
+                data.get("applied") == 44,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -570,6 +571,7 @@ def check_backup(ledger, cli, work):
             "OEChatsDoubleTapOut": 4,
             "OEChatsStickerTimeSide": True,
             "OEChatsHideStickerTime": False,
+            "OEGhostShowStatus": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -591,7 +593,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 43,
+            data.get("applied") == 44,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -647,6 +649,10 @@ def check_backup(ledger, cli, work):
             and section.get("OEChatsHideStickerTime") is False,
             (section.get("OEChatsStickerTimeSide"),
              section.get("OEChatsHideStickerTime")))
+        ledger.check(
+            "backup full ghost status",
+            section.get("OEGhostShowStatus") is True,
+            section.get("OEGhostShowStatus"))
         ledger.check(
             "backup full generic keys",
             section.get("relativeLastSeen") is True
@@ -746,10 +752,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 43",
+            "backup legacy eight completed to 44",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (38, 3, 2),
+             len(sections["mainconfig"])) == (39, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1559,6 +1565,7 @@ def check_sticker_time(ledger, cli, work):
         "exteraconfig": {
             "OEChatsStickerTimeSide": True,
             "OEChatsHideStickerTime": False,
+            "OEGhostShowStatus": True,
         },
     }
     data = json_call(
@@ -1740,6 +1747,152 @@ def check_pill_order(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ghost(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "ghost-defaults")
+    data = json_call(ledger, cli, ["ghost"], env, "ghost defaults")
+    if data is not None:
+        ledger.check(
+            "ghost defaults",
+            data.get("read") is True
+            and data.get("stories") is True
+            and data.get("online") is True
+            and data.get("typing") is True
+            and data.get("active") is False
+            and data.get("partial") is False
+            and data.get("count") == 0
+            and data.get("showStatus") is False,
+            data)
+
+    env = make_env(work / "ghost-on")
+    data = json_call(ledger, cli, ["ghost-set", "1"], env, "ghost on")
+    if data is not None:
+        ledger.check(
+            "ghost batch on",
+            data.get("read") is False
+            and data.get("stories") is False
+            and data.get("online") is False
+            and data.get("typing") is False
+            and data.get("active") is True
+            and data.get("partial") is False
+            and data.get("count") == 4,
+            data)
+    reloaded = json_call(ledger, cli, ["ghost"], env, "ghost on reload")
+    if reloaded is not None:
+        ledger.check(
+            "ghost batch persisted",
+            reloaded.get("active") is True and reloaded.get("count") == 4,
+            reloaded)
+
+    data = json_call(ledger, cli, ["ghost-set", "0"], env, "ghost off")
+    if data is not None:
+        ledger.check(
+            "ghost batch off",
+            data.get("active") is False
+            and data.get("partial") is False
+            and data.get("count") == 0,
+            data)
+
+    env = make_env(work / "ghost-partial")
+    data = json_call(
+        ledger, cli, ["ghost-flags", "1", "0", "1", "0"], env,
+        "ghost partial")
+    if data is not None:
+        ledger.check(
+            "ghost partial flags",
+            data.get("read") is False
+            and data.get("stories") is True
+            and data.get("online") is False
+            and data.get("typing") is True,
+            data)
+        ledger.check(
+            "ghost partial status",
+            data.get("active") is False
+            and data.get("partial") is True
+            and data.get("count") == 2,
+            data)
+
+    env = make_env(work / "ghost-show")
+    data = json_call(
+        ledger, cli, ["ghost-show", "1"], env, "ghost show status")
+    if data is not None:
+        ledger.check(
+            "ghost show status set",
+            data.get("showStatus") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ghost"], env, "ghost show status reload")
+    if reloaded is not None:
+        ledger.check(
+            "ghost show status persisted",
+            reloaded.get("showStatus") is True,
+            reloaded)
+
+    env = make_env(work / "ghost-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGhostShowStatus": True,
+            "OEGhostSendReadPackets": False,
+            "OEGhostSendReadStories": False,
+            "OEGhostSendOnline": False,
+            "OEGhostSendUploadProgress": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "ghost fromJson")
+    if data is not None:
+        ledger.check(
+            "ghost fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ghost"], env, "ghost fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "ghost fromJson values",
+            reloaded.get("active") is True
+            and reloaded.get("showStatus") is True,
+            reloaded)
+
+    env = make_env(work / "ghost-backup")
+    data = json_call(
+        ledger, cli, ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
+        env, "ghost backup export")
+    if data is not None:
+        section = data.get("exteraconfig") or {}
+        ledger.check(
+            "ghost backup show status",
+            section.get("OEGhostShowStatus") is False,
+            section.get("OEGhostShowStatus"))
+    root = {
+        "version": 1,
+        "exteraconfig": {"showGhostModeStatus": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ghost backup alias")
+    if data is not None:
+        ledger.check(
+            "ghost backup alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ghost"], env, "ghost backup alias read")
+    if reloaded is not None:
+        ledger.check(
+            "ghost backup alias value",
+            reloaded.get("showStatus") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1761,6 +1914,7 @@ def main():
         doubletap = check_doubletap(ledger, cli, work)
         stickertime = check_sticker_time(ledger, cli, work)
         pillorder = check_pill_order(ledger, cli, work)
+        ghost = check_ghost(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -1774,6 +1928,7 @@ def main():
     print(f"doubletap: {doubletap[0] - doubletap[1]} passed")
     print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
     print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
+    print(f"ghost: {ghost[0] - ghost[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

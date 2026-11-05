@@ -80,10 +80,21 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 261 проверка PASS
-  (44 strip, 10 reactions, 9 CLI, 7 config, 22 general, 27 deleted, 7 reset,
-  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 74 backup);
-  плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 276 проверок PASS
+  (44 strip, 10 reactions, 10 CLI, 7 config, 22 general, 27 deleted, 7 reset,
+  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 13 ghost,
+  75 backup); плагины без изменений — 32 и 213 проверок.
+- Ghost Mode batch/status (NB-17): пункт главного меню включает или выключает
+  все четыре тумблера одним кликом и показывает `On` / `Off` / `Partial`
+  при включённой настройке `OEGhostShowStatus` (Android-ключ
+  `showGhostModeStatus` в `.extera`, суммарно 44 ключа). `IsGhostActive`
+  теперь строгий: активен только когда все четыре в ghost-режиме;
+  `Partial` виден в меню. Статусные функции вынесены в
+  `exteraless/ghost_status.{h,cpp}` (без зависимости от MTP), CLI `ghost`
+  (13 проверок) проверяет дефолты, пакетное включение/выключение, partial,
+  `fromJson` и backup-алиас. Xvfb smoke: «Ghost Mode (Off)» → клик →
+  «Ghost Mode (On)», в `exteraless.json` все четыре `OEGhostSend* = false`;
+  повторный клик возвращает `true`.
 - Pill Stack order (NB-16): пилюли перетаскиваются прямо на полосе над
   списком чатов; порядок хранится в `OEPillStackOrder` (CSV из
   `cpu,ram,net,dc,proxy,cache,ghost,lastseen`), санитизируется (уникальность,
@@ -91,7 +102,9 @@
   `pillstackconfig` `.extera` (суммарно 43 ключа) и применяется при старте.
   CLI `pillorder` (9 проверок) проверяет дефолт, drag-эквивалент, санитайз,
   `fromJson` и backup. Xvfb smoke: перетаскивание меняет порядок, после
-  рестарта порядок сохраняется.
+  рестарта порядок сохраняется. При доработке исправлен порядок
+  инициализации: `applySavedOrder()` вызывается в конце конструктора, а не до
+  настройки виджета, иначе приложение могло падать на старте.
 - Sticker time (NB-14): селектор `Sticker time` (`As usual`, `Beside sticker`,
   `Hidden`) хранится в `OEChatsStickerTimeSide`/`OEChatsHideStickerTime`,
   отрисовка и hit-test времени вынесены в
@@ -182,8 +195,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `36cb6a3e…`,
-  mtime 2026-11-05 05:24; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `7d29b5b9…`,
+  mtime 2026-11-05 05:58; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

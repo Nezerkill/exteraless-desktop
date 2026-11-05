@@ -128,6 +128,18 @@ constexpr auto kPlayStatusLimit = 2;
 	}) | rpl::flatten_latest();
 }
 
+[[nodiscard]] QString GhostMenuStatus() {
+	switch (Exteraless::GetGhostStatus()) {
+	case Exteraless::GhostStatus::On:
+		return tr::lng_settings_exteraless_ghost_status_on(tr::now);
+	case Exteraless::GhostStatus::Partial:
+		return tr::lng_settings_exteraless_ghost_status_partial(tr::now);
+	case Exteraless::GhostStatus::Off:
+		break;
+	}
+	return tr::lng_settings_exteraless_ghost_status_off(tr::now);
+}
+
 [[nodiscard]] QStringList ParseMainMenuOrder(QString value) {
 	static const auto kKnown = std::array{
 		u"exteraless"_q,
@@ -847,8 +859,15 @@ void MainMenu::setupMenu() {
 			});
 			addEntry(id, button);
 		} else if (id == u"ghost"_q) {
+			const auto status = exteralessMenu->lifetime().make_state<
+				rpl::variable<QString>>(GhostMenuStatus());
+			auto title = Exteraless::Config::Instance().ghostShowStatus()
+				? (status->value() | rpl::map([](const QString &status) {
+					return u"Ghost Mode ("_q + status + u")"_q;
+				}))
+				: rpl::single(u"Ghost Mode"_q);
 			const auto button = addExteralessAction(
-				rpl::single(u"Ghost Mode"_q),
+				std::move(title),
 				{ &st::menuIconStealth });
 			const auto enabled = button->lifetime().make_state<
 				rpl::variable<bool>>(Exteraless::IsGhostActive());
@@ -856,6 +875,7 @@ void MainMenu::setupMenu() {
 			enabled->changes(
 			) | rpl::on_next([=](bool value) {
 				Exteraless::SetGhostActive(value);
+				status->force_assign(GhostMenuStatus());
 			}, button->lifetime());
 			button->setClickedCallback([=] {
 				if (*reordering) {

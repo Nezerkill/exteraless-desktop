@@ -196,6 +196,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setGhostSendUploadProgress(!value);
 		});
+	addGhostToggle(
+		u"exteraless/ghost/status"_q,
+		tr::lng_settings_exteraless_ghost_show_status(),
+		{ u"ghost"_q, u"status"_q, u"menu"_q },
+		Exteraless::Config::Instance().ghostShowStatus(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGhostShowStatus(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats"_q,

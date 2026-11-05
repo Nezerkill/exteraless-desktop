@@ -29,6 +29,7 @@ constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 constexpr auto kGhostSendOnline = "OEGhostSendOnline";
 constexpr auto kGhostSendUploadProgress = "OEGhostSendUploadProgress";
 constexpr auto kGhostSendOfflineAfterOnline = "OEGhostSendOfflineAfterOnline";
+constexpr auto kGhostShowStatus = "OEGhostShowStatus";
 constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
@@ -285,6 +286,14 @@ bool Config::ghostSendOfflineAfterOnline() const {
 
 void Config::setGhostSendOfflineAfterOnline(bool value) {
 	setValue(kGhostSendOfflineAfterOnline, value);
+}
+
+bool Config::ghostShowStatus() const {
+	return boolValue(kGhostShowStatus, false);
+}
+
+void Config::setGhostShowStatus(bool value) {
+	setValue(kGhostShowStatus, value);
 }
 
 bool Config::ghostReadExcluded(qint64 peerId) const {
@@ -574,6 +583,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGhostSendOnline
 			|| key == kGhostSendUploadProgress
 			|| key == kGhostSendOfflineAfterOnline
+			|| key == kGhostShowStatus
 			|| key == kGhostReadExclusions
 			|| key == kGhostTypingExclusions
 			|| key == kSaveDeletedMessages

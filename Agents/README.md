@@ -30,7 +30,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (261 проверка: strip, reactions, CLI, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, backup);
+  (276 проверок: strip, reactions, CLI, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
@@ -70,7 +70,7 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 43 desktop-ключа в секциях `exteraconfig`,
+  декодируются. Backup пишет все 44 desktop-ключа в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние.
 - Двойной тап по сообщению: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
@@ -81,6 +81,9 @@ sibling-чекаутом: `../exteraless`.
   через `Element::drawSideInfo`/`sideInfoRect`/`sideInfoTextState`.
 - Порядок пилюль: drag на полосе `PillStack`, сохраняется в `OEPillStackOrder`
   (CSV из `cpu,ram,net,dc,proxy,cache,ghost,lastseen`).
+- Ghost: пункт главного меню включает/выключает все четыре тумблера и
+  показывает `On`/`Off`/`Partial` при `OEGhostShowStatus`; статусные функции —
+  `exteraless/ghost_status.{h,cpp}`.
 - Порядок пунктов Exteraless в главном меню — `OEMainMenuOrder` (CSV,
   по умолчанию `exteraless,ghost,pillstack,proxy,storage`); drag-and-drop
   сохраняет новый порядок в конфиг.

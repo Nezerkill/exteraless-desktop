@@ -80,6 +80,8 @@ target_sources(Telegram PRIVATE
     ../exteraless/format.h
     ../exteraless/ghost_mode.cpp
     ../exteraless/ghost_mode.h
+    ../exteraless/ghost_status.cpp
+    ../exteraless/ghost_status.h
     ../exteraless/message_menu.h
     ../exteraless/proxy_rules.cpp
     ../exteraless/proxy_rules.h

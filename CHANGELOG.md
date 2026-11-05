@@ -2,10 +2,16 @@
 
 ## 2026-11-05
 
+- Ghost Mode: пункт главного меню показывает статус `On` / `Off` / `Partial`
+  (настройка `OEGhostShowStatus`, Android-ключ `showGhostModeStatus` в
+  `.extera`, всего 44 ключа), один клик включает или выключает все четыре
+  тумблера; `IsGhostActive` теперь строгий (все четыре), как в Android.
 - Pill Stack / Order: пилюли можно перетаскивать прямо на полосе над списком
   чатов; порядок сохраняется в `OEPillStackOrder` (CSV), переживает рестарт и
   экспортируется в `.extera` (всего 43 ключа), в настройках добавлена подсказка
-  о drag-сортировке.
+  о drag-сортировке; заодно исправлен порядок инициализации `PillStack`
+  (перенос применения сохранённого порядка в конец конструктора), из-за
+  которого приложение могло упасть на старте.
 - Chats / Stickers: настройка `Sticker time` (`As usual`, `Beside sticker`,
   `Hidden`) управляет временем на стикерах через `OEChatsStickerTimeSide` и
   `OEChatsHideStickerTime`; Android-ключи `stickerTimeMode`/`hideStickerTime`

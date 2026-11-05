@@ -9201,6 +9201,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_ghost_stories" = "Don't send story views";
 "lng_settings_exteraless_ghost_online" = "Don't send online status";
 "lng_settings_exteraless_ghost_typing" = "Don't send typing status";
+"lng_settings_exteraless_ghost_show_status" = "Show Ghost Mode status in menu";
+"lng_settings_exteraless_ghost_status_on" = "On";
+"lng_settings_exteraless_ghost_status_off" = "Off";
+"lng_settings_exteraless_ghost_status_partial" = "Partial";
 "lng_settings_exteraless_chats" = "Chats";
 "lng_settings_exteraless_chats_remove_tail" = "Remove message tail";
 "lng_settings_exteraless_chats_hide_reactions_channels" = "Hide reactions in channels";

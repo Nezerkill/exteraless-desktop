@@ -1,5 +1,6 @@
 #pragma once
 
+#include "exteraless/ghost_status.h"
 #include "mtproto/mtproto_request_filter.h"
 
 #include "data/data_peer_id.h"
@@ -27,8 +28,5 @@ private:
 };
 
 void InstallGhostMode(MTP::Instance &instance);
-
-[[nodiscard]] bool IsGhostActive();
-void SetGhostActive(bool active);
 
 } // namespace Exteraless

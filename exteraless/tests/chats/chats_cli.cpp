@@ -4,6 +4,7 @@
 #include "exteraless/deleted_messages_trim.h"
 #include "exteraless/doubletap.h"
 #include "exteraless/format.h"
+#include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
 
 #include <QByteArray>
@@ -50,6 +51,11 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli stickertime-set <side> <hidden>\n"
 		<< "  exteraless-chats-cli pillorder\n"
 		<< "  exteraless-chats-cli pillorder-set <csv>\n"
+		<< "  exteraless-chats-cli ghost\n"
+		<< "  exteraless-chats-cli ghost-set <0|1>\n"
+		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
+		<< "<typing>\n"
+		<< "  exteraless-chats-cli ghost-show <0|1>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -174,6 +180,20 @@ void PrintDoubleTap() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
+	});
+}
+
+void PrintGhost() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("read"), config.ghostSendReadPackets() },
+		{ QStringLiteral("stories"), config.ghostSendReadStories() },
+		{ QStringLiteral("online"), config.ghostSendOnline() },
+		{ QStringLiteral("typing"), config.ghostSendUploadProgress() },
+		{ QStringLiteral("active"), Exteraless::IsGhostActive() },
+		{ QStringLiteral("partial"), Exteraless::IsGhostPartiallyActive() },
+		{ QStringLiteral("count"), Exteraless::GhostEnabledCount() },
+		{ QStringLiteral("showStatus"), config.ghostShowStatus() },
 	});
 }
 
@@ -437,6 +457,55 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto active = false;
+		if (!ReadFlag(arguments[2], &active)) {
+			return PrintUsage();
+		}
+		Exteraless::SetGhostActive(active);
+		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-flags")) {
+		if (arguments.size() != 6) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 4>();
+		for (auto i = 0; i != 4; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setGhostSendReadPackets(!flags[0]);
+		config.setGhostSendReadStories(!flags[1]);
+		config.setGhostSendOnline(!flags[2]);
+		config.setGhostSendUploadProgress(!flags[3]);
+		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-show")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setGhostShowStatus(value);
+		PrintGhost();
 		return 0;
 	}
 	if (mode == QStringLiteral("pillorder")) {

@@ -11,6 +11,8 @@ add_library(exteraless STATIC
     exteraless.h
     format.cpp
     format.h
+    ghost_status.cpp
+    ghost_status.h
     links.cpp
     links.h
     message_menu.h

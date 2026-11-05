@@ -183,7 +183,6 @@ PillStack::PillStack(
 		{ Kind::Ghost, u"Ghost …"_q },
 		{ Kind::LastSeen, u"Seen …"_q },
 	};
-	applySavedOrder();
 	setMouseTracking(true);
 	setCursor(Qt::PointingHandCursor);
 	setFixedHeight(st::dialogsFilter.heightMin);
@@ -206,6 +205,7 @@ PillStack::PillStack(
 
 	_timer.callEach(kTimerInterval);
 	updatePills();
+	applySavedOrder();
 }
 
 rpl::producer<> PillStack::visibilityChanges() const {
