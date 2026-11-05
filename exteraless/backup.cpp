@@ -24,6 +24,14 @@ constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
 constexpr auto kDisableNumberRounding = "disableNumberRounding";
 constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
+constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
+constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
+constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
+constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
+constexpr auto kTranslucentDeletedAlias = "TranslucentDeletedMessages";
+constexpr auto kUseDeletedIconAlias = "UseDeletedIcon";
+constexpr auto kCustomDeletedMarkAlias = "CustomDeletedMark";
+constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 constexpr auto kHidePhone = "OEGeneralHidePhone";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
@@ -226,6 +234,10 @@ QString BuildBackup() {
 	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
+	extera[kTranslucentDeleted] = config.translucentDeletedMessages();
+	extera[kUseDeletedIcon] = config.useDeletedIcon();
+	extera[kCustomDeletedMark] = config.customDeletedMark();
+	extera[kDeletedMarkColor] = config.deletedMarkColor();
 	const auto menu = config.messageMenuSettings();
 	extera[kChatsMenuReply] = menu.reply;
 	extera[kChatsMenuEdit] = menu.edit;
@@ -403,6 +415,21 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setChatsStripTrackingOnPaste(value.toBool());
 		} else if (key == kChatsUnreadCapsule && value.isBool()) {
 			config.setChatsUnreadCapsule(value.toBool());
+		} else if ((key == kTranslucentDeleted
+			|| key == kTranslucentDeletedAlias)
+			&& value.isBool()) {
+			config.setTranslucentDeletedMessages(value.toBool());
+		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
+			&& value.isBool()) {
+			config.setUseDeletedIcon(value.toBool());
+		} else if ((key == kCustomDeletedMark
+			|| key == kCustomDeletedMarkAlias)
+			&& value.isString()) {
+			config.setCustomDeletedMark(value.toString());
+		} else if ((key == kDeletedMarkColor || key == kDeletedMarkColorAlias)
+			&& value.isDouble()
+			&& value.toInt() >= 0) {
+			config.setDeletedMarkColor(value.toInt());
 		} else if (key == kChatsMenuReply && value.isBool()) {
 			config.setChatsMenuReply(value.toBool());
 		} else if (key == kChatsMenuEdit && value.isBool()) {

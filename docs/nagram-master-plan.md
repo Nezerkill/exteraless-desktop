@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **292**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **304**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -124,7 +124,11 @@ APK-обновления и plugin-only API. Полный список искл�
   (7 проверок), Xvfb подтвердил реакцию и reply в боксе; исправлен
   use-after-free в пункте меню «Deleted messages».
 
-Дальше — NB-20 (метка удалённого сообщения в чате).
+- `NB-20` — ⚠️ split-required 2026-11-05: 4 настройки метки, значок,
+  прозрачность и цвет в боксе «Deleted messages», CLI `deletedmark`
+  (10 проверок), Xvfb; inline-показ в чате выделен в NB-92.
+
+Дальше — NB-21 (импорт базы AyuGram).
 `NB-13` (wide posts), `NB-15` (sort unread), feed, AI, player, Vosk и
 regex-фильтры — отдельными архитектурными этапами после стабилизации P0/P1.
 
@@ -164,7 +168,7 @@ nix flake check --no-build
   Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
 - Deleted messages: sidecar v2 с 17 полями (реакции, reply, forward,
   entities, дата правки, флаг прочтения); гейт, лимит и ротация закрыты в
-  NB-02, схема — в NB-19, метка в чате — NB-20.
+  NB-02, схема — в NB-19, метка в боксе — NB-20, inline-показ — NB-92.
 - Плагины: bwrap + Python host, разрешения заявленные и не применяются как
   capability; stage 3 (меню/настройки/intents) — NB-79.
 - WEB proxy уже есть в коде и Nix-сборке, но не описан в feature-mapping и не
@@ -178,7 +182,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-20`).
+   (сейчас `NB-21`; NB-92 — отдельный L-этап).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

@@ -154,6 +154,7 @@ def check_cli_args(ledger, cli):
         ("pillorder-set without order", ["pillorder-set"]),
         ("ghost-set with wrong count", ["ghost-set"]),
         ("ghost-lock with wrong count", ["ghost-lock", "1"]),
+        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -460,7 +461,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 44,
+            len(section) == 48,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -481,7 +482,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 49,
+            sum(len(value) for value in exported.values()) == 53,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -501,7 +502,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 49,
+                data.get("applied") == 53,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -579,6 +580,10 @@ def check_backup(ledger, cli, work):
             "OEGhostSendOnlineLocked": False,
             "OEGhostSendUploadProgressLocked": False,
             "OEGhostSendOfflineAfterOnlineLocked": False,
+            "OEChatsTranslucentDeleted": False,
+            "OEChatsUseDeletedIcon": False,
+            "OEChatsCustomDeletedMark": "del",
+            "OEChatsDeletedMarkColor": 16711680,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -600,7 +605,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 49,
+            data.get("applied") == 53,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -660,6 +665,16 @@ def check_backup(ledger, cli, work):
             "backup full ghost status",
             section.get("OEGhostShowStatus") is True,
             section.get("OEGhostShowStatus"))
+        ledger.check(
+            "backup full deleted mark",
+            section.get("OEChatsTranslucentDeleted") is False
+            and section.get("OEChatsUseDeletedIcon") is False
+            and section.get("OEChatsCustomDeletedMark") == "del"
+            and section.get("OEChatsDeletedMarkColor") == 16711680,
+            (section.get("OEChatsTranslucentDeleted"),
+             section.get("OEChatsUseDeletedIcon"),
+             section.get("OEChatsCustomDeletedMark"),
+             section.get("OEChatsDeletedMarkColor")))
         ledger.check(
             "backup full ghost locks",
             section.get("OEGhostSendReadLocked") is True
@@ -765,10 +780,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 49",
+            "backup legacy eight completed to 53",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (44, 3, 2),
+             len(sections["mainconfig"])) == (48, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1584,6 +1599,10 @@ def check_sticker_time(ledger, cli, work):
             "OEGhostSendOnlineLocked": False,
             "OEGhostSendUploadProgressLocked": False,
             "OEGhostSendOfflineAfterOnlineLocked": False,
+            "OEChatsTranslucentDeleted": False,
+            "OEChatsUseDeletedIcon": False,
+            "OEChatsCustomDeletedMark": "del",
+            "OEChatsDeletedMarkColor": 16711680,
         },
     }
     data = json_call(
@@ -2083,6 +2102,133 @@ def check_deleted_entry(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_deleted_mark(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "deletedmark-defaults")
+    data = json_call(
+        ledger, cli, ["deletedmark"], env, "deletedmark defaults")
+    if data is not None:
+        ledger.check(
+            "deletedmark defaults",
+            data.get("translucent") is True
+            and data.get("icon") is True
+            and data.get("mark") == ""
+            and data.get("color") == 0,
+            data)
+
+    env = make_env(work / "deletedmark-set")
+    data = json_call(
+        ledger, cli, ["deletedmark-set", "0", "0", "del", "16711680"],
+        env, "deletedmark set")
+    if data is not None:
+        ledger.check(
+            "deletedmark set values",
+            data.get("translucent") is False
+            and data.get("icon") is False
+            and data.get("mark") == "del"
+            and data.get("color") == 16711680,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["deletedmark"], env, "deletedmark reload")
+    if reloaded is not None:
+        ledger.check(
+            "deletedmark persisted",
+            reloaded.get("mark") == "del"
+            and reloaded.get("color") == 16711680,
+            reloaded)
+
+    long_mark = "x" * 40
+    data = json_call(
+        ledger, cli,
+        ["deletedmark-set", "1", "1", long_mark, "-5"],
+        env, "deletedmark limits")
+    if data is not None:
+        ledger.check(
+            "deletedmark mark truncated",
+            data.get("mark") == "x" * 32,
+            data.get("mark"))
+        ledger.check(
+            "deletedmark color sanitized",
+            data.get("color") == 0,
+            data.get("color"))
+
+    env = make_env(work / "deletedmark-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsTranslucentDeleted": False,
+            "OEChatsUseDeletedIcon": False,
+            "OEChatsCustomDeletedMark": "gone",
+            "OEChatsDeletedMarkColor": 255,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["config-fromjson", json.dumps(root)], env,
+        "deletedmark fromJson")
+    if data is not None:
+        ledger.check(
+            "deletedmark fromJson accepted",
+            data.get("accepted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["deletedmark"], env, "deletedmark fromJson read")
+    if reloaded is not None:
+        ledger.check(
+            "deletedmark fromJson values",
+            reloaded.get("translucent") is False
+            and reloaded.get("icon") is False
+            and reloaded.get("mark") == "gone"
+            and reloaded.get("color") == 255,
+            reloaded)
+
+    env = make_env(work / "deletedmark-backup")
+    data = json_call(
+        ledger, cli, ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
+        env, "deletedmark backup")
+    if data is not None:
+        section = data.get("exteraconfig") or {}
+        ledger.check(
+            "deletedmark backup keys",
+            section.get("OEChatsTranslucentDeleted") is True
+            and section.get("OEChatsUseDeletedIcon") is True
+            and section.get("OEChatsCustomDeletedMark") == ""
+            and section.get("OEChatsDeletedMarkColor") == 0,
+            section)
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "TranslucentDeletedMessages": False,
+            "UseDeletedIcon": False,
+            "CustomDeletedMark": "legacy",
+            "DeletedMarkColor": 305419896,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "deletedmark aliases")
+    if data is not None:
+        ledger.check(
+            "deletedmark aliases applied",
+            data.get("applied") == 4 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["deletedmark"], env, "deletedmark aliases read")
+    if reloaded is not None:
+        ledger.check(
+            "deletedmark aliases values",
+            reloaded.get("translucent") is False
+            and reloaded.get("icon") is False
+            and reloaded.get("mark") == "legacy"
+            and reloaded.get("color") == 305419896,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2106,6 +2252,7 @@ def main():
         stickertime = check_sticker_time(ledger, cli, work)
         pillorder = check_pill_order(ledger, cli, work)
         ghost = check_ghost(ledger, cli, work)
+        deleted_mark = check_deleted_mark(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2121,6 +2268,7 @@ def main():
     print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
     print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
     print(f"ghost: {ghost[0] - ghost[1]} passed")
+    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

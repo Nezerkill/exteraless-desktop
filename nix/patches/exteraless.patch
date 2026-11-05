@@ -83,10 +83,10 @@ index 811707d..736e5c1 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..c6f50fc 100644
+index ffc8ec9..b3c49b4 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,89 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,91 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -128,6 +128,8 @@ index ffc8ec9..c6f50fc 100644
 +"lng_settings_exteraless_chats_strip_paste" = "Strip tracking parameters from pasted text";
 +"lng_settings_exteraless_chats_unread_capsule" = "Compact unread messages label";
 +"lng_settings_exteraless_chats_save_deleted" = "Save deleted messages";
++"lng_settings_exteraless_chats_translucent_deleted" = "Translucent deleted messages";
++"lng_settings_exteraless_chats_use_deleted_icon" = "Use icon for deleted messages";
 +"lng_settings_exteraless_double_tap_title" = "Double tap action";
 +"lng_settings_exteraless_double_tap_in" = "On incoming messages";
 +"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
@@ -306,12 +308,13 @@ index 31c60aa..7f7abc1 100644
  
 diff --git a/Telegram/SourceFiles/boxes/deleted_messages_box.cpp b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
 new file mode 100644
-index 0000000..922738b
+index 0000000..951edc5
 --- /dev/null
 +++ b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,112 @@
 +#include "boxes/deleted_messages_box.h"
 +
++#include "exteraless/config.h"
 +#include "exteraless/deleted_messages.h"
 +#include "data/data_peer.h"
 +#include "lang/lang_keys.h"
@@ -322,6 +325,7 @@ index 0000000..922738b
 +#include "styles/style_boxes.h"
 +#include "styles/style_layers.h"
 +
++#include <QColor>
 +#include <QDateTime>
 +#include <QLocale>
 +
@@ -337,6 +341,13 @@ index 0000000..922738b
 +		return;
 +	}
 +	const auto entries = DeletedMessages::Instance().list(peer->id);
++	const auto &config = Config::Instance();
++	const auto customMark = config.customDeletedMark();
++	const auto mark = config.useDeletedIcon()
++		? (customMark.isEmpty() ? u"🗑"_q : customMark)
++		: customMark;
++	const auto markColor = config.deletedMarkColor();
++	const auto translucent = config.translucentDeletedMessages();
 +
 +	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 +		box->setTitle(u"Deleted messages"_q);
@@ -358,6 +369,9 @@ index 0000000..922738b
 +				auto text = entry.fromName.isEmpty()
 +					? entry.text
 +					: (entry.fromName + u": "_q + entry.text);
++				if (!mark.isEmpty()) {
++					text = mark + u" "_q + text;
++				}
 +				if (!entry.media.isEmpty()) {
 +					text += u" [media]"_q;
 +				}
@@ -389,12 +403,19 @@ index 0000000..922738b
 +				if (!entry.read) {
 +					text += u"  [unread]"_q;
 +				}
-+				layout->add(
++				const auto label = layout->add(
 +					object_ptr<Ui::FlatLabel>(
 +						box,
 +						rpl::single(date + u"  "_q + text),
 +						st::boxLabel),
 +					st::boxRowPadding);
++				if (markColor) {
++					label->setTextColorOverride(
++						QColor::fromRgba(quint32(markColor)));
++				}
++				if (translucent) {
++					label->setOpacity(0.6);
++				}
 +			}
 +		}
 +
@@ -4439,10 +4460,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..6a60a50
+index 0000000..f9672ba
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,941 @@
+@@ -0,0 +1,958 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4804,6 +4825,23 @@ index 0000000..6a60a50
 +		Exteraless::Config::Instance().saveDeletedMessages(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setSaveDeletedMessages(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/translucent-deleted"_q,
++		tr::lng_settings_exteraless_chats_translucent_deleted(),
++		{ u"deleted"_q, u"translucent"_q },
++		Exteraless::Config::Instance().translucentDeletedMessages(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setTranslucentDeletedMessages(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/use-deleted-icon"_q,
++		tr::lng_settings_exteraless_chats_use_deleted_icon(),
++		{ u"deleted"_q, u"icon"_q },
++		Exteraless::Config::Instance().useDeletedIcon(),
++		[](bool value) {
++			Exteraless::Config::Instance().setUseDeletedIcon(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -6082,10 +6120,10 @@ index 0000000..958c5f9
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..5d3cf46
+index 0000000..ac624e5
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,506 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6112,6 +6150,14 @@ index 0000000..5d3cf46
 +constexpr auto kDisableNumberRounding = "disableNumberRounding";
 +constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
++constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
++constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
++constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
++constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
++constexpr auto kTranslucentDeletedAlias = "TranslucentDeletedMessages";
++constexpr auto kUseDeletedIconAlias = "UseDeletedIcon";
++constexpr auto kCustomDeletedMarkAlias = "CustomDeletedMark";
++constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 +constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
@@ -6314,6 +6360,10 @@ index 0000000..5d3cf46
 +	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 +	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
++	extera[kTranslucentDeleted] = config.translucentDeletedMessages();
++	extera[kUseDeletedIcon] = config.useDeletedIcon();
++	extera[kCustomDeletedMark] = config.customDeletedMark();
++	extera[kDeletedMarkColor] = config.deletedMarkColor();
 +	const auto menu = config.messageMenuSettings();
 +	extera[kChatsMenuReply] = menu.reply;
 +	extera[kChatsMenuEdit] = menu.edit;
@@ -6491,6 +6541,21 @@ index 0000000..5d3cf46
 +			config.setChatsStripTrackingOnPaste(value.toBool());
 +		} else if (key == kChatsUnreadCapsule && value.isBool()) {
 +			config.setChatsUnreadCapsule(value.toBool());
++		} else if ((key == kTranslucentDeleted
++			|| key == kTranslucentDeletedAlias)
++			&& value.isBool()) {
++			config.setTranslucentDeletedMessages(value.toBool());
++		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
++			&& value.isBool()) {
++			config.setUseDeletedIcon(value.toBool());
++		} else if ((key == kCustomDeletedMark
++			|| key == kCustomDeletedMarkAlias)
++			&& value.isString()) {
++			config.setCustomDeletedMark(value.toString());
++		} else if ((key == kDeletedMarkColor || key == kDeletedMarkColorAlias)
++			&& value.isDouble()
++			&& value.toInt() >= 0) {
++			config.setDeletedMarkColor(value.toInt());
 +		} else if (key == kChatsMenuReply && value.isBool()) {
 +			config.setChatsMenuReply(value.toBool());
 +		} else if (key == kChatsMenuEdit && value.isBool()) {
@@ -6666,10 +6731,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..e4c71fb
+index 0000000..aaed958
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,817 @@
+@@ -0,0 +1,862 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6693,6 +6758,11 @@ index 0000000..e4c71fb
 +constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 +constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
++constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
++constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
++constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
++constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
++constexpr auto kMaxDeletedMarkLength = 32;
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
@@ -6901,6 +6971,42 @@ index 0000000..e4c71fb
 +
 +void Config::setShowSeconds(bool value) {
 +	setValue(kShowSeconds, value);
++}
++
++bool Config::translucentDeletedMessages() const {
++	return boolValue(kTranslucentDeleted, true);
++}
++
++void Config::setTranslucentDeletedMessages(bool value) {
++	setValue(kTranslucentDeleted, value);
++}
++
++bool Config::useDeletedIcon() const {
++	return boolValue(kUseDeletedIcon, true);
++}
++
++void Config::setUseDeletedIcon(bool value) {
++	setValue(kUseDeletedIcon, value);
++}
++
++QString Config::customDeletedMark() const {
++	return stringValue(kCustomDeletedMark, QString()).left(
++		kMaxDeletedMarkLength);
++}
++
++void Config::setCustomDeletedMark(const QString &value) {
++	setValue(
++		kCustomDeletedMark,
++		value.left(kMaxDeletedMarkLength));
++}
++
++int Config::deletedMarkColor() const {
++	const auto value = intValue(kDeletedMarkColor, 0);
++	return (value >= 0) ? value : 0;
++}
++
++void Config::setDeletedMarkColor(int value) {
++	setValue(kDeletedMarkColor, (value >= 0) ? value : 0);
 +}
 +
 +bool Config::hidePhone() const {
@@ -7294,6 +7400,10 @@ index 0000000..e4c71fb
 +			|| key == kAddCommaAfterMention
 +			|| key == kDisableNumberRounding
 +			|| key == kShowSeconds
++			|| key == kTranslucentDeleted
++			|| key == kUseDeletedIcon
++			|| key == kCustomDeletedMark
++			|| key == kDeletedMarkColor
 +			|| key == kHidePhone
 +			|| key == kProxyDisableConditions
 +			|| key == kProxyAutoDisabled
@@ -7489,10 +7599,10 @@ index 0000000..e4c71fb
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..b70d7c3
+index 0000000..677730b
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,184 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7553,6 +7663,14 @@ index 0000000..b70d7c3
 +
 +	[[nodiscard]] bool showSeconds() const;
 +	void setShowSeconds(bool value);
++	[[nodiscard]] bool translucentDeletedMessages() const;
++	void setTranslucentDeletedMessages(bool value);
++	[[nodiscard]] bool useDeletedIcon() const;
++	void setUseDeletedIcon(bool value);
++	[[nodiscard]] QString customDeletedMark() const;
++	void setCustomDeletedMark(const QString &value);
++	[[nodiscard]] int deletedMarkColor() const;
++	void setDeletedMarkColor(int value);
 +
 +	[[nodiscard]] bool hidePhone() const;
 +	void setHidePhone(bool value);
@@ -9399,10 +9517,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..eb698d0
+index 0000000..8f17766
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,760 @@
+@@ -0,0 +1,804 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9464,6 +9582,9 @@ index 0000000..eb698d0
 +		<< "  exteraless-chats-cli ghost-show <0|1>\n"
 +		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 +		<< "<typing> <offline>\n"
++		<< "  exteraless-chats-cli deletedmark\n"
++		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
++		<< "<mark> <color>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -9589,6 +9710,17 @@ index 0000000..eb698d0
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 +		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
++	});
++}
++
++void PrintDeletedMark() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("translucent"),
++			config.translucentDeletedMessages() },
++		{ QStringLiteral("icon"), config.useDeletedIcon() },
++		{ QStringLiteral("mark"), config.customDeletedMark() },
++		{ QStringLiteral("color"), config.deletedMarkColor() },
 +	});
 +}
 +
@@ -9874,6 +10006,36 @@ index 0000000..eb698d0
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("deletedmark")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintDeletedMark();
++		return 0;
++	}
++	if (mode == QStringLiteral("deletedmark-set")) {
++		if (arguments.size() != 6) {
++			return PrintUsage();
++		}
++		auto translucent = false;
++		auto icon = false;
++		if (!ReadFlag(arguments[2], &translucent)
++			|| !ReadFlag(arguments[3], &icon)) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto color = arguments[5].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setTranslucentDeletedMessages(translucent);
++		config.setUseDeletedIcon(icon);
++		config.setCustomDeletedMark(arguments[4]);
++		config.setDeletedMarkColor(color);
++		PrintDeletedMark();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("ghost")) {
@@ -10227,10 +10389,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..cddc6db
+index 0000000..fbb6336
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2135 @@
+@@ -0,0 +1,2283 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10387,6 +10549,7 @@ index 0000000..cddc6db
 +        ("pillorder-set without order", ["pillorder-set"]),
 +        ("ghost-set with wrong count", ["ghost-set"]),
 +        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
++        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -10693,7 +10856,7 @@ index 0000000..cddc6db
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 44,
++            len(section) == 48,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -10714,7 +10877,7 @@ index 0000000..cddc6db
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 49,
++            sum(len(value) for value in exported.values()) == 53,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -10734,7 +10897,7 @@ index 0000000..cddc6db
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 49,
++                data.get("applied") == 53,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -10812,6 +10975,10 @@ index 0000000..cddc6db
 +            "OEGhostSendOnlineLocked": False,
 +            "OEGhostSendUploadProgressLocked": False,
 +            "OEGhostSendOfflineAfterOnlineLocked": False,
++            "OEChatsTranslucentDeleted": False,
++            "OEChatsUseDeletedIcon": False,
++            "OEChatsCustomDeletedMark": "del",
++            "OEChatsDeletedMarkColor": 16711680,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -10833,7 +11000,7 @@ index 0000000..cddc6db
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 49,
++            data.get("applied") == 53,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -10893,6 +11060,16 @@ index 0000000..cddc6db
 +            "backup full ghost status",
 +            section.get("OEGhostShowStatus") is True,
 +            section.get("OEGhostShowStatus"))
++        ledger.check(
++            "backup full deleted mark",
++            section.get("OEChatsTranslucentDeleted") is False
++            and section.get("OEChatsUseDeletedIcon") is False
++            and section.get("OEChatsCustomDeletedMark") == "del"
++            and section.get("OEChatsDeletedMarkColor") == 16711680,
++            (section.get("OEChatsTranslucentDeleted"),
++             section.get("OEChatsUseDeletedIcon"),
++             section.get("OEChatsCustomDeletedMark"),
++             section.get("OEChatsDeletedMarkColor")))
 +        ledger.check(
 +            "backup full ghost locks",
 +            section.get("OEGhostSendReadLocked") is True
@@ -10998,10 +11175,10 @@ index 0000000..cddc6db
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 49",
++            "backup legacy eight completed to 53",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (44, 3, 2),
++             len(sections["mainconfig"])) == (48, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -11817,6 +11994,10 @@ index 0000000..cddc6db
 +            "OEGhostSendOnlineLocked": False,
 +            "OEGhostSendUploadProgressLocked": False,
 +            "OEGhostSendOfflineAfterOnlineLocked": False,
++            "OEChatsTranslucentDeleted": False,
++            "OEChatsUseDeletedIcon": False,
++            "OEChatsCustomDeletedMark": "del",
++            "OEChatsDeletedMarkColor": 16711680,
 +        },
 +    }
 +    data = json_call(
@@ -12316,6 +12497,133 @@ index 0000000..cddc6db
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_deleted_mark(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "deletedmark-defaults")
++    data = json_call(
++        ledger, cli, ["deletedmark"], env, "deletedmark defaults")
++    if data is not None:
++        ledger.check(
++            "deletedmark defaults",
++            data.get("translucent") is True
++            and data.get("icon") is True
++            and data.get("mark") == ""
++            and data.get("color") == 0,
++            data)
++
++    env = make_env(work / "deletedmark-set")
++    data = json_call(
++        ledger, cli, ["deletedmark-set", "0", "0", "del", "16711680"],
++        env, "deletedmark set")
++    if data is not None:
++        ledger.check(
++            "deletedmark set values",
++            data.get("translucent") is False
++            and data.get("icon") is False
++            and data.get("mark") == "del"
++            and data.get("color") == 16711680,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["deletedmark"], env, "deletedmark reload")
++    if reloaded is not None:
++        ledger.check(
++            "deletedmark persisted",
++            reloaded.get("mark") == "del"
++            and reloaded.get("color") == 16711680,
++            reloaded)
++
++    long_mark = "x" * 40
++    data = json_call(
++        ledger, cli,
++        ["deletedmark-set", "1", "1", long_mark, "-5"],
++        env, "deletedmark limits")
++    if data is not None:
++        ledger.check(
++            "deletedmark mark truncated",
++            data.get("mark") == "x" * 32,
++            data.get("mark"))
++        ledger.check(
++            "deletedmark color sanitized",
++            data.get("color") == 0,
++            data.get("color"))
++
++    env = make_env(work / "deletedmark-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsTranslucentDeleted": False,
++            "OEChatsUseDeletedIcon": False,
++            "OEChatsCustomDeletedMark": "gone",
++            "OEChatsDeletedMarkColor": 255,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["config-fromjson", json.dumps(root)], env,
++        "deletedmark fromJson")
++    if data is not None:
++        ledger.check(
++            "deletedmark fromJson accepted",
++            data.get("accepted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["deletedmark"], env, "deletedmark fromJson read")
++    if reloaded is not None:
++        ledger.check(
++            "deletedmark fromJson values",
++            reloaded.get("translucent") is False
++            and reloaded.get("icon") is False
++            and reloaded.get("mark") == "gone"
++            and reloaded.get("color") == 255,
++            reloaded)
++
++    env = make_env(work / "deletedmark-backup")
++    data = json_call(
++        ledger, cli, ["backup-export", "1", "0", "0", "0", "1", "0", "0"],
++        env, "deletedmark backup")
++    if data is not None:
++        section = data.get("exteraconfig") or {}
++        ledger.check(
++            "deletedmark backup keys",
++            section.get("OEChatsTranslucentDeleted") is True
++            and section.get("OEChatsUseDeletedIcon") is True
++            and section.get("OEChatsCustomDeletedMark") == ""
++            and section.get("OEChatsDeletedMarkColor") == 0,
++            section)
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "TranslucentDeletedMessages": False,
++            "UseDeletedIcon": False,
++            "CustomDeletedMark": "legacy",
++            "DeletedMarkColor": 305419896,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "deletedmark aliases")
++    if data is not None:
++        ledger.check(
++            "deletedmark aliases applied",
++            data.get("applied") == 4 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["deletedmark"], env, "deletedmark aliases read")
++    if reloaded is not None:
++        ledger.check(
++            "deletedmark aliases values",
++            reloaded.get("translucent") is False
++            and reloaded.get("icon") is False
++            and reloaded.get("mark") == "legacy"
++            and reloaded.get("color") == 305419896,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -12339,6 +12647,7 @@ index 0000000..cddc6db
 +        stickertime = check_sticker_time(ledger, cli, work)
 +        pillorder = check_pill_order(ledger, cli, work)
 +        ghost = check_ghost(ledger, cli, work)
++        deleted_mark = check_deleted_mark(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -12354,6 +12663,7 @@ index 0000000..cddc6db
 +    print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
 +    print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
 +    print(f"ghost: {ghost[0] - ghost[1]} passed")
++    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

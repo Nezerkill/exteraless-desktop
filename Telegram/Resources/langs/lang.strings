@@ -9220,6 +9220,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_strip_paste" = "Strip tracking parameters from pasted text";
 "lng_settings_exteraless_chats_unread_capsule" = "Compact unread messages label";
 "lng_settings_exteraless_chats_save_deleted" = "Save deleted messages";
+"lng_settings_exteraless_chats_translucent_deleted" = "Translucent deleted messages";
+"lng_settings_exteraless_chats_use_deleted_icon" = "Use icon for deleted messages";
 "lng_settings_exteraless_double_tap_title" = "Double tap action";
 "lng_settings_exteraless_double_tap_in" = "On incoming messages";
 "lng_settings_exteraless_double_tap_out" = "On outgoing messages";

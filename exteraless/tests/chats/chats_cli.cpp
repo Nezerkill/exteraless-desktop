@@ -59,6 +59,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ghost-show <0|1>\n"
 		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 		<< "<typing> <offline>\n"
+		<< "  exteraless-chats-cli deletedmark\n"
+		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
+		<< "<mark> <color>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -184,6 +187,17 @@ void PrintDoubleTap() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("in"), config.chatsDoubleTapIn() },
 		{ QStringLiteral("out"), config.chatsDoubleTapOut() },
+	});
+}
+
+void PrintDeletedMark() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("translucent"),
+			config.translucentDeletedMessages() },
+		{ QStringLiteral("icon"), config.useDeletedIcon() },
+		{ QStringLiteral("mark"), config.customDeletedMark() },
+		{ QStringLiteral("color"), config.deletedMarkColor() },
 	});
 }
 
@@ -469,6 +483,36 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("deletedmark")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintDeletedMark();
+		return 0;
+	}
+	if (mode == QStringLiteral("deletedmark-set")) {
+		if (arguments.size() != 6) {
+			return PrintUsage();
+		}
+		auto translucent = false;
+		auto icon = false;
+		if (!ReadFlag(arguments[2], &translucent)
+			|| !ReadFlag(arguments[3], &icon)) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto color = arguments[5].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setTranslucentDeletedMessages(translucent);
+		config.setUseDeletedIcon(icon);
+		config.setCustomDeletedMark(arguments[4]);
+		config.setDeletedMarkColor(color);
+		PrintDeletedMark();
 		return 0;
 	}
 	if (mode == QStringLiteral("ghost")) {

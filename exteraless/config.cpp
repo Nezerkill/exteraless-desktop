@@ -21,6 +21,11 @@ constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
+constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
+constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
+constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
+constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
+constexpr auto kMaxDeletedMarkLength = 32;
 constexpr auto kHidePhone = "OEGeneralHidePhone";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
@@ -229,6 +234,42 @@ bool Config::showSeconds() const {
 
 void Config::setShowSeconds(bool value) {
 	setValue(kShowSeconds, value);
+}
+
+bool Config::translucentDeletedMessages() const {
+	return boolValue(kTranslucentDeleted, true);
+}
+
+void Config::setTranslucentDeletedMessages(bool value) {
+	setValue(kTranslucentDeleted, value);
+}
+
+bool Config::useDeletedIcon() const {
+	return boolValue(kUseDeletedIcon, true);
+}
+
+void Config::setUseDeletedIcon(bool value) {
+	setValue(kUseDeletedIcon, value);
+}
+
+QString Config::customDeletedMark() const {
+	return stringValue(kCustomDeletedMark, QString()).left(
+		kMaxDeletedMarkLength);
+}
+
+void Config::setCustomDeletedMark(const QString &value) {
+	setValue(
+		kCustomDeletedMark,
+		value.left(kMaxDeletedMarkLength));
+}
+
+int Config::deletedMarkColor() const {
+	const auto value = intValue(kDeletedMarkColor, 0);
+	return (value >= 0) ? value : 0;
+}
+
+void Config::setDeletedMarkColor(int value) {
+	setValue(kDeletedMarkColor, (value >= 0) ? value : 0);
 }
 
 bool Config::hidePhone() const {
@@ -622,6 +663,10 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kAddCommaAfterMention
 			|| key == kDisableNumberRounding
 			|| key == kShowSeconds
+			|| key == kTranslucentDeleted
+			|| key == kUseDeletedIcon
+			|| key == kCustomDeletedMark
+			|| key == kDeletedMarkColor
 			|| key == kHidePhone
 			|| key == kProxyDisableConditions
 			|| key == kProxyAutoDisabled

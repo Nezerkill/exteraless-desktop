@@ -1,5 +1,6 @@
 #include "boxes/deleted_messages_box.h"
 
+#include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
 #include "data/data_peer.h"
 #include "lang/lang_keys.h"
@@ -10,6 +11,7 @@
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
 
+#include <QColor>
 #include <QDateTime>
 #include <QLocale>
 
@@ -25,6 +27,13 @@ void ShowDeletedMessagesBox(
 		return;
 	}
 	const auto entries = DeletedMessages::Instance().list(peer->id);
+	const auto &config = Config::Instance();
+	const auto customMark = config.customDeletedMark();
+	const auto mark = config.useDeletedIcon()
+		? (customMark.isEmpty() ? u"🗑"_q : customMark)
+		: customMark;
+	const auto markColor = config.deletedMarkColor();
+	const auto translucent = config.translucentDeletedMessages();
 
 	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 		box->setTitle(u"Deleted messages"_q);
@@ -46,6 +55,9 @@ void ShowDeletedMessagesBox(
 				auto text = entry.fromName.isEmpty()
 					? entry.text
 					: (entry.fromName + u": "_q + entry.text);
+				if (!mark.isEmpty()) {
+					text = mark + u" "_q + text;
+				}
 				if (!entry.media.isEmpty()) {
 					text += u" [media]"_q;
 				}
@@ -77,12 +89,19 @@ void ShowDeletedMessagesBox(
 				if (!entry.read) {
 					text += u"  [unread]"_q;
 				}
-				layout->add(
+				const auto label = layout->add(
 					object_ptr<Ui::FlatLabel>(
 						box,
 						rpl::single(date + u"  "_q + text),
 						st::boxLabel),
 					st::boxRowPadding);
+				if (markColor) {
+					label->setTextColorOverride(
+						QColor::fromRgba(quint32(markColor)));
+				}
+				if (translucent) {
+					label->setOpacity(0.6);
+				}
 			}
 		}
 

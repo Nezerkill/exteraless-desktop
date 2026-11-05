@@ -58,6 +58,14 @@ public:
 
 	[[nodiscard]] bool showSeconds() const;
 	void setShowSeconds(bool value);
+	[[nodiscard]] bool translucentDeletedMessages() const;
+	void setTranslucentDeletedMessages(bool value);
+	[[nodiscard]] bool useDeletedIcon() const;
+	void setUseDeletedIcon(bool value);
+	[[nodiscard]] QString customDeletedMark() const;
+	void setCustomDeletedMark(const QString &value);
+	[[nodiscard]] int deletedMarkColor() const;
+	void setDeletedMarkColor(int value);
 
 	[[nodiscard]] bool hidePhone() const;
 	void setHidePhone(bool value);

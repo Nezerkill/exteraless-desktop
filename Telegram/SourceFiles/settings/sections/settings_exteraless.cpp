@@ -360,6 +360,23 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setSaveDeletedMessages(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/translucent-deleted"_q,
+		tr::lng_settings_exteraless_chats_translucent_deleted(),
+		{ u"deleted"_q, u"translucent"_q },
+		Exteraless::Config::Instance().translucentDeletedMessages(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setTranslucentDeletedMessages(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/use-deleted-icon"_q,
+		tr::lng_settings_exteraless_chats_use_deleted_icon(),
+		{ u"deleted"_q, u"icon"_q },
+		Exteraless::Config::Instance().useDeletedIcon(),
+		[](bool value) {
+			Exteraless::Config::Instance().setUseDeletedIcon(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,

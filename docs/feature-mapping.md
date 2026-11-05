@@ -93,11 +93,11 @@ Desktop behavior of the Chats keys:
   `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
   `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
   names are never decoded.
-- `.extera` backup carries all 49 desktop keys in three sections
-  (`exteraconfig` 44, `pillstackconfig` 3, `mainconfig` 2); the old
+- `.extera` backup carries all 53 desktop keys in three sections
+  (`exteraconfig` 48, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 292 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 304 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -126,7 +126,7 @@ inactive and the setting UI says so.
 ### Backup
 
 `.extera` is a JSON document wrapped in invisible Unicode characters. It
-contains all 49 desktop keys in three sections: `exteraconfig` (44 keys),
+contains all 53 desktop keys in three sections: `exteraconfig` (48 keys),
 `pillstackconfig` (3 keys) and `mainconfig` (2 keys). Import validates every
 known key, applies only the right type and range, and reports the rest as
 unknown; entries in `pillstackconfig`/`mainconfig` and unknown top-level
@@ -174,9 +174,12 @@ id and quoted text, forward source and date, text entities, edited date and a
 read flag, next to the basic author/date/text/media fields. Old v1 files load
 with defaults. On item destruction the message is saved before the local
 history is cleared. UI: a per-peer list from the chat context menu showing
-reactions and reply/forward markers; a deleted-message mark in the chat is not
-implemented yet (NB-20). Import of the old Android database is not part of
-MVP2.
+reactions and reply/forward markers. The rows can be marked with the deleted
+icon (`OEChatsUseDeletedIcon`, default `true`) or a custom mark
+(`OEChatsCustomDeletedMark`), made translucent (`OEChatsTranslucentDeleted`,
+default `true`) and colored (`OEChatsDeletedMarkColor`). A true inline
+insertion of deleted messages into the chat history is not implemented yet
+(NB-92). Import of the old Android database is not part of MVP2.
 
 ### Pill Stack
 

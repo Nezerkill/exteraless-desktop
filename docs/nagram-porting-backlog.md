@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(292 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup),
+(304 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -109,7 +109,7 @@ timeout, state). Все три прогоняются на текущем дер
 | ID | Задача | Android key(s) | Desktop point | Размер · риск | Smoke | Статус | Источник |
 |---|---|---|---|---|---|---|---|
 | NB-19 | Расширить схему удалённых: реакции, ответ, форвард, entities, правки, read date | Room-схема AyuGram | `exteraless/deleted_entry.{h,cpp}`, `exteraless/deleted_messages.{h,cpp}`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | L · высокий (миграция JSON, размер файла) | сохранить сообщение с реакцией и ответом, перезапуск, всё читается | ✅ 2026-11-05: схема v2 (17 полей), старые записи совместимы, CLI `deleted-entry` (7 проверок), Xvfb: реакция и reply видны в боксе; исправлен захват controller/peer в меню | R1 P1-1 |
-| NB-20 | Метка удалённого сообщения в чате и иконка | `translucentDeletedMessages`, `useDeletedIcon`, `customDeletedMark`, `deletedMarkColor` | `history/view/history_view_message.cpp`, `history_view_element.cpp` | M · средний | Xvfb: удалённое помечено, при off метки нет | ⬜ | R1 P1-2, R2 M3 |
+| NB-20 | Метка удалённого сообщения в чате и иконка | `translucentDeletedMessages`, `useDeletedIcon`, `customDeletedMark`, `deletedMarkColor` | `exteraless/config.{h,cpp}`, `exteraless/backup.cpp`, `boxes/deleted_messages_box.cpp`, `settings/sections/settings_exteraless.cpp` | M · средний | Xvfb: удалённое помечено, при off метки нет | ⚠️ split-required 2026-11-05: 4 настройки, значок/кастомная метка, прозрачность и цвет работают в боксе «Deleted messages» (CLI `deletedmark`, 10 проверок, Xvfb). Inline-вставка в историю чата требует подсистемы локальных HistoryItem — выделено в NB-92 | R1 P1-2, R2 M3 |
 | NB-21 | Импорт базы AyuGram | `OEAyuDatabaseImport` | новый импортёр + `exteraless/deleted_messages.cpp` | M · средний (чужой формат БД) | импорт тестовой БД, счётчик совпал | ⬜ | R1 P1-3 |
 | NB-22 | Regex-фильтры сообщений | `regexFiltersEnabled`, `regexFiltersData`, `enableInChats`, `excludedDialogs` | `dialogs/dialogs_inner_widget.cpp`, `data/data_histories.cpp` | L · высокий (производительность, потеря сообщений из вида) | CLI regex-движка + Xvfb: `(?i)spam` скрывает строку, выключение возвращает; нужен флаг «показать скрытые» | ⬜ | R1 P1-4 |
 | NB-23 | Ghost-отправка «как отложенное» | `NaConfig.ghostScheduledSend` | `apiwrap.cpp` (send), `exteraless/ghost_mode.cpp` | M · высокий (задержка 12 с) | при включённом online-ghost сообщение уходит через 12 с | ⬜ | R1 P1-5 |
@@ -185,6 +185,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-88 | Медиа-качество и форматы: HLS по умолчанию, декодер, GIF как видео, битрейт аудио, MP4 как видео | `defaultHlsVideoQuality`, `playerDecoder`, `takeGIFasVideo`, `customAudioBitrate`, `sendMp4DocumentAsVideo` | `media/streaming/*`, `media/view/*`, `chat_helpers/compose/*` | M–L · средний (сеть и кодеки) | Xvfb + ручной: видео играет в выбранном качестве, GIF уходит видео | ⬜ | R1 §3.18, R2 §3.2 |
 | NB-89 | Тулбар форматирования, markdown-парсер, спойлеры сразу, подсветка синтаксиса | `showText*` (10+), `textStyleOrder`, `markdownParser`, `showSpoilersDirectly`, `syntaxhighlight/*` | `chat_helpers/message_field.cpp`, `ui/text/*` | M · средний | Xvfb: состав и порядок кнопок сохраняются, спойлер раскрыт | ⬜ | R1 §3.19 |
 | NB-90 | WEB proxy: relay-сервер, включение в UI и документации | desktop-only; `tproxy-server` из `docs/web-proxy-plan.md` | `mtproto/web_proxy/*`, `mtproto/details/mtproto_web_proxy_socket.{h,cpp}`, `boxes/connection_box.cpp`, `docs/feature-mapping.md` | L · высокий (инфраструктура, сеть, приватность) | поднять тестовый relay, проверить соединение и fallback; обновить docs | ⬜ | R2 §6.21 |
+| NB-92 | Inline-показ удалённых сообщений в чате | `translucentDeletedMessages` (продолжение NB-20) | `history/history.cpp` (`addNewLocalMessage`), `history/view/history_view_message.cpp`, `history_view_element.cpp`, `exteraless/deleted_messages.cpp` | L · высокий (вставка локальных сообщений, порядок, дубликаты) | Xvfb: удалённое сообщение видно в чате полупрозрачным с меткой; выключение убирает вставки | ⬜ | NB-20 (split) |
 | NB-91 | Расширенные действия двойного тапа: translate, save, edit, delete, forward, download, repeat | `doubleTapAction` (Android 3,5,6,7,8,10,11,12) | `exteraless/doubletap.{h,cpp}`, `history/history_inner_widget.cpp`, `history/view/history_view_list_widget.cpp` | M · средний (разные API в двух виджетах) | CLI `doubletap-resolve` для всех значений; Xvfb: каждое действие срабатывает | ⬜ | NB-12 (follow-up) |
 
 ## 6. Android-only, plugin/Xposed и «не переносить»
@@ -267,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 292 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 304 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

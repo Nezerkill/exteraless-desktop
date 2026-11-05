@@ -2,6 +2,13 @@
 
 ## 2026-11-05
 
+- Deleted messages / Mark: настройки `OEChatsTranslucentDeleted` (default
+  `true`), `OEChatsUseDeletedIcon` (default `true`), `OEChatsCustomDeletedMark`
+  (default пусто) и `OEChatsDeletedMarkColor` (default `0`); бокс удалённых
+  сообщений показывает значок/кастомную метку, прозрачность 0.6 и цвет.
+  Android-алиасы `TranslucentDeletedMessages`/`UseDeletedIcon`/
+  `CustomDeletedMark`/`DeletedMarkColor` поддержаны в `.extera` (всего 53
+  ключа). Inline-вставка удалённых сообщений в историю чата вынесена в NB-92.
 - Deleted messages / Schema: сайдкар переведён на версию 2 с 17 полями —
   реакции, ответ (`replyToMsgId`/`replyToText`), форвард (`forwardedFrom`/
   `forwardedDate`), entities, дата правки, флаг прочтения; старые записи
