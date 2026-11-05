@@ -97,7 +97,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 48, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 315 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 322 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -119,6 +119,10 @@ Android conditions from `ProxyDisableCondition`:
 | Wi-Fi | 4 | `QNetworkInformation::TransportMedium::WiFi` |
 
 The proxy list, editing and MTProto/SOCKS5 transport already exist in tdesktop.
+The auto-disable state is in-memory only and fires once per condition
+transition; enabling the proxy manually while the condition is active wins,
+and a restart without the condition does not re-enable the proxy.
+`OEProxyAutoDisabled` is a legacy exported field and is not written anymore.
 The port adds display names, ping display and the auto-disable mask
 (`OEProxyDisableConditions`). If detection is unavailable, the condition is
 inactive and the setting UI says so.

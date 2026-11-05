@@ -1,5 +1,7 @@
 #pragma once
 
+#include "exteraless/proxy_rules_state.h"
+
 namespace Exteraless {
 
 enum class ProxyCondition : int {

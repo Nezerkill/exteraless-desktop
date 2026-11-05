@@ -8,6 +8,7 @@
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
 #include "exteraless/network.h"
+#include "exteraless/proxy_rules.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -64,6 +65,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 		<< "<mark> <color>\n"
 		<< "  exteraless-chats-cli vpn-name <interface>\n"
+		<< "  exteraless-chats-cli proxy-rule <conditionActive> <autoDisabled> "
+		<< "<shouldDisable> <proxyEnabled>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -485,6 +488,29 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("proxy-rule")) {
+		if (arguments.size() != 6) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 4>();
+		for (auto i = 0; i != 4; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		const auto action = Exteraless::DecideProxyRule(
+			{ .conditionActive = flags[0], .autoDisabled = flags[1] },
+			flags[2],
+			flags[3]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("conditionActive"),
+				action.state.conditionActive },
+			{ QStringLiteral("autoDisabled"), action.state.autoDisabled },
+			{ QStringLiteral("disable"), action.disableProxy },
+			{ QStringLiteral("enable"), action.enableProxy },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("vpn-name")) {

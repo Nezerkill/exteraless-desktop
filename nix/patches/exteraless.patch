@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..736e5c1 100644
+index 811707d..9d9ccf9 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,33 @@ endif()
+@@ -70,6 +70,35 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -33,6 +33,8 @@ index 811707d..736e5c1 100644
 +    ../exteraless/message_menu.h
 +    ../exteraless/proxy_rules.cpp
 +    ../exteraless/proxy_rules.h
++    ../exteraless/proxy_rules_state.cpp
++    ../exteraless/proxy_rules_state.h
 +    SourceFiles/boxes/deleted_messages_box.cpp
 +    SourceFiles/boxes/deleted_messages_box.h
 +    SourceFiles/exteraless/pill_stack.cpp
@@ -46,7 +48,7 @@ index 811707d..736e5c1 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +136,7 @@ PRIVATE
+@@ -109,6 +138,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -54,7 +56,7 @@ index 811707d..736e5c1 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1708,7 @@ PRIVATE
+@@ -1680,6 +1710,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -62,7 +64,7 @@ index 811707d..736e5c1 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1926,8 @@ PRIVATE
+@@ -1897,6 +1928,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -71,7 +73,7 @@ index 811707d..736e5c1 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2561,10 @@ else()
+@@ -2530,6 +2563,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -6074,10 +6076,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..958c5f9
+index 0000000..e304b3c
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,42 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6101,6 +6103,8 @@ index 0000000..958c5f9
 +    network.cpp
 +    network.h
 +    plugins/scanner.cpp
++    proxy_rules_state.cpp
++    proxy_rules_state.h
 +    plugins/scanner.h
 +)
 +
@@ -9389,16 +9393,17 @@ index 0000000..bafbeca
 +} // namespace Exteraless::Plugins
 diff --git a/exteraless/proxy_rules.cpp b/exteraless/proxy_rules.cpp
 new file mode 100644
-index 0000000..c45177b
+index 0000000..b9a6d9c
 --- /dev/null
 +++ b/exteraless/proxy_rules.cpp
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,68 @@
 +#include "exteraless/proxy_rules.h"
 +
 +#include "core/application.h"
 +#include "core/core_settings.h"
 +#include "exteraless/config.h"
 +#include "exteraless/network.h"
++#include "exteraless/proxy_rules_state.h"
 +#include "mtproto/mtproto_proxy_data.h"
 +
 +#include <QTimer>
@@ -9406,6 +9411,8 @@ index 0000000..c45177b
 +
 +namespace Exteraless {
 +namespace {
++
++ProxyRuleState RuleState;
 +
 +[[nodiscard]] ProxyCondition ConditionFor(Transport transport) {
 +	switch (transport) {
@@ -9419,29 +9426,27 @@ index 0000000..c45177b
 +} // namespace
 +
 +void ApplyProxyRules() {
-+	auto &config = Config::Instance();
++	const auto &config = Config::Instance();
 +	const auto condition = ConditionFor(CurrentTransport());
 +	const auto shouldDisable = (condition != ProxyCondition::None)
 +		&& HasProxyCondition(config.proxyDisableConditions(), condition);
 +	auto &proxy = Core::App().settings().proxy();
 +
-+	if (shouldDisable) {
-+		if (!proxy.isEnabled()) {
-+			return;
-+		}
-+		config.setProxyAutoDisabled(true);
++	const auto action = DecideProxyRule(
++		RuleState,
++		shouldDisable,
++		proxy.isEnabled());
++	RuleState = action.state;
++	if (action.disableProxy) {
 +		Core::App().setCurrentProxy(
 +			proxy.selected(),
 +			MTP::ProxyData::Settings::Disabled);
 +		Core::App().saveSettingsDelayed();
-+	} else if (config.proxyAutoDisabled()) {
-+		config.setProxyAutoDisabled(false);
-+		if (proxy.settings() == MTP::ProxyData::Settings::Disabled) {
-+			Core::App().setCurrentProxy(
-+				proxy.selected(),
-+				MTP::ProxyData::Settings::Enabled);
-+			Core::App().saveSettingsDelayed();
-+		}
++	} else if (action.enableProxy) {
++		Core::App().setCurrentProxy(
++			proxy.selected(),
++			MTP::ProxyData::Settings::Enabled);
++		Core::App().saveSettingsDelayed();
 +	}
 +}
 +
@@ -9462,11 +9467,13 @@ index 0000000..c45177b
 +} // namespace Exteraless
 diff --git a/exteraless/proxy_rules.h b/exteraless/proxy_rules.h
 new file mode 100644
-index 0000000..204b97a
+index 0000000..71fad3f
 --- /dev/null
 +++ b/exteraless/proxy_rules.h
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,40 @@
 +#pragma once
++
++#include "exteraless/proxy_rules_state.h"
 +
 +namespace Exteraless {
 +
@@ -9504,6 +9511,70 @@ index 0000000..204b97a
 +void ApplyProxyRules();
 +
 +} // namespace Exteraless
+diff --git a/exteraless/proxy_rules_state.cpp b/exteraless/proxy_rules_state.cpp
+new file mode 100644
+index 0000000..cd43ace
+--- /dev/null
++++ b/exteraless/proxy_rules_state.cpp
+@@ -0,0 +1,31 @@
++#include "exteraless/proxy_rules_state.h"
++
++namespace Exteraless {
++
++ProxyRuleAction DecideProxyRule(
++		ProxyRuleState state,
++		bool shouldDisable,
++		bool proxyEnabled) {
++	auto result = ProxyRuleAction{ .state = state };
++	if (result.state.conditionActive
++		&& result.state.autoDisabled
++		&& proxyEnabled) {
++		result.state.autoDisabled = false;
++	}
++	if (shouldDisable && !result.state.conditionActive) {
++		result.state.conditionActive = true;
++		if (proxyEnabled) {
++			result.state.autoDisabled = true;
++			result.disableProxy = true;
++		}
++	} else if (!shouldDisable && result.state.conditionActive) {
++		result.state.conditionActive = false;
++		if (result.state.autoDisabled) {
++			result.state.autoDisabled = false;
++			result.enableProxy = !proxyEnabled;
++		}
++	}
++	return result;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/proxy_rules_state.h b/exteraless/proxy_rules_state.h
+new file mode 100644
+index 0000000..3bf5b81
+--- /dev/null
++++ b/exteraless/proxy_rules_state.h
+@@ -0,0 +1,21 @@
++#pragma once
++
++namespace Exteraless {
++
++struct ProxyRuleState {
++	bool conditionActive = false;
++	bool autoDisabled = false;
++};
++
++struct ProxyRuleAction {
++	ProxyRuleState state;
++	bool disableProxy = false;
++	bool enableProxy = false;
++};
++
++[[nodiscard]] ProxyRuleAction DecideProxyRule(
++	ProxyRuleState state,
++	bool shouldDisable,
++	bool proxyEnabled);
++
++} // namespace Exteraless
 diff --git a/exteraless/tests/chats/CMakeLists.txt b/exteraless/tests/chats/CMakeLists.txt
 new file mode 100644
 index 0000000..05215b8
@@ -9518,10 +9589,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..db62f85
+index 0000000..dd6432f
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,815 @@
+@@ -0,0 +1,841 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9532,6 +9603,7 @@ index 0000000..db62f85
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
 +#include "exteraless/network.h"
++#include "exteraless/proxy_rules.h"
 +
 +#include <QByteArray>
 +#include <QCoreApplication>
@@ -9588,6 +9660,8 @@ index 0000000..db62f85
 +		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 +		<< "<mark> <color>\n"
 +		<< "  exteraless-chats-cli vpn-name <interface>\n"
++		<< "  exteraless-chats-cli proxy-rule <conditionActive> <autoDisabled> "
++		<< "<shouldDisable> <proxyEnabled>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10011,6 +10085,29 @@ index 0000000..db62f85
 +		PrintStickerTime();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("proxy-rule")) {
++		if (arguments.size() != 6) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 4>();
++		for (auto i = 0; i != 4; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		const auto action = Exteraless::DecideProxyRule(
++			{ .conditionActive = flags[0], .autoDisabled = flags[1] },
++			flags[2],
++			flags[3]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("conditionActive"),
++				action.state.conditionActive },
++			{ QStringLiteral("autoDisabled"), action.state.autoDisabled },
++			{ QStringLiteral("disable"), action.disableProxy },
++			{ QStringLiteral("enable"), action.enableProxy },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("vpn-name")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -10401,10 +10498,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..4ce7efd
+index 0000000..5585e55
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2316 @@
+@@ -0,0 +1,2358 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10563,6 +10660,7 @@ index 0000000..4ce7efd
 +        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
 +        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
 +        ("vpn-name without name", ["vpn-name"]),
++        ("proxy-rule with wrong count", ["proxy-rule", "0"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -12667,6 +12765,45 @@ index 0000000..4ce7efd
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_proxy_rules(ledger, cli):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    cases = [
++        ("disable on transition", ["0", "0", "1", "1"],
++         {"conditionActive": True, "autoDisabled": True,
++          "disable": True, "enable": False}),
++        ("manual enable wins", ["1", "1", "1", "1"],
++         {"conditionActive": True, "autoDisabled": False,
++          "disable": False, "enable": False}),
++        ("restore when condition clears", ["1", "1", "0", "0"],
++         {"conditionActive": False, "autoDisabled": False,
++          "disable": False, "enable": True}),
++        ("no auto enable on fresh start", ["0", "0", "0", "0"],
++         {"conditionActive": False, "autoDisabled": False,
++          "disable": False, "enable": False}),
++        ("active condition no repeat", ["1", "0", "1", "1"],
++         {"conditionActive": True, "autoDisabled": False,
++          "disable": False, "enable": False}),
++        ("disabled proxy no auto flag", ["0", "0", "1", "0"],
++         {"conditionActive": True, "autoDisabled": False,
++          "disable": False, "enable": False}),
++    ]
++    for name, arguments, expected in cases:
++        data = json_call(
++            ledger, cli, ["proxy-rule", *arguments], None,
++            f"proxy rule {name}")
++        if data is not None:
++            ledger.check(
++                f"proxy rule {name}",
++                all(data.get(key) == value for key, value in expected.items()),
++                data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -12692,6 +12829,7 @@ index 0000000..4ce7efd
 +        ghost = check_ghost(ledger, cli, work)
 +        deleted_mark = check_deleted_mark(ledger, cli, work)
 +        vpn = check_vpn(ledger, cli)
++        proxy_rules = check_proxy_rules(ledger, cli)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -12709,6 +12847,7 @@ index 0000000..4ce7efd
 +    print(f"ghost: {ghost[0] - ghost[1]} passed")
 +    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
 +    print(f"vpn: {vpn[0] - vpn[1]} passed")
++    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

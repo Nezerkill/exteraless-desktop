@@ -156,6 +156,7 @@ def check_cli_args(ledger, cli):
         ("ghost-lock with wrong count", ["ghost-lock", "1"]),
         ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
         ("vpn-name without name", ["vpn-name"]),
+        ("proxy-rule with wrong count", ["proxy-rule", "0"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -2260,6 +2261,45 @@ def check_vpn(ledger, cli):
         len(ledger.failures) - before_failures)
 
 
+def check_proxy_rules(ledger, cli):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    cases = [
+        ("disable on transition", ["0", "0", "1", "1"],
+         {"conditionActive": True, "autoDisabled": True,
+          "disable": True, "enable": False}),
+        ("manual enable wins", ["1", "1", "1", "1"],
+         {"conditionActive": True, "autoDisabled": False,
+          "disable": False, "enable": False}),
+        ("restore when condition clears", ["1", "1", "0", "0"],
+         {"conditionActive": False, "autoDisabled": False,
+          "disable": False, "enable": True}),
+        ("no auto enable on fresh start", ["0", "0", "0", "0"],
+         {"conditionActive": False, "autoDisabled": False,
+          "disable": False, "enable": False}),
+        ("active condition no repeat", ["1", "0", "1", "1"],
+         {"conditionActive": True, "autoDisabled": False,
+          "disable": False, "enable": False}),
+        ("disabled proxy no auto flag", ["0", "0", "1", "0"],
+         {"conditionActive": True, "autoDisabled": False,
+          "disable": False, "enable": False}),
+    ]
+    for name, arguments, expected in cases:
+        data = json_call(
+            ledger, cli, ["proxy-rule", *arguments], None,
+            f"proxy rule {name}")
+        if data is not None:
+            ledger.check(
+                f"proxy rule {name}",
+                all(data.get(key) == value for key, value in expected.items()),
+                data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2285,6 +2325,7 @@ def main():
         ghost = check_ghost(ledger, cli, work)
         deleted_mark = check_deleted_mark(ledger, cli, work)
         vpn = check_vpn(ledger, cli)
+        proxy_rules = check_proxy_rules(ledger, cli)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2302,6 +2343,7 @@ def main():
     print(f"ghost: {ghost[0] - ghost[1]} passed")
     print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
     print(f"vpn: {vpn[0] - vpn[1]} passed")
+    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

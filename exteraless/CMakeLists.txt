@@ -21,6 +21,8 @@ add_library(exteraless STATIC
     network.cpp
     network.h
     plugins/scanner.cpp
+    proxy_rules_state.cpp
+    proxy_rules_state.h
     plugins/scanner.h
 )
 

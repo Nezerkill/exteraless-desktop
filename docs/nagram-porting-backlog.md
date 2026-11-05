@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(315 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, backup),
+(322 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -135,7 +135,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-43 | Ghost-allowance: привязать разрешение к peer | `AyuState.setAllowReadPacket` (семантика) | `exteraless/ghost_mode.cpp` (`Allowance`, TTL 5 с) | M · средний (риск утечки read-квитанции чужому чату) | CLI: разрешение для чата A не расходуется чатом B | ⬜ | R2 M11 |
 | NB-44 | Мёртвый `Config::load()`: убрать или задокументировать | — | `exteraless/config.cpp` | S · низкий | сборка без предупреждений, поведение ленивой загрузки не меняется | ✅ 2026-11-05: неиспользуемый `Config::load()` удалён, ленивая `ensureLoaded()` не изменена; CLI-тесты PASS | R2 M12 |
 | NB-45 | `hasVpnInterface()` не должен считать `ppp*` VPN | `OEProxyDisableConditions` (бит 1) | `exteraless/network.cpp` | S · средний (proxy выключается на PPPoE) | CLI/ручной тест: `ppp0` не даёт VPN-условия | ⬜ | R2 M13 |
-| NB-46 | `ApplyProxyRules()` не должен отменять ручное включение прокси и не должен персистить автовыключение | `OEProxyAutoDisabled` | `exteraless/proxy_rules.cpp`, `core/application.cpp` | S · средний | включить прокси при активном условии → остаётся включённым; перезапуск без условия не включает прокси сам | ⬜ | R2 M14 |
+| NB-46 | `ApplyProxyRules()` не должен отменять ручное включение прокси и не должен персистить автовыключение | `OEProxyAutoDisabled` | `exteraless/proxy_rules_state.{h,cpp}`, `exteraless/proxy_rules.cpp`, `core/application.cpp` | S · средний | включить прокси при активном условии → остаётся включённым; перезапуск без условия не включает прокси сам | ✅ 2026-11-05: состояние только в памяти, автовыключение один раз на переход условия, ручное включение побеждает; `OEProxyAutoDisabled` больше не пишется; CLI `proxy-rule` (6 проверок) | R2 M14 |
 
 ## 5. P2 — паритет функций
 
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 315 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 322 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

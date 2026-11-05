@@ -10,7 +10,8 @@ sibling-чекаутом: `../exteraless`.
 - `exteraless/` — наши модули без зависимости от UI, где возможно:
   - `config.*` — JSON-настройки `tdata/exteraless.json`, включая
     `OEPluginStates` (включённость плагинов, default `false`);
-  - `proxy_rules.*` — авто-отключение прокси по типу сети;
+  - `proxy_rules.*` и `proxy_rules_state.*` — авто-отключение прокси по типу сети
+    (состояние в памяти, один раз на переход);
   - `ghost_mode.*` — фильтр исходящих MTProto-запросов;
   - `deleted_entry.*` и `deleted_messages.*` — JSON-sidecar удалённых
     сообщений (схема v2: реакции, reply, forward, entities, правка, read);
@@ -31,7 +32,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (315 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, backup);
+  (322 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых

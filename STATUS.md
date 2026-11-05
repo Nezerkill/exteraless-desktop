@@ -84,13 +84,18 @@
   не изменилось.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
-- Chats: `exteraless/tests/chats/run_checks.py` — 315 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 322 проверки PASS
   (44 strip, 10 reactions, 14 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
-  9 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 77 backup); плагины без
-  изменений — 32 и 213 проверок.
+  9 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 77 backup);
+  плагины без изменений — 32 и 213 проверок.
 - Network: `ppp*` больше не считается VPN (`IsVpnInterfaceName`), PPPoE не
   выключает прокси; CLI `vpn-name` (10 проверок).
+- Proxy rules: автовыключение прокси хранится только в памяти, срабатывает
+  один раз на переход условия и не отменяет ручное включение; после
+  перезапуска без условия прокси не включается сам. `OEProxyAutoDisabled`
+  остаётся legacy и не пишется. Решение — `DecideProxyRule` в
+  `exteraless/proxy_rules_state.{h,cpp}`, CLI `proxy-rule` (6 проверок).
 - Deleted message mark (NB-20, split-required): добавлены
   `OEChatsTranslucentDeleted` (default `true`), `OEChatsUseDeletedIcon`
   (`true`), `OEChatsCustomDeletedMark` (пусто) и `OEChatsDeletedMarkColor`
@@ -230,8 +235,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `23c88bb4…`,
-  mtime 2026-11-05 07:36; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `a639d913…`,
+  mtime 2026-11-05 07:43; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

@@ -4,6 +4,7 @@
 #include "core/core_settings.h"
 #include "exteraless/config.h"
 #include "exteraless/network.h"
+#include "exteraless/proxy_rules_state.h"
 #include "mtproto/mtproto_proxy_data.h"
 
 #include <QTimer>
@@ -11,6 +12,8 @@
 
 namespace Exteraless {
 namespace {
+
+ProxyRuleState RuleState;
 
 [[nodiscard]] ProxyCondition ConditionFor(Transport transport) {
 	switch (transport) {
@@ -24,29 +27,27 @@ namespace {
 } // namespace
 
 void ApplyProxyRules() {
-	auto &config = Config::Instance();
+	const auto &config = Config::Instance();
 	const auto condition = ConditionFor(CurrentTransport());
 	const auto shouldDisable = (condition != ProxyCondition::None)
 		&& HasProxyCondition(config.proxyDisableConditions(), condition);
 	auto &proxy = Core::App().settings().proxy();
 
-	if (shouldDisable) {
-		if (!proxy.isEnabled()) {
-			return;
-		}
-		config.setProxyAutoDisabled(true);
+	const auto action = DecideProxyRule(
+		RuleState,
+		shouldDisable,
+		proxy.isEnabled());
+	RuleState = action.state;
+	if (action.disableProxy) {
 		Core::App().setCurrentProxy(
 			proxy.selected(),
 			MTP::ProxyData::Settings::Disabled);
 		Core::App().saveSettingsDelayed();
-	} else if (config.proxyAutoDisabled()) {
-		config.setProxyAutoDisabled(false);
-		if (proxy.settings() == MTP::ProxyData::Settings::Disabled) {
-			Core::App().setCurrentProxy(
-				proxy.selected(),
-				MTP::ProxyData::Settings::Enabled);
-			Core::App().saveSettingsDelayed();
-		}
+	} else if (action.enableProxy) {
+		Core::App().setCurrentProxy(
+			proxy.selected(),
+			MTP::ProxyData::Settings::Enabled);
+		Core::App().saveSettingsDelayed();
 	}
 }
 
