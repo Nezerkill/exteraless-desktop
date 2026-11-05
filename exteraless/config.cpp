@@ -169,11 +169,6 @@ Config &Config::Instance() {
 	return instance;
 }
 
-void Config::load() {
-	ensureLoaded();
-	refreshChats();
-}
-
 void Config::reset() {
 	ensureLoaded();
 	if (_values.isEmpty()) {

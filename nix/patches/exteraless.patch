@@ -6731,10 +6731,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..aaed958
+index 0000000..dadb6b9
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,862 @@
+@@ -0,0 +1,857 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6904,11 +6904,6 @@ index 0000000..aaed958
 +Config &Config::Instance() {
 +	static auto instance = Config();
 +	return instance;
-+}
-+
-+void Config::load() {
-+	ensureLoaded();
-+	refreshChats();
 +}
 +
 +void Config::reset() {
@@ -7599,10 +7594,10 @@ index 0000000..aaed958
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..677730b
+index 0000000..c9d755a
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,184 @@
+@@ -0,0 +1,183 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7647,7 +7642,6 @@ index 0000000..677730b
 +public:
 +	static Config &Instance();
 +
-+	void load();
 +	void save();
 +	void reset();
 +	void setWorkingDir(const QString &workingDir);

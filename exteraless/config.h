@@ -42,7 +42,6 @@ class Config final {
 public:
 	static Config &Instance();
 
-	void load();
 	void save();
 	void reset();
 	void setWorkingDir(const QString &workingDir);

@@ -2,6 +2,8 @@
 
 ## 2026-11-05
 
+- Config: удалён неиспользуемый `Config::load()`; загрузка остаётся ленивой
+  через `ensureLoaded()`.
 - Сборка: `nix/smoke-test.sh` запускает `out/bin/Telegram` и собирает
   `LD_LIBRARY_PATH` из `NIX_LDFLAGS`, smoke-тест проходит (30 с).
 - Deleted messages / Mark: настройки `OEChatsTranslucentDeleted` (default

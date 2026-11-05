@@ -80,6 +80,8 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
+- Config: неиспользуемый `Config::load()` удалён, поведение ленивой загрузки
+  не изменилось.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
 - Chats: `exteraless/tests/chats/run_checks.py` — 304 проверки PASS
@@ -226,8 +228,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `c285936a…`,
-  mtime 2026-11-05 07:23; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `97e4d910…`,
+  mtime 2026-11-05 07:33; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
