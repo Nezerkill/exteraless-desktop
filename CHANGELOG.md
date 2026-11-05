@@ -2,6 +2,8 @@
 
 ## 2026-11-05
 
+- Сборка: удалён устаревший untracked-symlink `result/` на старую Nix-сборку;
+  актуальный клиент создаётся `nix build` по требованию.
 - Docs: `feature-mapping.md` сверен с кодом — Deleted messages описывает
   схему v2 и метку в боксе, удалено несуществующее `pinnedReactions`-
   утверждение; hook-раздел соответствует `plugin_runtime.cpp`.

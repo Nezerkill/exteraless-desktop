@@ -87,6 +87,8 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
+- Nix (NB-40): устаревший `result/` (symlink на сборку от 1 ноября) удалён;
+  `nix build` создаёт новый результат.
 - Docs (NB-39): `docs/feature-mapping.md` сверен с кодом, убрано
   несуществующее утверждение о `pinnedReactions`; Deleted messages описывает
   схему v2 и метку в боксе (inline — NB-92).
