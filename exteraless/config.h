@@ -105,6 +105,8 @@ public:
 	void setDisableLinkPreviewByDefault(bool value);
 	[[nodiscard]] bool hideAllChatsFolder() const;
 	void setHideAllChatsFolder(bool value);
+	[[nodiscard]] bool alwaysShowDownloadIcon() const;
+	void setAlwaysShowDownloadIcon(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

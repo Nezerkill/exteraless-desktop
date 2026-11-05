@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..d9d1de1 100644
+index ffc8ec9..a8d81f6 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,119 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,120 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -145,6 +145,7 @@ index ffc8ec9..d9d1de1 100644
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
 +"lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
 +"lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
++"lng_settings_exteraless_chats_always_show_download" = "Always show download icon";
 +"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 +"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 +"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
@@ -1051,6 +1052,28 @@ index ee8bff7..8274456 100644
  	object_ptr<HistoryView::TopBarWidget> _subsectionTopBar = { nullptr };
  	struct {
  		object_ptr<Ui::IconButton> toggle;
+diff --git a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp b/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
+index 2bdf47a..e66bf76 100644
+--- a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
++++ b/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
+@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_peer_values.h"
+ #include "data/data_session.h"
+ #include "data/data_user.h"
++#include "exteraless/config.h"
+ #include "dialogs/ui/chat_search_empty.h"
+ #include "dialogs/ui/chat_search_in.h"
+ #include "dialogs/ui/posts_search_intro.h"
+@@ -2320,7 +2321,8 @@ std::vector<Suggestions::Key> Suggestions::TabKeysFor(
+ 		{ Tab::Media, MediaType::MusicFile },
+ 		{ Tab::Media, MediaType::RoundVoiceFile },
+ 	};
+-	if (Core::App().downloadManager().empty()) {
++	if (Core::App().downloadManager().empty()
++		&& !Exteraless::Config::Instance().alwaysShowDownloadIcon()) {
+ 		result.erase(ranges::find(result, Key{ Tab::Downloads }));
+ 	}
+ 	return result;
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
 new file mode 100644
 index 0000000..db3fa5e
@@ -4703,6 +4726,118 @@ index b907117..96203d6 100644
  	MessageSelection selectionFromStates(
  		const TextState &anchor,
  		const TextState &current,
+diff --git a/Telegram/SourceFiles/history/view/media/history_view_document.cpp b/Telegram/SourceFiles/history/view/media/history_view_document.cpp
+index 8007427..2ab8852 100644
+--- a/Telegram/SourceFiles/history/view/media/history_view_document.cpp
++++ b/Telegram/SourceFiles/history/view/media/history_view_document.cpp
+@@ -41,6 +41,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_file_click_handler.h"
+ #include "api/api_transcribes.h"
+ #include "apiwrap.h"
++#include "exteraless/config.h"
+ #include "styles/style_chat.h"
+ #include "styles/style_chat_style.h"
+ #include "styles/style_dialogs.h"
+@@ -1223,9 +1224,12 @@ void Document::drawCornerDownload(
+ 		Painter &p,
+ 		const PaintContext &context,
+ 		LayoutMode mode) const {
+-	if (dataLoaded()
+-		|| _data->loadedInMediaCache()
+-		|| !downloadInCorner()) {
++	if (!downloadInCorner()) {
++		return;
++	}
++	const auto always = Exteraless::Config::Instance()
++		.alwaysShowDownloadIcon();
++	if (!always && (dataLoaded() || _data->loadedInMediaCache())) {
+ 		return;
+ 	}
+ 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;
+@@ -1288,9 +1292,12 @@ TextState Document::cornerDownloadTextState(
+ 		StateRequest request,
+ 		LayoutMode mode) const {
+ 	auto result = TextState(_parent);
+-	if (dataLoaded()
+-		|| _data->loadedInMediaCache()
+-		|| !downloadInCorner()) {
++	if (!downloadInCorner()) {
++		return result;
++	}
++	const auto always = Exteraless::Config::Instance()
++		.alwaysShowDownloadIcon();
++	if (!always && (dataLoaded() || _data->loadedInMediaCache())) {
+ 		return result;
+ 	}
+ 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;
+diff --git a/Telegram/SourceFiles/history/view/media/history_view_gif.cpp b/Telegram/SourceFiles/history/view/media/history_view_gif.cpp
+index 0e25d53..6e0f28a 100644
+--- a/Telegram/SourceFiles/history/view/media/history_view_gif.cpp
++++ b/Telegram/SourceFiles/history/view/media/history_view_gif.cpp
+@@ -62,6 +62,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_file_origin.h"
+ #include "data/data_document_media.h"
+ #include "data/data_web_page.h"
++#include "exteraless/config.h"
+ #include "storage/storage_account.h"
+ #include "styles/style_chat.h"
+ #include "styles/style_chat_style.h"
+@@ -1345,6 +1346,23 @@ void Gif::validateSpoilerImageCache(
+ 	_spoiler->backgroundRounding = rounding;
+ }
+ 
++namespace {
++
++[[nodiscard]] bool ShowCornerDownload(
++		bool inCorner,
++		bool loaded,
++		bool loadedInMediaCache,
++		bool streamed) {
++	if (!inCorner) {
++		return false;
++	} else if (!Exteraless::Config::Instance().alwaysShowDownloadIcon()) {
++		return !loaded && !loadedInMediaCache;
++	}
++	return !streamed;
++}
++
++} // namespace
++
+ void Gif::drawCornerStatus(
+ 		Painter &p,
+ 		const PaintContext &context,
+@@ -1353,9 +1371,11 @@ void Gif::drawCornerStatus(
+ 		return;
+ 	}
+ 	const auto own = activeOwnStreamed();
+-	const auto download = downloadInCorner()
+-		&& !dataLoaded()
+-		&& !_data->loadedInMediaCache();
++	const auto download = ShowCornerDownload(
++		downloadInCorner(),
++		dataLoaded(),
++		_data->loadedInMediaCache(),
++		(_streamed != nullptr));
+ 	PaintVideoCornerStatus(p, context, {
+ 		.text = ((own && !own->frozenStatusText.isEmpty())
+ 			? own->frozenStatusText
+@@ -1377,7 +1397,15 @@ TextState Gif::cornerStatusTextState(
+ 		StateRequest request,
+ 		QPoint position) const {
+ 	auto result = TextState(_parent);
+-	if (!needCornerStatusDisplay() || !downloadInCorner() || dataLoaded()) {
++	if (!needCornerStatusDisplay()) {
++		return result;
++	}
++	const auto download = ShowCornerDownload(
++		downloadInCorner(),
++		dataLoaded(),
++		_data->loadedInMediaCache(),
++		(_streamed != nullptr));
++	if (!download) {
+ 		return result;
+ 	}
+ 	if (VideoCornerDownloadRect(position).contains(point)) {
 diff --git a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp b/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp
 index 269853a..19c05f6 100644
 --- a/Telegram/SourceFiles/history/view/media/history_view_media_unwrapped.cpp
@@ -5286,10 +5421,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..2e31c61
+index 0000000..2c9262b
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1302 @@
+@@ -0,0 +1,1310 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5897,6 +6032,14 @@ index 0000000..2e31c61
 +			if (const auto controller = builder.controller()) {
 +				controller->session().data().chatsFilters().notifyListChanged();
 +			}
++		});
++	addChatsToggle(
++		u"exteraless/chats/always-show-download"_q,
++		tr::lng_settings_exteraless_chats_always_show_download(),
++		{ u"download"_q, u"icon"_q, u"media"_q },
++		Exteraless::Config::Instance().alwaysShowDownloadIcon(),
++		[](bool value) {
++			Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/use-edited-icon"_q,
@@ -7444,10 +7587,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..05effe5
+index 0000000..093e034
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,659 @@
+@@ -0,0 +1,668 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7498,6 +7641,7 @@ index 0000000..05effe5
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
++constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 +constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 +constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 +constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -7515,6 +7659,8 @@ index 0000000..05effe5
 +constexpr auto kHideAllChatsFolderAlias = "hideAllTab";
 +constexpr auto kHideAllChatsFolderAliasUpper = "HideAllTab";
 +constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
++constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
++constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -7752,6 +7898,7 @@ index 0000000..05effe5
 +	extera[kDisableLinkPreviewByDefault]
 +		= config.disableLinkPreviewByDefault();
 +	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
++	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -8016,6 +8163,11 @@ index 0000000..05effe5
 +			|| key == kHideAllChatsFolderAliasChats)
 +			&& value.isBool()) {
 +			config.setHideAllChatsFolder(value.toBool());
++		} else if ((key == kAlwaysShowDownloadIcon
++			|| key == kAlwaysShowDownloadIconAlias
++			|| key == kAlwaysShowDownloadIconAliasUpper)
++			&& value.isBool()) {
++			config.setAlwaysShowDownloadIcon(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -8208,10 +8360,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..c617c43
+index 0000000..347a325
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1079 @@
+@@ -0,0 +1,1089 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -8259,6 +8411,7 @@ index 0000000..c617c43
 +constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
++constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8668,6 +8821,14 @@ index 0000000..c617c43
 +
 +void Config::setHideAllChatsFolder(bool value) {
 +	setValue(kHideAllChatsFolder, value);
++}
++
++bool Config::alwaysShowDownloadIcon() const {
++	return boolValue(kAlwaysShowDownloadIcon, false);
++}
++
++void Config::setAlwaysShowDownloadIcon(bool value) {
++	setValue(kAlwaysShowDownloadIcon, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -9097,6 +9258,7 @@ index 0000000..c617c43
 +			|| key == kChatMenuClearDeleted
 +			|| key == kDisableLinkPreviewByDefault
 +			|| key == kHideAllChatsFolder
++			|| key == kAlwaysShowDownloadIcon
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -9293,10 +9455,10 @@ index 0000000..c617c43
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..1ef5935
+index 0000000..bb9f6ff
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,227 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -9404,6 +9566,8 @@ index 0000000..1ef5935
 +	void setDisableLinkPreviewByDefault(bool value);
 +	[[nodiscard]] bool hideAllChatsFolder() const;
 +	void setHideAllChatsFolder(bool value);
++	[[nodiscard]] bool alwaysShowDownloadIcon() const;
++	void setAlwaysShowDownloadIcon(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -12000,10 +12164,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..a8e6662
+index 0000000..e8bf065
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1400 @@
+@@ -0,0 +1,1424 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -12098,6 +12262,8 @@ index 0000000..a8e6662
 +		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
 +		<< "  exteraless-chats-cli hide-all-chats\n"
 +		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
++		<< "  exteraless-chats-cli always-show-download\n"
++		<< "  exteraless-chats-cli always-show-download-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-menu\n"
 +		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 +		<< "<viewDeleted> <clearDeleted>\n"
@@ -12588,6 +12754,28 @@ index 0000000..a8e6662
 +			return PrintUsage();
 +		}
 +		Exteraless::Config::Instance().setHideAllChatsFolder(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("always-show-download")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().alwaysShowDownloadIcon() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("always-show-download-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
 +		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
@@ -13468,10 +13656,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..4b0a768
+index 0000000..9764423
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3647 @@
+@@ -0,0 +1,3716 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -13651,6 +13839,8 @@ index 0000000..4b0a768
 +         ["disable-link-preview-set"]),
 +        ("hide-all-chats-set with wrong count",
 +         ["hide-all-chats-set"]),
++        ("always-show-download-set with wrong count",
++         ["always-show-download-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13963,7 +14153,7 @@ index 0000000..4b0a768
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 69,
++            len(section) == 70,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13984,7 +14174,7 @@ index 0000000..4b0a768
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 74,
++            sum(len(value) for value in exported.values()) == 75,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -14004,7 +14194,7 @@ index 0000000..4b0a768
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 74,
++                data.get("applied") == 75,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -14107,6 +14297,7 @@ index 0000000..4b0a768
 +            "OEChatsChatMenuClearDeleted": False,
 +            "OEChatsDisableLinkPreviewByDefault": True,
 +            "OEChatsHideAllChatsFolder": True,
++            "OEChatsAlwaysShowDownloadIcon": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -14128,7 +14319,7 @@ index 0000000..4b0a768
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 74,
++            data.get("applied") == 75,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -14215,6 +14406,10 @@ index 0000000..4b0a768
 +            "backup full hide all chats",
 +            section.get("OEChatsHideAllChatsFolder") is True,
 +            section.get("OEChatsHideAllChatsFolder"))
++        ledger.check(
++            "backup full always show download",
++            section.get("OEChatsAlwaysShowDownloadIcon") is True,
++            section.get("OEChatsAlwaysShowDownloadIcon"))
 +        ledger.check(
 +            "backup full disable link preview",
 +            section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -14378,10 +14573,10 @@ index 0000000..4b0a768
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 74",
++            "backup legacy eight completed to 75",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (69, 3, 2),
++             len(sections["mainconfig"])) == (70, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -15223,6 +15418,7 @@ index 0000000..4b0a768
 +            "OEChatsChatMenuClearDeleted": False,
 +            "OEChatsDisableLinkPreviewByDefault": True,
 +            "OEChatsHideAllChatsFolder": True,
++            "OEChatsAlwaysShowDownloadIcon": True,
 +        },
 +    }
 +    data = json_call(
@@ -17029,6 +17225,64 @@ index 0000000..4b0a768
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_always_show_download(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "always-show-download-defaults")
++    data = json_call(
++        ledger, cli, ["always-show-download"], env,
++        "always-show-download defaults")
++    if data is not None:
++        ledger.check(
++            "always show download default off",
++            data.get("enabled") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["always-show-download-set", "1"], env,
++        "always-show-download set")
++    if data is not None:
++        ledger.check("always show download set on", data == 1, data)
++
++    reloaded = json_call(
++        ledger, cli, ["always-show-download"], env,
++        "always-show-download reload")
++    if reloaded is not None:
++        ledger.check(
++            "always show download persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "always-show-download-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "alwaysShowDownloadIcon": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "always-show-download alias")
++    if data is not None:
++        ledger.check(
++            "always show download alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["always-show-download"], env,
++        "always-show-download alias read")
++    if reloaded is not None:
++        ledger.check(
++            "always show download alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -17071,6 +17325,7 @@ index 0000000..4b0a768
 +        chat_menu = check_chat_menu(ledger, cli, work)
 +        disable_link_preview = check_disable_link_preview(ledger, cli, work)
 +        hide_all_chats = check_hide_all_chats(ledger, cli, work)
++        always_show_download = check_always_show_download(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -17107,6 +17362,8 @@ index 0000000..4b0a768
 +          f"{disable_link_preview[0] - disable_link_preview[1]} passed")
 +    print(f"hide-all-chats: "
 +          f"{hide_all_chats[0] - hide_all_chats[1]} passed")
++    print(f"always-show-download: "
++          f"{always_show_download[0] - always_show_download[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

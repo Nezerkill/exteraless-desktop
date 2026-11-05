@@ -41,6 +41,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_click_handler.h"
 #include "api/api_transcribes.h"
 #include "apiwrap.h"
+#include "exteraless/config.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
 #include "styles/style_dialogs.h"
@@ -1223,9 +1224,12 @@ void Document::drawCornerDownload(
 		Painter &p,
 		const PaintContext &context,
 		LayoutMode mode) const {
-	if (dataLoaded()
-		|| _data->loadedInMediaCache()
-		|| !downloadInCorner()) {
+	if (!downloadInCorner()) {
+		return;
+	}
+	const auto always = Exteraless::Config::Instance()
+		.alwaysShowDownloadIcon();
+	if (!always && (dataLoaded() || _data->loadedInMediaCache())) {
 		return;
 	}
 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;
@@ -1288,9 +1292,12 @@ TextState Document::cornerDownloadTextState(
 		StateRequest request,
 		LayoutMode mode) const {
 	auto result = TextState(_parent);
-	if (dataLoaded()
-		|| _data->loadedInMediaCache()
-		|| !downloadInCorner()) {
+	if (!downloadInCorner()) {
+		return result;
+	}
+	const auto always = Exteraless::Config::Instance()
+		.alwaysShowDownloadIcon();
+	if (!always && (dataLoaded() || _data->loadedInMediaCache())) {
 		return result;
 	}
 	auto topMinus = isBubbleTop() ? 0 : st::msgFileTopMinus;

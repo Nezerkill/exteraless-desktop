@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_peer_values.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "exteraless/config.h"
 #include "dialogs/ui/chat_search_empty.h"
 #include "dialogs/ui/chat_search_in.h"
 #include "dialogs/ui/posts_search_intro.h"
@@ -2320,7 +2321,8 @@ std::vector<Suggestions::Key> Suggestions::TabKeysFor(
 		{ Tab::Media, MediaType::MusicFile },
 		{ Tab::Media, MediaType::RoundVoiceFile },
 	};
-	if (Core::App().downloadManager().empty()) {
+	if (Core::App().downloadManager().empty()
+		&& !Exteraless::Config::Instance().alwaysShowDownloadIcon()) {
 		result.erase(ranges::find(result, Key{ Tab::Downloads }));
 	}
 	return result;

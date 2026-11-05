@@ -62,6 +62,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_origin.h"
 #include "data/data_document_media.h"
 #include "data/data_web_page.h"
+#include "exteraless/config.h"
 #include "storage/storage_account.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
@@ -1345,6 +1346,23 @@ void Gif::validateSpoilerImageCache(
 	_spoiler->backgroundRounding = rounding;
 }
 
+namespace {
+
+[[nodiscard]] bool ShowCornerDownload(
+		bool inCorner,
+		bool loaded,
+		bool loadedInMediaCache,
+		bool streamed) {
+	if (!inCorner) {
+		return false;
+	} else if (!Exteraless::Config::Instance().alwaysShowDownloadIcon()) {
+		return !loaded && !loadedInMediaCache;
+	}
+	return !streamed;
+}
+
+} // namespace
+
 void Gif::drawCornerStatus(
 		Painter &p,
 		const PaintContext &context,
@@ -1353,9 +1371,11 @@ void Gif::drawCornerStatus(
 		return;
 	}
 	const auto own = activeOwnStreamed();
-	const auto download = downloadInCorner()
-		&& !dataLoaded()
-		&& !_data->loadedInMediaCache();
+	const auto download = ShowCornerDownload(
+		downloadInCorner(),
+		dataLoaded(),
+		_data->loadedInMediaCache(),
+		(_streamed != nullptr));
 	PaintVideoCornerStatus(p, context, {
 		.text = ((own && !own->frozenStatusText.isEmpty())
 			? own->frozenStatusText
@@ -1377,7 +1397,15 @@ TextState Gif::cornerStatusTextState(
 		StateRequest request,
 		QPoint position) const {
 	auto result = TextState(_parent);
-	if (!needCornerStatusDisplay() || !downloadInCorner() || dataLoaded()) {
+	if (!needCornerStatusDisplay()) {
+		return result;
+	}
+	const auto download = ShowCornerDownload(
+		downloadInCorner(),
+		dataLoaded(),
+		_data->loadedInMediaCache(),
+		(_streamed != nullptr));
+	if (!download) {
 		return result;
 	}
 	if (VideoCornerDownloadRect(position).contains(point)) {

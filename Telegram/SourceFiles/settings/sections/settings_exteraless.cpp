@@ -607,6 +607,14 @@ const auto kMeta = Builder::BuildHelper({
 			}
 		});
 	addChatsToggle(
+		u"exteraless/chats/always-show-download"_q,
+		tr::lng_settings_exteraless_chats_always_show_download(),
+		{ u"download"_q, u"icon"_q, u"media"_q },
+		Exteraless::Config::Instance().alwaysShowDownloadIcon(),
+		[](bool value) {
+			Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/use-edited-icon"_q,
 		tr::lng_settings_exteraless_chats_use_edited_icon(),
 		{ u"edited"_q, u"icon"_q },

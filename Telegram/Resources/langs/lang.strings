@@ -9235,6 +9235,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
 "lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
 "lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
+"lng_settings_exteraless_chats_always_show_download" = "Always show download icon";
 "lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 "lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 "lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";

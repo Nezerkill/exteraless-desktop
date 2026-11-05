@@ -48,6 +48,7 @@ constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
+constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -65,6 +66,8 @@ constexpr auto kDisableLinkPreviewByDefaultAliasUpper
 constexpr auto kHideAllChatsFolderAlias = "hideAllTab";
 constexpr auto kHideAllChatsFolderAliasUpper = "HideAllTab";
 constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
+constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
+constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -302,6 +305,7 @@ QString BuildBackup() {
 	extera[kDisableLinkPreviewByDefault]
 		= config.disableLinkPreviewByDefault();
 	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
+	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -566,6 +570,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kHideAllChatsFolderAliasChats)
 			&& value.isBool()) {
 			config.setHideAllChatsFolder(value.toBool());
+		} else if ((key == kAlwaysShowDownloadIcon
+			|| key == kAlwaysShowDownloadIconAlias
+			|| key == kAlwaysShowDownloadIconAliasUpper)
+			&& value.isBool()) {
+			config.setAlwaysShowDownloadIcon(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

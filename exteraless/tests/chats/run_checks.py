@@ -177,6 +177,8 @@ def check_cli_args(ledger, cli):
          ["disable-link-preview-set"]),
         ("hide-all-chats-set with wrong count",
          ["hide-all-chats-set"]),
+        ("always-show-download-set with wrong count",
+         ["always-show-download-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -489,7 +491,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 69,
+            len(section) == 70,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -510,7 +512,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 74,
+            sum(len(value) for value in exported.values()) == 75,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -530,7 +532,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 74,
+                data.get("applied") == 75,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -633,6 +635,7 @@ def check_backup(ledger, cli, work):
             "OEChatsChatMenuClearDeleted": False,
             "OEChatsDisableLinkPreviewByDefault": True,
             "OEChatsHideAllChatsFolder": True,
+            "OEChatsAlwaysShowDownloadIcon": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -654,7 +657,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 74,
+            data.get("applied") == 75,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -741,6 +744,10 @@ def check_backup(ledger, cli, work):
             "backup full hide all chats",
             section.get("OEChatsHideAllChatsFolder") is True,
             section.get("OEChatsHideAllChatsFolder"))
+        ledger.check(
+            "backup full always show download",
+            section.get("OEChatsAlwaysShowDownloadIcon") is True,
+            section.get("OEChatsAlwaysShowDownloadIcon"))
         ledger.check(
             "backup full disable link preview",
             section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -904,10 +911,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 74",
+            "backup legacy eight completed to 75",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (69, 3, 2),
+             len(sections["mainconfig"])) == (70, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1749,6 +1756,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsChatMenuClearDeleted": False,
             "OEChatsDisableLinkPreviewByDefault": True,
             "OEChatsHideAllChatsFolder": True,
+            "OEChatsAlwaysShowDownloadIcon": True,
         },
     }
     data = json_call(
@@ -3555,6 +3563,64 @@ def check_hide_all_chats(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_always_show_download(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "always-show-download-defaults")
+    data = json_call(
+        ledger, cli, ["always-show-download"], env,
+        "always-show-download defaults")
+    if data is not None:
+        ledger.check(
+            "always show download default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["always-show-download-set", "1"], env,
+        "always-show-download set")
+    if data is not None:
+        ledger.check("always show download set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["always-show-download"], env,
+        "always-show-download reload")
+    if reloaded is not None:
+        ledger.check(
+            "always show download persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "always-show-download-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "alwaysShowDownloadIcon": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "always-show-download alias")
+    if data is not None:
+        ledger.check(
+            "always show download alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["always-show-download"], env,
+        "always-show-download alias read")
+    if reloaded is not None:
+        ledger.check(
+            "always show download alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3597,6 +3663,7 @@ def main():
         chat_menu = check_chat_menu(ledger, cli, work)
         disable_link_preview = check_disable_link_preview(ledger, cli, work)
         hide_all_chats = check_hide_all_chats(ledger, cli, work)
+        always_show_download = check_always_show_download(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3633,6 +3700,8 @@ def main():
           f"{disable_link_preview[0] - disable_link_preview[1]} passed")
     print(f"hide-all-chats: "
           f"{hide_all_chats[0] - hide_all_chats[1]} passed")
+    print(f"always-show-download: "
+          f"{always_show_download[0] - always_show_download[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

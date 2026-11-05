@@ -99,19 +99,27 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 513 проверок PASS
-  (44 strip, 10 reactions, 38 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 520 проверок PASS
+  (44 strip, 10 reactions, 39 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
-  12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
+  11 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 6 edited-mark,
   5 forward-date, 5 media-menu, 5 chat-menu, 5 disable-link-preview,
-  5 hide-all-chats, 92 backup); плагины без изменений — 32 и 213 проверок.
+  5 hide-all-chats, 5 always-show-download, 93 backup); плагины без изменений —
+  32 и 213 проверок.
 - Hide All Chats (NB-84): `OEChatsHideAllChatsFolder` (default `false`) скрывает
   папку «Все чаты» в левой панели фильтров при наличии пользовательских папок,
   активной становится первая доступная папка. CLI `hide-all-chats` (5 проверок).
   Xvfb: вкладка «All chats» скрыта, в сайдбаре осталась папка «IT», чаты
   отфильтрованы по «IT».
+- Always show download icon (NB-75): `OEChatsAlwaysShowDownloadIcon` (default
+  `false`) оставляет вкладку «Downloads» в поисковых подсказках и угловую
+  иконку скачивания на уже загруженных аудиофайлах. CLI
+  `always-show-download` (5 проверок). Xvfb: чип «Downloads» появляется сразу
+  после включения тумблера; у играющего (загруженного) аудио иконка видна с
+  включённой настройкой и исчезает после выключения; у незагруженного
+  аудиофайла иконка на месте при обоих значениях.
 - Link preview default (NB-74): `OEChatsDisableLinkPreviewByDefault` (default
   `false`) отключает автоматическое определение превью ссылок в поле ввода;
   ручное переключение остаётся по `Ctrl+R`. CLI `disable-link-preview`
@@ -343,11 +351,15 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `5a3b574d…`,
-  mtime 2026-11-05 15:52; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `c8784c40…`,
+  mtime 2026-11-05 16:52; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
-  (только glob/CMake re-run).
+  (только glob/CMake re-run). Перед финальным линком пересобраны TU,
+  зависящие от `history_view_webpage_processor.h`: header менялся в NB-74,
+  а `history_widget.cpp.o` остался от 12:02, и старый `sizeof` давал порчу
+  хипа со SIGSEGV в `~WebpageProcessor` при смене чата; после пересборки
+  переключение чатов стабильно.
 - Локализация секции Exteraless: все заголовки, чекбоксы, тумблеры и
   сообщения боксов переведены на `tr::lng_settings_exteraless_*` (30 новых
   ключей в `Telegram/Resources/langs/lang.strings`, суммарно 41). Сгенерирован
