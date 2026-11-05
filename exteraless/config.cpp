@@ -39,6 +39,10 @@ constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
+constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
+constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
+constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
+constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -400,6 +404,38 @@ bool Config::mediaViewerMenuSetProfile() const {
 
 void Config::setMediaViewerMenuSetProfile(bool value) {
 	setValue(kMediaViewerMenuSetProfile, value);
+}
+
+bool Config::chatMenuBoost() const {
+	return boolValue(kChatMenuBoost, true);
+}
+
+void Config::setChatMenuBoost(bool value) {
+	setValue(kChatMenuBoost, value);
+}
+
+bool Config::chatMenuLinked() const {
+	return boolValue(kChatMenuLinked, true);
+}
+
+void Config::setChatMenuLinked(bool value) {
+	setValue(kChatMenuLinked, value);
+}
+
+bool Config::chatMenuViewDeleted() const {
+	return boolValue(kChatMenuViewDeleted, true);
+}
+
+void Config::setChatMenuViewDeleted(bool value) {
+	setValue(kChatMenuViewDeleted, value);
+}
+
+bool Config::chatMenuClearDeleted() const {
+	return boolValue(kChatMenuClearDeleted, true);
+}
+
+void Config::setChatMenuClearDeleted(bool value) {
+	setValue(kChatMenuClearDeleted, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -823,6 +859,10 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kMediaViewerMenuCopyFrame
 			|| key == kMediaViewerMenuCopyPhoto
 			|| key == kMediaViewerMenuSetProfile
+			|| key == kChatMenuBoost
+			|| key == kChatMenuLinked
+			|| key == kChatMenuViewDeleted
+			|| key == kChatMenuClearDeleted
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

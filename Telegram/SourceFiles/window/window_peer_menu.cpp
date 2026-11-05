@@ -873,12 +873,40 @@ void Filler::addDeletedMessages() {
 	if (!count) {
 		return;
 	}
+	const auto &config = Exteraless::Config::Instance();
 	const auto controller = _controller.get();
 	const auto peer = _peer;
-	_addAction(
-		u"Deleted messages (%1)"_q.arg(count),
-		[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
-		&st::menuIconDelete);
+	const auto peerId = peer->id;
+	if (config.chatMenuViewDeleted()) {
+		_addAction(
+			u"Deleted messages (%1)"_q.arg(count),
+			[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
+			&st::menuIconDelete);
+	}
+	if (config.chatMenuClearDeleted()) {
+		const auto weak = base::make_weak(_controller);
+		_addAction(
+			u"Clear deleted messages"_q,
+			[=] {
+				if (!weak.get()) {
+					return;
+				}
+				weak.get()->show(Ui::MakeConfirmBox({
+					.text = u"Clear all saved deleted messages "
+						"in this chat?"_q,
+					.confirmed = [=] {
+						Exteraless::DeletedMessages::Instance()
+							.clear(peerId);
+						if (const auto still = weak.get()) {
+							still->showToast(
+								u"Deleted messages cleared."_q);
+						}
+					},
+					.confirmText = u"Clear"_q,
+				}));
+			},
+			&st::menuIconDelete);
+	}
 }
 
 void Filler::addGhostModeExclusions() {
@@ -1088,6 +1116,9 @@ void Filler::addBanFromChannel() {
 }
 
 void Filler::addViewDiscussion() {
+	if (!Exteraless::Config::Instance().chatMenuLinked()) {
+		return;
+	}
 	const auto channel = _peer->asBroadcast();
 	if (!channel) {
 		return;
@@ -1360,6 +1391,9 @@ void Filler::addManageChat() {
 }
 
 void Filler::addBoostChat() {
+	if (!Exteraless::Config::Instance().chatMenuBoost()) {
+		return;
+	}
 	if (const auto channel = _peer->asChannel()) {
 		if (channel->isMonoforum()) {
 			return;

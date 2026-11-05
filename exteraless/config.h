@@ -93,6 +93,14 @@ public:
 	void setMediaViewerMenuCopyPhoto(bool value);
 	[[nodiscard]] bool mediaViewerMenuSetProfile() const;
 	void setMediaViewerMenuSetProfile(bool value);
+	[[nodiscard]] bool chatMenuBoost() const;
+	void setChatMenuBoost(bool value);
+	[[nodiscard]] bool chatMenuLinked() const;
+	void setChatMenuLinked(bool value);
+	[[nodiscard]] bool chatMenuViewDeleted() const;
+	void setChatMenuViewDeleted(bool value);
+	[[nodiscard]] bool chatMenuClearDeleted() const;
+	void setChatMenuClearDeleted(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

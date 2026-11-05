@@ -88,6 +88,9 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli chat-menu\n"
+		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
+		<< "<viewDeleted> <clearDeleted>\n"
 		<< "  exteraless-chats-cli media-menu\n"
 		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
 		<< "<copyPhoto> <setProfile>\n"
@@ -530,6 +533,46 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("chat-menu")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("boost"), config.chatMenuBoost() },
+			{ QStringLiteral("linked"), config.chatMenuLinked() },
+			{ QStringLiteral("viewDeleted"),
+				config.chatMenuViewDeleted() },
+			{ QStringLiteral("clearDeleted"),
+				config.chatMenuClearDeleted() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("chat-menu-set")) {
+		if (arguments.size() != 6) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 4>();
+		for (auto i = 0; i != 4; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setChatMenuBoost(flags[0]);
+		config.setChatMenuLinked(flags[1]);
+		config.setChatMenuViewDeleted(flags[2]);
+		config.setChatMenuClearDeleted(flags[3]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("boost"), config.chatMenuBoost() },
+			{ QStringLiteral("linked"), config.chatMenuLinked() },
+			{ QStringLiteral("viewDeleted"),
+				config.chatMenuViewDeleted() },
+			{ QStringLiteral("clearDeleted"),
+				config.chatMenuClearDeleted() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("media-menu")) {

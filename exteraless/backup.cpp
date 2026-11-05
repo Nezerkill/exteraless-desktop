@@ -42,6 +42,14 @@ constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
+constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
+constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
+constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
+constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
+constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
+constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
+constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
+constexpr auto kChatMenuClearDeletedAlias = "chatMenuItemClearDeleted";
 constexpr auto kMediaViewerMenuForwardAlias = "mediaViewerMenuItemForward";
 constexpr auto kMediaViewerMenuCopyFrameAlias = "mediaViewerMenuItemCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
@@ -278,6 +286,10 @@ QString BuildBackup() {
 	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
 	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
+	extera[kChatMenuBoost] = config.chatMenuBoost();
+	extera[kChatMenuLinked] = config.chatMenuLinked();
+	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
+	extera[kChatMenuClearDeleted] = config.chatMenuClearDeleted();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -517,6 +529,20 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kMediaViewerMenuSetProfileAlias)
 			&& value.isBool()) {
 			config.setMediaViewerMenuSetProfile(value.toBool());
+		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
+			&& value.isBool()) {
+			config.setChatMenuBoost(value.toBool());
+		} else if ((key == kChatMenuLinked || key == kChatMenuLinkedAlias)
+			&& value.isBool()) {
+			config.setChatMenuLinked(value.toBool());
+		} else if ((key == kChatMenuViewDeleted
+			|| key == kChatMenuViewDeletedAlias)
+			&& value.isBool()) {
+			config.setChatMenuViewDeleted(value.toBool());
+		} else if ((key == kChatMenuClearDeleted
+			|| key == kChatMenuClearDeletedAlias)
+			&& value.isBool()) {
+			config.setChatMenuClearDeleted(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

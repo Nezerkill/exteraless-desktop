@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(492 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, backup),
+(499 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -175,7 +175,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-78 | Обновление списка tracking-параметров с сервера | `links/LinkCleaner.kt`, `AdGuardRule.kt` | `exteraless/links.cpp` (сейчас хардкод) + HTTP-загрузчик | M · средний | CLI: загрузка списка, сбой сети не ломает срез | ⬜ | R2 §3.2 |
 | NB-79 | Plugin engine stage 3: меню, настройки, intents, уровни доступа | `plugins/{ui,menus,intents,models}`, `PluginTrustLevel` | `Telegram/SourceFiles/exteraless/plugin_runtime.cpp` (IPC-контракт) | XL · высокий | CLI host-тесты: плагин публикует пункт меню, читает свои настройки, получает intent | ⬜ | R2 §3.6 |
 | NB-80 | Пункты меню медиавьюера | 6 ключей `NaConfig.mediaViewerMenuItem*` | `exteraless/config.{h,cpp}`, `media/view/media_view_overlay_widget.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · низкий | Xvfb: каждый пункт скрывается отдельно | ✅ 2026-11-05: Forward, Copy Frame, Copy, Set as profile photo скрываются четырьмя ключами; `NoQuoteForward` и `ScanQRCode` не применимы (таких пунктов в desktop нет); CLI `media-menu` (5 проверок), Xvfb: меню фото осталось без Copy/Forward/Set profile | R1 §3.4 |
-| NB-81 | Пункты меню чата (14 ключей) | `chatMenuItemBoostGroup`, `LinkedChat`, `ToBeginning`, `GoToMessage`, `HideTitle`, `ViewDeleted`, `ClearDeleted`, `DeleteOwnMessages`, `showAddToBookmark` | `window/window_peer_menu.cpp` | S–M · низкий | Xvfb: пункт скрывается, остальные на месте | ⬜ | R1 §3.4 |
+| NB-81 | Пункты меню чата (14 ключей) | `chatMenuItemBoostGroup`, `LinkedChat`, `ToBeginning`, `GoToMessage`, `HideTitle`, `ViewDeleted`, `ClearDeleted`, `DeleteOwnMessages`, `showAddToBookmark` | `exteraless/config.{h,cpp}`, `window/window_peer_menu.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · низкий | Xvfb: пункт скрывается, остальные на месте | ✅ 2026-11-05 (частично): Boost, linked chat, «Deleted messages», «Clear deleted messages» (с подтверждением) управляются четырьмя ключами; CLI `chat-menu` (5 проверок); Xvfb: Boost и Deleted messages исчезли, Clear остался. `ToBeginning`/`GoToMessage`/`HideTitle`/`DeleteOwnMessages`/закладки не применимы | R1 §3.4 |
 | NB-82 | Быстрые админ-шорткаты в профиле | `shortcutsAdministrators`, `shortcutsRecentActions`, `shortcutsStatistics`, `shortcutsPermissions`, `shortcutsMembers` | `info/profile/*` | S–M · средний | Xvfb: пункты ведут на нужные экраны | ⬜ | R1 §3.4 |
 | NB-83 | Группированное меню сообщения и меню удаления по умолчанию | `groupedMessageMenu`, `defaultDeleteMenu` | `history/view/history_view_context_menu.cpp` | S–M · средний | Xvfb: основные действия внизу, удаление по умолчанию как выбрано | ⬜ | R1 §3.4 |
 | NB-84 | Скрыть вкладку «Все чаты» и стиль заголовков вкладок | `NekoConfig.hideAllTab`, `tabsTitleType`, `tabCounter` | `window/window_filters_menu.cpp`, `dialogs/dialogs_widget.cpp` | S · низкий (в tdesktop вкладки — фильтры) | Xvfb: вкладка скрыта, фильтры работают | ⬜ | R2 §3.3 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 492 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 499 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

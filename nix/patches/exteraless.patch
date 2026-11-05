@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..342b196 100644
+index ffc8ec9..6de5540 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,112 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,117 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -143,6 +143,11 @@ index ffc8ec9..342b196 100644
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
++"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
++"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
++"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
++"lng_settings_exteraless_chat_menu_view_deleted" = "Show deleted messages";
++"lng_settings_exteraless_chat_menu_clear_deleted" = "Show clear deleted messages";
 +"lng_settings_exteraless_media_menu" = "Media viewer menu";
 +"lng_settings_exteraless_media_menu_forward" = "Show Forward";
 +"lng_settings_exteraless_media_menu_copy_frame" = "Show Copy Frame";
@@ -5172,10 +5177,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..0962c06
+index 0000000..d4b758d
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1228 @@
+@@ -0,0 +1,1279 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5516,6 +5521,57 @@ index 0000000..0962c06
 +			Exteraless::Config::Instance()
 +				.setGhostSendUploadProgressLocked(value);
 +		});
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chat-menu"_q,
++		.title = tr::lng_settings_exteraless_chat_menu(),
++	});
++	const auto addChatMenuToggle = [&](
++			QString id,
++			rpl::producer<QString> title,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto toggle = builder.addCheckbox({
++			.id = std::move(id),
++			.title = std::move(title),
++			.checked = current,
++			.keywords = { u"chat"_q, u"menu"_q },
++		});
++		if (toggle) {
++			toggle->checkedChanges(
++			) | rpl::on_next([=](bool value) {
++				setter(value);
++			}, toggle->lifetime());
++		}
++	};
++	addChatMenuToggle(
++		u"exteraless/chat-menu/boost"_q,
++		tr::lng_settings_exteraless_chat_menu_boost(),
++		Exteraless::Config::Instance().chatMenuBoost(),
++		[](bool value) {
++			Exteraless::Config::Instance().setChatMenuBoost(value);
++		});
++	addChatMenuToggle(
++		u"exteraless/chat-menu/linked"_q,
++		tr::lng_settings_exteraless_chat_menu_linked(),
++		Exteraless::Config::Instance().chatMenuLinked(),
++		[](bool value) {
++			Exteraless::Config::Instance().setChatMenuLinked(value);
++		});
++	addChatMenuToggle(
++		u"exteraless/chat-menu/view-deleted"_q,
++		tr::lng_settings_exteraless_chat_menu_view_deleted(),
++		Exteraless::Config::Instance().chatMenuViewDeleted(),
++		[](bool value) {
++			Exteraless::Config::Instance().setChatMenuViewDeleted(value);
++		});
++	addChatMenuToggle(
++		u"exteraless/chat-menu/clear-deleted"_q,
++		tr::lng_settings_exteraless_chat_menu_clear_deleted(),
++		Exteraless::Config::Instance().chatMenuClearDeleted(),
++		[](bool value) {
++			Exteraless::Config::Instance().setChatMenuClearDeleted(value);
++		});
++
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/media-viewer-menu"_q,
 +		.title = tr::lng_settings_exteraless_media_menu(),
@@ -6949,7 +7005,7 @@ index 5975e0e..6ee9b2c 100644
  	object_ptr<Ui::FlatLabel> _setEmojiStatus;
  	std::unique_ptr<Info::Profile::EmojiStatusPanel> _emojiStatusPanel;
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
-index 56d2e56..a93dc68 100644
+index 56d2e56..0336afb 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
 @@ -15,6 +15,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -6971,7 +7027,7 @@ index 56d2e56..a93dc68 100644
  	void addDeleteChat();
  	void addLeaveChat();
  	void addJoinChat();
-@@ -859,8 +864,68 @@ void Filler::addToggleArchive() {
+@@ -859,8 +864,96 @@ void Filler::addToggleArchive() {
  	SetActionText(archiveAction, std::move(actionText));
  }
  
@@ -6986,12 +7042,40 @@ index 56d2e56..a93dc68 100644
 +	if (!count) {
 +		return;
 +	}
++	const auto &config = Exteraless::Config::Instance();
 +	const auto controller = _controller.get();
 +	const auto peer = _peer;
-+	_addAction(
-+		u"Deleted messages (%1)"_q.arg(count),
-+		[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
-+		&st::menuIconDelete);
++	const auto peerId = peer->id;
++	if (config.chatMenuViewDeleted()) {
++		_addAction(
++			u"Deleted messages (%1)"_q.arg(count),
++			[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
++			&st::menuIconDelete);
++	}
++	if (config.chatMenuClearDeleted()) {
++		const auto weak = base::make_weak(_controller);
++		_addAction(
++			u"Clear deleted messages"_q,
++			[=] {
++				if (!weak.get()) {
++					return;
++				}
++				weak.get()->show(Ui::MakeConfirmBox({
++					.text = u"Clear all saved deleted messages "
++						"in this chat?"_q,
++					.confirmed = [=] {
++						Exteraless::DeletedMessages::Instance()
++							.clear(peerId);
++						if (const auto still = weak.get()) {
++							still->showToast(
++								u"Deleted messages cleared."_q);
++						}
++					},
++					.confirmText = u"Clear"_q,
++				}));
++			},
++			&st::menuIconDelete);
++	}
 +}
 +
 +void Filler::addGhostModeExclusions() {
@@ -7042,7 +7126,27 @@ index 56d2e56..a93dc68 100644
  		return;
  	}
  	const auto channel = _peer->asChannel();
-@@ -1928,6 +1993,8 @@ void Filler::fillContextMenuActions() {
+@@ -1023,6 +1116,9 @@ void Filler::addBanFromChannel() {
+ }
+ 
+ void Filler::addViewDiscussion() {
++	if (!Exteraless::Config::Instance().chatMenuLinked()) {
++		return;
++	}
+ 	const auto channel = _peer->asBroadcast();
+ 	if (!channel) {
+ 		return;
+@@ -1295,6 +1391,9 @@ void Filler::addManageChat() {
+ }
+ 
+ void Filler::addBoostChat() {
++	if (!Exteraless::Config::Instance().chatMenuBoost()) {
++		return;
++	}
+ 	if (const auto channel = _peer->asChannel()) {
+ 		if (channel->isMonoforum()) {
+ 			return;
+@@ -1928,6 +2027,8 @@ void Filler::fillContextMenuActions() {
  		}
  	}
  	addBanFromChannel();
@@ -7051,7 +7155,7 @@ index 56d2e56..a93dc68 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -1952,6 +2019,8 @@ void Filler::fillHistoryActions() {
+@@ -1952,6 +2053,8 @@ void Filler::fillHistoryActions() {
  	addExportChat();
  	addTranslate();
  	addReport();
@@ -7060,7 +7164,7 @@ index 56d2e56..a93dc68 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -4446,7 +4515,11 @@ void FillSenderUserpicMenu(
+@@ -4446,7 +4549,11 @@ void FillSenderUserpicMenu(
  	if (const auto guard = mention ? fieldForMention : nullptr) {
  		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
  			if (!username.isEmpty()) {
@@ -7143,10 +7247,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..1f3f41d
+index 0000000..516b4cf
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,636 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7191,6 +7295,14 @@ index 0000000..1f3f41d
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
++constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
++constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
++constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
++constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
++constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
++constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
++constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
++constexpr auto kChatMenuClearDeletedAlias = "chatMenuItemClearDeleted";
 +constexpr auto kMediaViewerMenuForwardAlias = "mediaViewerMenuItemForward";
 +constexpr auto kMediaViewerMenuCopyFrameAlias = "mediaViewerMenuItemCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
@@ -7427,6 +7539,10 @@ index 0000000..1f3f41d
 +	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 +	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
 +	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
++	extera[kChatMenuBoost] = config.chatMenuBoost();
++	extera[kChatMenuLinked] = config.chatMenuLinked();
++	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
++	extera[kChatMenuClearDeleted] = config.chatMenuClearDeleted();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7666,6 +7782,20 @@ index 0000000..1f3f41d
 +			|| key == kMediaViewerMenuSetProfileAlias)
 +			&& value.isBool()) {
 +			config.setMediaViewerMenuSetProfile(value.toBool());
++		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
++			&& value.isBool()) {
++			config.setChatMenuBoost(value.toBool());
++		} else if ((key == kChatMenuLinked || key == kChatMenuLinkedAlias)
++			&& value.isBool()) {
++			config.setChatMenuLinked(value.toBool());
++		} else if ((key == kChatMenuViewDeleted
++			|| key == kChatMenuViewDeletedAlias)
++			&& value.isBool()) {
++			config.setChatMenuViewDeleted(value.toBool());
++		} else if ((key == kChatMenuClearDeleted
++			|| key == kChatMenuClearDeletedAlias)
++			&& value.isBool()) {
++			config.setChatMenuClearDeleted(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -7858,10 +7988,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..c442cf0
+index 0000000..98c0fa3
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1019 @@
+@@ -0,0 +1,1059 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7903,6 +8033,10 @@ index 0000000..c442cf0
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
++constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
++constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
++constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
++constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8264,6 +8398,38 @@ index 0000000..c442cf0
 +
 +void Config::setMediaViewerMenuSetProfile(bool value) {
 +	setValue(kMediaViewerMenuSetProfile, value);
++}
++
++bool Config::chatMenuBoost() const {
++	return boolValue(kChatMenuBoost, true);
++}
++
++void Config::setChatMenuBoost(bool value) {
++	setValue(kChatMenuBoost, value);
++}
++
++bool Config::chatMenuLinked() const {
++	return boolValue(kChatMenuLinked, true);
++}
++
++void Config::setChatMenuLinked(bool value) {
++	setValue(kChatMenuLinked, value);
++}
++
++bool Config::chatMenuViewDeleted() const {
++	return boolValue(kChatMenuViewDeleted, true);
++}
++
++void Config::setChatMenuViewDeleted(bool value) {
++	setValue(kChatMenuViewDeleted, value);
++}
++
++bool Config::chatMenuClearDeleted() const {
++	return boolValue(kChatMenuClearDeleted, true);
++}
++
++void Config::setChatMenuClearDeleted(bool value) {
++	setValue(kChatMenuClearDeleted, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8687,6 +8853,10 @@ index 0000000..c442cf0
 +			|| key == kMediaViewerMenuCopyFrame
 +			|| key == kMediaViewerMenuCopyPhoto
 +			|| key == kMediaViewerMenuSetProfile
++			|| key == kChatMenuBoost
++			|| key == kChatMenuLinked
++			|| key == kChatMenuViewDeleted
++			|| key == kChatMenuClearDeleted
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8883,10 +9053,10 @@ index 0000000..c442cf0
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..4fc9f9c
+index 0000000..caa0818
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,221 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8982,6 +9152,14 @@ index 0000000..4fc9f9c
 +	void setMediaViewerMenuCopyPhoto(bool value);
 +	[[nodiscard]] bool mediaViewerMenuSetProfile() const;
 +	void setMediaViewerMenuSetProfile(bool value);
++	[[nodiscard]] bool chatMenuBoost() const;
++	void setChatMenuBoost(bool value);
++	[[nodiscard]] bool chatMenuLinked() const;
++	void setChatMenuLinked(bool value);
++	[[nodiscard]] bool chatMenuViewDeleted() const;
++	void setChatMenuViewDeleted(bool value);
++	[[nodiscard]] bool chatMenuClearDeleted() const;
++	void setChatMenuClearDeleted(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11578,10 +11756,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..86f5aee
+index 0000000..d513aa5
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1307 @@
+@@ -0,0 +1,1350 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11672,6 +11850,9 @@ index 0000000..86f5aee
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli chat-menu\n"
++		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
++		<< "<viewDeleted> <clearDeleted>\n"
 +		<< "  exteraless-chats-cli media-menu\n"
 +		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
 +		<< "<copyPhoto> <setProfile>\n"
@@ -12114,6 +12295,46 @@ index 0000000..86f5aee
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("chat-menu")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		const auto &config = Exteraless::Config::Instance();
++		PrintJson(QJsonObject{
++			{ QStringLiteral("boost"), config.chatMenuBoost() },
++			{ QStringLiteral("linked"), config.chatMenuLinked() },
++			{ QStringLiteral("viewDeleted"),
++				config.chatMenuViewDeleted() },
++			{ QStringLiteral("clearDeleted"),
++				config.chatMenuClearDeleted() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("chat-menu-set")) {
++		if (arguments.size() != 6) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 4>();
++		for (auto i = 0; i != 4; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setChatMenuBoost(flags[0]);
++		config.setChatMenuLinked(flags[1]);
++		config.setChatMenuViewDeleted(flags[2]);
++		config.setChatMenuClearDeleted(flags[3]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("boost"), config.chatMenuBoost() },
++			{ QStringLiteral("linked"), config.chatMenuLinked() },
++			{ QStringLiteral("viewDeleted"),
++				config.chatMenuViewDeleted() },
++			{ QStringLiteral("clearDeleted"),
++				config.chatMenuClearDeleted() },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("media-menu")) {
@@ -12953,10 +13174,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..b0d573d
+index 0000000..8384566
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3419 @@
+@@ -0,0 +1,3509 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -13131,6 +13352,7 @@ index 0000000..b0d573d
 +        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
 +        ("forward-date-set with wrong count", ["forward-date-set"]),
 +        ("media-menu-set with wrong count", ["media-menu-set", "1"]),
++        ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13443,7 +13665,7 @@ index 0000000..b0d573d
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 63,
++            len(section) == 67,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13464,7 +13686,7 @@ index 0000000..b0d573d
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 68,
++            sum(len(value) for value in exported.values()) == 72,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13484,7 +13706,7 @@ index 0000000..b0d573d
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 68,
++                data.get("applied") == 72,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13581,6 +13803,10 @@ index 0000000..b0d573d
 +            "OEMediaViewerMenuCopyFrame": False,
 +            "OEMediaViewerMenuCopyPhoto": True,
 +            "OEMediaViewerMenuSetProfile": False,
++            "OEChatsChatMenuBoost": False,
++            "OEChatsChatMenuLinked": False,
++            "OEChatsChatMenuViewDeleted": True,
++            "OEChatsChatMenuClearDeleted": False,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13602,7 +13828,7 @@ index 0000000..b0d573d
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 68,
++            data.get("applied") == 72,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13685,6 +13911,16 @@ index 0000000..b0d573d
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full chat menu",
++            section.get("OEChatsChatMenuBoost") is False
++            and section.get("OEChatsChatMenuLinked") is False
++            and section.get("OEChatsChatMenuViewDeleted") is True
++            and section.get("OEChatsChatMenuClearDeleted") is False,
++            (section.get("OEChatsChatMenuBoost"),
++             section.get("OEChatsChatMenuLinked"),
++             section.get("OEChatsChatMenuViewDeleted"),
++             section.get("OEChatsChatMenuClearDeleted")))
 +        ledger.check(
 +            "backup full media menu",
 +            section.get("OEMediaViewerMenuForward") is False
@@ -13834,10 +14070,10 @@ index 0000000..b0d573d
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 68",
++            "backup legacy eight completed to 72",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (63, 3, 2),
++             len(sections["mainconfig"])) == (67, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -14673,6 +14909,10 @@ index 0000000..b0d573d
 +            "OEMediaViewerMenuCopyFrame": False,
 +            "OEMediaViewerMenuCopyPhoto": True,
 +            "OEMediaViewerMenuSetProfile": False,
++            "OEChatsChatMenuBoost": False,
++            "OEChatsChatMenuLinked": False,
++            "OEChatsChatMenuViewDeleted": True,
++            "OEChatsChatMenuClearDeleted": False,
 +        },
 +    }
 +    data = json_call(
@@ -16294,6 +16534,75 @@ index 0000000..b0d573d
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_chat_menu(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "chat-menu-defaults")
++    data = json_call(ledger, cli, ["chat-menu"], env, "chat-menu defaults")
++    if data is not None:
++        ledger.check(
++            "chat menu defaults",
++            data.get("boost") is True
++            and data.get("linked") is True
++            and data.get("viewDeleted") is True
++            and data.get("clearDeleted") is True,
++            data)
++
++    data = json_call(
++        ledger, cli, ["chat-menu-set", "0", "1", "0", "1"], env,
++        "chat-menu set")
++    if data is not None:
++        ledger.check(
++            "chat menu set",
++            data.get("boost") is False
++            and data.get("linked") is True
++            and data.get("viewDeleted") is False
++            and data.get("clearDeleted") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["chat-menu"], env, "chat-menu reload")
++    if reloaded is not None:
++        ledger.check(
++            "chat menu persisted",
++            reloaded.get("boost") is False
++            and reloaded.get("viewDeleted") is False,
++            reloaded)
++
++    env = make_env(work / "chat-menu-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "chatMenuItemBoostGroup": False,
++            "chatMenuItemLinkedChat": False,
++            "chatMenuItemViewDeleted": False,
++            "chatMenuItemClearDeleted": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "chat-menu alias")
++    if data is not None:
++        ledger.check(
++            "chat menu alias applied",
++            data.get("applied") == 4 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["chat-menu"], env, "chat-menu alias read")
++    if reloaded is not None:
++        ledger.check(
++            "chat menu alias values",
++            reloaded.get("boost") is False
++            and reloaded.get("linked") is False
++            and reloaded.get("viewDeleted") is False
++            and reloaded.get("clearDeleted") is False,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -16333,6 +16642,7 @@ index 0000000..b0d573d
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
 +        media_menu = check_media_menu(ledger, cli, work)
++        chat_menu = check_chat_menu(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -16364,6 +16674,7 @@ index 0000000..b0d573d
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
++    print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

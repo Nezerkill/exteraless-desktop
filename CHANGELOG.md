@@ -2,6 +2,13 @@
 
 ## 2026-11-05
 
+- Chat / Menu: четыре настройки `OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
+  `OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted` (все default
+  `true`) управляют пунктами меню чата Boost, связанный чат, «Deleted
+  messages» и «Clear deleted messages»; очистка удалённых теперь спрашивает
+  подтверждение. Android-алиасы `chatMenuItem*` поддержаны в `.extera`
+  (всего 72 ключа). `ToBeginning`, `GoToMessage`, `HideTitle`,
+  `DeleteOwnMessages` и закладки не применимы — таких пунктов в desktop нет.
 - Media viewer / Menu: четыре настройки `OEMediaViewerMenuForward`,
   `OEMediaViewerMenuCopyFrame`, `OEMediaViewerMenuCopyPhoto`,
   `OEMediaViewerMenuSetProfile` (все default `true`) скрывают пункты

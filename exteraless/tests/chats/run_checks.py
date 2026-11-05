@@ -172,6 +172,7 @@ def check_cli_args(ledger, cli):
         ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
         ("forward-date-set with wrong count", ["forward-date-set"]),
         ("media-menu-set with wrong count", ["media-menu-set", "1"]),
+        ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -484,7 +485,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 63,
+            len(section) == 67,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -505,7 +506,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 68,
+            sum(len(value) for value in exported.values()) == 72,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -525,7 +526,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 68,
+                data.get("applied") == 72,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -622,6 +623,10 @@ def check_backup(ledger, cli, work):
             "OEMediaViewerMenuCopyFrame": False,
             "OEMediaViewerMenuCopyPhoto": True,
             "OEMediaViewerMenuSetProfile": False,
+            "OEChatsChatMenuBoost": False,
+            "OEChatsChatMenuLinked": False,
+            "OEChatsChatMenuViewDeleted": True,
+            "OEChatsChatMenuClearDeleted": False,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -643,7 +648,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 68,
+            data.get("applied") == 72,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -726,6 +731,16 @@ def check_backup(ledger, cli, work):
             "backup full seek duration",
             section.get("OEChatsSeekDuration") == 15,
             section.get("OEChatsSeekDuration"))
+        ledger.check(
+            "backup full chat menu",
+            section.get("OEChatsChatMenuBoost") is False
+            and section.get("OEChatsChatMenuLinked") is False
+            and section.get("OEChatsChatMenuViewDeleted") is True
+            and section.get("OEChatsChatMenuClearDeleted") is False,
+            (section.get("OEChatsChatMenuBoost"),
+             section.get("OEChatsChatMenuLinked"),
+             section.get("OEChatsChatMenuViewDeleted"),
+             section.get("OEChatsChatMenuClearDeleted")))
         ledger.check(
             "backup full media menu",
             section.get("OEMediaViewerMenuForward") is False
@@ -875,10 +890,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 68",
+            "backup legacy eight completed to 72",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (63, 3, 2),
+             len(sections["mainconfig"])) == (67, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1714,6 +1729,10 @@ def check_sticker_time(ledger, cli, work):
             "OEMediaViewerMenuCopyFrame": False,
             "OEMediaViewerMenuCopyPhoto": True,
             "OEMediaViewerMenuSetProfile": False,
+            "OEChatsChatMenuBoost": False,
+            "OEChatsChatMenuLinked": False,
+            "OEChatsChatMenuViewDeleted": True,
+            "OEChatsChatMenuClearDeleted": False,
         },
     }
     data = json_call(
@@ -3335,6 +3354,75 @@ def check_media_menu(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_chat_menu(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "chat-menu-defaults")
+    data = json_call(ledger, cli, ["chat-menu"], env, "chat-menu defaults")
+    if data is not None:
+        ledger.check(
+            "chat menu defaults",
+            data.get("boost") is True
+            and data.get("linked") is True
+            and data.get("viewDeleted") is True
+            and data.get("clearDeleted") is True,
+            data)
+
+    data = json_call(
+        ledger, cli, ["chat-menu-set", "0", "1", "0", "1"], env,
+        "chat-menu set")
+    if data is not None:
+        ledger.check(
+            "chat menu set",
+            data.get("boost") is False
+            and data.get("linked") is True
+            and data.get("viewDeleted") is False
+            and data.get("clearDeleted") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["chat-menu"], env, "chat-menu reload")
+    if reloaded is not None:
+        ledger.check(
+            "chat menu persisted",
+            reloaded.get("boost") is False
+            and reloaded.get("viewDeleted") is False,
+            reloaded)
+
+    env = make_env(work / "chat-menu-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "chatMenuItemBoostGroup": False,
+            "chatMenuItemLinkedChat": False,
+            "chatMenuItemViewDeleted": False,
+            "chatMenuItemClearDeleted": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "chat-menu alias")
+    if data is not None:
+        ledger.check(
+            "chat menu alias applied",
+            data.get("applied") == 4 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["chat-menu"], env, "chat-menu alias read")
+    if reloaded is not None:
+        ledger.check(
+            "chat menu alias values",
+            reloaded.get("boost") is False
+            and reloaded.get("linked") is False
+            and reloaded.get("viewDeleted") is False
+            and reloaded.get("clearDeleted") is False,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3374,6 +3462,7 @@ def main():
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
         media_menu = check_media_menu(ledger, cli, work)
+        chat_menu = check_chat_menu(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3405,6 +3494,7 @@ def main():
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
+    print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -80,7 +80,10 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - media viewer menu items: `OEMediaViewerMenuForward`,
     `OEMediaViewerMenuCopyFrame`, `OEMediaViewerMenuCopyPhoto`,
     `OEMediaViewerMenuSetProfile` (all default `true`) hide the matching
-    entries; forward-without-quote and QR scan have no desktop counterpart.
+    entries; forward-without-quote and QR scan have no desktop counterpart;
+  - chat menu items: `OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
+    `OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted` (all default
+    `true`). Clearing stored deleted messages asks for confirmation.
 - **Files** — `OEGeneralSaveToChatSubfolder` (default `false`,
   `saveToChatSubfolder` in `.extera`) puts automatically downloaded files into
   a subfolder named after the chat (sanitized, ` (2)` suffix on collision).
@@ -136,7 +139,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 51, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 492 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 499 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the

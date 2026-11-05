@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **68** | **68** | 68 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; далее NB-35/NB-24/NB-26/NB-23/NB-72/NB-68/NB-67/NB-80 добавили настройки Send as, inline math, save subfolder, ghost schedule, seek duration, edited mark, forward date и меню медиавьюера |
-| Ключей `.extera` | 8 | 8 | 68 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26, NB-23, NB-72, NB-68, NB-67, NB-80 — все 68 desktop-ключей |
+| **Ключей форка desktop** | **72** | **72** | 72 объявлено, мёртвых нет | мёртвый offline-ключ удалён в NB-38; далее NB-35/NB-24/NB-26/NB-23/NB-72/NB-68/NB-67/NB-80/NB-81 добавили настройки Send as, inline math, save subfolder, ghost schedule, seek duration, edited mark, forward date и меню медиавьюера/чата |
+| Ключей `.extera` | 8 | 8 | 72 | на момент аудита было 8; после NB-04…NB-38, NB-35, NB-24, NB-26, NB-23, NB-72, NB-68, NB-67, NB-80, NB-81 — все 72 desktop-ключа |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -604,9 +604,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (68)
+## 13. Приложение B. Ключи `.extera` (72)
 
-Секция `exteraconfig` (63): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (67): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
@@ -631,6 +631,8 @@ M-нумерацию:
 `OEChatsUseEditedIcon`, `OEChatsCustomEditedMark`, `OEChatsShowForwardDate`,
 `OEMediaViewerMenuForward`, `OEMediaViewerMenuCopyFrame`,
 `OEMediaViewerMenuCopyPhoto`, `OEMediaViewerMenuSetProfile`,
+`OEChatsChatMenuBoost`, `OEChatsChatMenuLinked`,
+`OEChatsChatMenuViewDeleted`, `OEChatsChatMenuClearDeleted`,
 `OESettingsHidePremium`,
 `OESettingsHideHelp`,
 `OEAppearanceHideAiEditor`.

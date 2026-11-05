@@ -9233,6 +9233,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 "lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 "lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
+"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
+"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
+"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
+"lng_settings_exteraless_chat_menu_view_deleted" = "Show deleted messages";
+"lng_settings_exteraless_chat_menu_clear_deleted" = "Show clear deleted messages";
 "lng_settings_exteraless_media_menu" = "Media viewer menu";
 "lng_settings_exteraless_media_menu_forward" = "Show Forward";
 "lng_settings_exteraless_media_menu_copy_frame" = "Show Copy Frame";
