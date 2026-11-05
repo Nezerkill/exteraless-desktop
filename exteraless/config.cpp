@@ -28,6 +28,7 @@ constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
+constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -288,6 +289,14 @@ bool Config::hideSendAsPeer() const {
 
 void Config::setHideSendAsPeer(bool value) {
 	setValue(kHideSendAsPeer, value);
+}
+
+bool Config::inlineMathResult() const {
+	return boolValue(kInlineMathResult, false);
+}
+
+void Config::setInlineMathResult(bool value) {
+	setValue(kInlineMathResult, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -700,6 +709,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kHideHelpSection
 			|| key == kHideAiEditor
 			|| key == kHideSendAsPeer
+			|| key == kInlineMathResult
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

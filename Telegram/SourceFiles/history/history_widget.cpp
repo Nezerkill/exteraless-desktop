@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_widget.h"
 
 #include "exteraless/config.h"
+#include "exteraless/math.h"
 #include "exteraless/pangu.h"
 
 #include "api/api_compose_with_ai.h"
@@ -6789,6 +6790,30 @@ void HistoryWidget::insertTextAtCursor(const QString &text) {
 bool HistoryWidget::eventFilter(QObject *obj, QEvent *e) {
 	if (e->type() == QEvent::KeyPress) {
 		const auto k = static_cast<QKeyEvent*>(e);
+		if (k->key() == Qt::Key_Space
+			&& (k->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier
+			&& !k->isAutoRepeat()
+			&& Exteraless::Config::Instance().inlineMathResult()
+			&& obj == _field->rawTextEdit().get()) {
+			auto cursor = _field->rawTextEdit()->textCursor();
+			const auto line = cursor.block().text();
+			if (!cursor.hasSelection()
+				&& cursor.atEnd()
+				&& line.endsWith(u'=')) {
+				const auto expression = line.left(line.size() - 1).trimmed();
+				if (const auto value = Exteraless::EvaluateMathExpression(
+						expression)) {
+					auto text = _field->getTextWithTags();
+					text.text += *value + u" "_q;
+					_field->setTextWithTags(
+						std::move(text),
+						Ui::InputField::HistoryAction::NewEntry);
+					_field->setCursorPosition(
+						_field->getTextWithTags().text.size());
+					return true;
+				}
+			}
+		}
 		if ((k->modifiers() & kCommonModifiers) == Qt::ControlModifier) {
 			if (k->key() == Qt::Key_Up) {
 #ifdef Q_OS_MAC

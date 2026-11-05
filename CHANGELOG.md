@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- Chats / Inline math: настройка `OEChatsInlineMathResult` (default `false`)
+  вычисляет выражение при нажатии Space после `=`: `2+2=` → `2+2=4 `.
+  Парсер (`exteraless/math.{h,cpp}`) поддерживает `+ - * / % ^`, скобки,
+  константы `pi`/`e` и функции (`sqrt`, `abs`, `sin`, `cos`, `tan`, `ln`,
+  `log`, `exp`, `floor`, `ceil`, `round`); Android-алиас `inlineMathResult`
+  поддержан в `.extera` (всего 58 ключей).
 - Chats / Channels: настройка `OEChatsHideSendAsPeer` (default `false`)
   скрывает кнопку «Send as...» в каналах; Android-алиас
   `hideSendAsChannel` поддержан в `.extera` (всего 57 ключей). Из трёх

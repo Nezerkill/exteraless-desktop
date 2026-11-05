@@ -71,6 +71,8 @@ public:
 	void setHideAiEditor(bool value);
 	[[nodiscard]] bool hideSendAsPeer() const;
 	void setHideSendAsPeer(bool value);
+	[[nodiscard]] bool inlineMathResult() const;
+	void setInlineMathResult(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

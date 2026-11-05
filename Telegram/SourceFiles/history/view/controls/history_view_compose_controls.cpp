@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/controls/history_view_compose_controls.h"
 
 #include "exteraless/config.h"
+#include "exteraless/math.h"
 
 #include "history/view/controls/history_view_bot_menu_button.h"
 
@@ -167,6 +168,54 @@ constexpr auto kStarEffectDuration = 2 * crl::time(1000);
 constexpr auto kStarEffectRotationMax = 12;
 constexpr auto kStarEffectScaleMin = 0.3;
 constexpr auto kStarEffectScaleMax = 0.7;
+
+class InlineMathFilter final : public QObject {
+public:
+	InlineMathFilter(QWidget *parent, not_null<Ui::InputField*> field)
+	: QObject(parent)
+	, _field(field)
+	, _edit(field->rawTextEdit()) {
+	}
+
+protected:
+	bool eventFilter(QObject *object, QEvent *event) override {
+		if (event->type() != QEvent::KeyPress
+			|| !Exteraless::Config::Instance().inlineMathResult()) {
+			return QObject::eventFilter(object, event);
+		}
+		const auto key = static_cast<QKeyEvent*>(event);
+		if (key->key() != Qt::Key_Space
+			|| (key->modifiers() & ~Qt::KeypadModifier) != Qt::NoModifier
+			|| key->isAutoRepeat()) {
+			return QObject::eventFilter(object, event);
+		}
+		auto cursor = _edit->textCursor();
+		if (cursor.hasSelection() || !cursor.atEnd()) {
+			return QObject::eventFilter(object, event);
+		}
+		const auto line = cursor.block().text();
+		if (!line.endsWith(u'=')) {
+			return QObject::eventFilter(object, event);
+		}
+		const auto expression = line.left(line.size() - 1).trimmed();
+		const auto value = Exteraless::EvaluateMathExpression(expression);
+		if (!value) {
+			return QObject::eventFilter(object, event);
+		}
+		auto text = _field->getTextWithTags();
+		text.text += *value + u" "_q;
+		_field->setTextWithTags(
+			std::move(text),
+			Ui::InputField::HistoryAction::NewEntry);
+		_field->setCursorPosition(_field->getTextWithTags().text.size());
+		return true;
+	}
+
+private:
+	const not_null<Ui::InputField*> _field;
+	const not_null<QTextEdit*> _edit;
+
+};
 
 constexpr auto kCommonModifiers = 0
 	| Qt::ShiftModifier
@@ -3280,6 +3329,8 @@ void ComposeControls::initField() {
 	_field->setEditLanguageCallback(DefaultEditLanguageCallback(_show));
 
 	const auto rawTextEdit = _field->rawTextEdit().get();
+	rawTextEdit->installEventFilter(
+		Ui::CreateChild<InlineMathFilter>(rawTextEdit, _field));
 	rpl::merge(
 		_field->scrollTop().changes() | rpl::to_empty,
 		base::qt_signal_producer(

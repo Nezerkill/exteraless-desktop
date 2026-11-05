@@ -446,6 +446,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setHideSendAsPeer(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/inline-math"_q,
+		tr::lng_settings_exteraless_chats_inline_math(),
+		{ u"math"_q, u"inline"_q, u"result"_q },
+		Exteraless::Config::Instance().inlineMathResult(),
+		[](bool value) {
+			Exteraless::Config::Instance().setInlineMathResult(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,

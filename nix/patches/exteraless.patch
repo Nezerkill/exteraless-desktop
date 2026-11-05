@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..16537a6 100644
+index ffc8ec9..0f302de 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,98 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,99 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -137,6 +137,7 @@ index ffc8ec9..16537a6 100644
 +"lng_settings_exteraless_chats_pangu" = "Add spaces between CJK and Latin on send";
 +"lng_settings_exteraless_chats_silent_by_default" = "Send messages silently by default";
 +"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
++"lng_settings_exteraless_chats_inline_math" = "Inline math: press Space after \"2+2=\"";
 +"lng_settings_exteraless_double_tap_title" = "Double tap action";
 +"lng_settings_exteraless_double_tap_in" = "On incoming messages";
 +"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
@@ -3703,20 +3704,21 @@ index dcb902d..5b28a1d 100644
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
 diff --git a/Telegram/SourceFiles/history/history_widget.cpp b/Telegram/SourceFiles/history/history_widget.cpp
-index 43b2003..4ce3584 100644
+index 43b2003..ee9cc3e 100644
 --- a/Telegram/SourceFiles/history/history_widget.cpp
 +++ b/Telegram/SourceFiles/history/history_widget.cpp
-@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/history_widget.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/math.h"
 +#include "exteraless/pangu.h"
 +
  #include "api/api_compose_with_ai.h"
  #include "api/api_editing.h"
  #include "api/api_bot.h"
-@@ -5778,6 +5781,9 @@ Api::SendAction HistoryWidget::prepareSendAction(
+@@ -5778,6 +5782,9 @@ Api::SendAction HistoryWidget::prepareSendAction(
  		}
  	}
  
@@ -3726,7 +3728,7 @@ index 43b2003..4ce3584 100644
  	result.options.suggest = suggestOptions();
  	result.options.sendAs = _sendAs
  		? _history->session().sendAsPeers().resolveChosen(
-@@ -5974,6 +5980,25 @@ void HistoryWidget::sendTextWithTags(
+@@ -5974,6 +5981,25 @@ void HistoryWidget::sendTextWithTags(
  		_cornerButtons.clearReplyReturns();
  	}
  
@@ -3752,20 +3754,116 @@ index 43b2003..4ce3584 100644
  	auto message = Api::MessageToSend(prepareSendAction(options));
  	message.textWithTags = textWithTags;
  	if (useWebPageDraft && _preview) {
+@@ -6764,6 +6790,30 @@ void HistoryWidget::insertTextAtCursor(const QString &text) {
+ bool HistoryWidget::eventFilter(QObject *obj, QEvent *e) {
+ 	if (e->type() == QEvent::KeyPress) {
+ 		const auto k = static_cast<QKeyEvent*>(e);
++		if (k->key() == Qt::Key_Space
++			&& (k->modifiers() & ~Qt::KeypadModifier) == Qt::NoModifier
++			&& !k->isAutoRepeat()
++			&& Exteraless::Config::Instance().inlineMathResult()
++			&& obj == _field->rawTextEdit().get()) {
++			auto cursor = _field->rawTextEdit()->textCursor();
++			const auto line = cursor.block().text();
++			if (!cursor.hasSelection()
++				&& cursor.atEnd()
++				&& line.endsWith(u'=')) {
++				const auto expression = line.left(line.size() - 1).trimmed();
++				if (const auto value = Exteraless::EvaluateMathExpression(
++						expression)) {
++					auto text = _field->getTextWithTags();
++					text.text += *value + u" "_q;
++					_field->setTextWithTags(
++						std::move(text),
++						Ui::InputField::HistoryAction::NewEntry);
++					_field->setCursorPosition(
++						_field->getTextWithTags().text.size());
++					return true;
++				}
++			}
++		}
+ 		if ((k->modifiers() & kCommonModifiers) == Qt::ControlModifier) {
+ 			if (k->key() == Qt::Key_Up) {
+ #ifdef Q_OS_MAC
 diff --git a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
-index f95a351..ad10e57 100644
+index f95a351..6f65edd 100644
 --- a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
 +++ b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
-@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/controls/history_view_compose_controls.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/math.h"
 +
  #include "history/view/controls/history_view_bot_menu_button.h"
  
  #include "base/call_delayed.h"
-@@ -5251,7 +5253,8 @@ void ComposeControls::updateControlsVisibility() {
+@@ -166,6 +169,54 @@ constexpr auto kStarEffectRotationMax = 12;
+ constexpr auto kStarEffectScaleMin = 0.3;
+ constexpr auto kStarEffectScaleMax = 0.7;
+ 
++class InlineMathFilter final : public QObject {
++public:
++	InlineMathFilter(QWidget *parent, not_null<Ui::InputField*> field)
++	: QObject(parent)
++	, _field(field)
++	, _edit(field->rawTextEdit()) {
++	}
++
++protected:
++	bool eventFilter(QObject *object, QEvent *event) override {
++		if (event->type() != QEvent::KeyPress
++			|| !Exteraless::Config::Instance().inlineMathResult()) {
++			return QObject::eventFilter(object, event);
++		}
++		const auto key = static_cast<QKeyEvent*>(event);
++		if (key->key() != Qt::Key_Space
++			|| (key->modifiers() & ~Qt::KeypadModifier) != Qt::NoModifier
++			|| key->isAutoRepeat()) {
++			return QObject::eventFilter(object, event);
++		}
++		auto cursor = _edit->textCursor();
++		if (cursor.hasSelection() || !cursor.atEnd()) {
++			return QObject::eventFilter(object, event);
++		}
++		const auto line = cursor.block().text();
++		if (!line.endsWith(u'=')) {
++			return QObject::eventFilter(object, event);
++		}
++		const auto expression = line.left(line.size() - 1).trimmed();
++		const auto value = Exteraless::EvaluateMathExpression(expression);
++		if (!value) {
++			return QObject::eventFilter(object, event);
++		}
++		auto text = _field->getTextWithTags();
++		text.text += *value + u" "_q;
++		_field->setTextWithTags(
++			std::move(text),
++			Ui::InputField::HistoryAction::NewEntry);
++		_field->setCursorPosition(_field->getTextWithTags().text.size());
++		return true;
++	}
++
++private:
++	const not_null<Ui::InputField*> _field;
++	const not_null<QTextEdit*> _edit;
++
++};
++
+ constexpr auto kCommonModifiers = 0
+ 	| Qt::ShiftModifier
+ 	| Qt::MetaModifier
+@@ -3278,6 +3329,8 @@ void ComposeControls::initField() {
+ 	_field->setEditLanguageCallback(DefaultEditLanguageCallback(_show));
+ 
+ 	const auto rawTextEdit = _field->rawTextEdit().get();
++	rawTextEdit->installEventFilter(
++		Ui::CreateChild<InlineMathFilter>(rawTextEdit, _field));
+ 	rpl::merge(
+ 		_field->scrollTop().changes() | rpl::to_empty,
+ 		base::qt_signal_producer(
+@@ -5251,7 +5304,8 @@ void ComposeControls::updateControlsVisibility() {
  }
  
  void ComposeControls::updateAiButtonVisibility() {
@@ -3775,7 +3873,7 @@ index f95a351..ad10e57 100644
  		|| !_wrap->isVisible()
  		|| _recording.current()
  		|| !_field->isVisible();
-@@ -5649,6 +5652,7 @@ bool ComposeControls::updateSendAsButton(
+@@ -5649,6 +5703,7 @@ bool ComposeControls::updateSendAsButton(
  		? Main::SendAsType::VideoStream
  		: Main::SendAsType::Message;
  	if (!_features.sendAs
@@ -4804,10 +4902,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..5939ca5
+index 0000000..d44f0d5
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1042 @@
+@@ -0,0 +1,1050 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5255,6 +5353,14 @@ index 0000000..5939ca5
 +		Exteraless::Config::Instance().hideSendAsPeer(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setHideSendAsPeer(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/inline-math"_q,
++		tr::lng_settings_exteraless_chats_inline_math(),
++		{ u"math"_q, u"inline"_q, u"result"_q },
++		Exteraless::Config::Instance().inlineMathResult(),
++		[](bool value) {
++			Exteraless::Config::Instance().setInlineMathResult(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -6531,10 +6637,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..04214df
+index 0000000..6627c1c
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,48 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6554,6 +6660,8 @@ index 0000000..04214df
 +    ghost_status.h
 +    links.cpp
 +    links.h
++    math.cpp
++    math.h
 +    message_menu.h
 +    network.cpp
 +    network.h
@@ -6583,10 +6691,10 @@ index 0000000..04214df
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..cd5aa03
+index 0000000..f776292
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,527 @@
+@@ -0,0 +1,533 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6620,6 +6728,8 @@ index 0000000..cd5aa03
 +constexpr auto kHideHelpSection = "OESettingsHideHelp";
 +constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
++constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
++constexpr auto kInlineMathAlias = "inlineMathResult";
 +constexpr auto kHideSendAsAlias = "hideSendAsChannel";
 +constexpr auto kHideAiEditorAlias = "hideAiEditor";
 +constexpr auto kHidePremiumAlias = "hidePremiumSection";
@@ -6833,6 +6943,7 @@ index 0000000..cd5aa03
 +	extera[kHideHelpSection] = config.hideHelpSection();
 +	extera[kHideAiEditor] = config.hideAiEditor();
 +	extera[kHideSendAsPeer] = config.hideSendAsPeer();
++	extera[kInlineMathResult] = config.inlineMathResult();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7029,6 +7140,9 @@ index 0000000..cd5aa03
 +		} else if ((key == kHideSendAsPeer || key == kHideSendAsAlias)
 +			&& value.isBool()) {
 +			config.setHideSendAsPeer(value.toBool());
++		} else if ((key == kInlineMathResult || key == kInlineMathAlias)
++			&& value.isBool()) {
++			config.setInlineMathResult(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -7215,10 +7329,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..a5e5de4
+index 0000000..b79370f
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,896 @@
+@@ -0,0 +1,906 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7249,6 +7363,7 @@ index 0000000..a5e5de4
 +constexpr auto kHideHelpSection = "OESettingsHideHelp";
 +constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
++constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7509,6 +7624,14 @@ index 0000000..a5e5de4
 +
 +void Config::setHideSendAsPeer(bool value) {
 +	setValue(kHideSendAsPeer, value);
++}
++
++bool Config::inlineMathResult() const {
++	return boolValue(kInlineMathResult, false);
++}
++
++void Config::setInlineMathResult(bool value) {
++	setValue(kInlineMathResult, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -7921,6 +8044,7 @@ index 0000000..a5e5de4
 +			|| key == kHideHelpSection
 +			|| key == kHideAiEditor
 +			|| key == kHideSendAsPeer
++			|| key == kInlineMathResult
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8117,10 +8241,10 @@ index 0000000..a5e5de4
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..c21075e
+index 0000000..8839850
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,193 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8194,6 +8318,8 @@ index 0000000..c21075e
 +	void setHideAiEditor(bool value);
 +	[[nodiscard]] bool hideSendAsPeer() const;
 +	void setHideSendAsPeer(bool value);
++	[[nodiscard]] bool inlineMathResult() const;
++	void setInlineMathResult(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -9449,6 +9575,300 @@ index 0000000..12c9a3e
 +[[nodiscard]] QString StripTrackingInText(const QString &text);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/math.cpp b/exteraless/math.cpp
+new file mode 100644
+index 0000000..4e3e1d7
+--- /dev/null
++++ b/exteraless/math.cpp
+@@ -0,0 +1,270 @@
++#include "exteraless/math.h"
++
++#include <QtMath>
++
++#include <cmath>
++#include <optional>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMaxExpressionLength = 256;
++constexpr auto kMaxResultLength = 64;
++constexpr auto kPi = 3.14159265358979323846;
++constexpr auto kE = 2.71828182845904523536;
++
++class Parser final {
++public:
++	explicit Parser(const QString &text) : _text(text) {
++	}
++
++	[[nodiscard]] std::optional<double> parse() {
++		skipSpaces();
++		const auto value = parseExpression();
++		if (!value) {
++			return std::nullopt;
++		}
++		skipSpaces();
++		if (_position != _text.size()) {
++			return std::nullopt;
++		}
++		return value;
++	}
++
++private:
++	void skipSpaces() {
++		while (_position != _text.size() && _text[_position].isSpace()) {
++			++_position;
++		}
++	}
++
++	[[nodiscard]] bool consume(QChar ch) {
++		skipSpaces();
++		if (_position != _text.size() && _text[_position] == ch) {
++			++_position;
++			return true;
++		}
++		return false;
++	}
++
++	[[nodiscard]] std::optional<double> parseExpression() {
++		auto value = parseTerm();
++		if (!value) {
++			return std::nullopt;
++		}
++		while (true) {
++			skipSpaces();
++			if (_position == _text.size()) {
++				return value;
++			}
++			const auto ch = _text[_position];
++			if (ch != u'+' && ch != u'-') {
++				return value;
++			}
++			++_position;
++			const auto right = parseTerm();
++			if (!right) {
++				return std::nullopt;
++			}
++			*value = (ch == u'+') ? (*value + *right) : (*value - *right);
++		}
++	}
++
++	[[nodiscard]] std::optional<double> parseTerm() {
++		auto value = parsePower();
++		if (!value) {
++			return std::nullopt;
++		}
++		while (true) {
++			skipSpaces();
++			if (_position == _text.size()) {
++				return value;
++			}
++			const auto ch = _text[_position];
++			if (ch != u'*' && ch != u'/' && ch != u'%') {
++				return value;
++			}
++			++_position;
++			const auto right = parsePower();
++			if (!right) {
++				return std::nullopt;
++			}
++			if (ch == u'*') {
++				*value = *value * *right;
++			} else if (ch == u'/') {
++				if (*right == 0.) {
++					return std::nullopt;
++				}
++				*value = *value / *right;
++			} else {
++				if (*right == 0.) {
++					return std::nullopt;
++				}
++				*value = std::fmod(*value, *right);
++			}
++		}
++	}
++
++	[[nodiscard]] std::optional<double> parsePower() {
++		const auto value = parseUnary();
++		if (!value) {
++			return std::nullopt;
++		}
++		skipSpaces();
++		if (_position != _text.size() && _text[_position] == u'^') {
++			++_position;
++			const auto exponent = parsePower();
++			if (!exponent) {
++				return std::nullopt;
++			}
++			return std::pow(*value, *exponent);
++		}
++		return value;
++	}
++
++	[[nodiscard]] std::optional<double> parseUnary() {
++		skipSpaces();
++		if (_position != _text.size()) {
++			const auto ch = _text[_position];
++			if (ch == u'+' || ch == u'-') {
++				++_position;
++				const auto value = parseUnary();
++				if (!value) {
++					return std::nullopt;
++				}
++				return (ch == u'-') ? -*value : *value;
++			}
++		}
++		return parsePrimary();
++	}
++
++	[[nodiscard]] std::optional<double> parsePrimary() {
++		skipSpaces();
++		if (_position == _text.size()) {
++			return std::nullopt;
++		}
++		if (consume(u'(')) {
++			const auto value = parseExpression();
++			if (!value || !consume(u')')) {
++				return std::nullopt;
++			}
++			return value;
++		}
++		if (_text[_position].isDigit() || _text[_position] == u'.') {
++			return parseNumber();
++		}
++		if (_text[_position].isLetter()) {
++			return parseIdentifier();
++		}
++		return std::nullopt;
++	}
++
++	[[nodiscard]] std::optional<double> parseNumber() {
++		const auto start = _position;
++		auto seenDot = false;
++		while (_position != _text.size()) {
++			const auto ch = _text[_position];
++			if (ch.isDigit()) {
++				++_position;
++			} else if (ch == u'.' && !seenDot) {
++				seenDot = true;
++				++_position;
++			} else {
++				break;
++			}
++		}
++		if (_position == start) {
++			return std::nullopt;
++		}
++		auto ok = false;
++		const auto value = _text.mid(start, _position - start).toDouble(&ok);
++		return ok ? std::optional<double>(value) : std::nullopt;
++	}
++
++	[[nodiscard]] std::optional<double> parseIdentifier() {
++		const auto start = _position;
++		while (_position != _text.size() && _text[_position].isLetter()) {
++			++_position;
++		}
++		const auto name = _text.mid(start, _position - start).toLower();
++		skipSpaces();
++		if (_position == _text.size() || _text[_position] != u'(') {
++			if (name == QStringLiteral("pi")) {
++				return kPi;
++			} else if (name == QStringLiteral("e")) {
++				return kE;
++			}
++			return std::nullopt;
++		}
++		++_position;
++		const auto argument = parseExpression();
++		if (!argument || !consume(u')')) {
++			return std::nullopt;
++		}
++		const auto x = *argument;
++		if (name == QStringLiteral("sqrt")) {
++			return (x >= 0.) ? std::optional<double>(std::sqrt(x)) : std::nullopt;
++		} else if (name == QStringLiteral("abs")) {
++			return std::abs(x);
++		} else if (name == QStringLiteral("sin")) {
++			return std::sin(x);
++		} else if (name == QStringLiteral("cos")) {
++			return std::cos(x);
++		} else if (name == QStringLiteral("tan")) {
++			return std::tan(x);
++		} else if (name == QStringLiteral("asin")) {
++			return (x >= -1. && x <= 1.)
++				? std::optional<double>(std::asin(x))
++				: std::nullopt;
++		} else if (name == QStringLiteral("acos")) {
++			return (x >= -1. && x <= 1.)
++				? std::optional<double>(std::acos(x))
++				: std::nullopt;
++		} else if (name == QStringLiteral("atan")) {
++			return std::atan(x);
++		} else if (name == QStringLiteral("ln")) {
++			return (x > 0.) ? std::optional<double>(std::log(x)) : std::nullopt;
++		} else if (name == QStringLiteral("log")) {
++			return (x > 0.)
++				? std::optional<double>(std::log10(x))
++				: std::nullopt;
++		} else if (name == QStringLiteral("exp")) {
++			return std::exp(x);
++		} else if (name == QStringLiteral("floor")) {
++			return std::floor(x);
++		} else if (name == QStringLiteral("ceil")) {
++			return std::ceil(x);
++		} else if (name == QStringLiteral("round")) {
++			return std::round(x);
++		}
++		return std::nullopt;
++	}
++
++	QString _text;
++	int _position = 0;
++};
++
++} // namespace
++
++std::optional<QString> EvaluateMathExpression(const QString &expression) {
++	const auto trimmed = expression.trimmed();
++	if (trimmed.isEmpty()
++		|| trimmed.size() > kMaxExpressionLength) {
++		return std::nullopt;
++	}
++	const auto value = Parser(trimmed).parse();
++	if (!value || !std::isfinite(*value)) {
++		return std::nullopt;
++	}
++	auto result = *value;
++	if (std::abs(result) < 1e-12) {
++		result = 0.;
++	}
++	const auto text = QString::number(result, 'g', 10);
++	if (text.isEmpty() || text.size() > kMaxResultLength) {
++		return std::nullopt;
++	}
++	return text;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/math.h b/exteraless/math.h
+new file mode 100644
+index 0000000..5d638fb
+--- /dev/null
++++ b/exteraless/math.h
+@@ -0,0 +1,12 @@
++#pragma once
++
++#include <QString>
++
++#include <optional>
++
++namespace Exteraless {
++
++[[nodiscard]] std::optional<QString> EvaluateMathExpression(
++	const QString &expression);
++
++} // namespace Exteraless
 diff --git a/exteraless/message_menu.h b/exteraless/message_menu.h
 new file mode 100644
 index 0000000..ffa1cbd
@@ -10355,10 +10775,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..05bf283
+index 0000000..87530f5
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1048 @@
+@@ -0,0 +1,1084 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10368,6 +10788,7 @@ index 0000000..05bf283
 +#include "exteraless/format.h"
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
++#include "exteraless/math.h"
 +#include "exteraless/network.h"
 +#include "exteraless/pangu.h"
 +#include "exteraless/plugins/installer.h"
@@ -10442,6 +10863,9 @@ index 0000000..05bf283
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli inline-math\n"
++		<< "  exteraless-chats-cli inline-math-set <0|1>\n"
++		<< "  exteraless-chats-cli math-eval <expression>\n"
 +		<< "  exteraless-chats-cli send-as\n"
 +		<< "  exteraless-chats-cli send-as-set <0|1>\n"
 +		<< "  exteraless-chats-cli plugin-filename <name>\n"
@@ -10866,6 +11290,38 @@ index 0000000..05bf283
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("inline-math")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().inlineMathResult() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("inline-math-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setInlineMathResult(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("math-eval")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto result = Exteraless::EvaluateMathExpression(arguments[2]);
++		std::cout
++			<< (result ? *result : QStringLiteral("invalid")).toUtf8().constData()
++			<< '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("send-as")) {
@@ -11471,10 +11927,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..262d844
+index 0000000..aa810a0
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2819 @@
+@@ -0,0 +1,2915 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -11642,6 +12098,8 @@ index 0000000..262d844
 +        ("ai-editor-set with wrong count", ["ai-editor-set"]),
 +        ("plugin-filename without name", ["plugin-filename"]),
 +        ("send-as-set with wrong count", ["send-as-set"]),
++        ("inline-math-set with wrong count", ["inline-math-set"]),
++        ("math-eval without expression", ["math-eval"]),
 +        ("plugin-install without args", ["plugin-install"]),
 +        ("plugin-delete without args", ["plugin-delete"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
@@ -11949,7 +12407,7 @@ index 0000000..262d844
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 52,
++            len(section) == 53,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -11970,7 +12428,7 @@ index 0000000..262d844
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 57,
++            sum(len(value) for value in exported.values()) == 58,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -11990,7 +12448,7 @@ index 0000000..262d844
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 57,
++                data.get("applied") == 58,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -12076,6 +12534,7 @@ index 0000000..262d844
 +            "OESettingsHideHelp": True,
 +            "OEAppearanceHideAiEditor": True,
 +            "OEChatsHideSendAsPeer": True,
++            "OEChatsInlineMathResult": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -12097,7 +12556,7 @@ index 0000000..262d844
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 57,
++            data.get("applied") == 58,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -12164,6 +12623,10 @@ index 0000000..262d844
 +            "backup full hide send as",
 +            section.get("OEChatsHideSendAsPeer") is True,
 +            section.get("OEChatsHideSendAsPeer"))
++        ledger.check(
++            "backup full inline math",
++            section.get("OEChatsInlineMathResult") is True,
++            section.get("OEChatsInlineMathResult"))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -12293,10 +12756,10 @@ index 0000000..262d844
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 57",
++            "backup legacy eight completed to 58",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (52, 3, 2),
++             len(sections["mainconfig"])) == (53, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -13121,6 +13584,7 @@ index 0000000..262d844
 +            "OESettingsHideHelp": True,
 +            "OEAppearanceHideAiEditor": True,
 +            "OEChatsHideSendAsPeer": True,
++            "OEChatsInlineMathResult": True,
 +        },
 +    }
 +    data = json_call(
@@ -14226,6 +14690,92 @@ index 0000000..262d844
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_inline_math(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "inline-math-defaults")
++    data = json_call(
++        ledger, cli, ["inline-math"], env, "inline-math defaults")
++    if data is not None:
++        ledger.check(
++            "inline math default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["inline-math-set", "1"], env, "inline-math set")
++    if data is not None:
++        ledger.check("inline math set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["inline-math"], env, "inline-math reload")
++    if reloaded is not None:
++        ledger.check(
++            "inline math persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    cases = [
++        ("2+2", "4"),
++        ("2+2*2", "6"),
++        ("(2+2)*2", "8"),
++        ("2^10", "1024"),
++        ("2^3^2", "512"),
++        ("10/4", "2.5"),
++        ("0.1+0.2", "0.3"),
++        ("-5+2", "-3"),
++        ("3%2", "1"),
++        ("sqrt(16)", "4"),
++        ("abs(-3)", "3"),
++        ("floor(2.9)", "2"),
++        ("ceil(2.1)", "3"),
++        ("round(2.5)", "3"),
++        ("log(100)", "2"),
++        ("ln(e)", "1"),
++        ("sin(0)", "0"),
++        ("pi", "3.141592654"),
++        ("2 + 2", "4"),
++        ("1/0", "invalid"),
++        ("2+", "invalid"),
++        ("abc", "invalid"),
++        ("", "invalid"),
++        ("2 2", "invalid"),
++        ("sqrt(-1)", "invalid"),
++        ("1e999", "invalid"),
++    ]
++    for expression, expected in cases:
++        result = run(cli, ["math-eval", expression])
++        actual = result.stdout.strip()
++        ledger.check(
++            f"math eval {expression or 'empty'}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    env = make_env(work / "inline-math-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"inlineMathResult": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "inline-math alias")
++    if data is not None:
++        ledger.check(
++            "inline math alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["inline-math"], env, "inline-math alias read")
++    if reloaded is not None:
++        ledger.check(
++            "inline math alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -14258,6 +14808,7 @@ index 0000000..262d844
 +        ai_editor = check_ai_editor(ledger, cli, work)
 +        pluginops = check_plugin_installer(ledger, cli, work)
 +        send_as = check_send_as(ledger, cli, work)
++        inline_math = check_inline_math(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -14282,6 +14833,7 @@ index 0000000..262d844
 +    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
 +    print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
 +    print(f"send-as: {send_as[0] - send_as[1]} passed")
++    print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

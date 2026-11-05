@@ -165,6 +165,8 @@ def check_cli_args(ledger, cli):
         ("ai-editor-set with wrong count", ["ai-editor-set"]),
         ("plugin-filename without name", ["plugin-filename"]),
         ("send-as-set with wrong count", ["send-as-set"]),
+        ("inline-math-set with wrong count", ["inline-math-set"]),
+        ("math-eval without expression", ["math-eval"]),
         ("plugin-install without args", ["plugin-install"]),
         ("plugin-delete without args", ["plugin-delete"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
@@ -472,7 +474,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 52,
+            len(section) == 53,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -493,7 +495,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 57,
+            sum(len(value) for value in exported.values()) == 58,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -513,7 +515,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 57,
+                data.get("applied") == 58,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -599,6 +601,7 @@ def check_backup(ledger, cli, work):
             "OESettingsHideHelp": True,
             "OEAppearanceHideAiEditor": True,
             "OEChatsHideSendAsPeer": True,
+            "OEChatsInlineMathResult": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -620,7 +623,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 57,
+            data.get("applied") == 58,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -687,6 +690,10 @@ def check_backup(ledger, cli, work):
             "backup full hide send as",
             section.get("OEChatsHideSendAsPeer") is True,
             section.get("OEChatsHideSendAsPeer"))
+        ledger.check(
+            "backup full inline math",
+            section.get("OEChatsInlineMathResult") is True,
+            section.get("OEChatsInlineMathResult"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -816,10 +823,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 57",
+            "backup legacy eight completed to 58",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (52, 3, 2),
+             len(sections["mainconfig"])) == (53, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1644,6 +1651,7 @@ def check_sticker_time(ledger, cli, work):
             "OESettingsHideHelp": True,
             "OEAppearanceHideAiEditor": True,
             "OEChatsHideSendAsPeer": True,
+            "OEChatsInlineMathResult": True,
         },
     }
     data = json_call(
@@ -2749,6 +2757,92 @@ def check_send_as(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_inline_math(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "inline-math-defaults")
+    data = json_call(
+        ledger, cli, ["inline-math"], env, "inline-math defaults")
+    if data is not None:
+        ledger.check(
+            "inline math default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["inline-math-set", "1"], env, "inline-math set")
+    if data is not None:
+        ledger.check("inline math set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["inline-math"], env, "inline-math reload")
+    if reloaded is not None:
+        ledger.check(
+            "inline math persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    cases = [
+        ("2+2", "4"),
+        ("2+2*2", "6"),
+        ("(2+2)*2", "8"),
+        ("2^10", "1024"),
+        ("2^3^2", "512"),
+        ("10/4", "2.5"),
+        ("0.1+0.2", "0.3"),
+        ("-5+2", "-3"),
+        ("3%2", "1"),
+        ("sqrt(16)", "4"),
+        ("abs(-3)", "3"),
+        ("floor(2.9)", "2"),
+        ("ceil(2.1)", "3"),
+        ("round(2.5)", "3"),
+        ("log(100)", "2"),
+        ("ln(e)", "1"),
+        ("sin(0)", "0"),
+        ("pi", "3.141592654"),
+        ("2 + 2", "4"),
+        ("1/0", "invalid"),
+        ("2+", "invalid"),
+        ("abc", "invalid"),
+        ("", "invalid"),
+        ("2 2", "invalid"),
+        ("sqrt(-1)", "invalid"),
+        ("1e999", "invalid"),
+    ]
+    for expression, expected in cases:
+        result = run(cli, ["math-eval", expression])
+        actual = result.stdout.strip()
+        ledger.check(
+            f"math eval {expression or 'empty'}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    env = make_env(work / "inline-math-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"inlineMathResult": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "inline-math alias")
+    if data is not None:
+        ledger.check(
+            "inline math alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["inline-math"], env, "inline-math alias read")
+    if reloaded is not None:
+        ledger.check(
+            "inline math alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2781,6 +2875,7 @@ def main():
         ai_editor = check_ai_editor(ledger, cli, work)
         pluginops = check_plugin_installer(ledger, cli, work)
         send_as = check_send_as(ledger, cli, work)
+        inline_math = check_inline_math(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2805,6 +2900,7 @@ def main():
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
     print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
     print(f"send-as: {send_as[0] - send_as[1]} passed")
+    print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

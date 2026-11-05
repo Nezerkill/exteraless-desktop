@@ -7,6 +7,7 @@
 #include "exteraless/format.h"
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
+#include "exteraless/math.h"
 #include "exteraless/network.h"
 #include "exteraless/pangu.h"
 #include "exteraless/plugins/installer.h"
@@ -81,6 +82,9 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli inline-math\n"
+		<< "  exteraless-chats-cli inline-math-set <0|1>\n"
+		<< "  exteraless-chats-cli math-eval <expression>\n"
 		<< "  exteraless-chats-cli send-as\n"
 		<< "  exteraless-chats-cli send-as-set <0|1>\n"
 		<< "  exteraless-chats-cli plugin-filename <name>\n"
@@ -505,6 +509,38 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("inline-math")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().inlineMathResult() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("inline-math-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setInlineMathResult(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("math-eval")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto result = Exteraless::EvaluateMathExpression(arguments[2]);
+		std::cout
+			<< (result ? *result : QStringLiteral("invalid")).toUtf8().constData()
+			<< '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("send-as")) {
