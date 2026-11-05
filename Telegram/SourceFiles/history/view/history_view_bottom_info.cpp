@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_bottom_info.h"
 
+#include "exteraless/config.h"
 #include "exteraless/format.h"
 
 #include "ui/chat/message_bubble.h"
@@ -69,6 +70,17 @@ namespace {
 		}
 	}
 	return map.back().text;
+}
+
+[[nodiscard]] QString EditedLabel() {
+	const auto &config = Exteraless::Config::Instance();
+	const auto custom = config.customEditedMark();
+	if (!custom.isEmpty()) {
+		return custom;
+	}
+	return config.useEditedIcon()
+		? QString::fromUtf8("\xe2\x9c\x8e")
+		: tr::lng_edited(tr::now);
 }
 
 [[nodiscard]] QString FormatEditedDate(QDateTime sent, QDateTime edited) {
@@ -494,7 +506,7 @@ void BottomInfo::layoutDateText() {
 		: updated
 		? (tr::lng_ephemeral_updated(tr::now) + ' ')
 		: (_data.flags & Data::Flag::Edited)
-		? (tr::lng_edited(tr::now) + ' ')
+		? (EditedLabel() + ' ')
 		: (_data.flags & Data::Flag::EstimateDate)
 		? (tr::lng_approximate(tr::now) + ' ')
 		: _data.scheduleRepeatPeriod

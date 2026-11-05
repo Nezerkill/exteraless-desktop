@@ -9231,6 +9231,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 "lng_settings_exteraless_chats_inline_math" = "Inline math: press Space after \"2+2=\"";
 "lng_settings_exteraless_chats_seek_duration" = "Seek duration";
+"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
+"lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
+"lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
+"lng_settings_exteraless_default" = "Default";
 "lng_settings_exteraless_double_tap_title" = "Double tap action";
 "lng_settings_exteraless_double_tap_in" = "On incoming messages";
 "lng_settings_exteraless_double_tap_out" = "On outgoing messages";

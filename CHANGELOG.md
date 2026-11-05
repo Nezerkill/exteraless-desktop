@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Chats / Edited mark: настройки `OEChatsUseEditedIcon` (иконка «✎» вместо
+  слова) и `OEChatsCustomEditedMark` (свой текст, до 16 символов) заменяют
+  метку «edited» в сообщениях; Android-алиасы `useEditedIcon`/
+  `customEditedMessage` поддержаны в `.extera` (всего 63 ключа), в Chats
+  добавлены тумблер и поле метки.
 - Player / Seek: настройка `OEChatsSeekDuration` (5/10/15/30 с, default 5)
   задаёт шаг перемотки стрелками в медиавьюере (J/L — двойной шаг);
   Android-алиас `doubleTapSeekDuration` (индекс 0–3) поддержан в `.extera`

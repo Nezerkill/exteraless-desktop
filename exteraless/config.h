@@ -79,6 +79,10 @@ public:
 	void setGhostScheduledSend(bool value);
 	[[nodiscard]] int seekDuration() const;
 	void setSeekDuration(int value);
+	[[nodiscard]] bool useEditedIcon() const;
+	void setUseEditedIcon(bool value);
+	[[nodiscard]] QString customEditedMark() const;
+	void setCustomEditedMark(const QString &value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

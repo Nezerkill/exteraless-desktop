@@ -99,13 +99,17 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 470 проверок PASS
-  (44 strip, 10 reactions, 32 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 478 проверок PASS
+  (44 strip, 10 reactions, 33 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
-  15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 86 backup); плагины
-  без изменений — 32 и 213 проверок.
+  15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 6 edited-mark,
+  87 backup); плагины без изменений — 32 и 213 проверок.
+- Edited mark (NB-68): `OEChatsUseEditedIcon` (глиф ✎) и
+  `OEChatsCustomEditedMark` (до 16 символов) заменяют локализованное «edited»
+  в строке сообщения; CLI `edited-mark` (6 проверок). Xvfb: метка «ed.»
+  отрисовалась в сообщении канала.
 - Seek duration (NB-72): `OEChatsSeekDuration` (5/10/15/30, default 5) задаёт
   шаг перемотки стрелками в медиавьюере, J/L — двойной шаг; Android-индекс
   `doubleTapSeekDuration` конвертируется в секунды. CLI `seek-duration`
@@ -309,8 +313,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `1a3c3ed2…`,
-  mtime 2026-11-05 12:19; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `06b1efbd…`,
+  mtime 2026-11-05 13:28; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

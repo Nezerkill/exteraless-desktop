@@ -32,6 +32,10 @@ constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 constexpr auto kSeekDuration = "OEChatsSeekDuration";
+constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
+constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
+
+constexpr auto kMaxEditedMarkLength = 16;
 
 [[nodiscard]] int SanitizeSeekDuration(int value) {
 	switch (value) {
@@ -334,6 +338,23 @@ int Config::seekDuration() const {
 
 void Config::setSeekDuration(int value) {
 	setValue(kSeekDuration, SanitizeSeekDuration(value));
+}
+
+bool Config::useEditedIcon() const {
+	return boolValue(kUseEditedIcon, false);
+}
+
+void Config::setUseEditedIcon(bool value) {
+	setValue(kUseEditedIcon, value);
+}
+
+QString Config::customEditedMark() const {
+	return stringValue(kCustomEditedMark, QString()).left(
+		kMaxEditedMarkLength);
+}
+
+void Config::setCustomEditedMark(const QString &value) {
+	setValue(kCustomEditedMark, value.left(kMaxEditedMarkLength));
 }
 
 bool Config::useDeletedIcon() const {
@@ -750,6 +771,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kSaveToChatSubfolder
 			|| key == kGhostScheduledSend
 			|| key == kSeekDuration
+			|| key == kUseEditedIcon
+			|| key == kCustomEditedMark
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

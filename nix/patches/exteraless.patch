@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..7b9a131 100644
+index ffc8ec9..acf85ac 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,102 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,106 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -141,6 +141,10 @@ index ffc8ec9..7b9a131 100644
 +"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 +"lng_settings_exteraless_chats_inline_math" = "Inline math: press Space after \"2+2=\"";
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
++"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
++"lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
++"lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
++"lng_settings_exteraless_default" = "Default";
 +"lng_settings_exteraless_double_tap_title" = "Double tap action";
 +"lng_settings_exteraless_double_tap_in" = "On incoming messages";
 +"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
@@ -3948,20 +3952,34 @@ index f95a351..6f65edd 100644
  		|| isEditingMessage()
  		|| !session().sendAsPeers().shouldChoose({ peer, type })) {
 diff --git a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp b/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
-index 9971a38..58cec9f 100644
+index 9971a38..6c1e80e 100644
 --- a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
-@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_bottom_info.h"
  
++#include "exteraless/config.h"
 +#include "exteraless/format.h"
 +
  #include "ui/chat/message_bubble.h"
  #include "ui/chat/chat_style.h"
  #include "ui/effects/reaction_fly_animation.h"
-@@ -71,7 +73,7 @@ namespace {
+@@ -69,9 +72,20 @@ namespace {
+ 	return map.back().text;
+ }
  
++[[nodiscard]] QString EditedLabel() {
++	const auto &config = Exteraless::Config::Instance();
++	const auto custom = config.customEditedMark();
++	if (!custom.isEmpty()) {
++		return custom;
++	}
++	return config.useEditedIcon()
++		? QString::fromUtf8("\xe2\x9c\x8e")
++		: tr::lng_edited(tr::now);
++}
++
  [[nodiscard]] QString FormatEditedDate(QDateTime sent, QDateTime edited) {
  	const auto today = QDateTime::currentDateTime().date();
 -	const auto time = QLocale().toString(edited.time(), QLocale::ShortFormat);
@@ -3969,7 +3987,16 @@ index 9971a38..58cec9f 100644
  	if (sent.date() == today && edited.date() == today) {
  		return tr::lng_edited_at(tr::now, lt_time, time);
  	}
-@@ -505,7 +507,7 @@ void BottomInfo::layoutDateText() {
+@@ -492,7 +506,7 @@ void BottomInfo::layoutDateText() {
+ 		: updated
+ 		? (tr::lng_ephemeral_updated(tr::now) + ' ')
+ 		: (_data.flags & Data::Flag::Edited)
+-		? (tr::lng_edited(tr::now) + ' ')
++		? (EditedLabel() + ' ')
+ 		: (_data.flags & Data::Flag::EstimateDate)
+ 		? (tr::lng_approximate(tr::now) + ' ')
+ 		: _data.scheduleRepeatPeriod
+@@ -505,7 +519,7 @@ void BottomInfo::layoutDateText() {
  		: edited + ((_data.flags
  			& (Data::Flag::ForwardedDate | Data::Flag::FullDate))
  		? Ui::FormatDateTimeSavedFrom(_data.date)
@@ -5043,10 +5070,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..f01ae4a
+index 0000000..c44f307
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1115 @@
+@@ -0,0 +1,1169 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5066,6 +5093,7 @@ index 0000000..f01ae4a
 +#include "ui/ui_utility.h"
 +#include "ui/widgets/buttons.h"
 +#include "ui/widgets/checkbox.h"
++#include "ui/widgets/fields/input_field.h"
 +#include "ui/wrap/vertical_layout.h"
 +#include "window/window_session_controller.h"
 +#include "styles/style_menu_icons.h"
@@ -5521,6 +5549,59 @@ index 0000000..f01ae4a
 +		[](bool value) {
 +			Exteraless::Config::Instance().setHideSendAsPeer(value);
 +		});
++	addChatsToggle(
++		u"exteraless/chats/use-edited-icon"_q,
++		tr::lng_settings_exteraless_chats_use_edited_icon(),
++		{ u"edited"_q, u"icon"_q },
++		Exteraless::Config::Instance().useEditedIcon(),
++		[](bool value) {
++			Exteraless::Config::Instance().setUseEditedIcon(value);
++		});
++	const auto editedMark = std::make_shared<rpl::variable<QString>>(
++		Exteraless::Config::Instance().customEditedMark().isEmpty()
++		? tr::lng_settings_exteraless_default(tr::now)
++		: Exteraless::Config::Instance().customEditedMark());
++	builder.addButton({
++		.id = u"exteraless/chats/custom-edited-mark"_q,
++		.title = tr::lng_settings_exteraless_chats_custom_edited(),
++		.st = &st::settingsButtonNoIcon,
++		.label = editedMark->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_chats_custom_edited());
++				const auto field = box->addRow(
++					object_ptr<Ui::InputField>(
++						box,
++						st::defaultInputField,
++						Ui::InputField::Mode::SingleLine,
++						tr::lng_settings_exteraless_chats_custom_edited_hint(),
++						TextWithTags{
++							Exteraless::Config::Instance()
++								.customEditedMark() }),
++					st::boxRowPadding);
++				field->setMaxLength(16);
++				box->addButton(tr::lng_settings_save(), [=] {
++					const auto value = field->getTextWithTags()
++						.text.trimmed().left(16);
++					Exteraless::Config::Instance()
++						.setCustomEditedMark(value);
++					editedMark->force_assign(value.isEmpty()
++						? tr::lng_settings_exteraless_default(tr::now)
++						: value);
++					box->closeBox();
++				});
++				box->addButton(tr::lng_cancel(), [=] {
++					box->closeBox();
++				});
++			}));
++		},
++		.keywords = { u"edited"_q, u"mark"_q, u"label"_q },
++	});
 +	const auto seekDuration = std::make_shared<rpl::variable<QString>>(
 +		u"%1 s"_q.arg(Exteraless::Config::Instance().seekDuration()));
 +	builder.addButton({
@@ -6901,10 +6982,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..c0b077e
+index 0000000..5ae4f32
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,563 @@
+@@ -0,0 +1,575 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6942,6 +7023,10 @@ index 0000000..c0b077e
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 +constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 +constexpr auto kSeekDuration = "OEChatsSeekDuration";
++constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
++constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
++constexpr auto kUseEditedIconAlias = "useEditedIcon";
++constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
 +constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 +constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
@@ -7163,6 +7248,8 @@ index 0000000..c0b077e
 +	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 +	extera[kGhostScheduledSend] = config.ghostScheduledSend();
 +	extera[kSeekDuration] = config.seekDuration();
++	extera[kUseEditedIcon] = config.useEditedIcon();
++	extera[kCustomEditedMark] = config.customEditedMark();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7377,6 +7464,12 @@ index 0000000..c0b077e
 +				|| value.toInt() == 15
 +				|| value.toInt() == 30)) {
 +			config.setSeekDuration(value.toInt());
++		} else if ((key == kUseEditedIcon || key == kUseEditedIconAlias)
++			&& value.isBool()) {
++			config.setUseEditedIcon(value.toBool());
++		} else if ((key == kCustomEditedMark || key == kCustomEditedMarkAlias)
++			&& value.isString()) {
++			config.setCustomEditedMark(value.toString());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -7569,10 +7662,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..3280ca1
+index 0000000..b5dc6be
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,946 @@
+@@ -0,0 +1,969 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7607,6 +7700,10 @@ index 0000000..3280ca1
 +constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 +constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 +constexpr auto kSeekDuration = "OEChatsSeekDuration";
++constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
++constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
++
++constexpr auto kMaxEditedMarkLength = 16;
 +
 +[[nodiscard]] int SanitizeSeekDuration(int value) {
 +	switch (value) {
@@ -7909,6 +8006,23 @@ index 0000000..3280ca1
 +
 +void Config::setSeekDuration(int value) {
 +	setValue(kSeekDuration, SanitizeSeekDuration(value));
++}
++
++bool Config::useEditedIcon() const {
++	return boolValue(kUseEditedIcon, false);
++}
++
++void Config::setUseEditedIcon(bool value) {
++	setValue(kUseEditedIcon, value);
++}
++
++QString Config::customEditedMark() const {
++	return stringValue(kCustomEditedMark, QString()).left(
++		kMaxEditedMarkLength);
++}
++
++void Config::setCustomEditedMark(const QString &value) {
++	setValue(kCustomEditedMark, value.left(kMaxEditedMarkLength));
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8325,6 +8439,8 @@ index 0000000..3280ca1
 +			|| key == kSaveToChatSubfolder
 +			|| key == kGhostScheduledSend
 +			|| key == kSeekDuration
++			|| key == kUseEditedIcon
++			|| key == kCustomEditedMark
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8521,10 +8637,10 @@ index 0000000..3280ca1
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..b3048b3
+index 0000000..929d385
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,199 @@
+@@ -0,0 +1,203 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8606,6 +8722,10 @@ index 0000000..b3048b3
 +	void setGhostScheduledSend(bool value);
 +	[[nodiscard]] int seekDuration() const;
 +	void setSeekDuration(int value);
++	[[nodiscard]] bool useEditedIcon() const;
++	void setUseEditedIcon(bool value);
++	[[nodiscard]] QString customEditedMark() const;
++	void setCustomEditedMark(const QString &value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11202,10 +11322,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..2d67e60
+index 0000000..e83d54c
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1210 @@
+@@ -0,0 +1,1242 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11296,6 +11416,8 @@ index 0000000..2d67e60
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli edited-mark\n"
++		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 +		<< "  exteraless-chats-cli seek-duration\n"
 +		<< "  exteraless-chats-cli seek-duration-set <seconds>\n"
 +		<< "  exteraless-chats-cli save-subfolder\n"
@@ -11731,6 +11853,36 @@ index 0000000..2d67e60
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("edited-mark")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("icon"),
++				Exteraless::Config::Instance().useEditedIcon() },
++			{ QStringLiteral("mark"),
++				Exteraless::Config::Instance().customEditedMark() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("edited-mark-set")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto icon = false;
++		if (!ReadFlag(arguments[2], &icon)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setUseEditedIcon(icon);
++		Exteraless::Config::Instance().setCustomEditedMark(arguments[3]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("icon"),
++				Exteraless::Config::Instance().useEditedIcon() },
++			{ QStringLiteral("mark"),
++				Exteraless::Config::Instance().customEditedMark() },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("seek-duration")) {
@@ -12480,10 +12632,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..3d7aa33
+index 0000000..c1ac08f
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3188 @@
+@@ -0,0 +1,3270 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12655,6 +12807,7 @@ index 0000000..3d7aa33
 +        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
 +        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
 +        ("seek-duration-set without value", ["seek-duration-set"]),
++        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -12967,7 +13120,7 @@ index 0000000..3d7aa33
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 56,
++            len(section) == 58,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -12988,7 +13141,7 @@ index 0000000..3d7aa33
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 61,
++            sum(len(value) for value in exported.values()) == 63,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13008,7 +13161,7 @@ index 0000000..3d7aa33
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 61,
++                data.get("applied") == 63,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13098,6 +13251,8 @@ index 0000000..3d7aa33
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
 +            "OEChatsSeekDuration": 15,
++            "OEChatsUseEditedIcon": True,
++            "OEChatsCustomEditedMark": "изм.",
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13119,7 +13274,7 @@ index 0000000..3d7aa33
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 61,
++            data.get("applied") == 63,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13202,6 +13357,12 @@ index 0000000..3d7aa33
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full edited mark",
++            section.get("OEChatsUseEditedIcon") is True
++            and section.get("OEChatsCustomEditedMark") == "изм.",
++            (section.get("OEChatsUseEditedIcon"),
++             section.get("OEChatsCustomEditedMark")))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -13331,10 +13492,10 @@ index 0000000..3d7aa33
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 61",
++            "backup legacy eight completed to 63",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (56, 3, 2),
++             len(sections["mainconfig"])) == (58, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -14163,6 +14324,8 @@ index 0000000..3d7aa33
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
 +            "OEChatsSeekDuration": 15,
++            "OEChatsUseEditedIcon": True,
++            "OEChatsCustomEditedMark": "изм.",
 +        },
 +    }
 +    data = json_call(
@@ -15596,6 +15759,75 @@ index 0000000..3d7aa33
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_edited_mark(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "edited-mark-defaults")
++    data = json_call(
++        ledger, cli, ["edited-mark"], env, "edited-mark defaults")
++    if data is not None:
++        ledger.check(
++            "edited mark defaults",
++            data.get("icon") is False and data.get("mark") == "",
++            data)
++
++    data = json_call(
++        ledger, cli, ["edited-mark-set", "1", "ред."], env,
++        "edited-mark set")
++    if data is not None:
++        ledger.check(
++            "edited mark set",
++            data.get("icon") is True and data.get("mark") == "ред.",
++            data)
++    reloaded = json_call(
++        ledger, cli, ["edited-mark"], env, "edited-mark reload")
++    if reloaded is not None:
++        ledger.check(
++            "edited mark persisted",
++            reloaded.get("icon") is True and reloaded.get("mark") == "ред.",
++            reloaded)
++
++    long_mark = "y" * 40
++    data = json_call(
++        ledger, cli, ["edited-mark-set", "0", long_mark], env,
++        "edited-mark truncation")
++    if data is not None:
++        ledger.check(
++            "edited mark truncated",
++            data.get("mark") == "y" * 16 and data.get("icon") is False,
++            data)
++
++    env = make_env(work / "edited-mark-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "useEditedIcon": True,
++            "customEditedMessage": "изм.",
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "edited-mark alias")
++    if data is not None:
++        ledger.check(
++            "edited mark alias applied",
++            data.get("applied") == 2 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["edited-mark"], env, "edited-mark alias read")
++    if reloaded is not None:
++        ledger.check(
++            "edited mark alias values",
++            reloaded.get("icon") is True
++            and reloaded.get("mark") == "изм.",
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -15632,6 +15864,7 @@ index 0000000..3d7aa33
 +        save_subfolder = check_save_subfolder(ledger, cli, work)
 +        ghost_schedule = check_ghost_schedule(ledger, cli, work)
 +        seek_duration = check_seek_duration(ledger, cli, work)
++        edited_mark = check_edited_mark(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -15660,6 +15893,7 @@ index 0000000..3d7aa33
 +    print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
 +    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
 +    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
++    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

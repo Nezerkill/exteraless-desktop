@@ -169,6 +169,7 @@ def check_cli_args(ledger, cli):
         ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
         ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
         ("seek-duration-set without value", ["seek-duration-set"]),
+        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -481,7 +482,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 56,
+            len(section) == 58,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -502,7 +503,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 61,
+            sum(len(value) for value in exported.values()) == 63,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -522,7 +523,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 61,
+                data.get("applied") == 63,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -612,6 +613,8 @@ def check_backup(ledger, cli, work):
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
             "OEChatsSeekDuration": 15,
+            "OEChatsUseEditedIcon": True,
+            "OEChatsCustomEditedMark": "изм.",
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -633,7 +636,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 61,
+            data.get("applied") == 63,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -716,6 +719,12 @@ def check_backup(ledger, cli, work):
             "backup full seek duration",
             section.get("OEChatsSeekDuration") == 15,
             section.get("OEChatsSeekDuration"))
+        ledger.check(
+            "backup full edited mark",
+            section.get("OEChatsUseEditedIcon") is True
+            and section.get("OEChatsCustomEditedMark") == "изм.",
+            (section.get("OEChatsUseEditedIcon"),
+             section.get("OEChatsCustomEditedMark")))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -845,10 +854,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 61",
+            "backup legacy eight completed to 63",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (56, 3, 2),
+             len(sections["mainconfig"])) == (58, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1677,6 +1686,8 @@ def check_sticker_time(ledger, cli, work):
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
             "OEChatsSeekDuration": 15,
+            "OEChatsUseEditedIcon": True,
+            "OEChatsCustomEditedMark": "изм.",
         },
     }
     data = json_call(
@@ -3110,6 +3121,75 @@ def check_seek_duration(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_edited_mark(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "edited-mark-defaults")
+    data = json_call(
+        ledger, cli, ["edited-mark"], env, "edited-mark defaults")
+    if data is not None:
+        ledger.check(
+            "edited mark defaults",
+            data.get("icon") is False and data.get("mark") == "",
+            data)
+
+    data = json_call(
+        ledger, cli, ["edited-mark-set", "1", "ред."], env,
+        "edited-mark set")
+    if data is not None:
+        ledger.check(
+            "edited mark set",
+            data.get("icon") is True and data.get("mark") == "ред.",
+            data)
+    reloaded = json_call(
+        ledger, cli, ["edited-mark"], env, "edited-mark reload")
+    if reloaded is not None:
+        ledger.check(
+            "edited mark persisted",
+            reloaded.get("icon") is True and reloaded.get("mark") == "ред.",
+            reloaded)
+
+    long_mark = "y" * 40
+    data = json_call(
+        ledger, cli, ["edited-mark-set", "0", long_mark], env,
+        "edited-mark truncation")
+    if data is not None:
+        ledger.check(
+            "edited mark truncated",
+            data.get("mark") == "y" * 16 and data.get("icon") is False,
+            data)
+
+    env = make_env(work / "edited-mark-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "useEditedIcon": True,
+            "customEditedMessage": "изм.",
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "edited-mark alias")
+    if data is not None:
+        ledger.check(
+            "edited mark alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["edited-mark"], env, "edited-mark alias read")
+    if reloaded is not None:
+        ledger.check(
+            "edited mark alias values",
+            reloaded.get("icon") is True
+            and reloaded.get("mark") == "изм.",
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3146,6 +3226,7 @@ def main():
         save_subfolder = check_save_subfolder(ledger, cli, work)
         ghost_schedule = check_ghost_schedule(ledger, cli, work)
         seek_duration = check_seek_duration(ledger, cli, work)
+        edited_mark = check_edited_mark(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3174,6 +3255,7 @@ def main():
     print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
     print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
     print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
+    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

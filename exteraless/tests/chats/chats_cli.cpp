@@ -88,6 +88,8 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli edited-mark\n"
+		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 		<< "  exteraless-chats-cli seek-duration\n"
 		<< "  exteraless-chats-cli seek-duration-set <seconds>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
@@ -523,6 +525,36 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("edited-mark")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("icon"),
+				Exteraless::Config::Instance().useEditedIcon() },
+			{ QStringLiteral("mark"),
+				Exteraless::Config::Instance().customEditedMark() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("edited-mark-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto icon = false;
+		if (!ReadFlag(arguments[2], &icon)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setUseEditedIcon(icon);
+		Exteraless::Config::Instance().setCustomEditedMark(arguments[3]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("icon"),
+				Exteraless::Config::Instance().useEditedIcon() },
+			{ QStringLiteral("mark"),
+				Exteraless::Config::Instance().customEditedMark() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("seek-duration")) {

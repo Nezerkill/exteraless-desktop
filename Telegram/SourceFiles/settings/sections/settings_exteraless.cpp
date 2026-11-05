@@ -17,6 +17,7 @@
 #include "ui/ui_utility.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/widgets/fields/input_field.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 #include "styles/style_menu_icons.h"
@@ -472,6 +473,59 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setHideSendAsPeer(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/use-edited-icon"_q,
+		tr::lng_settings_exteraless_chats_use_edited_icon(),
+		{ u"edited"_q, u"icon"_q },
+		Exteraless::Config::Instance().useEditedIcon(),
+		[](bool value) {
+			Exteraless::Config::Instance().setUseEditedIcon(value);
+		});
+	const auto editedMark = std::make_shared<rpl::variable<QString>>(
+		Exteraless::Config::Instance().customEditedMark().isEmpty()
+		? tr::lng_settings_exteraless_default(tr::now)
+		: Exteraless::Config::Instance().customEditedMark());
+	builder.addButton({
+		.id = u"exteraless/chats/custom-edited-mark"_q,
+		.title = tr::lng_settings_exteraless_chats_custom_edited(),
+		.st = &st::settingsButtonNoIcon,
+		.label = editedMark->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_custom_edited());
+				const auto field = box->addRow(
+					object_ptr<Ui::InputField>(
+						box,
+						st::defaultInputField,
+						Ui::InputField::Mode::SingleLine,
+						tr::lng_settings_exteraless_chats_custom_edited_hint(),
+						TextWithTags{
+							Exteraless::Config::Instance()
+								.customEditedMark() }),
+					st::boxRowPadding);
+				field->setMaxLength(16);
+				box->addButton(tr::lng_settings_save(), [=] {
+					const auto value = field->getTextWithTags()
+						.text.trimmed().left(16);
+					Exteraless::Config::Instance()
+						.setCustomEditedMark(value);
+					editedMark->force_assign(value.isEmpty()
+						? tr::lng_settings_exteraless_default(tr::now)
+						: value);
+					box->closeBox();
+				});
+				box->addButton(tr::lng_cancel(), [=] {
+					box->closeBox();
+				});
+			}));
+		},
+		.keywords = { u"edited"_q, u"mark"_q, u"label"_q },
+	});
 	const auto seekDuration = std::make_shared<rpl::variable<QString>>(
 		u"%1 s"_q.arg(Exteraless::Config::Instance().seekDuration()));
 	builder.addButton({

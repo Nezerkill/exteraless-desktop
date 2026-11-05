@@ -35,6 +35,10 @@ constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 constexpr auto kSeekDuration = "OEChatsSeekDuration";
+constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
+constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
+constexpr auto kUseEditedIconAlias = "useEditedIcon";
+constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
 constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
@@ -256,6 +260,8 @@ QString BuildBackup() {
 	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 	extera[kGhostScheduledSend] = config.ghostScheduledSend();
 	extera[kSeekDuration] = config.seekDuration();
+	extera[kUseEditedIcon] = config.useEditedIcon();
+	extera[kCustomEditedMark] = config.customEditedMark();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -470,6 +476,12 @@ BackupImportResult ApplyBackup(const QString &text) {
 				|| value.toInt() == 15
 				|| value.toInt() == 30)) {
 			config.setSeekDuration(value.toInt());
+		} else if ((key == kUseEditedIcon || key == kUseEditedIconAlias)
+			&& value.isBool()) {
+			config.setUseEditedIcon(value.toBool());
+		} else if ((key == kCustomEditedMark || key == kCustomEditedMarkAlias)
+			&& value.isString()) {
+			config.setCustomEditedMark(value.toString());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0
