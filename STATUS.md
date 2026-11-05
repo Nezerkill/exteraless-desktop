@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 542 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 549 проверок PASS
   (44 strip, 10 reactions, 39 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   11 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
@@ -107,7 +107,8 @@
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 6 edited-mark,
   5 forward-date, 5 media-menu, 5 chat-menu, 5 disable-link-preview,
   5 hide-all-chats, 5 always-show-download, 5 false-bottom, 5 decoration,
-  5 shortcuts, 96 backup); плагины без изменений — 32 и 213 проверок.
+  5 shortcuts, 5 message-menu-style, 97 backup); плагины без изменений —
+  32 и 213 проверок.
 - Hide All Chats (NB-84): `OEChatsHideAllChatsFolder` (default `false`) скрывает
   папку «Все чаты» в левой панели фильтров при наличии пользовательских папок,
   активной становится первая доступная папка. CLI `hide-all-chats` (5 проверок).
@@ -143,6 +144,15 @@
   Administrators, Members, Recent actions; Recent actions открыл All actions,
   Administrators — список админов, Permissions — права участников, Members —
   подписчиков; тестовый канал удалён после проверки.
+- Message menu (NB-83): `OEChatsGroupedMessageMenu` (default `false`)
+  переносит Delete в конец меню сообщения, отделяя его разделителем (меню чата
+  строится в `history/history_inner_widget.cpp`, а не в
+  `history_view_context_menu.cpp`, — правки внесены в оба файла);
+  `OEChatsDefaultDeleteMenu` (default `false`) запоминает выбор
+  «удалить у всех / только у себя» автоматически. CLI `message-menu-style`
+  (5 проверок). Xvfb: Delete внизу меню после «Select»; удаление с снятой
+  галочкой «Also delete» привело к тому, что следующее окно удаления открылось
+  с уже снятой галочкой.
 - Link preview default (NB-74): `OEChatsDisableLinkPreviewByDefault` (default
   `false`) отключает автоматическое определение превью ссылок в поле ввода;
   ручное переключение остаётся по `Ctrl+R`. CLI `disable-link-preview`
@@ -374,8 +384,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f574a02c…`,
-  mtime 2026-11-05 23:54; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `75e759aa…`,
+  mtime 2026-11-06 02:15; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run). Перед финальным линком пересобраны TU,

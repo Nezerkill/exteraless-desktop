@@ -121,6 +121,10 @@ public:
 	void setChatShortcutPermissions(bool value);
 	[[nodiscard]] bool chatShortcutMembers() const;
 	void setChatShortcutMembers(bool value);
+	[[nodiscard]] bool groupedMessageMenu() const;
+	void setGroupedMessageMenu(bool value);
+	[[nodiscard]] bool defaultDeleteMenu() const;
+	void setDefaultDeleteMenu(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

@@ -835,6 +835,27 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/message-menu"_q,
+		.title = tr::lng_settings_exteraless_message_menu(),
+	});
+	addChatsToggle(
+		u"exteraless/chats/grouped-message-menu"_q,
+		tr::lng_settings_exteraless_grouped_menu(),
+		{ u"menu"_q, u"grouped"_q, u"delete"_q },
+		Exteraless::Config::Instance().groupedMessageMenu(),
+		[](bool value) {
+			Exteraless::Config::Instance().setGroupedMessageMenu(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/default-delete-menu"_q,
+		tr::lng_settings_exteraless_default_delete(),
+		{ u"delete"_q, u"remember"_q, u"menu"_q },
+		Exteraless::Config::Instance().defaultDeleteMenu(),
+		[](bool value) {
+			Exteraless::Config::Instance().setDefaultDeleteMenu(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,
 		.title = tr::lng_settings_exteraless_chats_menu_title(),
 	});

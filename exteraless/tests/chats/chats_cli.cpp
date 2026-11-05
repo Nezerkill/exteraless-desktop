@@ -101,6 +101,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli shortcuts\n"
 		<< "  exteraless-chats-cli shortcuts-set <admins> <recent> "
 		<< "<stats> <perms> <members>\n"
+		<< "  exteraless-chats-cli message-menu-style\n"
+		<< "  exteraless-chats-cli message-menu-style-set <grouped> "
+		<< "<defaultDelete>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -706,6 +709,38 @@ int main(int argc, char *argv[]) {
 				config.chatShortcutPermissions() },
 			{ QStringLiteral("members"),
 				config.chatShortcutMembers() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("message-menu-style")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("grouped"), config.groupedMessageMenu() },
+			{ QStringLiteral("defaultDelete"),
+				config.defaultDeleteMenu() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("message-menu-style-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto grouped = false;
+		auto defaultDelete = false;
+		if (!ReadFlag(arguments[2], &grouped)
+			|| !ReadFlag(arguments[3], &defaultDelete)) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setGroupedMessageMenu(grouped);
+		config.setDefaultDeleteMenu(defaultDelete);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("grouped"), config.groupedMessageMenu() },
+			{ QStringLiteral("defaultDelete"),
+				config.defaultDeleteMenu() },
 		});
 		return 0;
 	}

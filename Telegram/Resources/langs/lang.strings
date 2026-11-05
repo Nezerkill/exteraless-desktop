@@ -9254,6 +9254,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_shortcut_statistics" = "Statistics";
 "lng_settings_exteraless_shortcut_permissions" = "Permissions";
 "lng_settings_exteraless_shortcut_members" = "Members";
+"lng_settings_exteraless_message_menu" = "Message menu";
+"lng_settings_exteraless_grouped_menu" = "Grouped menu: Delete at the bottom";
+"lng_settings_exteraless_default_delete" = "Remember the delete choice automatically";
 "lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 "lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 "lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";

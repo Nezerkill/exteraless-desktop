@@ -1430,11 +1430,14 @@ void AddMessageActions(
 		not_null<Ui::PopupMenu*> menu,
 		const ContextMenuRequest &request,
 		not_null<ListWidget*> list) {
+	const auto grouped = Exteraless::Config::Instance().groupedMessageMenu();
 	AddPostLinkAction(menu, request);
 	AddForwardAction(menu, request, list);
 	AddOfferAction(menu, request, list);
 	AddSendNowAction(menu, request, list);
-	AddDeleteAction(menu, request, list);
+	if (!grouped) {
+		AddDeleteAction(menu, request, list);
+	}
 	AddDownloadFilesAction(menu, request, list);
 	AddSaveRichHtmlAction(menu, request, list);
 	AddReportAction(menu, request, list);
@@ -1450,6 +1453,10 @@ void AddMessageActions(
 		AddEphemeralAboutAction(menu, request.item);
 	}
 	AddRescheduleAction(menu, request, list);
+	if (grouped) {
+		menu->addSeparator();
+		AddDeleteAction(menu, request, list);
+	}
 }
 
 void AddCopyLinkAction(

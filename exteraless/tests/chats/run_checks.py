@@ -183,6 +183,8 @@ def check_cli_args(ledger, cli):
         ("decoration-set with wrong count", ["decoration-set"]),
         ("decoration-set out of range", ["decoration-set", "7"]),
         ("shortcuts-set with wrong count", ["shortcuts-set"]),
+        ("message-menu-style-set with wrong count",
+         ["message-menu-style-set", "1"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -495,7 +497,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 77,
+            len(section) == 79,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -516,7 +518,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 82,
+            sum(len(value) for value in exported.values()) == 84,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -536,7 +538,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 82,
+                data.get("applied") == 84,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -647,6 +649,8 @@ def check_backup(ledger, cli, work):
             "OEChatsShortcutStatistics": True,
             "OEChatsShortcutPermissions": True,
             "OEChatsShortcutMembers": True,
+            "OEChatsGroupedMessageMenu": True,
+            "OEChatsDefaultDeleteMenu": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -668,7 +672,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 82,
+            data.get("applied") == 84,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -773,6 +777,12 @@ def check_backup(ledger, cli, work):
             and section.get("OEChatsShortcutMembers") is True,
             {key: section.get(key) for key in section
              if key.startswith("OEChatsShortcut")})
+        ledger.check(
+            "backup full message menu style",
+            section.get("OEChatsGroupedMessageMenu") is True
+            and section.get("OEChatsDefaultDeleteMenu") is True,
+            (section.get("OEChatsGroupedMessageMenu"),
+             section.get("OEChatsDefaultDeleteMenu")))
         ledger.check(
             "backup full disable link preview",
             section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -936,10 +946,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 82",
+            "backup legacy eight completed to 84",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (77, 3, 2),
+             len(sections["mainconfig"])) == (79, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1789,6 +1799,8 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsShortcutStatistics": True,
             "OEChatsShortcutPermissions": True,
             "OEChatsShortcutMembers": True,
+            "OEChatsGroupedMessageMenu": True,
+            "OEChatsDefaultDeleteMenu": True,
         },
     }
     data = json_call(
@@ -3835,6 +3847,72 @@ def check_shortcuts(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_message_menu_style(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "menu-style-defaults")
+    data = json_call(
+        ledger, cli, ["message-menu-style"], env,
+        "menu-style defaults")
+    if data is not None:
+        ledger.check(
+            "menu style default off",
+            data.get("grouped") is False
+            and data.get("defaultDelete") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["message-menu-style-set", "1", "1"], env,
+        "menu-style set")
+    if data is not None:
+        ledger.check(
+            "menu style set on",
+            data.get("grouped") is True
+            and data.get("defaultDelete") is True,
+            data)
+
+    reloaded = json_call(
+        ledger, cli, ["message-menu-style"], env,
+        "menu-style reload")
+    if reloaded is not None:
+        ledger.check(
+            "menu style persisted",
+            reloaded.get("grouped") is True
+            and reloaded.get("defaultDelete") is True,
+            reloaded)
+
+    env = make_env(work / "menu-style-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "groupMessageMenu": True,
+            "DefaultDeleteMenu": 2,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "menu-style alias")
+    if data is not None:
+        ledger.check(
+            "menu style alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["message-menu-style"], env,
+        "menu-style alias read")
+    if reloaded is not None:
+        ledger.check(
+            "menu style alias value",
+            reloaded.get("grouped") is True
+            and reloaded.get("defaultDelete") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3881,6 +3959,7 @@ def main():
         false_bottom = check_false_bottom(ledger, cli, work)
         decoration = check_decoration(ledger, cli, work)
         shortcuts = check_shortcuts(ledger, cli, work)
+        menu_style = check_message_menu_style(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3922,6 +4001,8 @@ def main():
     print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
     print(f"decoration: {decoration[0] - decoration[1]} passed")
     print(f"shortcuts: {shortcuts[0] - shortcuts[1]} passed")
+    print(f"message-menu-style: "
+          f"{menu_style[0] - menu_style[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

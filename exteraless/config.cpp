@@ -54,6 +54,8 @@ constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
 constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
 constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
 constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
+constexpr auto kGroupedMessageMenu = "OEChatsGroupedMessageMenu";
+constexpr auto kDefaultDeleteMenu = "OEChatsDefaultDeleteMenu";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -529,6 +531,22 @@ void Config::setChatShortcutMembers(bool value) {
 	setValue(kShortcutMembers, value);
 }
 
+bool Config::groupedMessageMenu() const {
+	return boolValue(kGroupedMessageMenu, false);
+}
+
+void Config::setGroupedMessageMenu(bool value) {
+	setValue(kGroupedMessageMenu, value);
+}
+
+bool Config::defaultDeleteMenu() const {
+	return boolValue(kDefaultDeleteMenu, false);
+}
+
+void Config::setDefaultDeleteMenu(bool value) {
+	setValue(kDefaultDeleteMenu, value);
+}
+
 bool Config::useDeletedIcon() const {
 	return boolValue(kUseDeletedIcon, true);
 }
@@ -964,6 +982,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kShortcutStatistics
 			|| key == kShortcutPermissions
 			|| key == kShortcutMembers
+			|| key == kGroupedMessageMenu
+			|| key == kDefaultDeleteMenu
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

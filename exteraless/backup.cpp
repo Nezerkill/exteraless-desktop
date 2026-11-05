@@ -56,6 +56,8 @@ constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
 constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
 constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
 constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
+constexpr auto kGroupedMessageMenu = "OEChatsGroupedMessageMenu";
+constexpr auto kDefaultDeleteMenu = "OEChatsDefaultDeleteMenu";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -84,6 +86,9 @@ constexpr auto kShortcutRecentActionsAlias = "EventLog";
 constexpr auto kShortcutStatisticsAlias = "Statistics";
 constexpr auto kShortcutPermissionsAlias = "ChannelPermissions";
 constexpr auto kShortcutMembersAlias = "GroupMembers";
+constexpr auto kGroupedMessageMenuAlias = "groupedMessageMenu";
+constexpr auto kGroupedMessageMenuAliasBackup = "groupMessageMenu";
+constexpr auto kDefaultDeleteMenuAlias = "DefaultDeleteMenu";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -329,6 +334,8 @@ QString BuildBackup() {
 	extera[kShortcutStatistics] = config.chatShortcutStatistics();
 	extera[kShortcutPermissions] = config.chatShortcutPermissions();
 	extera[kShortcutMembers] = config.chatShortcutMembers();
+	extera[kGroupedMessageMenu] = config.groupedMessageMenu();
+	extera[kDefaultDeleteMenu] = config.defaultDeleteMenu();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -640,6 +647,19 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kShortcutMembersAlias)
 			&& value.isBool()) {
 			config.setChatShortcutMembers(value.toBool());
+		} else if ((key == kGroupedMessageMenu
+			|| key == kGroupedMessageMenuAlias
+			|| key == kGroupedMessageMenuAliasBackup)
+			&& value.isBool()) {
+			config.setGroupedMessageMenu(value.toBool());
+		} else if ((key == kDefaultDeleteMenu || key == kDefaultDeleteMenuAlias)
+			&& value.isBool()) {
+			config.setDefaultDeleteMenu(value.toBool());
+		} else if (key == kDefaultDeleteMenuAlias
+			&& value.isDouble()
+			&& value.toInt() >= 0) {
+			const auto mask = value.toInt();
+			config.setDefaultDeleteMenu((mask & 2) != 0);
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

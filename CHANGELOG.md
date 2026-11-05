@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- Chats / Message menu: настройки `OEChatsGroupedMessageMenu` (default
+  `false`) переносит пункт Delete в конец меню сообщения с разделителем, а
+  `OEChatsDefaultDeleteMenu` (default `false`) запоминает выбор
+  «удалить у всех / только у себя» автоматически, без галочки «Remember».
+  Android-алиасы `groupedMessageMenu`/`groupMessageMenu` и
+  `DefaultDeleteMenu` поддержаны в `.extera` (всего 84 ключа).
 - Chats / Admin shortcuts: пять настроек `OEChatsShortcutAdministrators`,
   `OEChatsShortcutRecentActions`, `OEChatsShortcutStatistics`,
   `OEChatsShortcutPermissions`, `OEChatsShortcutMembers` (все default

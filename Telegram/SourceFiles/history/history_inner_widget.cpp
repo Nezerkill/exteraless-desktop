@@ -3536,6 +3536,8 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			}
 		}
 	} else { // maybe cursor on some text history item?
+		const auto groupedMenu = Exteraless::Config::Instance()
+			.groupedMessageMenu();
 		const auto albumPartItem = _dragStateItem;
 		const auto item = [&]() -> HistoryItem* {
 			if (e->reason() == QContextMenuEvent::Keyboard
@@ -3810,6 +3812,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						Api::AddOfferToMessage(_controller->uiShow(), itemId);
 					}, &st::menuIconTagSell);
 				}
+				if (!groupedMenu) {
 				if (canDelete
 					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
 					const auto callback = [=] {
@@ -3832,6 +3835,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 							[=] { _menu = nullptr; }));
 					}
 				}
+				}
 				if (!canBlockSender && canReport
 					&& Exteraless::Config::Instance().messageMenuSettings().report) {
 					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
@@ -3851,6 +3855,31 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				_menu->addAction(tr::lng_profile_block_user(tr::now), [=] {
 					blockSenderAsGroup(itemId);
 				}, &st::menuIconBlock);
+			}
+			if (groupedMenu && isUponSelected != -2) {
+				_menu->addSeparator();
+				if (canDelete
+					&& Exteraless::Config::Instance().messageMenuSettings().deleteMsg) {
+					const auto callback = [=] {
+						deleteAsGroup(itemId);
+					};
+					if (item->isUploading()) {
+						if (item->media()
+							&& item->media()->allowsEditCaption()) {
+							_menu->addAction(
+								tr::lng_context_upload_edit_caption(tr::now),
+								[=] { editCaptionUploadLayer(item); },
+								&st::menuIconEdit);
+						}
+						_menu->addAction(tr::lng_context_cancel_upload(tr::now), callback, &st::menuIconCancel);
+					} else {
+						_menu->addAction(Ui::DeleteMessageContextAction(
+							_menu->menu(),
+							callback,
+							item->ttlDestroyAt(),
+							[=] { _menu = nullptr; }));
+					}
+				}
 			}
 		} else if (Element::Moused()) {
 			addSelectMessageAction(Element::Moused()->data());

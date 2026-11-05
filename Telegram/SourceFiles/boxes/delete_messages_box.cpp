@@ -28,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/toast/toast.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
+#include "exteraless/config.h"
 #include "ui/widgets/labels.h"
 #include "ui/rect.h"
 #include "ui/wrap/slide_wrap.h"
@@ -523,6 +524,11 @@ void DeleteMessagesBox::deleteAndClear() {
 		&& _revokeRemember
 		&& _revokeRemember->toggled()
 		&& _revokeRemember->entity()->checked()) {
+		Core::App().settings().setRememberedDeleteMessageOnlyForYou(
+			!_revoke->checked());
+		Core::App().saveSettingsDelayed();
+	} else if (_revoke
+		&& Exteraless::Config::Instance().defaultDeleteMenu()) {
 		Core::App().settings().setRememberedDeleteMessageOnlyForYou(
 			!_revoke->checked());
 		Core::App().saveSettingsDelayed();
