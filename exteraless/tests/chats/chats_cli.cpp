@@ -94,6 +94,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
 		<< "  exteraless-chats-cli always-show-download\n"
 		<< "  exteraless-chats-cli always-show-download-set <0|1>\n"
+		<< "  exteraless-chats-cli false-bottom\n"
+		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -606,6 +608,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("false-bottom")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().falseBottom() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("false-bottom-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setFalseBottom(value);
 		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}

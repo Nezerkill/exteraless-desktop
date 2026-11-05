@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(520 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, always-show-download, backup),
+(527 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, always-show-download, false-bottom, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -179,7 +179,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-82 | Быстрые админ-шорткаты в профиле | `shortcutsAdministrators`, `shortcutsRecentActions`, `shortcutsStatistics`, `shortcutsPermissions`, `shortcutsMembers` | `info/profile/*` | S–M · средний | Xvfb: пункты ведут на нужные экраны | ⬜ | R1 §3.4 |
 | NB-83 | Группированное меню сообщения и меню удаления по умолчанию | `groupedMessageMenu`, `defaultDeleteMenu` | `history/view/history_view_context_menu.cpp` | S–M · средний | Xvfb: основные действия внизу, удаление по умолчанию как выбрано | ⬜ | R1 §3.4 |
 | NB-84 | Скрыть вкладку «Все чаты» и стиль заголовков вкладок | `NekoConfig.hideAllTab`, `tabsTitleType`, `tabCounter` | `exteraless/config.{h,cpp}`, `data/data_chat_filters.{h,cpp}`, `window/window_filters_menu.cpp`, `window/window_session_controller.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий (в tdesktop вкладки — фильтры) | Xvfb: вкладка скрыта, фильтры работают | ✅ 2026-11-05: `OEChatsHideAllChatsFolder` (default `false`) скрывает папку «Все чаты» в сайдбаре фильтров при наличии других папок; CLI `hide-all-chats` (5 проверок), Xvfb: «All chats» скрыта, активной стала папка «IT»; стили вкладок (`tabsTitleType`) уже есть в upstream (`chatFiltersTabsMode`) | R2 §3.3 |
-| NB-85 | Скрытая «ложная» секция настроек за passcode | `OEPrivacyFalseBottom*` | `settings/sections/settings_main.cpp`, `main/main_domain.cpp` | M · средний (приватность, локальный passcode) | Xvfb: секция скрыта/показана после разблокировки, поиск не раскрывает | ⬜ | R2 §3.1 |
+| NB-85 | Скрытая «ложная» секция настроек за passcode | `OEPrivacyFalseBottom*` | `exteraless/config.{h,cpp}`, `settings/sections/settings_exteraless.cpp`, `exteraless/backup.cpp` | M · средний (приватность, локальный passcode) | Xvfb: секция скрыта/показана после разблокировки, поиск не раскрывает | ✅ 2026-11-05: `OEPrivacyFalseBottom` (default `false`) добавляет в конец Exteraless секцию «Двойное дно»; при локальном пароле открывается только после его ввода (неверный — ошибка, верный — перестройка страницы), содержимое (пасскод-менеджмент и «Заблокировать сейчас») не индексируется поиском, пока секция закрыта; CLI `false-bottom` (5 проверок); Xvfb подтвердил оба состояния и `Lock now`. Per-account passcode/panic code Android-версии не переносятся: в desktop один локальный пароль на приложение; ID/DC в профиле desktop не показывает | R2 §3.1 |
 | NB-86 | Мелочи чата: приветственный стикер, клавиатура при скролле, скрепка, нижняя кнопка канала, быстрые переходы | `disableGreetingSticker`, `hideKeyboardOnScroll`, `keepAttachButton`, `bottomButton`, `quickTransition*` | `chat_helpers/*`, `history/view/controls/history_view_compose_controls.h` | M · средний | Xvfb: каждый пункт меняет только своё поведение | ⬜ | R2 §3.2 (P2/P3) |
 | NB-87 | Праздничные декорации шапки | `chatDecoration`, `NekoConfig.actionBarDecoration` | `window/window_top_bar_wrap.h`, `dialogs/dialogs_widget.cpp` | S · низкий | Xvfb: декор включается и выключается, геометрия шапки не меняется | ⬜ | R2 §3.3 (P3 у R2) |
 | NB-88 | Медиа-качество и форматы: HLS по умолчанию, декодер, GIF как видео, битрейт аудио, MP4 как видео | `defaultHlsVideoQuality`, `playerDecoder`, `takeGIFasVideo`, `customAudioBitrate`, `sendMp4DocumentAsVideo` | `media/streaming/*`, `media/view/*`, `chat_helpers/compose/*` | M–L · средний (сеть и кодеки) | Xvfb + ручной: видео играет в выбранном качестве, GIF уходит видео | ⬜ | R1 §3.18, R2 §3.2 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 520 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 527 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

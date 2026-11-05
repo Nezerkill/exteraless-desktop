@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..a8d81f6 100644
+index ffc8ec9..d4d53c0 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,120 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,127 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -146,6 +146,13 @@ index ffc8ec9..a8d81f6 100644
 +"lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
 +"lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
 +"lng_settings_exteraless_chats_always_show_download" = "Always show download icon";
++"lng_settings_exteraless_false_bottom" = "False bottom";
++"lng_settings_exteraless_false_bottom_unlock" = "Unlock";
++"lng_settings_exteraless_false_bottom_enter" = "Enter local passcode";
++"lng_settings_exteraless_false_bottom_about" = "Hidden section. Its contents stay out of the settings search until it is unlocked.";
++"lng_settings_exteraless_false_bottom_passcode" = "Local passcode";
++"lng_settings_exteraless_false_bottom_lock" = "Lock now";
++"lng_settings_exteraless_false_bottom_no_passcode" = "Set a local passcode to protect this section.";
 +"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 +"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 +"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
@@ -5421,10 +5428,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..2c9262b
+index 0000000..94e0a9b
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1310 @@
+@@ -0,0 +1,1453 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5434,8 +5441,19 @@ index 0000000..2c9262b
 +#include "exteraless/doubletap.h"
 +#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
++#include "base/openssl_help.h"
++#include "core/application.h"
 +#include "core/file_utilities.h"
++#include "main/main_domain.h"
 +#include "main/main_session.h"
++#include "settings.h"
++#include "settings/cloud_password/settings_cloud_password_common.h"
++#include "settings/sections/settings_local_passcode.h"
++#include "storage/storage_domain.h"
++#include "ui/widgets/fields/password_input.h"
++#include "ui/widgets/labels.h"
++#include "styles/style_boxes.h"
++#include "styles/style_layers.h"
 +#include "data/data_session.h"
 +#include "data/data_chat_filters.h"
 +#include "lang/lang_keys.h"
@@ -5470,6 +5488,65 @@ index 0000000..2c9262b
 +private:
 +	void setupContent();
 +};
++
++bool &FalseBottomUnlocked() {
++	static auto result = false;
++	return result;
++}
++
++void FalseBottomUnlockBox(
++		not_null<Ui::GenericBox*> box,
++		not_null<Window::SessionController*> controller,
++		Fn<void()> unlocked) {
++	box->setTitle(tr::lng_settings_exteraless_false_bottom());
++	box->setWidth(st::boxWideWidth);
++	box->addRow(
++		object_ptr<Ui::FlatLabel>(
++			box,
++			tr::lng_settings_exteraless_false_bottom_about(),
++			st::boxLabel),
++		st::boxRowPadding);
++	const auto field = CloudPassword::AddPasswordField(
++		box->verticalLayout(),
++		tr::lng_settings_exteraless_false_bottom_enter(),
++		QString());
++	const auto error = CloudPassword::AddError(box->verticalLayout(), field);
++	const auto submit = [=] {
++		if (!passcodeCanTry()) {
++			field->showError();
++			error->show();
++			error->setText(tr::lng_flood_error(tr::now));
++			return;
++		}
++		auto utf8 = field->text().toUtf8();
++		const auto cleanse = gsl::finally([&] {
++			if (!utf8.isEmpty()) {
++				OPENSSL_cleanse(utf8.data(), utf8.size());
++			}
++		});
++		const auto session = &controller->session();
++		Storage::DeriveOnWorker(
++			session->domain().local().prepareOpen(utf8),
++			crl::guard(box, [=](Storage::PasscodeDerivation &&derived) {
++				if (session->domain().local().checkPasscode(
++						std::move(derived))) {
++					cSetPasscodeBadTries(0);
++					unlocked();
++					return;
++				}
++				cSetPasscodeBadTries(cPasscodeBadTries() + 1);
++				cSetPasscodeLastTry(crl::now());
++				field->selectAll();
++				field->setFocus();
++				field->showError();
++				error->show();
++				error->setText(tr::lng_passcode_wrong(tr::now));
++			}));
++	};
++	box->addButton(tr::lng_settings_exteraless_false_bottom_unlock(), submit);
++	QObject::connect(field, &Ui::MaskedInputField::submitted, submit);
++	box->setFocusCallback([=] { field->setFocusFast(); });
++}
 +
 +const auto kMeta = Builder::BuildHelper({
 +	.id = ExteralessSection::Id(),
@@ -6707,6 +6784,79 @@ index 0000000..2c9262b
 +		},
 +		.keywords = { u"plugins"_q, u"plugin"_q },
 +	});
++
++	if (Exteraless::Config::Instance().falseBottom()) {
++		const auto session = controller
++			? &controller->session()
++			: nullptr;
++		const auto hasPasscode = session
++			&& session->domain().local().hasPasscode();
++		if (!FalseBottomUnlocked()) {
++			builder.addButton({
++				.id = u"exteraless/false-bottom/unlock"_q,
++				.title = tr::lng_settings_exteraless_false_bottom(),
++				.icon = { &st::menuIconLock },
++				.onClick = [=] {
++					if (!controller) {
++						return;
++					} else if (!controller->session()
++						.domain().local().hasPasscode()) {
++						FalseBottomUnlocked() = true;
++						controller->showSettings(ExteralessSectionId());
++						return;
++					}
++					controller->show(Box(
++						FalseBottomUnlockBox,
++						controller,
++						[=] {
++							FalseBottomUnlocked() = true;
++							controller->showSettings(ExteralessSectionId());
++						}));
++				},
++				.keywords = { u"passcode"_q, u"hidden"_q, u"private"_q },
++			});
++		} else {
++			builder.addSubsectionTitle({
++				.id = u"exteraless/false-bottom"_q,
++				.title = tr::lng_settings_exteraless_false_bottom(),
++			});
++			const auto showOther = builder.showOther();
++			builder.addButton({
++				.id = u"exteraless/false-bottom/passcode"_q,
++				.title = tr::lng_settings_exteraless_false_bottom_passcode(),
++				.st = &st::settingsButtonNoIcon,
++				.label = rpl::single(
++					hasPasscode
++					? tr::lng_settings_cloud_password_on(tr::now)
++					: tr::lng_settings_cloud_password_off(tr::now)),
++				.onClick = [=] {
++					if (!showOther) {
++						return;
++					}
++					showOther(hasPasscode
++						? LocalPasscodeCheckId()
++						: LocalPasscodeCreateId());
++				},
++				.keywords = { u"passcode"_q, u"lock"_q, u"pin"_q },
++			});
++			if (hasPasscode) {
++				builder.addButton({
++					.id = u"exteraless/false-bottom/lock"_q,
++					.title = tr::lng_settings_exteraless_false_bottom_lock(),
++					.st = &st::settingsButtonNoIcon,
++					.onClick = [=] {
++						FalseBottomUnlocked() = false;
++						Core::App().lockByPasscode();
++					},
++					.keywords = { u"lock"_q, u"passcode"_q },
++				});
++			}
++			builder.addDividerText(rpl::single(hasPasscode
++				? tr::lng_settings_exteraless_false_bottom_about(tr::now)
++				: tr::lng_settings_exteraless_false_bottom_no_passcode(
++					tr::now)));
++		}
++	}
 +});
 +
 +const auto kBuild = kMeta.build;
@@ -7587,10 +7737,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..093e034
+index 0000000..3b6fbd4
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,668 @@
+@@ -0,0 +1,677 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7642,6 +7792,7 @@ index 0000000..093e034
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 +constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
++constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 +constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 +constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 +constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -7661,6 +7812,8 @@ index 0000000..093e034
 +constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
 +constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
 +constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
++constexpr auto kFalseBottomAlias = "falseBottom";
++constexpr auto kFalseBottomAliasUpper = "FalseBottom";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -7899,6 +8052,7 @@ index 0000000..093e034
 +		= config.disableLinkPreviewByDefault();
 +	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
 +	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
++	extera[kFalseBottom] = config.falseBottom();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -8168,6 +8322,11 @@ index 0000000..093e034
 +			|| key == kAlwaysShowDownloadIconAliasUpper)
 +			&& value.isBool()) {
 +			config.setAlwaysShowDownloadIcon(value.toBool());
++		} else if ((key == kFalseBottom
++			|| key == kFalseBottomAlias
++			|| key == kFalseBottomAliasUpper)
++			&& value.isBool()) {
++			config.setFalseBottom(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -8360,10 +8519,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..347a325
+index 0000000..c2e13a8
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1089 @@
+@@ -0,0 +1,1099 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -8412,6 +8571,7 @@ index 0000000..347a325
 +constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 +constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 +constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
++constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8829,6 +8989,14 @@ index 0000000..347a325
 +
 +void Config::setAlwaysShowDownloadIcon(bool value) {
 +	setValue(kAlwaysShowDownloadIcon, value);
++}
++
++bool Config::falseBottom() const {
++	return boolValue(kFalseBottom, false);
++}
++
++void Config::setFalseBottom(bool value) {
++	setValue(kFalseBottom, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -9259,6 +9427,7 @@ index 0000000..347a325
 +			|| key == kDisableLinkPreviewByDefault
 +			|| key == kHideAllChatsFolder
 +			|| key == kAlwaysShowDownloadIcon
++			|| key == kFalseBottom
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -9455,10 +9624,10 @@ index 0000000..347a325
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..bb9f6ff
+index 0000000..c2dd2b4
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,229 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -9568,6 +9737,8 @@ index 0000000..bb9f6ff
 +	void setHideAllChatsFolder(bool value);
 +	[[nodiscard]] bool alwaysShowDownloadIcon() const;
 +	void setAlwaysShowDownloadIcon(bool value);
++	[[nodiscard]] bool falseBottom() const;
++	void setFalseBottom(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -12164,10 +12335,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..e8bf065
+index 0000000..365ef09
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1424 @@
+@@ -0,0 +1,1448 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -12264,6 +12435,8 @@ index 0000000..e8bf065
 +		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
 +		<< "  exteraless-chats-cli always-show-download\n"
 +		<< "  exteraless-chats-cli always-show-download-set <0|1>\n"
++		<< "  exteraless-chats-cli false-bottom\n"
++		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-menu\n"
 +		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 +		<< "<viewDeleted> <clearDeleted>\n"
@@ -12776,6 +12949,28 @@ index 0000000..e8bf065
 +			return PrintUsage();
 +		}
 +		Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("false-bottom")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().falseBottom() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("false-bottom-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setFalseBottom(value);
 +		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
@@ -13656,10 +13851,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..9764423
+index 0000000..f25c2a4
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3716 @@
+@@ -0,0 +1,3783 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -13841,6 +14036,7 @@ index 0000000..9764423
 +         ["hide-all-chats-set"]),
 +        ("always-show-download-set with wrong count",
 +         ["always-show-download-set"]),
++        ("false-bottom-set with wrong count", ["false-bottom-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -14153,7 +14349,7 @@ index 0000000..9764423
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 70,
++            len(section) == 71,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -14174,7 +14370,7 @@ index 0000000..9764423
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 75,
++            sum(len(value) for value in exported.values()) == 76,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -14194,7 +14390,7 @@ index 0000000..9764423
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 75,
++                data.get("applied") == 76,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -14298,6 +14494,7 @@ index 0000000..9764423
 +            "OEChatsDisableLinkPreviewByDefault": True,
 +            "OEChatsHideAllChatsFolder": True,
 +            "OEChatsAlwaysShowDownloadIcon": True,
++            "OEPrivacyFalseBottom": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -14319,7 +14516,7 @@ index 0000000..9764423
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 75,
++            data.get("applied") == 76,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -14410,6 +14607,10 @@ index 0000000..9764423
 +            "backup full always show download",
 +            section.get("OEChatsAlwaysShowDownloadIcon") is True,
 +            section.get("OEChatsAlwaysShowDownloadIcon"))
++        ledger.check(
++            "backup full false bottom",
++            section.get("OEPrivacyFalseBottom") is True,
++            section.get("OEPrivacyFalseBottom"))
 +        ledger.check(
 +            "backup full disable link preview",
 +            section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -14573,10 +14774,10 @@ index 0000000..9764423
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 75",
++            "backup legacy eight completed to 76",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (70, 3, 2),
++             len(sections["mainconfig"])) == (71, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -15419,6 +15620,7 @@ index 0000000..9764423
 +            "OEChatsDisableLinkPreviewByDefault": True,
 +            "OEChatsHideAllChatsFolder": True,
 +            "OEChatsAlwaysShowDownloadIcon": True,
++            "OEPrivacyFalseBottom": True,
 +        },
 +    }
 +    data = json_call(
@@ -17283,6 +17485,64 @@ index 0000000..9764423
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_false_bottom(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "false-bottom-defaults")
++    data = json_call(
++        ledger, cli, ["false-bottom"], env,
++        "false-bottom defaults")
++    if data is not None:
++        ledger.check(
++            "false bottom default off",
++            data.get("enabled") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["false-bottom-set", "1"], env,
++        "false-bottom set")
++    if data is not None:
++        ledger.check("false bottom set on", data == 1, data)
++
++    reloaded = json_call(
++        ledger, cli, ["false-bottom"], env,
++        "false-bottom reload")
++    if reloaded is not None:
++        ledger.check(
++            "false bottom persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "false-bottom-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "falseBottom": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "false-bottom alias")
++    if data is not None:
++        ledger.check(
++            "false bottom alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["false-bottom"], env,
++        "false-bottom alias read")
++    if reloaded is not None:
++        ledger.check(
++            "false bottom alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -17326,6 +17586,7 @@ index 0000000..9764423
 +        disable_link_preview = check_disable_link_preview(ledger, cli, work)
 +        hide_all_chats = check_hide_all_chats(ledger, cli, work)
 +        always_show_download = check_always_show_download(ledger, cli, work)
++        false_bottom = check_false_bottom(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -17364,6 +17625,7 @@ index 0000000..9764423
 +          f"{hide_all_chats[0] - hide_all_chats[1]} passed")
 +    print(f"always-show-download: "
 +          f"{always_show_download[0] - always_show_download[1]} passed")
++    print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

@@ -107,6 +107,8 @@ public:
 	void setHideAllChatsFolder(bool value);
 	[[nodiscard]] bool alwaysShowDownloadIcon() const;
 	void setAlwaysShowDownloadIcon(bool value);
+	[[nodiscard]] bool falseBottom() const;
+	void setFalseBottom(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

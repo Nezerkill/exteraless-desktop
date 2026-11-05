@@ -49,6 +49,7 @@ constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
+constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -68,6 +69,8 @@ constexpr auto kHideAllChatsFolderAliasUpper = "HideAllTab";
 constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
 constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
 constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
+constexpr auto kFalseBottomAlias = "falseBottom";
+constexpr auto kFalseBottomAliasUpper = "FalseBottom";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -306,6 +309,7 @@ QString BuildBackup() {
 		= config.disableLinkPreviewByDefault();
 	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
 	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
+	extera[kFalseBottom] = config.falseBottom();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -575,6 +579,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kAlwaysShowDownloadIconAliasUpper)
 			&& value.isBool()) {
 			config.setAlwaysShowDownloadIcon(value.toBool());
+		} else if ((key == kFalseBottom
+			|| key == kFalseBottomAlias
+			|| key == kFalseBottomAliasUpper)
+			&& value.isBool()) {
+			config.setFalseBottom(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

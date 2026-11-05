@@ -7,8 +7,19 @@
 #include "exteraless/doubletap.h"
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
+#include "base/openssl_help.h"
+#include "core/application.h"
 #include "core/file_utilities.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
+#include "settings.h"
+#include "settings/cloud_password/settings_cloud_password_common.h"
+#include "settings/sections/settings_local_passcode.h"
+#include "storage/storage_domain.h"
+#include "ui/widgets/fields/password_input.h"
+#include "ui/widgets/labels.h"
+#include "styles/style_boxes.h"
+#include "styles/style_layers.h"
 #include "data/data_session.h"
 #include "data/data_chat_filters.h"
 #include "lang/lang_keys.h"
@@ -43,6 +54,65 @@ public:
 private:
 	void setupContent();
 };
+
+bool &FalseBottomUnlocked() {
+	static auto result = false;
+	return result;
+}
+
+void FalseBottomUnlockBox(
+		not_null<Ui::GenericBox*> box,
+		not_null<Window::SessionController*> controller,
+		Fn<void()> unlocked) {
+	box->setTitle(tr::lng_settings_exteraless_false_bottom());
+	box->setWidth(st::boxWideWidth);
+	box->addRow(
+		object_ptr<Ui::FlatLabel>(
+			box,
+			tr::lng_settings_exteraless_false_bottom_about(),
+			st::boxLabel),
+		st::boxRowPadding);
+	const auto field = CloudPassword::AddPasswordField(
+		box->verticalLayout(),
+		tr::lng_settings_exteraless_false_bottom_enter(),
+		QString());
+	const auto error = CloudPassword::AddError(box->verticalLayout(), field);
+	const auto submit = [=] {
+		if (!passcodeCanTry()) {
+			field->showError();
+			error->show();
+			error->setText(tr::lng_flood_error(tr::now));
+			return;
+		}
+		auto utf8 = field->text().toUtf8();
+		const auto cleanse = gsl::finally([&] {
+			if (!utf8.isEmpty()) {
+				OPENSSL_cleanse(utf8.data(), utf8.size());
+			}
+		});
+		const auto session = &controller->session();
+		Storage::DeriveOnWorker(
+			session->domain().local().prepareOpen(utf8),
+			crl::guard(box, [=](Storage::PasscodeDerivation &&derived) {
+				if (session->domain().local().checkPasscode(
+						std::move(derived))) {
+					cSetPasscodeBadTries(0);
+					unlocked();
+					return;
+				}
+				cSetPasscodeBadTries(cPasscodeBadTries() + 1);
+				cSetPasscodeLastTry(crl::now());
+				field->selectAll();
+				field->setFocus();
+				field->showError();
+				error->show();
+				error->setText(tr::lng_passcode_wrong(tr::now));
+			}));
+	};
+	box->addButton(tr::lng_settings_exteraless_false_bottom_unlock(), submit);
+	QObject::connect(field, &Ui::MaskedInputField::submitted, submit);
+	box->setFocusCallback([=] { field->setFocusFast(); });
+}
 
 const auto kMeta = Builder::BuildHelper({
 	.id = ExteralessSection::Id(),
@@ -1280,6 +1350,79 @@ const auto kMeta = Builder::BuildHelper({
 		},
 		.keywords = { u"plugins"_q, u"plugin"_q },
 	});
+
+	if (Exteraless::Config::Instance().falseBottom()) {
+		const auto session = controller
+			? &controller->session()
+			: nullptr;
+		const auto hasPasscode = session
+			&& session->domain().local().hasPasscode();
+		if (!FalseBottomUnlocked()) {
+			builder.addButton({
+				.id = u"exteraless/false-bottom/unlock"_q,
+				.title = tr::lng_settings_exteraless_false_bottom(),
+				.icon = { &st::menuIconLock },
+				.onClick = [=] {
+					if (!controller) {
+						return;
+					} else if (!controller->session()
+						.domain().local().hasPasscode()) {
+						FalseBottomUnlocked() = true;
+						controller->showSettings(ExteralessSectionId());
+						return;
+					}
+					controller->show(Box(
+						FalseBottomUnlockBox,
+						controller,
+						[=] {
+							FalseBottomUnlocked() = true;
+							controller->showSettings(ExteralessSectionId());
+						}));
+				},
+				.keywords = { u"passcode"_q, u"hidden"_q, u"private"_q },
+			});
+		} else {
+			builder.addSubsectionTitle({
+				.id = u"exteraless/false-bottom"_q,
+				.title = tr::lng_settings_exteraless_false_bottom(),
+			});
+			const auto showOther = builder.showOther();
+			builder.addButton({
+				.id = u"exteraless/false-bottom/passcode"_q,
+				.title = tr::lng_settings_exteraless_false_bottom_passcode(),
+				.st = &st::settingsButtonNoIcon,
+				.label = rpl::single(
+					hasPasscode
+					? tr::lng_settings_cloud_password_on(tr::now)
+					: tr::lng_settings_cloud_password_off(tr::now)),
+				.onClick = [=] {
+					if (!showOther) {
+						return;
+					}
+					showOther(hasPasscode
+						? LocalPasscodeCheckId()
+						: LocalPasscodeCreateId());
+				},
+				.keywords = { u"passcode"_q, u"lock"_q, u"pin"_q },
+			});
+			if (hasPasscode) {
+				builder.addButton({
+					.id = u"exteraless/false-bottom/lock"_q,
+					.title = tr::lng_settings_exteraless_false_bottom_lock(),
+					.st = &st::settingsButtonNoIcon,
+					.onClick = [=] {
+						FalseBottomUnlocked() = false;
+						Core::App().lockByPasscode();
+					},
+					.keywords = { u"lock"_q, u"passcode"_q },
+				});
+			}
+			builder.addDividerText(rpl::single(hasPasscode
+				? tr::lng_settings_exteraless_false_bottom_about(tr::now)
+				: tr::lng_settings_exteraless_false_bottom_no_passcode(
+					tr::now)));
+		}
+	}
 });
 
 const auto kBuild = kMeta.build;

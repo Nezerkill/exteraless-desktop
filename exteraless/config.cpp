@@ -46,6 +46,7 @@ constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
+constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -463,6 +464,14 @@ bool Config::alwaysShowDownloadIcon() const {
 
 void Config::setAlwaysShowDownloadIcon(bool value) {
 	setValue(kAlwaysShowDownloadIcon, value);
+}
+
+bool Config::falseBottom() const {
+	return boolValue(kFalseBottom, false);
+}
+
+void Config::setFalseBottom(bool value) {
+	setValue(kFalseBottom, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -893,6 +902,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kDisableLinkPreviewByDefault
 			|| key == kHideAllChatsFolder
 			|| key == kAlwaysShowDownloadIcon
+			|| key == kFalseBottom
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor
