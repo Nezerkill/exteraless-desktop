@@ -8,9 +8,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_components.h"
 
 #include "api/api_text_entities.h"
+#include "exteraless/config.h"
+#include "exteraless/format.h"
 #include "base/qt/qt_key_modifiers.h"
 #include "base/algorithm.h"
 #include "base/options.h"
+#include "base/unixtime.h"
 #include "lang/lang_keys.h"
 #include "ui/effects/ripple_animation.h"
 #include "ui/effects/spoiler_mess.h"
@@ -383,6 +386,16 @@ void HistoryMessageForwarded::create(
 				Ui::Text::Wrapped(phrase, EntityType::CustomUrl, QString()), // Link 1.
 				tr::marked);
 		}
+	}
+	if (Exteraless::Config::Instance().showForwardDate()
+		&& !story
+		&& psaType.isEmpty()
+		&& originalDate) {
+		const auto parsed = base::unixtime::parse(originalDate);
+		phrase.append(u" \u00b7 "_q);
+		phrase.append(langDayOfMonthShort(parsed.date()));
+		phrase.append(u' ');
+		phrase.append(Exteraless::FormatClock(parsed.time()));
 	}
 	text.setMarkedText(st::fwdTextStyle, phrase, kMarkupTextOptions, context);
 

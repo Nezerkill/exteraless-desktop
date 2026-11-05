@@ -474,6 +474,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setHideSendAsPeer(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/forward-date"_q,
+		tr::lng_settings_exteraless_chats_forward_date(),
+		{ u"forward"_q, u"date"_q },
+		Exteraless::Config::Instance().showForwardDate(),
+		[](bool value) {
+			Exteraless::Config::Instance().setShowForwardDate(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/use-edited-icon"_q,
 		tr::lng_settings_exteraless_chats_use_edited_icon(),
 		{ u"edited"_q, u"icon"_q },

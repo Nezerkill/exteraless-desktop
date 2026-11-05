@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Chats / Forwards: настройка `OEChatsShowForwardDate` (default `false`)
+  дописывает дату оригинала в заголовок «Forwarded from …» (`· 5 нояб.
+  13:39`); Android-алиас `dateOfForwardedMsg` поддержан в `.extera` (всего
+  64 ключа), тумблер в Chats.
 - Chats / Edited mark: настройки `OEChatsUseEditedIcon` (иконка «✎» вместо
   слова) и `OEChatsCustomEditedMark` (свой текст, до 16 символов) заменяют
   метку «edited» в сообщениях; Android-алиасы `useEditedIcon`/

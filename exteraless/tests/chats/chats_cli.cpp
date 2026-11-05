@@ -88,6 +88,8 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli forward-date\n"
+		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli edited-mark\n"
 		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 		<< "  exteraless-chats-cli seek-duration\n"
@@ -525,6 +527,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("forward-date")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().showForwardDate() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("forward-date-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setShowForwardDate(value);
+		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("edited-mark")) {

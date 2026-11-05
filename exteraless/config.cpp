@@ -34,6 +34,7 @@ constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
+constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -355,6 +356,14 @@ QString Config::customEditedMark() const {
 
 void Config::setCustomEditedMark(const QString &value) {
 	setValue(kCustomEditedMark, value.left(kMaxEditedMarkLength));
+}
+
+bool Config::showForwardDate() const {
+	return boolValue(kShowForwardDate, false);
+}
+
+void Config::setShowForwardDate(bool value) {
+	setValue(kShowForwardDate, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -773,6 +782,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kSeekDuration
 			|| key == kUseEditedIcon
 			|| key == kCustomEditedMark
+			|| key == kShowForwardDate
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

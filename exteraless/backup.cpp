@@ -37,6 +37,8 @@ constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
 constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
+constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
+constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -262,6 +264,7 @@ QString BuildBackup() {
 	extera[kSeekDuration] = config.seekDuration();
 	extera[kUseEditedIcon] = config.useEditedIcon();
 	extera[kCustomEditedMark] = config.customEditedMark();
+	extera[kShowForwardDate] = config.showForwardDate();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -482,6 +485,9 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kCustomEditedMark || key == kCustomEditedMarkAlias)
 			&& value.isString()) {
 			config.setCustomEditedMark(value.toString());
+		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
+			&& value.isBool()) {
+			config.setShowForwardDate(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

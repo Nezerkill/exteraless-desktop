@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..acf85ac 100644
+index ffc8ec9..5e44a3e 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,106 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,107 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -142,6 +142,7 @@ index ffc8ec9..acf85ac 100644
 +"lng_settings_exteraless_chats_inline_math" = "Inline math: press Space after \"2+2=\"";
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
++"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
 +"lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
 +"lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
 +"lng_settings_exteraless_default" = "Default";
@@ -3735,6 +3736,40 @@ index 391e1d3..866488c 100644
  					_menu->addAction(tr::lng_context_report_msg(tr::now), [=] {
  						reportAsGroup(itemId);
  					}, &st::menuIconReport);
+diff --git a/Telegram/SourceFiles/history/history_item_components.cpp b/Telegram/SourceFiles/history/history_item_components.cpp
+index 5f7cc78..8fb4a98 100644
+--- a/Telegram/SourceFiles/history/history_item_components.cpp
++++ b/Telegram/SourceFiles/history/history_item_components.cpp
+@@ -8,9 +8,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "history/history_item_components.h"
+ 
+ #include "api/api_text_entities.h"
++#include "exteraless/config.h"
++#include "exteraless/format.h"
+ #include "base/qt/qt_key_modifiers.h"
+ #include "base/algorithm.h"
+ #include "base/options.h"
++#include "base/unixtime.h"
+ #include "lang/lang_keys.h"
+ #include "ui/effects/ripple_animation.h"
+ #include "ui/effects/spoiler_mess.h"
+@@ -384,6 +387,16 @@ void HistoryMessageForwarded::create(
+ 				tr::marked);
+ 		}
+ 	}
++	if (Exteraless::Config::Instance().showForwardDate()
++		&& !story
++		&& psaType.isEmpty()
++		&& originalDate) {
++		const auto parsed = base::unixtime::parse(originalDate);
++		phrase.append(u" \u00b7 "_q);
++		phrase.append(langDayOfMonthShort(parsed.date()));
++		phrase.append(u' ');
++		phrase.append(Exteraless::FormatClock(parsed.time()));
++	}
+ 	text.setMarkedText(st::fwdTextStyle, phrase, kMarkupTextOptions, context);
+ 
+ 	text.setLink(1, fromChannel
 diff --git a/Telegram/SourceFiles/history/history_streamed_drafts.cpp b/Telegram/SourceFiles/history/history_streamed_drafts.cpp
 index dcb902d..5b28a1d 100644
 --- a/Telegram/SourceFiles/history/history_streamed_drafts.cpp
@@ -5070,10 +5105,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..c44f307
+index 0000000..b5b41ca
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1169 @@
+@@ -0,0 +1,1177 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5548,6 +5583,14 @@ index 0000000..c44f307
 +		Exteraless::Config::Instance().hideSendAsPeer(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setHideSendAsPeer(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/forward-date"_q,
++		tr::lng_settings_exteraless_chats_forward_date(),
++		{ u"forward"_q, u"date"_q },
++		Exteraless::Config::Instance().showForwardDate(),
++		[](bool value) {
++			Exteraless::Config::Instance().setShowForwardDate(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/use-edited-icon"_q,
@@ -6982,10 +7025,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..5ae4f32
+index 0000000..76cda66
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,575 @@
+@@ -0,0 +1,581 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7025,6 +7068,8 @@ index 0000000..5ae4f32
 +constexpr auto kSeekDuration = "OEChatsSeekDuration";
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
++constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
++constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -7250,6 +7295,7 @@ index 0000000..5ae4f32
 +	extera[kSeekDuration] = config.seekDuration();
 +	extera[kUseEditedIcon] = config.useEditedIcon();
 +	extera[kCustomEditedMark] = config.customEditedMark();
++	extera[kShowForwardDate] = config.showForwardDate();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7470,6 +7516,9 @@ index 0000000..5ae4f32
 +		} else if ((key == kCustomEditedMark || key == kCustomEditedMarkAlias)
 +			&& value.isString()) {
 +			config.setCustomEditedMark(value.toString());
++		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
++			&& value.isBool()) {
++			config.setShowForwardDate(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -7662,10 +7711,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..b5dc6be
+index 0000000..0605aca
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,969 @@
+@@ -0,0 +1,979 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7702,6 +7751,7 @@ index 0000000..b5dc6be
 +constexpr auto kSeekDuration = "OEChatsSeekDuration";
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
++constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8023,6 +8073,14 @@ index 0000000..b5dc6be
 +
 +void Config::setCustomEditedMark(const QString &value) {
 +	setValue(kCustomEditedMark, value.left(kMaxEditedMarkLength));
++}
++
++bool Config::showForwardDate() const {
++	return boolValue(kShowForwardDate, false);
++}
++
++void Config::setShowForwardDate(bool value) {
++	setValue(kShowForwardDate, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8441,6 +8499,7 @@ index 0000000..b5dc6be
 +			|| key == kSeekDuration
 +			|| key == kUseEditedIcon
 +			|| key == kCustomEditedMark
++			|| key == kShowForwardDate
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8637,10 +8696,10 @@ index 0000000..b5dc6be
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..929d385
+index 0000000..fa0cd3e
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,205 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8726,6 +8785,8 @@ index 0000000..929d385
 +	void setUseEditedIcon(bool value);
 +	[[nodiscard]] QString customEditedMark() const;
 +	void setCustomEditedMark(const QString &value);
++	[[nodiscard]] bool showForwardDate() const;
++	void setShowForwardDate(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11322,10 +11383,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..e83d54c
+index 0000000..dbcc118
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1242 @@
+@@ -0,0 +1,1266 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11416,6 +11477,8 @@ index 0000000..e83d54c
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli forward-date\n"
++		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 +		<< "  exteraless-chats-cli edited-mark\n"
 +		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 +		<< "  exteraless-chats-cli seek-duration\n"
@@ -11853,6 +11916,28 @@ index 0000000..e83d54c
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("forward-date")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().showForwardDate() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("forward-date-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setShowForwardDate(value);
++		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("edited-mark")) {
@@ -12632,10 +12717,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..c1ac08f
+index 0000000..8d9b8e4
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3270 @@
+@@ -0,0 +1,3329 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12808,6 +12893,7 @@ index 0000000..c1ac08f
 +        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
 +        ("seek-duration-set without value", ["seek-duration-set"]),
 +        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
++        ("forward-date-set with wrong count", ["forward-date-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13120,7 +13206,7 @@ index 0000000..c1ac08f
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 58,
++            len(section) == 59,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13141,7 +13227,7 @@ index 0000000..c1ac08f
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 63,
++            sum(len(value) for value in exported.values()) == 64,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13161,7 +13247,7 @@ index 0000000..c1ac08f
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 63,
++                data.get("applied") == 64,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13253,6 +13339,7 @@ index 0000000..c1ac08f
 +            "OEChatsSeekDuration": 15,
 +            "OEChatsUseEditedIcon": True,
 +            "OEChatsCustomEditedMark": "изм.",
++            "OEChatsShowForwardDate": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13274,7 +13361,7 @@ index 0000000..c1ac08f
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 63,
++            data.get("applied") == 64,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13357,6 +13444,10 @@ index 0000000..c1ac08f
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full forward date",
++            section.get("OEChatsShowForwardDate") is True,
++            section.get("OEChatsShowForwardDate"))
 +        ledger.check(
 +            "backup full edited mark",
 +            section.get("OEChatsUseEditedIcon") is True
@@ -13492,10 +13583,10 @@ index 0000000..c1ac08f
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 63",
++            "backup legacy eight completed to 64",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (58, 3, 2),
++             len(sections["mainconfig"])) == (59, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -14326,6 +14417,7 @@ index 0000000..c1ac08f
 +            "OEChatsSeekDuration": 15,
 +            "OEChatsUseEditedIcon": True,
 +            "OEChatsCustomEditedMark": "изм.",
++            "OEChatsShowForwardDate": True,
 +        },
 +    }
 +    data = json_call(
@@ -15828,6 +15920,56 @@ index 0000000..c1ac08f
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_forward_date(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "forward-date-defaults")
++    data = json_call(
++        ledger, cli, ["forward-date"], env, "forward-date defaults")
++    if data is not None:
++        ledger.check(
++            "forward date default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["forward-date-set", "1"], env, "forward-date set")
++    if data is not None:
++        ledger.check("forward date set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["forward-date"], env, "forward-date reload")
++    if reloaded is not None:
++        ledger.check(
++            "forward date persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "forward-date-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"dateOfForwardedMsg": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "forward-date alias")
++    if data is not None:
++        ledger.check(
++            "forward date alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["forward-date"], env, "forward-date alias read")
++    if reloaded is not None:
++        ledger.check(
++            "forward date alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -15865,6 +16007,7 @@ index 0000000..c1ac08f
 +        ghost_schedule = check_ghost_schedule(ledger, cli, work)
 +        seek_duration = check_seek_duration(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
++        forward_date = check_forward_date(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -15894,6 +16037,7 @@ index 0000000..c1ac08f
 +    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
 +    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
++    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

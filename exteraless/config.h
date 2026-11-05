@@ -83,6 +83,8 @@ public:
 	void setUseEditedIcon(bool value);
 	[[nodiscard]] QString customEditedMark() const;
 	void setCustomEditedMark(const QString &value);
+	[[nodiscard]] bool showForwardDate() const;
+	void setShowForwardDate(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

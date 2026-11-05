@@ -170,6 +170,7 @@ def check_cli_args(ledger, cli):
         ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
         ("seek-duration-set without value", ["seek-duration-set"]),
         ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
+        ("forward-date-set with wrong count", ["forward-date-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -482,7 +483,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 58,
+            len(section) == 59,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -503,7 +504,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 63,
+            sum(len(value) for value in exported.values()) == 64,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -523,7 +524,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 63,
+                data.get("applied") == 64,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -615,6 +616,7 @@ def check_backup(ledger, cli, work):
             "OEChatsSeekDuration": 15,
             "OEChatsUseEditedIcon": True,
             "OEChatsCustomEditedMark": "изм.",
+            "OEChatsShowForwardDate": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -636,7 +638,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 63,
+            data.get("applied") == 64,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -719,6 +721,10 @@ def check_backup(ledger, cli, work):
             "backup full seek duration",
             section.get("OEChatsSeekDuration") == 15,
             section.get("OEChatsSeekDuration"))
+        ledger.check(
+            "backup full forward date",
+            section.get("OEChatsShowForwardDate") is True,
+            section.get("OEChatsShowForwardDate"))
         ledger.check(
             "backup full edited mark",
             section.get("OEChatsUseEditedIcon") is True
@@ -854,10 +860,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 63",
+            "backup legacy eight completed to 64",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (58, 3, 2),
+             len(sections["mainconfig"])) == (59, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1688,6 +1694,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsSeekDuration": 15,
             "OEChatsUseEditedIcon": True,
             "OEChatsCustomEditedMark": "изм.",
+            "OEChatsShowForwardDate": True,
         },
     }
     data = json_call(
@@ -3190,6 +3197,56 @@ def check_edited_mark(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_forward_date(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "forward-date-defaults")
+    data = json_call(
+        ledger, cli, ["forward-date"], env, "forward-date defaults")
+    if data is not None:
+        ledger.check(
+            "forward date default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["forward-date-set", "1"], env, "forward-date set")
+    if data is not None:
+        ledger.check("forward date set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["forward-date"], env, "forward-date reload")
+    if reloaded is not None:
+        ledger.check(
+            "forward date persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "forward-date-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"dateOfForwardedMsg": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "forward-date alias")
+    if data is not None:
+        ledger.check(
+            "forward date alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["forward-date"], env, "forward-date alias read")
+    if reloaded is not None:
+        ledger.check(
+            "forward date alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3227,6 +3284,7 @@ def main():
         ghost_schedule = check_ghost_schedule(ledger, cli, work)
         seek_duration = check_seek_duration(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
+        forward_date = check_forward_date(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3256,6 +3314,7 @@ def main():
     print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
     print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
+    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

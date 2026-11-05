@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(478 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, backup),
+(485 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -161,7 +161,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-64 | Радиус секций, отдельные заголовки, M3 list items | `sectionRadius`, `separateHeaders`, `m3ListItems` | `settings/sections/*`, `ui/boxes/*` | M–L · средний | Xvfb: настройки в трёх режимах, поиск не ломается | ⬜ | R2 §3.3 |
 | NB-65 | Стеклянное меню и контур | `glassMessageMenu`, `glassOutlineStyle` | `menu/*`, `window/themes/*` | M · средний (блюр зависит от ОС) | Xvfb: меню сообщения в двух режимах | ⬜ | R2 §3.3 |
 | NB-66 | Стили прогресса, свитчей и слайдеров | `newLoadingStyle`, `newSwitchStyle`, `newSliderStyle` | `ui/widgets/*`, `ui/effects/*` (частично `lib_ui`) | M · средний (вне Nix-патча) | Xvfb-скрин контролов | ⬜ | R2 §3.3 |
-| NB-67 | Дата на форвардах | `NaConfig.dateOfForwardedMsg` | `history/view/history_view_message.cpp` (forwarded header) | S–M · низкий | Xvfb: плашка «forwarded from» с датой | ⬜ | R2 §3.2 |
+| NB-67 | Дата на форвардах | `NaConfig.dateOfForwardedMsg` | `exteraless/config.{h,cpp}`, `history/history_item_components.cpp`, `settings/sections/settings_exteraless.cpp` | S–M · низкий | Xvfb: плашка «forwarded from» с датой | ✅ 2026-11-05: `OEChatsShowForwardDate` дописывает `· дата время` к заголовку форварда; CLI `forward-date` (5 проверок); лог подтвердил строку «Forwarded from … · Oct 30 8:16:10 PM», в узких бабблах хвост эллипсится как в upstream | R2 §3.2 |
 | NB-68 | Иконка вместо текста «edited» и своя метка | `replaceEditedWithIcon`, `customEditedMessage`, `useEditedIcon` | `exteraless/config.{h,cpp}`, `history/view/history_view_bottom_info.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb-скрин: иконка и своя строка | ✅ 2026-11-05: `OEChatsUseEditedIcon` (✎) и `OEChatsCustomEditedMark` (16 символов) заменяют «edited»; CLI `edited-mark` (6 проверок), Xvfb: метка «ed.» отрисовалась в сообщении; `replaceEditedWithIcon` сведён к `OEChatsUseEditedIcon` | R2 §3.2 |
 | NB-69 | Размер и форма стикеров | `NekoConfig.stickerSize`, `OEChatsStickerShape` | `history/view/media/history_view_sticker.cpp`; уже есть `base::options::option<int> OptionStickerSize` | S–M · низкий | Xvfb: ползунок 8..20 и три формы | ⬜ | R2 §3.2 |
 | NB-70 | Оформление цитаты ответа | `replyColors`, `replyEmoji`, `replyBackground`, `messageColoredBackground` | `history/view/history_view_reply.cpp` | M · средний | Xvfb: цитата в трёх режимах, ширина не ломается | ⬜ | R2 §3.2 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 478 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 485 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.
