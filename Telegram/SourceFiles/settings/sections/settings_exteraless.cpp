@@ -122,6 +122,42 @@ const auto kMeta = Builder::BuildHelper({
 		}, showSeconds->lifetime());
 	}
 
+	const auto hidePremium = builder.addButton({
+		.id = u"exteraless/hide-premium"_q,
+		.title = tr::lng_settings_exteraless_hide_premium(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().hidePremiumSection()),
+		.keywords = { u"premium"_q, u"settings"_q, u"hide"_q },
+	});
+	if (hidePremium) {
+		hidePremium->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().hidePremiumSection());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setHidePremiumSection(value);
+		}, hidePremium->lifetime());
+	}
+
+	const auto hideHelp = builder.addButton({
+		.id = u"exteraless/hide-help"_q,
+		.title = tr::lng_settings_exteraless_hide_help(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().hideHelpSection()),
+		.keywords = { u"help"_q, u"settings"_q, u"hide"_q },
+	});
+	if (hideHelp) {
+		hideHelp->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().hideHelpSection());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setHideHelpSection(value);
+		}, hideHelp->lifetime());
+	}
+
 	const auto hidePhone = builder.addButton({
 		.id = u"exteraless/hide-phone"_q,
 		.title = tr::lng_settings_exteraless_hide_phone(),

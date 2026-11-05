@@ -87,11 +87,16 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
-- Chats: `exteraless/tests/chats/run_checks.py` — 346 проверок PASS
-  (44 strip, 10 reactions, 16 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 353 проверки PASS
+  (44 strip, 10 reactions, 17 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   9 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  5 silent, 79 backup); плагины без изменений — 32 и 213 проверок.
+  5 silent, 5 sections, 80 backup); плагины без изменений — 32 и 213
+  проверок.
+- Settings sections (NB-36): `OESettingsHidePremium`/`OESettingsHideHelp`
+  (default false) убирают Premium/Credits и Help из главного экрана настроек;
+  тумблеры в General, CLI `settings-sections` (5 проверок). Xvfb: после
+  включения секции исчезли, после выключения вернулись.
 - Silent send (NB-34): `OEChatsSilentByDefault` (default `false`) выставляет
   `SendOptions.silent` в `prepareSendAction` обоих виджетов истории; тумблер в
   Chats, CLI `silent` (5 проверок). Xvfb: тумблер записывает ключ.
@@ -246,8 +251,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `d4450dfc…`,
-  mtime 2026-11-05 08:16; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `3f4486d5…`,
+  mtime 2026-11-05 08:33; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

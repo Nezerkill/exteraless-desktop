@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..becf8b7 100644
+index ffc8ec9..c30b59a 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,93 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,95 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -106,6 +106,8 @@ index ffc8ec9..becf8b7 100644
 +"lng_settings_exteraless_exact_counters" = "Show exact counters (1.23K → 1234)";
 +"lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
 +"lng_settings_exteraless_hide_phone" = "Hide phone number in profile";
++"lng_settings_exteraless_hide_premium" = "Hide Premium and Credits settings";
++"lng_settings_exteraless_hide_help" = "Hide Help settings";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 +"lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -4564,10 +4566,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..1c0abf4
+index 0000000..96449b0
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,974 @@
+@@ -0,0 +1,1010 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4690,6 +4692,42 @@ index 0000000..1c0abf4
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setShowSeconds(value);
 +		}, showSeconds->lifetime());
++	}
++
++	const auto hidePremium = builder.addButton({
++		.id = u"exteraless/hide-premium"_q,
++		.title = tr::lng_settings_exteraless_hide_premium(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().hidePremiumSection()),
++		.keywords = { u"premium"_q, u"settings"_q, u"hide"_q },
++	});
++	if (hidePremium) {
++		hidePremium->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().hidePremiumSection());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setHidePremiumSection(value);
++		}, hidePremium->lifetime());
++	}
++
++	const auto hideHelp = builder.addButton({
++		.id = u"exteraless/hide-help"_q,
++		.title = tr::lng_settings_exteraless_hide_help(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().hideHelpSection()),
++		.keywords = { u"help"_q, u"settings"_q, u"hide"_q },
++	});
++	if (hideHelp) {
++		hideHelp->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().hideHelpSection());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setHideHelpSection(value);
++		}, hideHelp->lifetime());
 +	}
 +
 +	const auto hidePhone = builder.addButton({
@@ -5678,10 +5716,19 @@ index 54435fa..a67f08b 100644
  void UpdatePhotoLocally(not_null<UserData*> user, const QImage &image);
  
 diff --git a/Telegram/SourceFiles/settings/sections/settings_main.cpp b/Telegram/SourceFiles/settings/sections/settings_main.cpp
-index 62e91ea..29e649e 100644
+index 62e91ea..76f44bb 100644
 --- a/Telegram/SourceFiles/settings/sections/settings_main.cpp
 +++ b/Telegram/SourceFiles/settings/sections/settings_main.cpp
-@@ -51,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "settings/sections/settings_main.h"
+ 
++#include "exteraless/config.h"
++
+ #include "settings/settings_common_session.h"
+ 
+ #include "api/api_cloud_password.h"
+@@ -51,6 +53,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "settings/sections/settings_business.h"
  #include "settings/sections/settings_calls.h"
  #include "settings/sections/settings_chat.h"
@@ -5689,7 +5736,7 @@ index 62e91ea..29e649e 100644
  #include "settings/settings_codes.h"
  #include "settings/settings_faq_suggestions.h"
  #include "settings/sections/settings_credits.h"
-@@ -400,6 +401,13 @@ void BuildSectionButtons(SectionBuilder &builder) {
+@@ -400,6 +403,13 @@ void BuildSectionButtons(SectionBuilder &builder) {
  		.keywords = { u"themes"_q, u"appearance"_q, u"stickers"_q },
  	});
  
@@ -5703,6 +5750,26 @@ index 62e91ea..29e649e 100644
  	{ // Folders
  		const auto preload = [=] {
  			session->data().chatsFilters().requestSuggested();
+@@ -500,6 +510,9 @@ void BuildInterfaceScale(SectionBuilder &builder) {
+ }
+ 
+ void BuildPremiumSection(SectionBuilder &builder) {
++	if (Exteraless::Config::Instance().hidePremiumSection()) {
++		return;
++	}
+ 	const auto session = builder.session();
+ 	const auto controller = builder.controller();
+ 	const auto showOther = builder.showOther();
+@@ -579,6 +592,9 @@ void BuildPremiumSection(SectionBuilder &builder) {
+ }
+ 
+ void BuildHelpSection(SectionBuilder &builder) {
++	if (Exteraless::Config::Instance().hideHelpSection()) {
++		return;
++	}
+ 	builder.addDivider();
+ 	builder.addSkip();
+ 
 diff --git a/Telegram/SourceFiles/ui/chat/chat.style b/Telegram/SourceFiles/ui/chat/chat.style
 index 3f7770b..2a47f9f 100644
 --- a/Telegram/SourceFiles/ui/chat/chat.style
@@ -6244,10 +6311,10 @@ index 0000000..87623c5
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..2e4b4c0
+index 0000000..defd550
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,518 @@
+@@ -0,0 +1,530 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6277,6 +6344,10 @@ index 0000000..2e4b4c0
 +constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 +constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 +constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
++constexpr auto kHidePremiumSection = "OESettingsHidePremium";
++constexpr auto kHideHelpSection = "OESettingsHideHelp";
++constexpr auto kHidePremiumAlias = "hidePremiumSection";
++constexpr auto kHideHelpAlias = "hideHelpSection";
 +constexpr auto kSilentByDefaultAlias = "silentMessageByDefault";
 +constexpr auto kPanguAlias = "EnablePanguOnSending";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
@@ -6491,6 +6562,8 @@ index 0000000..2e4b4c0
 +	extera[kTranslucentDeleted] = config.translucentDeletedMessages();
 +	extera[kPanguOnSending] = config.panguOnSending();
 +	extera[kSilentByDefault] = config.silentByDefault();
++	extera[kHidePremiumSection] = config.hidePremiumSection();
++	extera[kHideHelpSection] = config.hideHelpSection();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -6681,6 +6754,12 @@ index 0000000..2e4b4c0
 +		} else if ((key == kSilentByDefault || key == kSilentByDefaultAlias)
 +			&& value.isBool()) {
 +			config.setSilentByDefault(value.toBool());
++		} else if ((key == kHidePremiumSection || key == kHidePremiumAlias)
++			&& value.isBool()) {
++			config.setHidePremiumSection(value.toBool());
++		} else if ((key == kHideHelpSection || key == kHideHelpAlias)
++			&& value.isBool()) {
++			config.setHideHelpSection(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -6867,10 +6946,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..99b7c8e
+index 0000000..221e614
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,877 @@
+@@ -0,0 +1,897 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6897,6 +6976,8 @@ index 0000000..99b7c8e
 +constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 +constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 +constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
++constexpr auto kHidePremiumSection = "OESettingsHidePremium";
++constexpr auto kHideHelpSection = "OESettingsHideHelp";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7128,6 +7209,22 @@ index 0000000..99b7c8e
 +
 +void Config::setSilentByDefault(bool value) {
 +	setValue(kSilentByDefault, value);
++}
++
++bool Config::hidePremiumSection() const {
++	return boolValue(kHidePremiumSection, false);
++}
++
++void Config::setHidePremiumSection(bool value) {
++	setValue(kHidePremiumSection, value);
++}
++
++bool Config::hideHelpSection() const {
++	return boolValue(kHideHelpSection, false);
++}
++
++void Config::setHideHelpSection(bool value) {
++	setValue(kHideHelpSection, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -7552,6 +7649,8 @@ index 0000000..99b7c8e
 +			|| key == kTranslucentDeleted
 +			|| key == kPanguOnSending
 +			|| key == kSilentByDefault
++			|| key == kHidePremiumSection
++			|| key == kHideHelpSection
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -7750,10 +7849,10 @@ index 0000000..99b7c8e
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..f195c7b
+index 0000000..fb48e8b
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,191 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7819,6 +7918,10 @@ index 0000000..f195c7b
 +	void setPanguOnSending(bool value);
 +	[[nodiscard]] bool silentByDefault() const;
 +	void setSilentByDefault(bool value);
++	[[nodiscard]] bool hidePremiumSection() const;
++	void setHidePremiumSection(bool value);
++	[[nodiscard]] bool hideHelpSection() const;
++	void setHideHelpSection(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -9826,10 +9929,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..5a70b23
+index 0000000..d8f70bb
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,926 @@
+@@ -0,0 +1,959 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9906,6 +10009,9 @@ index 0000000..5a70b23
 +		<< "  exteraless-chats-cli pangu-tags <text> <offset> <length>\n"
 +		<< "  exteraless-chats-cli silent\n"
 +		<< "  exteraless-chats-cli silent-set <0|1>\n"
++		<< "  exteraless-chats-cli settings-sections\n"
++		<< "  exteraless-chats-cli settings-sections-set <hidePremium> "
++		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10327,6 +10433,36 @@ index 0000000..5a70b23
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("settings-sections")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("hidePremium"),
++				Exteraless::Config::Instance().hidePremiumSection() },
++			{ QStringLiteral("hideHelp"),
++				Exteraless::Config::Instance().hideHelpSection() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("settings-sections-set")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto premium = false;
++		auto help = false;
++		if (!ReadFlag(arguments[2], &premium)
++			|| !ReadFlag(arguments[3], &help)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setHidePremiumSection(premium);
++		Exteraless::Config::Instance().setHideHelpSection(help);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("hidePremium"), premium },
++			{ QStringLiteral("hideHelp"), help },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("silent")) {
@@ -10820,10 +10956,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..25bfb08
+index 0000000..3f6a95d
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2505 @@
+@@ -0,0 +1,2581 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10985,6 +11121,8 @@ index 0000000..25bfb08
 +        ("proxy-rule with wrong count", ["proxy-rule", "0"]),
 +        ("pangu-apply without text", ["pangu-apply"]),
 +        ("silent-set with wrong count", ["silent-set"]),
++        ("settings-sections-set with wrong count",
++         ["settings-sections-set", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -11291,7 +11429,7 @@ index 0000000..25bfb08
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 50,
++            len(section) == 52,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -11312,7 +11450,7 @@ index 0000000..25bfb08
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 55,
++            sum(len(value) for value in exported.values()) == 57,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -11332,7 +11470,7 @@ index 0000000..25bfb08
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 55,
++                data.get("applied") == 57,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -11416,6 +11554,8 @@ index 0000000..25bfb08
 +            "OEChatsDeletedMarkColor": 16711680,
 +            "OEChatsPanguOnSending": True,
 +            "OEChatsSilentByDefault": True,
++            "OESettingsHidePremium": True,
++            "OESettingsHideHelp": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -11437,7 +11577,7 @@ index 0000000..25bfb08
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 55,
++            data.get("applied") == 57,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -11497,6 +11637,12 @@ index 0000000..25bfb08
 +            "backup full ghost status",
 +            section.get("OEGhostShowStatus") is True,
 +            section.get("OEGhostShowStatus"))
++        ledger.check(
++            "backup full settings sections",
++            section.get("OESettingsHidePremium") is True
++            and section.get("OESettingsHideHelp") is True,
++            (section.get("OESettingsHidePremium"),
++             section.get("OESettingsHideHelp")))
 +        ledger.check(
 +            "backup full silent",
 +            section.get("OEChatsSilentByDefault") is True,
@@ -11620,10 +11766,10 @@ index 0000000..25bfb08
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 55",
++            "backup legacy eight completed to 57",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (50, 3, 2),
++             len(sections["mainconfig"])) == (52, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -12445,6 +12591,8 @@ index 0000000..25bfb08
 +            "OEChatsDeletedMarkColor": 16711680,
 +            "OEChatsPanguOnSending": True,
 +            "OEChatsSilentByDefault": True,
++            "OESettingsHidePremium": True,
++            "OESettingsHideHelp": True,
 +        },
 +    }
 +    data = json_call(
@@ -13269,6 +13417,68 @@ index 0000000..25bfb08
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_settings_sections(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "sections-defaults")
++    data = json_call(
++        ledger, cli, ["settings-sections"], env, "sections defaults")
++    if data is not None:
++        ledger.check(
++            "sections default off",
++            data.get("hidePremium") is False
++            and data.get("hideHelp") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["settings-sections-set", "1", "1"], env,
++        "sections set")
++    if data is not None:
++        ledger.check(
++            "sections set on",
++            data.get("hidePremium") is True
++            and data.get("hideHelp") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["settings-sections"], env, "sections reload")
++    if reloaded is not None:
++        ledger.check(
++            "sections persisted",
++            reloaded.get("hidePremium") is True
++            and reloaded.get("hideHelp") is True,
++            reloaded)
++
++    env = make_env(work / "sections-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "hidePremiumSection": True,
++            "hideHelpSection": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "sections alias")
++    if data is not None:
++        ledger.check(
++            "sections alias applied",
++            data.get("applied") == 2 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["settings-sections"], env, "sections alias read")
++    if reloaded is not None:
++        ledger.check(
++            "sections alias values",
++            reloaded.get("hidePremium") is True
++            and reloaded.get("hideHelp") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -13297,6 +13507,7 @@ index 0000000..25bfb08
 +        proxy_rules = check_proxy_rules(ledger, cli)
 +        pangu = check_pangu(ledger, cli, work)
 +        silent = check_silent(ledger, cli, work)
++        sections = check_settings_sections(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -13317,6 +13528,7 @@ index 0000000..25bfb08
 +    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
 +    print(f"pangu: {pangu[0] - pangu[1]} passed")
 +    print(f"silent: {silent[0] - silent[1]} passed")
++    print(f"sections: {sections[0] - sections[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

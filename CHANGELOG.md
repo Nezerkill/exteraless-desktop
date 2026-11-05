@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Settings: настройки `OESettingsHidePremium` и `OESettingsHideHelp`
+  (default `false`) скрывают секции Premium/Credits и Help на главном экране
+  настроек; Android-алиасы `hidePremiumSection`/`hideHelpSection` поддержаны
+  в `.extera` (всего 57 ключей), тумблеры в General.
 - Chats / Silent send: настройка `OEChatsSilentByDefault` (default `false`)
   отправляет новые сообщения без звука через `SendOptions.silent` в
   `prepareSendAction` (`HistoryWidget` и `ChatWidget`); Android-алиас

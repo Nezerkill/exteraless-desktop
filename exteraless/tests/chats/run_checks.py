@@ -159,6 +159,8 @@ def check_cli_args(ledger, cli):
         ("proxy-rule with wrong count", ["proxy-rule", "0"]),
         ("pangu-apply without text", ["pangu-apply"]),
         ("silent-set with wrong count", ["silent-set"]),
+        ("settings-sections-set with wrong count",
+         ["settings-sections-set", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -465,7 +467,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 50,
+            len(section) == 52,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -486,7 +488,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 55,
+            sum(len(value) for value in exported.values()) == 57,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -506,7 +508,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 55,
+                data.get("applied") == 57,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -590,6 +592,8 @@ def check_backup(ledger, cli, work):
             "OEChatsDeletedMarkColor": 16711680,
             "OEChatsPanguOnSending": True,
             "OEChatsSilentByDefault": True,
+            "OESettingsHidePremium": True,
+            "OESettingsHideHelp": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -611,7 +615,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 55,
+            data.get("applied") == 57,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -671,6 +675,12 @@ def check_backup(ledger, cli, work):
             "backup full ghost status",
             section.get("OEGhostShowStatus") is True,
             section.get("OEGhostShowStatus"))
+        ledger.check(
+            "backup full settings sections",
+            section.get("OESettingsHidePremium") is True
+            and section.get("OESettingsHideHelp") is True,
+            (section.get("OESettingsHidePremium"),
+             section.get("OESettingsHideHelp")))
         ledger.check(
             "backup full silent",
             section.get("OEChatsSilentByDefault") is True,
@@ -794,10 +804,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 55",
+            "backup legacy eight completed to 57",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (50, 3, 2),
+             len(sections["mainconfig"])) == (52, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1619,6 +1629,8 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsDeletedMarkColor": 16711680,
             "OEChatsPanguOnSending": True,
             "OEChatsSilentByDefault": True,
+            "OESettingsHidePremium": True,
+            "OESettingsHideHelp": True,
         },
     }
     data = json_call(
@@ -2443,6 +2455,68 @@ def check_silent(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_settings_sections(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "sections-defaults")
+    data = json_call(
+        ledger, cli, ["settings-sections"], env, "sections defaults")
+    if data is not None:
+        ledger.check(
+            "sections default off",
+            data.get("hidePremium") is False
+            and data.get("hideHelp") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["settings-sections-set", "1", "1"], env,
+        "sections set")
+    if data is not None:
+        ledger.check(
+            "sections set on",
+            data.get("hidePremium") is True
+            and data.get("hideHelp") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["settings-sections"], env, "sections reload")
+    if reloaded is not None:
+        ledger.check(
+            "sections persisted",
+            reloaded.get("hidePremium") is True
+            and reloaded.get("hideHelp") is True,
+            reloaded)
+
+    env = make_env(work / "sections-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "hidePremiumSection": True,
+            "hideHelpSection": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sections alias")
+    if data is not None:
+        ledger.check(
+            "sections alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["settings-sections"], env, "sections alias read")
+    if reloaded is not None:
+        ledger.check(
+            "sections alias values",
+            reloaded.get("hidePremium") is True
+            and reloaded.get("hideHelp") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2471,6 +2545,7 @@ def main():
         proxy_rules = check_proxy_rules(ledger, cli)
         pangu = check_pangu(ledger, cli, work)
         silent = check_silent(ledger, cli, work)
+        sections = check_settings_sections(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2491,6 +2566,7 @@ def main():
     print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
     print(f"pangu: {pangu[0] - pangu[1]} passed")
     print(f"silent: {silent[0] - silent[1]} passed")
+    print(f"sections: {sections[0] - sections[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

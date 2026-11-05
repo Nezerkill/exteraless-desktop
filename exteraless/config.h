@@ -63,6 +63,10 @@ public:
 	void setPanguOnSending(bool value);
 	[[nodiscard]] bool silentByDefault() const;
 	void setSilentByDefault(bool value);
+	[[nodiscard]] bool hidePremiumSection() const;
+	void setHidePremiumSection(bool value);
+	[[nodiscard]] bool hideHelpSection() const;
+	void setHideHelpSection(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

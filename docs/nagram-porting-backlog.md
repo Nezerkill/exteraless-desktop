@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(346 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, backup),
+(353 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -125,7 +125,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-33 | Ответ на удалённое сообщение цитатой | `NaConfig.replyToDeletedAsQuote` | `history/view/history_view_context_menu.cpp`, `window/window_peer_menu.cpp` | S · средний (текст уже хранится) | reply на удалённое подставляет цитату | ⬜ | R1 P1-15 |
 | NB-34 | Тихая отправка по умолчанию | `NaConfig.silentMessageByDefault` | `exteraless/config.{h,cpp}`, `history/history_widget.cpp`, `history/view/history_view_chat_section.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | отправка без звука по умолчанию | ✅ 2026-11-05: `OEChatsSilentByDefault` (default false) выставляет `SendOptions.silent` в `prepareSendAction` обоих виджетов, тумблер в Chats, CLI `silent` (5 проверок), Xvfb toggle | R1 P1-16 |
 | NB-35 | Скрыть «Send as…» и кнопки ввода канала | `OEChatsHideSendAsPeer`, `hideShareButtonInChannel`, `hideCameraTile` | `history/view/controls/history_view_compose_controls.h`, `window/window_peer_menu.cpp` | M · средний | кнопки скрыты в канале, отправка работает | ⬜ | R1 P1-17 |
-| NB-36 | Скрыть секции настроек Premium и Help | `NaConfig.hidePremiumSection`, `hideHelpSection` | `settings/sections/settings_main.cpp` | S · низкий | секции исчезают, поиск не падает | ⬜ | R1 P1-18 |
+| NB-36 | Скрыть секции настроек Premium и Help | `NaConfig.hidePremiumSection`, `hideHelpSection` | `exteraless/config.{h,cpp}`, `settings/sections/settings_main.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | секции исчезают, поиск не падает | ✅ 2026-11-05: `OESettingsHidePremium`/`OESettingsHideHelp`, ранний выход из `BuildPremiumSection`/`BuildHelpSection`, два тумблера в General, CLI `settings-sections` (5 проверок), Xvfb: секции исчезли | R1 P1-18 |
 | NB-37 | Скрыть телефон в профиле | `NekoConfig.hidePhone` | `info/profile/info_profile_values.cpp` (`PhoneValue`, `PhoneOrHiddenValue`), `settings/sections/settings_exteraless.cpp` | S · низкий | Xvfb: профиль контакта и свой; при off поведение как upstream | ✅ 2026-11-05: `OEGeneralHidePhone`, скрытие в `PhoneValue`/`PhoneOrHiddenValue`, тумблер в General, CLI `general` (22 проверки), Xvfb подтвердил скрытие номера в профиле | R2 §6.3 |
 | NB-38 | Ghost offline-после-online: реализовать или убрать мёртвый ключ | `sendOfflinePacketAfterOnline` | `exteraless/ghost_mode.cpp` (`IsGhostActive`), `exteraless/config.cpp`, `.extera` | S · низкий | Xvfb/CLI: ключ либо работает, либо отсутствует в конфиге и бэкапе | ⬜ | R2 M5, M15 |
 | NB-39 | Привести `docs/feature-mapping.md` в соответствие с кодом: метка удалённого, hook, pinned bar | — | `docs/feature-mapping.md` | S · низкий | сверка утверждений с `exteraless/deleted_messages.cpp`, `window/window_peer_menu.cpp`, поиском по `pinnedReactions` | ⬜ | R2 M3, M4, M6 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 346 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 353 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

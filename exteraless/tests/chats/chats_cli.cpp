@@ -74,6 +74,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli pangu-tags <text> <offset> <length>\n"
 		<< "  exteraless-chats-cli silent\n"
 		<< "  exteraless-chats-cli silent-set <0|1>\n"
+		<< "  exteraless-chats-cli settings-sections\n"
+		<< "  exteraless-chats-cli settings-sections-set <hidePremium> "
+		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -495,6 +498,36 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("settings-sections")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidePremium"),
+				Exteraless::Config::Instance().hidePremiumSection() },
+			{ QStringLiteral("hideHelp"),
+				Exteraless::Config::Instance().hideHelpSection() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("settings-sections-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto premium = false;
+		auto help = false;
+		if (!ReadFlag(arguments[2], &premium)
+			|| !ReadFlag(arguments[3], &help)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setHidePremiumSection(premium);
+		Exteraless::Config::Instance().setHideHelpSection(help);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidePremium"), premium },
+			{ QStringLiteral("hideHelp"), help },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("silent")) {

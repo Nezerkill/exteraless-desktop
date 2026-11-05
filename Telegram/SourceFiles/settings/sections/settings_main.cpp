@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/sections/settings_main.h"
 
+#include "exteraless/config.h"
+
 #include "settings/settings_common_session.h"
 
 #include "api/api_cloud_password.h"
@@ -508,6 +510,9 @@ void BuildInterfaceScale(SectionBuilder &builder) {
 }
 
 void BuildPremiumSection(SectionBuilder &builder) {
+	if (Exteraless::Config::Instance().hidePremiumSection()) {
+		return;
+	}
 	const auto session = builder.session();
 	const auto controller = builder.controller();
 	const auto showOther = builder.showOther();
@@ -587,6 +592,9 @@ void BuildPremiumSection(SectionBuilder &builder) {
 }
 
 void BuildHelpSection(SectionBuilder &builder) {
+	if (Exteraless::Config::Instance().hideHelpSection()) {
+		return;
+	}
 	builder.addDivider();
 	builder.addSkip();
 

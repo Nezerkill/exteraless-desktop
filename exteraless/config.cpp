@@ -24,6 +24,8 @@ constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
+constexpr auto kHidePremiumSection = "OESettingsHidePremium";
+constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -255,6 +257,22 @@ bool Config::silentByDefault() const {
 
 void Config::setSilentByDefault(bool value) {
 	setValue(kSilentByDefault, value);
+}
+
+bool Config::hidePremiumSection() const {
+	return boolValue(kHidePremiumSection, false);
+}
+
+void Config::setHidePremiumSection(bool value) {
+	setValue(kHidePremiumSection, value);
+}
+
+bool Config::hideHelpSection() const {
+	return boolValue(kHideHelpSection, false);
+}
+
+void Config::setHideHelpSection(bool value) {
+	setValue(kHideHelpSection, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -679,6 +697,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kTranslucentDeleted
 			|| key == kPanguOnSending
 			|| key == kSilentByDefault
+			|| key == kHidePremiumSection
+			|| key == kHideHelpSection
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor
