@@ -12,7 +12,8 @@ sibling-чекаутом: `../exteraless`.
     `OEPluginStates` (включённость плагинов, default `false`);
   - `proxy_rules.*` — авто-отключение прокси по типу сети;
   - `ghost_mode.*` — фильтр исходящих MTProto-запросов;
-  - `deleted_messages.*` — JSON-sidecar удалённых сообщений;
+  - `deleted_entry.*` и `deleted_messages.*` — JSON-sidecar удалённых
+    сообщений (схема v2: реакции, reply, forward, entities, правка, read);
   - `backup.*` — формат `.extera`;
   - `network.*` — тип сети через Qt NetworkInformation + fallback по интерфейсам;
   - `plugins/scanner.*` — запуск `python3 -I -B` и разбор JSON манифестов;
@@ -30,10 +31,11 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (284 проверки: strip, reactions, CLI, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup);
+  (292 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
-- `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых сообщений.
+- `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
+  сообщений, показывает реакции и метки reply/forward/edited.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
 - Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты

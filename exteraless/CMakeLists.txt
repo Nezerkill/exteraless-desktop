@@ -5,6 +5,8 @@ add_library(exteraless STATIC
     chats.h
     config.cpp
     config.h
+    deleted_entry.cpp
+    deleted_entry.h
     doubletap.cpp
     doubletap.h
     exteraless.cpp

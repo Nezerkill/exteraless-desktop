@@ -1,6 +1,7 @@
 #include "exteraless/backup.h"
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
+#include "exteraless/deleted_entry.h"
 #include "exteraless/deleted_messages_trim.h"
 #include "exteraless/doubletap.h"
 #include "exteraless/format.h"
@@ -62,6 +63,7 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
 		<< "<json>\n"
+		<< "  exteraless-chats-cli deleted-entry <json>\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -585,6 +587,31 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setSaveDeletedMessages(value);
 		PrintDeleted();
+		return 0;
+	}
+	if (mode == QStringLiteral("deleted-entry")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto error = QJsonParseError{0, QJsonParseError::NoError};
+		const auto document = QJsonDocument::fromJson(
+			arguments[2].toUtf8(),
+			&error);
+		if (error.error != QJsonParseError::NoError
+			|| !document.isObject()) {
+			return PrintUsage();
+		}
+		const auto entry = Exteraless::DeserializeDeletedEntry(
+			document.object());
+		if (!entry) {
+			PrintJson(QJsonObject{ { QStringLiteral("valid"), false } });
+			return 0;
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("valid"), true },
+			{ QStringLiteral("entry"),
+				Exteraless::SerializeDeletedEntry(*entry) },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("deleted-trim")) {

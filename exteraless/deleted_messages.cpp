@@ -3,12 +3,15 @@
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages_trim.h"
 
+#include "data/data_message_reaction_id.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
 #include "history/history.h"
 #include "history/history_item.h"
+#include "history/history_item_components.h"
 #include "main/main_session.h"
 #include "storage/storage_account.h"
+#include "ui/text/text_entity.h"
 
 #include <QDir>
 #include <QFile>
@@ -25,14 +28,20 @@
 namespace Exteraless {
 namespace {
 
-constexpr auto kVersion = 1;
+constexpr auto kVersion = 2;
 
 [[nodiscard]] QString IdString(qint64 value) {
 	return QString::number(value);
 }
 
-[[nodiscard]] qint64 IdValue(const QJsonObject &object, const char *key) {
-	return object.value(key).toString().toLongLong();
+[[nodiscard]] QString ReactionText(const Data::ReactionId &id) {
+	if (const auto emoji = id.emoji(); !emoji.isEmpty()) {
+		return emoji;
+	}
+	if (const auto custom = id.custom()) {
+		return u"custom:%1"_q.arg(custom);
+	}
+	return {};
 }
 
 [[nodiscard]] bool ShouldSave(not_null<HistoryItem*> item) {
@@ -141,8 +150,37 @@ void DeletedMessages::onItemsDestroyed(
 		entry.fromName = item->from() ? item->from()->name() : QString();
 		entry.date = item->date();
 		entry.text = item->originalText().text;
+		if (const auto edited = item->Get<HistoryMessageEdited>()) {
+			entry.editedDate = edited->date;
+		}
+		if (const auto reply = item->Get<HistoryMessageReply>()) {
+			entry.replyToMsgId = qint64(reply->fields().messageId.bare);
+			entry.replyToText = reply->fields().quote.text;
+		}
+		if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
+			if (forwarded->originalSender) {
+				entry.forwardedFrom = forwarded->originalSender->name();
+			} else if (forwarded->originalHiddenSenderInfo) {
+				entry.forwardedFrom = forwarded->originalHiddenSenderInfo->name;
+			}
+			entry.forwardedDate = forwarded->originalDate;
+		}
+		for (const auto &reaction : item->reactions()) {
+			if (const auto text = ReactionText(reaction.id); !text.isEmpty()) {
+				entry.reactions.push_back(text);
+			}
+		}
+		for (const auto &entity : item->originalText().entities) {
+			entry.entities.push_back({
+				.type = int(entity.type()),
+				.offset = entity.offset(),
+				.length = entity.length(),
+				.data = entity.data(),
+			});
+		}
 		entry.media = item->media() ? u"media"_q : QString();
 		entry.out = item->out();
+		entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
 		_entries.push_back(std::move(entry));
 		changed = true;
 	}
@@ -169,19 +207,8 @@ void DeletedMessages::load() {
 	}
 	const auto messages = document.object().value("messages").toArray();
 	for (const auto &value : messages) {
-		const auto object = value.toObject();
-		auto entry = Entry();
-		entry.peerId = IdValue(object, "peerId");
-		entry.peerName = object.value("peerName").toString();
-		entry.msgId = IdValue(object, "msgId");
-		entry.fromId = IdValue(object, "fromId");
-		entry.fromName = object.value("fromName").toString();
-		entry.date = qint64(object.value("date").toDouble());
-		entry.text = object.value("text").toString();
-		entry.media = object.value("media").toString();
-		entry.out = object.value("out").toBool();
-		if (entry.peerId && entry.msgId) {
-			_entries.push_back(std::move(entry));
+		if (auto entry = DeserializeDeletedEntry(value.toObject())) {
+			_entries.push_back(std::move(*entry));
 		}
 	}
 	const auto loaded = _entries.size();
@@ -206,17 +233,7 @@ void DeletedMessages::save() {
 
 	auto messages = QJsonArray();
 	for (const auto &entry : _entries) {
-		auto object = QJsonObject();
-		object["peerId"] = IdString(entry.peerId);
-		object["peerName"] = entry.peerName;
-		object["msgId"] = IdString(entry.msgId);
-		object["fromId"] = IdString(entry.fromId);
-		object["fromName"] = entry.fromName;
-		object["date"] = double(entry.date);
-		object["text"] = entry.text;
-		object["media"] = entry.media;
-		object["out"] = entry.out;
-		messages.append(object);
+		messages.append(SerializeDeletedEntry(entry));
 	}
 
 	auto root = QJsonObject();

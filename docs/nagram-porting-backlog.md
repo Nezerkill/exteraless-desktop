@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(284 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup),
+(292 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -108,7 +108,7 @@ timeout, state). Все три прогоняются на текущем дер
 
 | ID | Задача | Android key(s) | Desktop point | Размер · риск | Smoke | Статус | Источник |
 |---|---|---|---|---|---|---|---|
-| NB-19 | Расширить схему удалённых: реакции, ответ, форвард, entities, правки, read date | Room-схема AyuGram | `exteraless/deleted_messages.{h,cpp}`, `boxes/deleted_messages_box.cpp` | L · высокий (миграция JSON, размер файла) | сохранить сообщение с реакцией и ответом, перезапуск, всё читается | ⬜ | R1 P1-1 |
+| NB-19 | Расширить схему удалённых: реакции, ответ, форвард, entities, правки, read date | Room-схема AyuGram | `exteraless/deleted_entry.{h,cpp}`, `exteraless/deleted_messages.{h,cpp}`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | L · высокий (миграция JSON, размер файла) | сохранить сообщение с реакцией и ответом, перезапуск, всё читается | ✅ 2026-11-05: схема v2 (17 полей), старые записи совместимы, CLI `deleted-entry` (7 проверок), Xvfb: реакция и reply видны в боксе; исправлен захват controller/peer в меню | R1 P1-1 |
 | NB-20 | Метка удалённого сообщения в чате и иконка | `translucentDeletedMessages`, `useDeletedIcon`, `customDeletedMark`, `deletedMarkColor` | `history/view/history_view_message.cpp`, `history_view_element.cpp` | M · средний | Xvfb: удалённое помечено, при off метки нет | ⬜ | R1 P1-2, R2 M3 |
 | NB-21 | Импорт базы AyuGram | `OEAyuDatabaseImport` | новый импортёр + `exteraless/deleted_messages.cpp` | M · средний (чужой формат БД) | импорт тестовой БД, счётчик совпал | ⬜ | R1 P1-3 |
 | NB-22 | Regex-фильтры сообщений | `regexFiltersEnabled`, `regexFiltersData`, `enableInChats`, `excludedDialogs` | `dialogs/dialogs_inner_widget.cpp`, `data/data_histories.cpp` | L · высокий (производительность, потеря сообщений из вида) | CLI regex-движка + Xvfb: `(?i)spam` скрывает строку, выключение возвращает; нужен флаг «показать скрытые» | ⬜ | R1 P1-4 |
@@ -267,7 +267,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 284 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 292 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

@@ -873,9 +873,11 @@ void Filler::addDeletedMessages() {
 	if (!count) {
 		return;
 	}
+	const auto controller = _controller.get();
+	const auto peer = _peer;
 	_addAction(
 		u"Deleted messages (%1)"_q.arg(count),
-		[=] { Exteraless::ShowDeletedMessagesBox(_controller.get(), _peer); },
+		[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
 		&st::menuIconDelete);
 }
 

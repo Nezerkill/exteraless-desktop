@@ -26,7 +26,7 @@ APK-обновления и plugin-only API. Полный список искл�
   Chats (tail/reactions/tracking/unread capsule), Pill Stack 8 пилюль,
   drawer/accounts/order, plugins stage 1–2, proxy auto-disable, backup 25
   ключей, брендинг, WEB proxy.
-- Проверки: chats **284**, plugin manifest **32**, plugin host **213**, все
+- Проверки: chats **292**, plugin manifest **32**, plugin host **213**, все
   PASS; `nix flake check --no-build` PASS; Nix patch применяется к v7.3.1.
 - `result/` устарел; полная Nix-сборка после последних изменений не
   завершена. Это отдельный P1-долг, не повод менять уже проверенный
@@ -119,7 +119,12 @@ APK-обновления и plugin-only API. Полный список искл�
   `ghost-lock` (19 ghost-проверок), Xvfb подтвердил сохранение read при
   Ghost On.
 
-Дальше — P1 бэклога, начиная с NB-19.
+- `NB-19` — ✅ закрыто 2026-11-05: схема удалённых v2 (17 полей), Qt-only
+  сериализация `exteraless/deleted_entry.{h,cpp}`, CLI `deleted-entry`
+  (7 проверок), Xvfb подтвердил реакцию и reply в боксе; исправлен
+  use-after-free в пункте меню «Deleted messages».
+
+Дальше — NB-20 (метка удалённого сообщения в чате).
 `NB-13` (wide posts), `NB-15` (sort unread), feed, AI, player, Vosk и
 regex-фильтры — отдельными архитектурными этапами после стабилизации P0/P1.
 
@@ -157,9 +162,9 @@ nix flake check --no-build
   нет. CLI-тесты используют `EXTERALESS_WORKDIR` для изоляции.
 - Ghost: 4 из 5 функций; `OEGhostSendOfflineAfterOnline` мёртв (NB-38).
   Allowance глобальный на 5 секунд, не привязан к peer (NB-43).
-- Deleted messages: sidecar с 9 полями, нет реакций/ответов/правок. Гейт,
-  лимит и ротация закрыты в NB-02; расширение схемы — NB-19, метка в чате —
-  NB-20.
+- Deleted messages: sidecar v2 с 17 полями (реакции, reply, forward,
+  entities, дата правки, флаг прочтения); гейт, лимит и ротация закрыты в
+  NB-02, схема — в NB-19, метка в чате — NB-20.
 - Плагины: bwrap + Python host, разрешения заявленные и не применяются как
   capability; stage 3 (меню/настройки/intents) — NB-79.
 - WEB proxy уже есть в коде и Nix-сборке, но не описан в feature-mapping и не
@@ -173,7 +178,7 @@ nix flake check --no-build
 
 1. Прочитать этот файл.
 2. Открыть `docs/nagram-porting-backlog.md`, взять первую открытую `NB-*`
-   (сейчас `NB-19`, P1).
+   (сейчас `NB-20`).
 3. Проверить `git status`, `git log -3`, текущие счётчики тестов.
 4. Выполнить задачу по циклу из раздела 4, закоммитить и запушить отдельным
    коммитом.

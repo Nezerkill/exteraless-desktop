@@ -80,10 +80,21 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 284 проверки PASS
-  (44 strip, 10 reactions, 11 CLI, 7 config, 22 general, 27 deleted, 7 reset,
-  8 workdir, 8 menu, 22 doubletap, 14 stickertime, 9 pillorder, 19 ghost,
-  76 backup); плагины без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 292 проверки PASS
+  (44 strip, 10 reactions, 12 CLI, 7 config, 22 general, 27 deleted,
+  7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
+  9 pillorder, 19 ghost, 76 backup); плагины без изменений — 32 и 213
+  проверок.
+- Deleted messages schema (NB-19): сайдкар переведён на версию 2 и хранит
+  17 полей: реакции, `replyToMsgId`/`replyToText`, `forwardedFrom`/
+  `forwardedDate`, entities, `editedDate` и флаг `read`. Сериализация вынесена
+  в Qt-only `exteraless/deleted_entry.{h,cpp}`, старые v1-записи читаются с
+  дефолтами, бокс показывает `[❤] [reply] [edited]`. CLI `deleted-entry`
+  (7 проверок) проверяет roundtrip, фильтрацию entities и обязательные id.
+  Xvfb smoke: после удаления сообщения с реакцией и ответом бокс «Deleted
+  messages» показывает реакцию и метку reply; попутно исправлен use-after-free
+  захвата `controller`/`peer` в `window_peer_menu.cpp` (раньше бокс мог не
+  открыться или упасть).
 - Ghost locked-тумблеры (NB-18): пять настроек `OEGhostSendReadLocked`,
   `OEGhostSendStoriesLocked`, `OEGhostSendOnlineLocked`,
   `OEGhostSendUploadProgressLocked`, `OEGhostSendOfflineAfterOnlineLocked`
@@ -205,8 +216,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `bff0503c…`,
-  mtime 2026-11-05 06:18; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `2360fe22…`,
+  mtime 2026-11-05 07:09; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

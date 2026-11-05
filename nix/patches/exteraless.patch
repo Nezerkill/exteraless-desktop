@@ -9,14 +9,16 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..882696a 100644
+index 811707d..736e5c1 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,31 @@ endif()
+@@ -70,6 +70,33 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
 +target_sources(Telegram PRIVATE
++    ../exteraless/deleted_entry.cpp
++    ../exteraless/deleted_entry.h
 +    ../exteraless/deleted_messages.cpp
 +    ../exteraless/deleted_messages.h
 +    ../exteraless/deleted_messages_trim.h
@@ -44,7 +46,7 @@ index 811707d..882696a 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +134,7 @@ PRIVATE
+@@ -109,6 +136,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -52,7 +54,7 @@ index 811707d..882696a 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1706,7 @@ PRIVATE
+@@ -1680,6 +1708,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -60,7 +62,7 @@ index 811707d..882696a 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1924,8 @@ PRIVATE
+@@ -1897,6 +1926,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -69,7 +71,7 @@ index 811707d..882696a 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2559,10 @@ else()
+@@ -2530,6 +2561,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -304,10 +306,10 @@ index 31c60aa..7f7abc1 100644
  
 diff --git a/Telegram/SourceFiles/boxes/deleted_messages_box.cpp b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
 new file mode 100644
-index 0000000..737126d
+index 0000000..922738b
 --- /dev/null
 +++ b/Telegram/SourceFiles/boxes/deleted_messages_box.cpp
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,93 @@
 +#include "boxes/deleted_messages_box.h"
 +
 +#include "exteraless/deleted_messages.h"
@@ -358,6 +360,34 @@ index 0000000..737126d
 +					: (entry.fromName + u": "_q + entry.text);
 +				if (!entry.media.isEmpty()) {
 +					text += u" [media]"_q;
++				}
++				if (!entry.reactions.isEmpty()) {
++					text += u"  ["_q
++						+ entry.reactions.join(u' ')
++						+ u"]"_q;
++				}
++				if (entry.replyToMsgId) {
++					text += u"  [reply"_q;
++					if (!entry.replyToText.isEmpty()) {
++						text += u": "_q
++							+ entry.replyToText.left(40);
++					}
++					text += u"]"_q;
++				}
++				if (!entry.forwardedFrom.isEmpty()) {
++					text += u"  [forwarded from "_q
++						+ entry.forwardedFrom
++						+ u"]"_q;
++				}
++				if (entry.editedDate) {
++					text += u"  [edited]"_q;
++				}
++				if (!entry.entities.empty()) {
++					text += u"  [entities: %1]"_q.arg(
++						int(entry.entities.size()));
++				}
++				if (!entry.read) {
++					text += u"  [unread]"_q;
 +				}
 +				layout->add(
 +					object_ptr<Ui::FlatLabel>(
@@ -5870,7 +5900,7 @@ index 5975e0e..6ee9b2c 100644
  	object_ptr<Ui::FlatLabel> _setEmojiStatus;
  	std::unique_ptr<Info::Profile::EmojiStatusPanel> _emojiStatusPanel;
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
-index 56d2e56..47c8b5e 100644
+index 56d2e56..a93dc68 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
 @@ -15,6 +15,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -5892,7 +5922,7 @@ index 56d2e56..47c8b5e 100644
  	void addDeleteChat();
  	void addLeaveChat();
  	void addJoinChat();
-@@ -859,8 +864,66 @@ void Filler::addToggleArchive() {
+@@ -859,8 +864,68 @@ void Filler::addToggleArchive() {
  	SetActionText(archiveAction, std::move(actionText));
  }
  
@@ -5907,9 +5937,11 @@ index 56d2e56..47c8b5e 100644
 +	if (!count) {
 +		return;
 +	}
++	const auto controller = _controller.get();
++	const auto peer = _peer;
 +	_addAction(
 +		u"Deleted messages (%1)"_q.arg(count),
-+		[=] { Exteraless::ShowDeletedMessagesBox(_controller.get(), _peer); },
++		[=] { Exteraless::ShowDeletedMessagesBox(controller, peer); },
 +		&st::menuIconDelete);
 +}
 +
@@ -5961,7 +5993,7 @@ index 56d2e56..47c8b5e 100644
  		return;
  	}
  	const auto channel = _peer->asChannel();
-@@ -1928,6 +1991,8 @@ void Filler::fillContextMenuActions() {
+@@ -1928,6 +1993,8 @@ void Filler::fillContextMenuActions() {
  		}
  	}
  	addBanFromChannel();
@@ -5970,7 +6002,7 @@ index 56d2e56..47c8b5e 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -1952,6 +2017,8 @@ void Filler::fillHistoryActions() {
+@@ -1952,6 +2019,8 @@ void Filler::fillHistoryActions() {
  	addExportChat();
  	addTranslate();
  	addReport();
@@ -5979,7 +6011,7 @@ index 56d2e56..47c8b5e 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -4446,7 +4513,11 @@ void FillSenderUserpicMenu(
+@@ -4446,7 +4515,11 @@ void FillSenderUserpicMenu(
  	if (const auto guard = mention ? fieldForMention : nullptr) {
  		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
  			if (!username.isEmpty()) {
@@ -6004,10 +6036,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..78b1ef7
+index 0000000..958c5f9
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,40 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6015,6 +6047,8 @@ index 0000000..78b1ef7
 +    chats.h
 +    config.cpp
 +    config.h
++    deleted_entry.cpp
++    deleted_entry.h
 +    doubletap.cpp
 +    doubletap.h
 +    exteraless.cpp
@@ -7635,23 +7669,184 @@ index 0000000..b70d7c3
 +};
 +
 +} // namespace Exteraless
+diff --git a/exteraless/deleted_entry.cpp b/exteraless/deleted_entry.cpp
+new file mode 100644
+index 0000000..12ecadc
+--- /dev/null
++++ b/exteraless/deleted_entry.cpp
+@@ -0,0 +1,101 @@
++#include "exteraless/deleted_entry.h"
++
++#include <QJsonArray>
++
++namespace Exteraless {
++namespace {
++
++// WHY: mirrors the last EntityType value; the sidecar must not depend on lib_ui.
++constexpr auto kMaxEntityType = 28;
++
++[[nodiscard]] QString IdString(qint64 value) {
++	return QString::number(value);
++}
++
++[[nodiscard]] qint64 IdValue(const QJsonObject &object, const char *key) {
++	return object.value(key).toString().toLongLong();
++}
++
++} // namespace
++
++QJsonObject SerializeDeletedEntry(const DeletedEntry &entry) {
++	auto object = QJsonObject();
++	object["peerId"] = IdString(entry.peerId);
++	object["peerName"] = entry.peerName;
++	object["msgId"] = IdString(entry.msgId);
++	object["fromId"] = IdString(entry.fromId);
++	object["fromName"] = entry.fromName;
++	object["date"] = double(entry.date);
++	object["editedDate"] = double(entry.editedDate);
++	object["text"] = entry.text;
++	object["media"] = entry.media;
++	object["out"] = entry.out;
++	object["read"] = entry.read;
++	object["replyToMsgId"] = IdString(entry.replyToMsgId);
++	object["replyToText"] = entry.replyToText;
++	object["forwardedFrom"] = entry.forwardedFrom;
++	object["forwardedDate"] = double(entry.forwardedDate);
++	object["reactions"] = QJsonArray::fromStringList(entry.reactions);
++	auto entities = QJsonArray();
++	for (const auto &entity : entry.entities) {
++		entities.append(QJsonObject{
++			{ "type", entity.type },
++			{ "offset", entity.offset },
++			{ "length", entity.length },
++			{ "data", entity.data },
++		});
++	}
++	object["entities"] = entities;
++	return object;
++}
++
++std::optional<DeletedEntry> DeserializeDeletedEntry(
++		const QJsonObject &object) {
++	auto entry = DeletedEntry();
++	entry.peerId = IdValue(object, "peerId");
++	entry.peerName = object.value("peerName").toString();
++	entry.msgId = IdValue(object, "msgId");
++	entry.fromId = IdValue(object, "fromId");
++	entry.fromName = object.value("fromName").toString();
++	entry.date = qint64(object.value("date").toDouble());
++	entry.editedDate = qint64(object.value("editedDate").toDouble());
++	entry.text = object.value("text").toString();
++	entry.media = object.value("media").toString();
++	entry.out = object.value("out").toBool();
++	entry.read = object.value("read").toBool(true);
++	entry.replyToMsgId = IdValue(object, "replyToMsgId");
++	entry.replyToText = object.value("replyToText").toString();
++	entry.forwardedFrom = object.value("forwardedFrom").toString();
++	entry.forwardedDate = qint64(object.value("forwardedDate").toDouble());
++	for (const auto &value : object.value("reactions").toArray()) {
++		const auto reaction = value.toString();
++		if (!reaction.isEmpty()) {
++			entry.reactions.push_back(reaction);
++		}
++	}
++	for (const auto &value : object.value("entities").toArray()) {
++		const auto entity = value.toObject();
++		const auto type = entity.value("type").toInt(-1);
++		const auto offset = entity.value("offset").toInt(-1);
++		const auto length = entity.value("length").toInt(-1);
++		if (type < 0
++			|| type > kMaxEntityType
++			|| offset < 0
++			|| length <= 0
++			|| offset + length > entry.text.size()) {
++			continue;
++		}
++		entry.entities.push_back({
++			.type = type,
++			.offset = offset,
++			.length = length,
++			.data = entity.value("data").toString(),
++		});
++	}
++	if (!entry.peerId || !entry.msgId) {
++		return std::nullopt;
++	}
++	return entry;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/deleted_entry.h b/exteraless/deleted_entry.h
+new file mode 100644
+index 0000000..82d1a5c
+--- /dev/null
++++ b/exteraless/deleted_entry.h
+@@ -0,0 +1,45 @@
++#pragma once
++
++#include <QtGlobal>
++
++#include <QJsonObject>
++#include <QString>
++#include <QStringList>
++
++#include <optional>
++#include <vector>
++
++namespace Exteraless {
++
++struct DeletedEntryEntity {
++	int type = 0;
++	int offset = 0;
++	int length = 0;
++	QString data;
++};
++
++struct DeletedEntry {
++	qint64 peerId = 0;
++	QString peerName;
++	qint64 msgId = 0;
++	qint64 fromId = 0;
++	QString fromName;
++	qint64 date = 0;
++	qint64 editedDate = 0;
++	QString text;
++	QString media;
++	QString replyToText;
++	QString forwardedFrom;
++	QStringList reactions;
++	std::vector<DeletedEntryEntity> entities;
++	qint64 replyToMsgId = 0;
++	qint64 forwardedDate = 0;
++	bool out = false;
++	bool read = true;
++};
++
++[[nodiscard]] QJsonObject SerializeDeletedEntry(const DeletedEntry &entry);
++[[nodiscard]] std::optional<DeletedEntry> DeserializeDeletedEntry(
++	const QJsonObject &object);
++
++} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.cpp b/exteraless/deleted_messages.cpp
 new file mode 100644
-index 0000000..75ea458
+index 0000000..a3ae829
 --- /dev/null
 +++ b/exteraless/deleted_messages.cpp
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,251 @@
 +#include "exteraless/deleted_messages.h"
 +
 +#include "exteraless/config.h"
 +#include "exteraless/deleted_messages_trim.h"
 +
++#include "data/data_message_reaction_id.h"
 +#include "data/data_peer.h"
 +#include "data/data_session.h"
 +#include "history/history.h"
 +#include "history/history_item.h"
++#include "history/history_item_components.h"
 +#include "main/main_session.h"
 +#include "storage/storage_account.h"
++#include "ui/text/text_entity.h"
 +
 +#include <QDir>
 +#include <QFile>
@@ -7668,14 +7863,20 @@ index 0000000..75ea458
 +namespace Exteraless {
 +namespace {
 +
-+constexpr auto kVersion = 1;
++constexpr auto kVersion = 2;
 +
 +[[nodiscard]] QString IdString(qint64 value) {
 +	return QString::number(value);
 +}
 +
-+[[nodiscard]] qint64 IdValue(const QJsonObject &object, const char *key) {
-+	return object.value(key).toString().toLongLong();
++[[nodiscard]] QString ReactionText(const Data::ReactionId &id) {
++	if (const auto emoji = id.emoji(); !emoji.isEmpty()) {
++		return emoji;
++	}
++	if (const auto custom = id.custom()) {
++		return u"custom:%1"_q.arg(custom);
++	}
++	return {};
 +}
 +
 +[[nodiscard]] bool ShouldSave(not_null<HistoryItem*> item) {
@@ -7784,8 +7985,37 @@ index 0000000..75ea458
 +		entry.fromName = item->from() ? item->from()->name() : QString();
 +		entry.date = item->date();
 +		entry.text = item->originalText().text;
++		if (const auto edited = item->Get<HistoryMessageEdited>()) {
++			entry.editedDate = edited->date;
++		}
++		if (const auto reply = item->Get<HistoryMessageReply>()) {
++			entry.replyToMsgId = qint64(reply->fields().messageId.bare);
++			entry.replyToText = reply->fields().quote.text;
++		}
++		if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
++			if (forwarded->originalSender) {
++				entry.forwardedFrom = forwarded->originalSender->name();
++			} else if (forwarded->originalHiddenSenderInfo) {
++				entry.forwardedFrom = forwarded->originalHiddenSenderInfo->name;
++			}
++			entry.forwardedDate = forwarded->originalDate;
++		}
++		for (const auto &reaction : item->reactions()) {
++			if (const auto text = ReactionText(reaction.id); !text.isEmpty()) {
++				entry.reactions.push_back(text);
++			}
++		}
++		for (const auto &entity : item->originalText().entities) {
++			entry.entities.push_back({
++				.type = int(entity.type()),
++				.offset = entity.offset(),
++				.length = entity.length(),
++				.data = entity.data(),
++			});
++		}
 +		entry.media = item->media() ? u"media"_q : QString();
 +		entry.out = item->out();
++		entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
 +		_entries.push_back(std::move(entry));
 +		changed = true;
 +	}
@@ -7812,19 +8042,8 @@ index 0000000..75ea458
 +	}
 +	const auto messages = document.object().value("messages").toArray();
 +	for (const auto &value : messages) {
-+		const auto object = value.toObject();
-+		auto entry = Entry();
-+		entry.peerId = IdValue(object, "peerId");
-+		entry.peerName = object.value("peerName").toString();
-+		entry.msgId = IdValue(object, "msgId");
-+		entry.fromId = IdValue(object, "fromId");
-+		entry.fromName = object.value("fromName").toString();
-+		entry.date = qint64(object.value("date").toDouble());
-+		entry.text = object.value("text").toString();
-+		entry.media = object.value("media").toString();
-+		entry.out = object.value("out").toBool();
-+		if (entry.peerId && entry.msgId) {
-+			_entries.push_back(std::move(entry));
++		if (auto entry = DeserializeDeletedEntry(value.toObject())) {
++			_entries.push_back(std::move(*entry));
 +		}
 +	}
 +	const auto loaded = _entries.size();
@@ -7849,17 +8068,7 @@ index 0000000..75ea458
 +
 +	auto messages = QJsonArray();
 +	for (const auto &entry : _entries) {
-+		auto object = QJsonObject();
-+		object["peerId"] = IdString(entry.peerId);
-+		object["peerName"] = entry.peerName;
-+		object["msgId"] = IdString(entry.msgId);
-+		object["fromId"] = IdString(entry.fromId);
-+		object["fromName"] = entry.fromName;
-+		object["date"] = double(entry.date);
-+		object["text"] = entry.text;
-+		object["media"] = entry.media;
-+		object["out"] = entry.out;
-+		messages.append(object);
++		messages.append(SerializeDeletedEntry(entry));
 +	}
 +
 +	auto root = QJsonObject();
@@ -7877,14 +8086,15 @@ index 0000000..75ea458
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.h b/exteraless/deleted_messages.h
 new file mode 100644
-index 0000000..380e262
+index 0000000..f642144
 --- /dev/null
 +++ b/exteraless/deleted_messages.h
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,42 @@
 +#pragma once
 +
 +#include "base/basic_types.h"
 +#include "data/data_peer_id.h"
++#include "exteraless/deleted_entry.h"
 +
 +#include <QString>
 +#include <vector>
@@ -7899,17 +8109,8 @@ index 0000000..380e262
 +
 +class DeletedMessages final {
 +public:
-+	struct Entry {
-+		qint64 peerId = 0;
-+		QString peerName;
-+		qint64 msgId = 0;
-+		qint64 fromId = 0;
-+		QString fromName;
-+		qint64 date = 0;
-+		QString text;
-+		QString media;
-+		bool out = false;
-+	};
++	using Entry = DeletedEntry;
++	using Entity = DeletedEntryEntity;
 +
 +	static DeletedMessages &Instance();
 +
@@ -9198,13 +9399,14 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..c87dd90
+index 0000000..eb698d0
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,733 @@
+@@ -0,0 +1,760 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
++#include "exteraless/deleted_entry.h"
 +#include "exteraless/deleted_messages_trim.h"
 +#include "exteraless/doubletap.h"
 +#include "exteraless/format.h"
@@ -9266,6 +9468,7 @@ index 0000000..c87dd90
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
 +		<< "<json>\n"
++		<< "  exteraless-chats-cli deleted-entry <json>\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -9791,6 +9994,31 @@ index 0000000..c87dd90
 +		PrintDeleted();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("deleted-entry")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto error = QJsonParseError{0, QJsonParseError::NoError};
++		const auto document = QJsonDocument::fromJson(
++			arguments[2].toUtf8(),
++			&error);
++		if (error.error != QJsonParseError::NoError
++			|| !document.isObject()) {
++			return PrintUsage();
++		}
++		const auto entry = Exteraless::DeserializeDeletedEntry(
++			document.object());
++		if (!entry) {
++			PrintJson(QJsonObject{ { QStringLiteral("valid"), false } });
++			return 0;
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("valid"), true },
++			{ QStringLiteral("entry"),
++				Exteraless::SerializeDeletedEntry(*entry) },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("deleted-trim")) {
 +		if (arguments.size() != 3 && arguments.size() != 5) {
 +			return PrintUsage();
@@ -9999,10 +10227,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..3d5398c
+index 0000000..cddc6db
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2034 @@
+@@ -0,0 +1,2135 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10160,6 +10388,7 @@ index 0000000..3d5398c
 +        ("ghost-set with wrong count", ["ghost-set"]),
 +        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
++        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -11989,6 +12218,104 @@ index 0000000..3d5398c
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_deleted_entry(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "deleted-entry")
++    entry = {
++        "peerId": "-1001234567890",
++        "peerName": "Chat",
++        "msgId": "77",
++        "fromId": "42",
++        "fromName": "Alice",
++        "date": 1000,
++        "editedDate": 1200,
++        "text": "Hello world",
++        "media": "",
++        "out": True,
++        "read": False,
++        "replyToMsgId": "76",
++        "replyToText": "quoted message",
++        "forwardedFrom": "Channel",
++        "forwardedDate": 900,
++        "reactions": ["👍", "custom:12345"],
++        "entities": [
++            {"type": 4, "offset": 0, "length": 5, "data": ""},
++            {"type": 99, "offset": 0, "length": 5, "data": ""},
++            {"type": 4, "offset": 6, "length": 50, "data": ""},
++        ],
++    }
++    data = json_call(
++        ledger, cli, ["deleted-entry", json.dumps(entry)], env,
++        "deleted entry")
++    if data is not None:
++        ledger.check(
++            "deleted entry valid",
++            data.get("valid") is True,
++            data)
++        out = data.get("entry") or {}
++        ledger.check(
++            "deleted entry schema",
++            out.get("peerId") == "-1001234567890"
++            and out.get("msgId") == "77"
++            and out.get("text") == "Hello world"
++            and out.get("out") is True
++            and out.get("read") is False,
++            out)
++        ledger.check(
++            "deleted entry extras",
++            out.get("editedDate") == 1200
++            and out.get("replyToMsgId") == "76"
++            and out.get("replyToText") == "quoted message"
++            and out.get("forwardedFrom") == "Channel"
++            and out.get("forwardedDate") == 900,
++            out)
++        ledger.check(
++            "deleted entry reactions",
++            out.get("reactions") == ["👍", "custom:12345"],
++            out.get("reactions"))
++        ledger.check(
++            "deleted entry entities filtered",
++            out.get("entities") == [
++                {"type": 4, "offset": 0, "length": 5, "data": ""},
++            ],
++            out.get("entities"))
++
++    legacy = {
++        "peerId": "1",
++        "msgId": "2",
++        "text": "old entry",
++        "date": 10,
++    }
++    data = json_call(
++        ledger, cli, ["deleted-entry", json.dumps(legacy)], env,
++        "deleted entry legacy")
++    if data is not None:
++        out = data.get("entry") or {}
++        ledger.check(
++            "deleted entry legacy defaults",
++            data.get("valid") is True
++            and out.get("read") is True
++            and out.get("editedDate") == 0
++            and out.get("reactions") == []
++            and out.get("entities") == [],
++            out)
++
++    data = json_call(
++        ledger, cli, ["deleted-entry", json.dumps({"text": "no ids"})],
++        env, "deleted entry no ids")
++    if data is not None:
++        ledger.check(
++            "deleted entry requires ids",
++            data.get("valid") is False,
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -12004,6 +12331,7 @@ index 0000000..3d5398c
 +        config = check_config(ledger, cli, work)
 +        general = check_general(ledger, cli, work)
 +        deleted = check_deleted(ledger, cli, work)
++        deleted_entry = check_deleted_entry(ledger, cli, work)
 +        reset = check_reset(ledger, cli, work)
 +        workdir = check_workdir(ledger, cli, work)
 +        menu = check_message_menu(ledger, cli, work)
@@ -12018,6 +12346,7 @@ index 0000000..3d5398c
 +    print(f"config: {config[0] - config[1]} passed")
 +    print(f"general: {general[0] - general[1]} passed")
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
++    print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
 +    print(f"reset: {reset[0] - reset[1]} passed")
 +    print(f"workdir: {workdir[0] - workdir[1]} passed")
 +    print(f"menu: {menu[0] - menu[1]} passed")

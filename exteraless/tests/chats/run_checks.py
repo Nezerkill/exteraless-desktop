@@ -155,6 +155,7 @@ def check_cli_args(ledger, cli):
         ("ghost-set with wrong count", ["ghost-set"]),
         ("ghost-lock with wrong count", ["ghost-lock", "1"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
+        ("deleted-entry without json", ["deleted-entry"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -1984,6 +1985,104 @@ def check_ghost(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_deleted_entry(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "deleted-entry")
+    entry = {
+        "peerId": "-1001234567890",
+        "peerName": "Chat",
+        "msgId": "77",
+        "fromId": "42",
+        "fromName": "Alice",
+        "date": 1000,
+        "editedDate": 1200,
+        "text": "Hello world",
+        "media": "",
+        "out": True,
+        "read": False,
+        "replyToMsgId": "76",
+        "replyToText": "quoted message",
+        "forwardedFrom": "Channel",
+        "forwardedDate": 900,
+        "reactions": ["👍", "custom:12345"],
+        "entities": [
+            {"type": 4, "offset": 0, "length": 5, "data": ""},
+            {"type": 99, "offset": 0, "length": 5, "data": ""},
+            {"type": 4, "offset": 6, "length": 50, "data": ""},
+        ],
+    }
+    data = json_call(
+        ledger, cli, ["deleted-entry", json.dumps(entry)], env,
+        "deleted entry")
+    if data is not None:
+        ledger.check(
+            "deleted entry valid",
+            data.get("valid") is True,
+            data)
+        out = data.get("entry") or {}
+        ledger.check(
+            "deleted entry schema",
+            out.get("peerId") == "-1001234567890"
+            and out.get("msgId") == "77"
+            and out.get("text") == "Hello world"
+            and out.get("out") is True
+            and out.get("read") is False,
+            out)
+        ledger.check(
+            "deleted entry extras",
+            out.get("editedDate") == 1200
+            and out.get("replyToMsgId") == "76"
+            and out.get("replyToText") == "quoted message"
+            and out.get("forwardedFrom") == "Channel"
+            and out.get("forwardedDate") == 900,
+            out)
+        ledger.check(
+            "deleted entry reactions",
+            out.get("reactions") == ["👍", "custom:12345"],
+            out.get("reactions"))
+        ledger.check(
+            "deleted entry entities filtered",
+            out.get("entities") == [
+                {"type": 4, "offset": 0, "length": 5, "data": ""},
+            ],
+            out.get("entities"))
+
+    legacy = {
+        "peerId": "1",
+        "msgId": "2",
+        "text": "old entry",
+        "date": 10,
+    }
+    data = json_call(
+        ledger, cli, ["deleted-entry", json.dumps(legacy)], env,
+        "deleted entry legacy")
+    if data is not None:
+        out = data.get("entry") or {}
+        ledger.check(
+            "deleted entry legacy defaults",
+            data.get("valid") is True
+            and out.get("read") is True
+            and out.get("editedDate") == 0
+            and out.get("reactions") == []
+            and out.get("entities") == [],
+            out)
+
+    data = json_call(
+        ledger, cli, ["deleted-entry", json.dumps({"text": "no ids"})],
+        env, "deleted entry no ids")
+    if data is not None:
+        ledger.check(
+            "deleted entry requires ids",
+            data.get("valid") is False,
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -1999,6 +2098,7 @@ def main():
         config = check_config(ledger, cli, work)
         general = check_general(ledger, cli, work)
         deleted = check_deleted(ledger, cli, work)
+        deleted_entry = check_deleted_entry(ledger, cli, work)
         reset = check_reset(ledger, cli, work)
         workdir = check_workdir(ledger, cli, work)
         menu = check_message_menu(ledger, cli, work)
@@ -2013,6 +2113,7 @@ def main():
     print(f"config: {config[0] - config[1]} passed")
     print(f"general: {general[0] - general[1]} passed")
     print(f"deleted: {deleted[0] - deleted[1]} passed")
+    print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
     print(f"reset: {reset[0] - reset[1]} passed")
     print(f"workdir: {workdir[0] - workdir[1]} passed")
     print(f"menu: {menu[0] - menu[1]} passed")

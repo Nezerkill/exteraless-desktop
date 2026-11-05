@@ -71,6 +71,8 @@ endif()
 set_target_properties(Telegram PROPERTIES AUTOMOC ON)
 
 target_sources(Telegram PRIVATE
+    ../exteraless/deleted_entry.cpp
+    ../exteraless/deleted_entry.h
     ../exteraless/deleted_messages.cpp
     ../exteraless/deleted_messages.h
     ../exteraless/deleted_messages_trim.h

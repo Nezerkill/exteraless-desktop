@@ -49,6 +49,34 @@ void ShowDeletedMessagesBox(
 				if (!entry.media.isEmpty()) {
 					text += u" [media]"_q;
 				}
+				if (!entry.reactions.isEmpty()) {
+					text += u"  ["_q
+						+ entry.reactions.join(u' ')
+						+ u"]"_q;
+				}
+				if (entry.replyToMsgId) {
+					text += u"  [reply"_q;
+					if (!entry.replyToText.isEmpty()) {
+						text += u": "_q
+							+ entry.replyToText.left(40);
+					}
+					text += u"]"_q;
+				}
+				if (!entry.forwardedFrom.isEmpty()) {
+					text += u"  [forwarded from "_q
+						+ entry.forwardedFrom
+						+ u"]"_q;
+				}
+				if (entry.editedDate) {
+					text += u"  [edited]"_q;
+				}
+				if (!entry.entities.empty()) {
+					text += u"  [entities: %1]"_q.arg(
+						int(entry.entities.size()));
+				}
+				if (!entry.read) {
+					text += u"  [unread]"_q;
+				}
 				layout->add(
 					object_ptr<Ui::FlatLabel>(
 						box,

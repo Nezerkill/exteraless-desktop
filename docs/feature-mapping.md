@@ -97,7 +97,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 44, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 284 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 292 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -169,10 +169,14 @@ AyuGram stores deleted messages in a separate local database
 per-account JSON sidecar in the cache path keyed by peer and message id.
 Recording is off by default (`OESaveDeletedMessages`, toggle in
 Exteraless → Chats), capped at 1000 entries with 100 per peer, and rotated on
-add and load. On item destruction the message is saved before the local
-history is cleared. UI: a per-peer list from the chat context menu; a
-deleted-message mark in the chat is not implemented yet. Import of the old
-Android database is not part of MVP2.
+add and load. Since schema v2 each entry stores 17 fields: reactions, reply
+id and quoted text, forward source and date, text entities, edited date and a
+read flag, next to the basic author/date/text/media fields. Old v1 files load
+with defaults. On item destruction the message is saved before the local
+history is cleared. UI: a per-peer list from the chat context menu showing
+reactions and reply/forward markers; a deleted-message mark in the chat is not
+implemented yet (NB-20). Import of the old Android database is not part of
+MVP2.
 
 ### Pill Stack
 

@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- Deleted messages / Schema: сайдкар переведён на версию 2 с 17 полями —
+  реакции, ответ (`replyToMsgId`/`replyToText`), форвард (`forwardedFrom`/
+  `forwardedDate`), entities, дата правки, флаг прочтения; старые записи
+  читаются с дефолтами, бокс показывает новые поля. Заодно исправлен захват
+  `controller`/`peer` в пункте «Deleted messages» (раньше бокс мог не
+  открыться или упасть после уничтожения `Filler`).
 - Ghost Mode / Locks: пять «locked»-тумблеров (`OEGhostSendReadLocked`,
   `OEGhostSendStoriesLocked`, `OEGhostSendOnlineLocked`,
   `OEGhostSendUploadProgressLocked`, `OEGhostSendOfflineAfterOnlineLocked`;

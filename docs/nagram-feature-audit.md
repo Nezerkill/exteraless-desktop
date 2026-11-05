@@ -141,7 +141,7 @@ A–F. Это одно и то же деление, и ниже использу
 | 4 | Proxy auto-disable (VPN / mobile / Wi-Fi) | `OEProxyDisableConditions`, `OEProxyAutoDisabled` | `exteraless/proxy_rules.cpp`, `exteraless/network.cpp`, `core/application.cpp` (`StartProxyRulesWatcher`) | ✅ |
 | 5 | Ghost: read / stories / online / typing | `OEGhostSendReadPackets`, `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress` | `exteraless/ghost_mode.cpp`, `exteraless/ghost_status.{h,cpp}` + `mtproto/mtproto_request_filter.h`, вызовы в `apiwrap.cpp`, `api/api_views.cpp`, `api/api_updates.cpp`, `api/api_send_progress.cpp`, `data/data_stories.cpp` | 🟡 4 из 5; пакетный тумблер и статус в меню — NB-17; пятый ключ мёртв |
 | 6 | Ghost per-chat exclusions | `OEGhostReadExclusions`, `OEGhostTypingExclusions` | `exteraless/config.cpp`, подменю в `window/window_peer_menu.cpp` | 🟡 UI и запись есть, сетевой эффект не измерялся |
-| 7 | Deleted messages | `OESaveDeletedMessages` (default `false`) | `exteraless/deleted_messages.cpp`, `exteraless/deleted_messages_trim.h`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | 🟡 9 полей; гейт, лимит и ротация закрыты в NB-02, схема — NB-19 |
+| 7 | Deleted messages | `OESaveDeletedMessages` (default `false`) | `exteraless/deleted_entry.{h,cpp}`, `exteraless/deleted_messages.cpp`, `exteraless/deleted_messages_trim.h`, `boxes/deleted_messages_box.cpp`, `window/window_peer_menu.cpp` | ✅ схема v2 (17 полей) в NB-19; гейт, лимит и ротация — NB-02; метка в чате — NB-20 |
 | 8 | Remove message tail | `OEChatsRemoveMessageTail` | `history/view/history_view_message.cpp` (`skipTail` → `BubbleRounding`) | ✅ |
 | 9 | Hide reactions (channel/group/private) + hover-кнопка | `OEChatsHideReactions*` | `exteraless/chats.cpp`, `history/view/history_view_element.cpp` (`refreshReactions`), `history_view_message.cpp` (`reactionButtonParameters`) | ✅ |
 | 10 | Strip tracking on open | `OEChatsStripTrackingOnOpen` | `exteraless/links.cpp`, `core/ui_integration.cpp` (`handleUrlClick`) | ✅ |
@@ -290,10 +290,12 @@ Nix-сборка её содержат и у неё есть отдельные 
 `DeletedMessage`, `DeletedMessageFull`, `EditedMessage`, `DeletedDialog`,
 `DeletedMessageReaction`, `LastSeenEntity`, `SpyMessageRead`,
 `SpyMessageContentsRead` и базовым классом примерно на 35 полей; desktop —
-JSON-sidecar `tdata/exteraless/deleted_messages.json` с 9 полями (`peerId`,
-`peerName`, `msgId`, `fromId`, `fromName`, `date`, `text`, `media`, `out`).
-Реакции, ответы, форварды, entities, медиа-файлы, история правок и read-date в
-desktop-схеме отсутствуют.
+JSON-sidecar `tdata/exteraless/deleted_messages.json` версии 2 с 17 полями
+(`peerId`, `peerName`, `msgId`, `fromId`, `fromName`, `date`, `editedDate`,
+`text`, `media`, `replyToMsgId`, `replyToText`, `forwardedFrom`,
+`forwardedDate`, `reactions`, `entities`, `out`, `read`). Медиа-файлы и полная
+история правок в desktop-схеме отсутствуют; read-date заменён флагом
+прочтения, потому что tdesktop не хранит точную дату прочтения.
 
 ### 6.6 Прокси и сеть
 
@@ -517,7 +519,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 | # | Что | Где | Суть | Статус |
 |---|---|---|---|---|
 | M1 | Инвертированное условие Ghost в счётчике просмотров | `api/api_views.cpp` (`ViewsManager::viewsIncrement`), патч `nix/patches/exteraless.patch` | было `MTP_bool(true)`, затем `MTP_bool(!ghostSendReadPackets())`, из-за чего при дефолте просмотры не отправлялись вовсе | 🔧 исправлено в `123a29f`: условие снова `ghostSendReadPackets()`, плюс исправлены инвертированные подписи четырёх тумблеров «Don't send …» в `settings_exteraless.cpp`, патч перегенерирован |
-| M2 | Deleted messages: мёртвый ключ, всегда включено, без лимита | `exteraless/config.cpp` (`saveDeletedMessages`), `exteraless/deleted_messages.cpp`, `core/application.cpp` (`attach`) | было: `OESaveDeletedMessages` записан и принимается `fromJson`, но не читается; запись шла всегда; `save()` синхронно перезаписывает весь JSON на каждое удаление, без cap и ротации | 🔧 закрыто в NB-02 (2026-11-05): ключ читается перед записью, default `false`, cap 1000 записей/100 на чат с ротацией при добавлении и загрузке, тумблер в Chats; расширение схемы — NB-19 |
+| M2 | Deleted messages: мёртвый ключ, всегда включено, без лимита | `exteraless/config.cpp` (`saveDeletedMessages`), `exteraless/deleted_messages.cpp`, `core/application.cpp` (`attach`) | было: `OESaveDeletedMessages` записан и принимается `fromJson`, но не читается; запись шла всегда; `save()` синхронно перезаписывает весь JSON на каждое удаление, без cap и ротации | 🔧 закрыто: NB-02 (гейт/лимит/ротация) и NB-19 (схема v2, 17 полей, совместимость с v1) |
 | M3 | docs: «UI: a deleted-message mark in the chat» | `docs/feature-mapping.md`, раздел Deleted messages | метки в чате нет: `DeletedMessages` используется только в `window/window_peer_menu.cpp` (счётчик и бокс), `history/view/**` о ней не знает | открыто, P1 |
 | M4 | docs: «On `UpdateDeleteMessages`, the message is saved before the local history is cleared» | там же | реализация висит на `session->data().itemsAboutToBeDestroyed`, то есть ловит любое уничтожение элемента (очистка истории, выход из канала, сброс кэша), а не только серверное удаление | открыто, P1 |
 | M5 | `OEGhostSendOfflineAfterOnline` — мёртвый ключ | `exteraless/config.cpp` | объявлен, но нигде не читается и нет в UI; в `.extera` экспортируется для полноты, семантика Android `sendOfflinePacketAfterOnline` не реализована | открыто, P1 |
@@ -552,7 +554,7 @@ M-нумерацию:
 | Пункт | Отчёт 1 | Отчёт 2 | Проверка в дереве | Вывод |
 |---|---|---|---|---|
 | Ghost-полнота | 5 из 5 ключей ✅, включая `OEGhostSendOfflineAfterOnline` | 4 из 5: offline-ключ мёртв | ключ встречается только в `exteraless/config.{h,cpp}` | 4 из 5, ключ мёртв |
-| Deleted messages | ✅ реализовано (`OESaveDeletedMessages` + модуль) | P0: ключ не читается, запись всегда включена, нет лимита | гейт, лимит и ротация закрыты в NB-02; схема по-прежнему 9 полей и метки в чате нет | частично: P0 закрыт, NB-19/NB-20 открыты |
+| Deleted messages | ✅ реализовано (`OESaveDeletedMessages` + модуль) | P0: ключ не читается, запись всегда включена, нет лимита | гейт, лимит и ротация закрыты в NB-02, схема v2 — NB-19; метки в чате нет | частично: NB-20 открыт |
 | `NaConfig` | 242 ключа | 267 `val` | 250 `addConfig` | 242–250 пользовательских настроек |
 | `NekoConfig` | 97 | 98 `addConfig` | 98 `addConfig` | 98 |
 | `AppearanceConfig` | 61 ключ в перечне | 74 | 74 `val` | 74 пункта, 61 «настройка» по перечню |
