@@ -3,6 +3,7 @@
 #include "exteraless/config.h"
 #include "exteraless/plugin_runtime.h"
 #include "exteraless/plugins/scanner.h"
+#include "core/application.h"
 #include "core/file_utilities.h"
 #include "settings.h"
 #include "lang/lang_keys.h"
@@ -16,6 +17,9 @@
 #include "styles/style_settings.h"
 
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
 #include <rpl/rpl.h>
 
 #include <memory>
@@ -102,6 +106,67 @@ struct Row {
 		: u"Plugin host: stopped"_q;
 }
 
+[[nodiscard]] QString ReadAuditTail(const QString &path, int maxLines) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return u"No audit records yet."_q;
+	}
+	const auto lines = QString::fromUtf8(file.readAll()).split('\n');
+	auto tail = QStringList();
+	for (auto i = lines.size() - 1; i >= 0 && tail.size() < maxLines; --i) {
+		if (!lines[i].isEmpty()) {
+			tail.push_front(lines[i]);
+		}
+	}
+	return tail.isEmpty()
+		? u"No audit records yet."_q
+		: tail.join('\n');
+}
+
+void ExportAuditLog(
+		not_null<Window::SessionController*> controller,
+		const QString &path) {
+	FileDialog::GetWritePath(
+		Core::App().getFileDialogParent(),
+		u"Export plugin audit log"_q,
+		u"Log files (*.log)"_q,
+		u"plugins-audit.log"_q,
+		[=](QString &&destination) mutable {
+			if (destination.isEmpty()) {
+				return;
+			}
+			QFile source(path);
+			if (!source.open(QIODevice::ReadOnly)) {
+				return;
+			}
+			QFile target(destination);
+			if (!target.open(QIODevice::WriteOnly)) {
+				return;
+			}
+			target.write(source.readAll());
+		});
+}
+
+void ShowAuditLogBox(
+		not_null<Window::SessionController*> controller,
+		const QString &path) {
+	const auto text = ReadAuditTail(path, 24);
+	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(u"Plugin audit log"_q);
+		const auto label = box->addRow(
+			object_ptr<Ui::FlatLabel>(
+				box,
+				rpl::single(text),
+				st::boxLabel),
+			st::boxRowPadding);
+		label->setSelectable(true);
+		box->addLeftButton(rpl::single(u"Export"_q), [=] {
+			ExportAuditLog(controller, path);
+		});
+		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+	}));
+}
+
 void RefreshRows(
 		const std::vector<std::unique_ptr<Row>> &rows,
 		Plugins::Runtime *runtime) {
@@ -141,6 +206,14 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 				rpl::single(u"Enabled plugins start when this window opens. The host keeps running until Exteraless exits. Manifest permissions are informational in this stage; network, subprocess, native and out-of-directory file access are denied for every plugin."_q),
 				st::boxLabel),
 			st::boxRowPadding);
+		const auto auditButton = layout->add(
+			object_ptr<Ui::SettingsButton>(
+				box,
+				rpl::single(u"Audit log"_q),
+				st::settingsButtonNoIcon));
+		auditButton->setClickedCallback([=] {
+			ShowAuditLogBox(controller, auditLog);
+		});
 
 		if (!result.error.isEmpty()) {
 			layout->add(

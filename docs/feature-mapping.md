@@ -259,7 +259,9 @@ Stage 1 (MVP3): manifest and inspection only.
 - Files larger than 2 MiB are rejected per file; process failures (no
   `python3`, timeout, invalid JSON, non-zero exit) become one global error.
 - UI: a `Plugins` subsection in the Exteraless settings opens a box with the
-  plugin count, metadata, per-file errors or an empty-state message.
+  plugin count, metadata, per-file errors or an empty-state message. The box
+  has an `Audit log` button that shows the last 24 lines of
+  `tdata/plugins-audit.log` and can export the whole log through a file dialog.
 
 Stage 2 (MVP3): controlled host for enabled plugins.
 

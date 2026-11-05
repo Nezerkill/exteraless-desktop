@@ -25,7 +25,8 @@ sibling-чекаутом: `../exteraless`.
   проверка путей, audit-лог, load/unload и остановка host при выходе.
 - `Telegram/SourceFiles/exteraless/pill_stack.*` — полоса Pill Stack в списке чатов.
 - `Telegram/SourceFiles/exteraless/plugins_box.*` — бокс «Plugins»: список,
-  ошибки, пустое состояние, тумблеры и статус host.
+  ошибки, пустое состояние, тумблеры, статус host, просмотр последних строк
+  `plugins-audit.log` и экспорт лога.
 - `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan` (stage 1),
   CLI `exteraless-plugin-host-cli` (stage 2), фикстуры, `run_checks.py`
   (32 проверки) и `run_host_checks.py` (213 проверок) с фикстурами

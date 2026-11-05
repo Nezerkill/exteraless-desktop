@@ -87,6 +87,9 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
+- Plugins audit log (NB-28): кнопка «Audit log» в боксе плагинов показывает
+  последние 24 строки `tdata/plugins-audit.log`, «Export» открывает файловый
+  диалог с `plugins-audit.log`; Xvfb подтвердил.
 - Nix (NB-40): устаревший `result/` (symlink на сборку от 1 ноября) удалён;
   `nix build` создаёт новый результат.
 - Docs (NB-39): `docs/feature-mapping.md` сверен с кодом, убрано
@@ -268,8 +271,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `cd12defe…`,
-  mtime 2026-11-05 09:10; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `50a7102a…`,
+  mtime 2026-11-05 09:49; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).
