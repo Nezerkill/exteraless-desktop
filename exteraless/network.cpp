@@ -12,12 +12,7 @@ namespace {
 		if (!interface.flags().testFlag(QNetworkInterface::IsUp)) {
 			continue;
 		}
-		const auto name = interface.name().toLower();
-		if (name.startsWith("tun")
-			|| name.startsWith("tap")
-			|| name.startsWith("wg")
-			|| name.startsWith("ppp")
-			|| name.startsWith("utun")) {
+		if (IsVpnInterfaceName(interface.name())) {
 			return true;
 		}
 	}
@@ -55,6 +50,14 @@ namespace {
 }
 
 } // namespace
+
+bool IsVpnInterfaceName(const QString &name) {
+	const auto lower = name.toLower();
+	return lower.startsWith("tun")
+		|| lower.startsWith("tap")
+		|| lower.startsWith("wg")
+		|| lower.startsWith("utun");
+}
 
 Transport CurrentTransport() {
 	if (HasVpnInterface()) {

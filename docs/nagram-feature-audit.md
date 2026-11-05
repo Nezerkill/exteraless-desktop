@@ -530,7 +530,7 @@ Pangu (пробелы между CJK и латиницей), Zalgo, выбор m
 | M10 | Хрупкий процесс генерации патча | `nix/update-patch.sh` | база — локальный тег `v7.3.1`, который уже содержит fork-код (`mtproto/web_proxy/*`, `.agents/**`); всё, что лежит в базовом теге, в патч не попадает, поэтому на настоящем upstream-исходнике WEB proxy и будущие правки «базовых» файлов молча исчезнут | открыто, P1 |
 | M11 | Ghost-allowance: глобальный счётчик и TTL 5 с | `exteraless/ghost_mode.cpp` (`Allowance`) | счётчик не привязан к peer: чтение исключённого чата A взводит разрешение на 5 с, чтение чата B в этом окне его «съедает» | открыто, P1 (минимум — документировать) |
 | M12 | `Config::load()` не вызывается | `exteraless/config.cpp` | мёртвый публичный API: всё делает ленивый `ensureLoaded()` | открыто, P2 |
-| M13 | `hasVpnInterface()` считает `ppp*` VPN | `exteraless/network.cpp` | PPPoE/DSL распознаётся как VPN, прокси выключается без VPN | открыто, P2 |
+| M13 | `hasVpnInterface()` считает `ppp*` VPN | `exteraless/network.cpp` | PPPoE/DSL распознавался как VPN, прокси выключался без VPN | ✅ закрыто в NB-45: `IsVpnInterfaceName()` без `ppp`, CLI `vpn-name` |
 | M14 | `ApplyProxyRules()` каждые 2 с | `exteraless/proxy_rules.cpp` | пока условие активно, пользователь не может вернуть прокси вручную; `proxyAutoDisabled` персистится и после перезапуска включает прокси сам | открыто, P2 |
 | M15 | `IsGhostActive()` не учитывает offline-после-online | `exteraless/ghost_mode.cpp` | связано с M5 | открыто, P2 |
 

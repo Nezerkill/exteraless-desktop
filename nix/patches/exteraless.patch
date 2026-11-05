@@ -8945,10 +8945,10 @@ index 0000000..ffa1cbd
 +} // namespace Exteraless
 diff --git a/exteraless/network.cpp b/exteraless/network.cpp
 new file mode 100644
-index 0000000..63d9e95
+index 0000000..0faabad
 --- /dev/null
 +++ b/exteraless/network.cpp
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,86 @@
 +#include "exteraless/network.h"
 +
 +#include <QNetworkInformation>
@@ -8963,12 +8963,7 @@ index 0000000..63d9e95
 +		if (!interface.flags().testFlag(QNetworkInterface::IsUp)) {
 +			continue;
 +		}
-+		const auto name = interface.name().toLower();
-+		if (name.startsWith("tun")
-+			|| name.startsWith("tap")
-+			|| name.startsWith("wg")
-+			|| name.startsWith("ppp")
-+			|| name.startsWith("utun")) {
++		if (IsVpnInterfaceName(interface.name())) {
 +			return true;
 +		}
 +	}
@@ -9007,6 +9002,14 @@ index 0000000..63d9e95
 +
 +} // namespace
 +
++bool IsVpnInterfaceName(const QString &name) {
++	const auto lower = name.toLower();
++	return lower.startsWith("tun")
++		|| lower.startsWith("tap")
++		|| lower.startsWith("wg")
++		|| lower.startsWith("utun");
++}
++
 +Transport CurrentTransport() {
 +	if (HasVpnInterface()) {
 +		return Transport::VPN;
@@ -9034,11 +9037,13 @@ index 0000000..63d9e95
 +} // namespace Exteraless
 diff --git a/exteraless/network.h b/exteraless/network.h
 new file mode 100644
-index 0000000..0679761
+index 0000000..fe4312b
 --- /dev/null
 +++ b/exteraless/network.h
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,19 @@
 +#pragma once
++
++#include <QString>
 +
 +namespace Exteraless {
 +
@@ -9049,6 +9054,8 @@ index 0000000..0679761
 +	Cellular,
 +	VPN,
 +};
++
++[[nodiscard]] bool IsVpnInterfaceName(const QString &name);
 +
 +[[nodiscard]] Transport CurrentTransport();
 +
@@ -9511,10 +9518,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..8f17766
+index 0000000..db62f85
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,804 @@
+@@ -0,0 +1,815 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9524,6 +9531,7 @@ index 0000000..8f17766
 +#include "exteraless/format.h"
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
++#include "exteraless/network.h"
 +
 +#include <QByteArray>
 +#include <QCoreApplication>
@@ -9579,6 +9587,7 @@ index 0000000..8f17766
 +		<< "  exteraless-chats-cli deletedmark\n"
 +		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 +		<< "<mark> <color>\n"
++		<< "  exteraless-chats-cli vpn-name <interface>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10002,6 +10011,15 @@ index 0000000..8f17766
 +		PrintStickerTime();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("vpn-name")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		std::cout
++			<< (Exteraless::IsVpnInterfaceName(arguments[2]) ? "1" : "0")
++			<< '\n';
++		return 0;
++	}
 +	if (mode == QStringLiteral("deletedmark")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -10383,10 +10401,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..fbb6336
+index 0000000..4ce7efd
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2283 @@
+@@ -0,0 +1,2316 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10544,6 +10562,7 @@ index 0000000..fbb6336
 +        ("ghost-set with wrong count", ["ghost-set"]),
 +        ("ghost-lock with wrong count", ["ghost-lock", "1"]),
 +        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
++        ("vpn-name without name", ["vpn-name"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -12618,6 +12637,36 @@ index 0000000..fbb6336
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_vpn(ledger, cli):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    cases = [
++        ("tun0", True),
++        ("tap0", True),
++        ("wg0", True),
++        ("utun3", True),
++        ("TUN0", True),
++        ("ppp0", False),
++        ("ppp1", False),
++        ("enp3s0", False),
++        ("wlan0", False),
++        ("", False),
++    ]
++    for name, expected in cases:
++        result = run(cli, ["vpn-name", name])
++        actual = result.stdout.strip()
++        want = "1" if expected else "0"
++        ledger.check(
++            f"vpn name {name or 'empty'}",
++            result.returncode == 0 and actual == want,
++            f"exit {result.returncode}, got {actual!r}, want {want!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -12642,6 +12691,7 @@ index 0000000..fbb6336
 +        pillorder = check_pill_order(ledger, cli, work)
 +        ghost = check_ghost(ledger, cli, work)
 +        deleted_mark = check_deleted_mark(ledger, cli, work)
++        vpn = check_vpn(ledger, cli)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -12658,6 +12708,7 @@ index 0000000..fbb6336
 +    print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
 +    print(f"ghost: {ghost[0] - ghost[1]} passed")
 +    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
++    print(f"vpn: {vpn[0] - vpn[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

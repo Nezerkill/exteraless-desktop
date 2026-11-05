@@ -97,7 +97,7 @@ Desktop behavior of the Chats keys:
   (`exteraconfig` 48, `pillstackconfig` 3, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 304 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 315 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -114,7 +114,7 @@ Android conditions from `ProxyDisableCondition`:
 
 | Flag | Value | Desktop source |
 |---|---:|---|
-| VPN | 1 | tunnel interface (`tun*`, `tap*`, `wg*`, `ppp*`) or NetworkManager |
+| VPN | 1 | tunnel interface (`tun*`, `tap*`, `wg*`, `utun*`); `ppp*` is PPPoE, not VPN |
 | Mobile data | 2 | `QNetworkInformation::TransportMedium::Cellular` |
 | Wi-Fi | 4 | `QNetworkInformation::TransportMedium::WiFi` |
 

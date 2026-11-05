@@ -7,6 +7,7 @@
 #include "exteraless/format.h"
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
+#include "exteraless/network.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -62,6 +63,7 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli deletedmark\n"
 		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 		<< "<mark> <color>\n"
+		<< "  exteraless-chats-cli vpn-name <interface>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -483,6 +485,15 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("vpn-name")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		std::cout
+			<< (Exteraless::IsVpnInterfaceName(arguments[2]) ? "1" : "0")
+			<< '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("deletedmark")) {

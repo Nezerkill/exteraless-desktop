@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QString>
+
 namespace Exteraless {
 
 enum class Transport {
@@ -9,6 +11,8 @@ enum class Transport {
 	Cellular,
 	VPN,
 };
+
+[[nodiscard]] bool IsVpnInterfaceName(const QString &name);
 
 [[nodiscard]] Transport CurrentTransport();
 

@@ -155,6 +155,7 @@ def check_cli_args(ledger, cli):
         ("ghost-set with wrong count", ["ghost-set"]),
         ("ghost-lock with wrong count", ["ghost-lock", "1"]),
         ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
+        ("vpn-name without name", ["vpn-name"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -2229,6 +2230,36 @@ def check_deleted_mark(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_vpn(ledger, cli):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    cases = [
+        ("tun0", True),
+        ("tap0", True),
+        ("wg0", True),
+        ("utun3", True),
+        ("TUN0", True),
+        ("ppp0", False),
+        ("ppp1", False),
+        ("enp3s0", False),
+        ("wlan0", False),
+        ("", False),
+    ]
+    for name, expected in cases:
+        result = run(cli, ["vpn-name", name])
+        actual = result.stdout.strip()
+        want = "1" if expected else "0"
+        ledger.check(
+            f"vpn name {name or 'empty'}",
+            result.returncode == 0 and actual == want,
+            f"exit {result.returncode}, got {actual!r}, want {want!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2253,6 +2284,7 @@ def main():
         pillorder = check_pill_order(ledger, cli, work)
         ghost = check_ghost(ledger, cli, work)
         deleted_mark = check_deleted_mark(ledger, cli, work)
+        vpn = check_vpn(ledger, cli)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2269,6 +2301,7 @@ def main():
     print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
     print(f"ghost: {ghost[0] - ghost[1]} passed")
     print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
+    print(f"vpn: {vpn[0] - vpn[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

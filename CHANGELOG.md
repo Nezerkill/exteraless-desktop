@@ -2,6 +2,9 @@
 
 ## 2026-11-05
 
+- Network: `ppp*` (PPPoE) больше не считается VPN-интерфейсом в
+  `IsVpnInterfaceName()`, поэтому авто-отключение прокси не срабатывает на
+  PPPoE; CLI `vpn-name` (10 проверок).
 - Config: удалён неиспользуемый `Config::load()`; загрузка остаётся ленивой
   через `ensureLoaded()`.
 - Сборка: `nix/smoke-test.sh` запускает `out/bin/Telegram` и собирает
