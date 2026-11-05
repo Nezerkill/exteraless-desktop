@@ -22,6 +22,7 @@ constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
+constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -237,6 +238,14 @@ bool Config::translucentDeletedMessages() const {
 
 void Config::setTranslucentDeletedMessages(bool value) {
 	setValue(kTranslucentDeleted, value);
+}
+
+bool Config::panguOnSending() const {
+	return boolValue(kPanguOnSending, false);
+}
+
+void Config::setPanguOnSending(bool value) {
+	setValue(kPanguOnSending, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -659,6 +668,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kDisableNumberRounding
 			|| key == kShowSeconds
 			|| key == kTranslucentDeleted
+			|| key == kPanguOnSending
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

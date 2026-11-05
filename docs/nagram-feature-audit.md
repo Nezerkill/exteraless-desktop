@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **53** | **53** | 53 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 53 | на момент аудита было 8; после NB-04…NB-20 — все 53 desktop-ключа |
+| **Ключей форка desktop** | **54** | **54** | 54 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
+| Ключей `.extera` | 8 | 8 | 54 | на момент аудита было 8; после NB-04…NB-25 — все 54 desktop-ключа |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -604,9 +604,9 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (53)
+## 13. Приложение B. Ключи `.extera` (54)
 
-Секция `exteraconfig` (48): `relativeLastSeen`, `addCommaAfterMention`,
+Секция `exteraconfig` (49): `relativeLastSeen`, `addCommaAfterMention`,
 `disableNumberRounding`, `formatTimeWithSeconds`, `hidePhoneNumber`,
 `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
@@ -625,7 +625,7 @@ M-нумерацию:
 `OEGhostSendOnlineLocked`, `OEGhostSendUploadProgressLocked`,
 `OEGhostSendOfflineAfterOnlineLocked`, `OEChatsTranslucentDeleted`,
 `OEChatsUseDeletedIcon`, `OEChatsCustomDeletedMark`,
-`OEChatsDeletedMarkColor`.
+`OEChatsDeletedMarkColor`, `OEChatsPanguOnSending`.
 
 Секция `pillstackconfig` (3): `OEPillStackEnabled`, `OEPillStackPills`,
 `OEPillStackOrder`.

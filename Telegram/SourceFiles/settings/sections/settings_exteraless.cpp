@@ -377,6 +377,14 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance().setUseDeletedIcon(value);
 		});
+	addChatsToggle(
+		u"exteraless/chats/pangu"_q,
+		tr::lng_settings_exteraless_chats_pangu(),
+		{ u"pangu"_q, u"cjk"_q, u"spaces"_q },
+		Exteraless::Config::Instance().panguOnSending(),
+		[](bool value) {
+			Exteraless::Config::Instance().setPanguOnSending(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/menu"_q,

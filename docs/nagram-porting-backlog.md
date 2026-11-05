@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(322 проверки: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, backup),
+(339 проверок: strip, reactions, cli, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -114,7 +114,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-22 | Regex-фильтры сообщений | `regexFiltersEnabled`, `regexFiltersData`, `enableInChats`, `excludedDialogs` | `dialogs/dialogs_inner_widget.cpp`, `data/data_histories.cpp` | L · высокий (производительность, потеря сообщений из вида) | CLI regex-движка + Xvfb: `(?i)spam` скрывает строку, выключение возвращает; нужен флаг «показать скрытые» | ⬜ | R1 P1-4 |
 | NB-23 | Ghost-отправка «как отложенное» | `NaConfig.ghostScheduledSend` | `apiwrap.cpp` (send), `exteraless/ghost_mode.cpp` | M · высокий (задержка 12 с) | при включённом online-ghost сообщение уходит через 12 с | ⬜ | R1 P1-5 |
 | NB-24 | Inline-математика без валют | `OEChatsInlineMathResult` | `chat_helpers/message_field.cpp`, `chat_helpers/field_autocomplete.cpp` | M · средний (парсер выражений) | `2+2=` показывает 4, по Space вставляет | ⬜ | R1 P1-6 |
-| NB-25 | Pangu: пробелы между CJK и латиницей | `NaConfig.enablePanguOnSending` | `chat_helpers/message_field.cpp` | S · низкий | текст «中文test» уходит с пробелом | ⬜ | R1 P1-7 |
+| NB-25 | Pangu: пробелы между CJK и латиницей | `NaConfig.enablePanguOnSending` | `exteraless/pangu.{h,cpp}`, `history/history_widget.cpp`, `history/view/history_view_chat_section.cpp`, `settings/sections/settings_exteraless.cpp` | S · низкий | текст «中文test» уходит с пробелом | ✅ 2026-11-05: `OEChatsPanguOnSending` (default false), `ApplyPanguWithMap` с корректировкой text-tags, тумблер в Chats, CLI `pangu*` (15 проверок), Xvfb toggle | R1 P1-7 |
 | NB-26 | Свой путь сохранения и подпапка на чат | `NekoConfig.customSavePath`, `NaConfig.saveToChatSubfolder` | `data/data_download_manager.cpp`, `settings/sections/settings_advanced.cpp` | M · средний (пути ФС) | файл сохраняется в выбранную папку и подпапку | ⬜ | R1 P1-8 |
 | NB-27 | Скрыть кнопки AI-редактора и саммари | `OEAppearanceHideAiEditor`, `HideIvSummary`, `HideMessageSummary` | `boxes/compose_ai_box.cpp`, `api/api_compose_with_ai.cpp` | S · низкий | Xvfb: кнопка скрыта, остальное работает | ⬜ | R1 P1-9 |
 | NB-28 | UI-просмотр audit-лога плагинов | `PluginActivityLog`, `PluginActivityExport` | `Telegram/SourceFiles/exteraless/plugins_box.cpp`, `plugin_runtime.cpp` | M · средний | строки `tdata/plugins-audit.log` видны в боксе, экспорт работает | ⬜ | R1 P1-10 |
@@ -268,7 +268,7 @@ Android-действия (translate/save/repeat/edit/delete/forward/download) �
 1. Debug-сборка (`ninja -C out Telegram`) и запуск `out/bin/Telegram` под
    Xvfb.
 2. `python3 exteraless/tests/chats/run_checks.py` с новой группой, без потери
-   существующих 322 проверок; `exteraless/tests/plugins/run_checks.py` и
+   существующих 339 проверок; `exteraless/tests/plugins/run_checks.py` и
    `run_host_checks.py` остаются PASS (32 и 213).
 3. `nix/update-patch.sh` и сверка sha256 патча — иначе повторяется дефект
    NB-42.

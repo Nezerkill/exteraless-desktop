@@ -20,6 +20,8 @@ add_library(exteraless STATIC
     message_menu.h
     network.cpp
     network.h
+    pangu.cpp
+    pangu.h
     plugins/scanner.cpp
     proxy_rules_state.cpp
     proxy_rules_state.h

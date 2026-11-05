@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..b3c49b4 100644
+index ffc8ec9..b1a9315 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,91 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,92 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -132,6 +132,7 @@ index ffc8ec9..b3c49b4 100644
 +"lng_settings_exteraless_chats_save_deleted" = "Save deleted messages";
 +"lng_settings_exteraless_chats_translucent_deleted" = "Translucent deleted messages";
 +"lng_settings_exteraless_chats_use_deleted_icon" = "Use icon for deleted messages";
++"lng_settings_exteraless_chats_pangu" = "Add spaces between CJK and Latin on send";
 +"lng_settings_exteraless_double_tap_title" = "Double tap action";
 +"lng_settings_exteraless_double_tap_in" = "On incoming messages";
 +"lng_settings_exteraless_double_tap_out" = "On outgoing messages";
@@ -3491,6 +3492,46 @@ index dcb902d..5b28a1d 100644
  	_history->session().api().request(MTPmessages_SetTyping(
  		MTP_flags(topMsgId
  			? MTPmessages_SetTyping::Flag::f_top_msg_id
+diff --git a/Telegram/SourceFiles/history/history_widget.cpp b/Telegram/SourceFiles/history/history_widget.cpp
+index 43b2003..607cff2 100644
+--- a/Telegram/SourceFiles/history/history_widget.cpp
++++ b/Telegram/SourceFiles/history/history_widget.cpp
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/history_widget.h"
+ 
++#include "exteraless/config.h"
++#include "exteraless/pangu.h"
++
+ #include "api/api_compose_with_ai.h"
+ #include "api/api_editing.h"
+ #include "api/api_bot.h"
+@@ -5974,6 +5977,25 @@ void HistoryWidget::sendTextWithTags(
+ 		_cornerButtons.clearReplyReturns();
+ 	}
+ 
++	if (Exteraless::Config::Instance().panguOnSending()) {
++		auto pangu = Exteraless::ApplyPanguWithMap(textWithTags.text);
++		if (pangu.text != textWithTags.text) {
++			for (auto &tag : textWithTags.tags) {
++				const auto from = std::clamp(
++					tag.offset,
++					0,
++					int(textWithTags.text.size()));
++				const auto to = std::clamp(
++					tag.offset + tag.length,
++					from,
++					int(textWithTags.text.size()));
++				tag.offset = pangu.map[from];
++				tag.length = pangu.map[to] - pangu.map[from];
++			}
++			textWithTags.text = std::move(pangu.text);
++		}
++	}
++
+ 	auto message = Api::MessageToSend(prepareSendAction(options));
+ 	message.textWithTags = textWithTags;
+ 	if (useWebPageDraft && _preview) {
 diff --git a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp b/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
 index 9971a38..58cec9f 100644
 --- a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
@@ -3522,6 +3563,46 @@ index 9971a38..58cec9f 100644
  	const auto afterAuthor = prefix + date;
  	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
  	const auto authorWidth = st::msgDateFont->width(author);
+diff --git a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
+index 28e423b..b35df26 100644
+--- a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/history_view_chat_section.h"
+ 
++#include "exteraless/config.h"
++#include "exteraless/pangu.h"
++
+ #include "history/admin_log/history_admin_log_section.h"
+ #include "history/view/controls/history_view_top_controls.h"
+ #include "history/view/controls/history_view_bottom_controls.h"
+@@ -2565,6 +2568,25 @@ void ChatWidget::sendTextWithTags(
+ 		_cornerButtons.clearReplyReturns();
+ 	}
+ 
++	if (Exteraless::Config::Instance().panguOnSending()) {
++		auto pangu = Exteraless::ApplyPanguWithMap(textWithTags.text);
++		if (pangu.text != textWithTags.text) {
++			for (auto &tag : textWithTags.tags) {
++				const auto from = std::clamp(
++					tag.offset,
++					0,
++					int(textWithTags.text.size()));
++				const auto to = std::clamp(
++					tag.offset + tag.length,
++					from,
++					int(textWithTags.text.size()));
++				tag.offset = pangu.map[from];
++				tag.length = pangu.map[to] - pangu.map[from];
++			}
++			textWithTags.text = std::move(pangu.text);
++		}
++	}
++
+ 	auto message = Api::MessageToSend(prepareSendAction(options));
+ 	message.textWithTags = textWithTags;
+ 	if (useCurrentWebPageDraft) {
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 index 3e25a13..bc91012 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
@@ -4462,10 +4543,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..f9672ba
+index 0000000..e3850cd
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,958 @@
+@@ -0,0 +1,966 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4844,6 +4925,14 @@ index 0000000..f9672ba
 +		Exteraless::Config::Instance().useDeletedIcon(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setUseDeletedIcon(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/pangu"_q,
++		tr::lng_settings_exteraless_chats_pangu(),
++		{ u"pangu"_q, u"cjk"_q, u"spaces"_q },
++		Exteraless::Config::Instance().panguOnSending(),
++		[](bool value) {
++			Exteraless::Config::Instance().setPanguOnSending(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -6076,10 +6165,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..e304b3c
+index 0000000..87623c5
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,44 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6102,6 +6191,8 @@ index 0000000..e304b3c
 +    message_menu.h
 +    network.cpp
 +    network.h
++    pangu.cpp
++    pangu.h
 +    plugins/scanner.cpp
 +    proxy_rules_state.cpp
 +    proxy_rules_state.h
@@ -6124,10 +6215,10 @@ index 0000000..e304b3c
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..ac624e5
+index 0000000..bf2a774
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,506 @@
+@@ -0,0 +1,512 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6155,6 +6246,8 @@ index 0000000..ac624e5
 +constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 +constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
++constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
++constexpr auto kPanguAlias = "EnablePanguOnSending";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -6365,6 +6458,7 @@ index 0000000..ac624e5
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 +	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
 +	extera[kTranslucentDeleted] = config.translucentDeletedMessages();
++	extera[kPanguOnSending] = config.panguOnSending();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -6549,6 +6643,9 @@ index 0000000..ac624e5
 +			|| key == kTranslucentDeletedAlias)
 +			&& value.isBool()) {
 +			config.setTranslucentDeletedMessages(value.toBool());
++		} else if ((key == kPanguOnSending || key == kPanguAlias)
++			&& value.isBool()) {
++			config.setPanguOnSending(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -6735,10 +6832,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..dadb6b9
+index 0000000..1557b58
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,857 @@
+@@ -0,0 +1,867 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6763,6 +6860,7 @@ index 0000000..dadb6b9
 +constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 +constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 +constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
++constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -6978,6 +7076,14 @@ index 0000000..dadb6b9
 +
 +void Config::setTranslucentDeletedMessages(bool value) {
 +	setValue(kTranslucentDeleted, value);
++}
++
++bool Config::panguOnSending() const {
++	return boolValue(kPanguOnSending, false);
++}
++
++void Config::setPanguOnSending(bool value) {
++	setValue(kPanguOnSending, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -7400,6 +7506,7 @@ index 0000000..dadb6b9
 +			|| key == kDisableNumberRounding
 +			|| key == kShowSeconds
 +			|| key == kTranslucentDeleted
++			|| key == kPanguOnSending
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -7598,10 +7705,10 @@ index 0000000..dadb6b9
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..c9d755a
+index 0000000..5b35bdc
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,185 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7663,6 +7770,8 @@ index 0000000..c9d755a
 +	void setShowSeconds(bool value);
 +	[[nodiscard]] bool translucentDeletedMessages() const;
 +	void setTranslucentDeletedMessages(bool value);
++	[[nodiscard]] bool panguOnSending() const;
++	void setPanguOnSending(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -9064,6 +9173,87 @@ index 0000000..fe4312b
 +[[nodiscard]] Transport CurrentTransport();
 +
 +} // namespace Exteraless
+diff --git a/exteraless/pangu.cpp b/exteraless/pangu.cpp
+new file mode 100644
+index 0000000..eefc89e
+--- /dev/null
++++ b/exteraless/pangu.cpp
+@@ -0,0 +1,51 @@
++#include "exteraless/pangu.h"
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] bool IsCjk(QChar ch) {
++	const auto code = ch.unicode();
++	return (code >= 0x2E80 && code <= 0x2EFF)
++		|| (code >= 0x3040 && code <= 0x30FF)
++		|| (code >= 0x3400 && code <= 0x4DBF)
++		|| (code >= 0x4E00 && code <= 0x9FFF)
++		|| (code >= 0xAC00 && code <= 0xD7AF)
++		|| (code >= 0xF900 && code <= 0xFAFF);
++}
++
++[[nodiscard]] bool IsAsciiAlnum(QChar ch) {
++	const auto code = ch.unicode();
++	return (code >= '0' && code <= '9')
++		|| (code >= 'A' && code <= 'Z')
++		|| (code >= 'a' && code <= 'z');
++}
++
++} // namespace
++
++PanguResult ApplyPanguWithMap(const QString &text) {
++	auto result = PanguResult();
++	result.text.reserve(text.size() + text.size() / 4);
++	result.map.resize(text.size() + 1);
++	auto previousCjk = false;
++	auto previousAscii = false;
++	for (auto i = 0; i != text.size(); ++i) {
++		const auto ch = text[i];
++		const auto cjk = IsCjk(ch);
++		const auto ascii = IsAsciiAlnum(ch);
++		if ((previousCjk && ascii) || (previousAscii && cjk)) {
++			result.text += u' ';
++		}
++		result.map[i] = result.text.size();
++		result.text += ch;
++		previousCjk = cjk;
++		previousAscii = ascii;
++	}
++	result.map[text.size()] = result.text.size();
++	return result;
++}
++
++QString ApplyPangu(const QString &text) {
++	return ApplyPanguWithMap(text).text;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/pangu.h b/exteraless/pangu.h
+new file mode 100644
+index 0000000..137db0c
+--- /dev/null
++++ b/exteraless/pangu.h
+@@ -0,0 +1,18 @@
++#pragma once
++
++#include <QString>
++
++#include <vector>
++
++namespace Exteraless {
++
++struct PanguResult {
++	QString text;
++	std::vector<int> map;
++};
++
++[[nodiscard]] PanguResult ApplyPanguWithMap(const QString &text);
++
++[[nodiscard]] QString ApplyPangu(const QString &text);
++
++} // namespace Exteraless
 diff --git a/exteraless/plugins/scanner.cpp b/exteraless/plugins/scanner.cpp
 new file mode 100644
 index 0000000..29539cb
@@ -9589,10 +9779,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..dd6432f
+index 0000000..f626d63
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,841 @@
+@@ -0,0 +1,902 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -9603,6 +9793,7 @@ index 0000000..dd6432f
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
 +#include "exteraless/network.h"
++#include "exteraless/pangu.h"
 +#include "exteraless/proxy_rules.h"
 +
 +#include <QByteArray>
@@ -9662,6 +9853,10 @@ index 0000000..dd6432f
 +		<< "  exteraless-chats-cli vpn-name <interface>\n"
 +		<< "  exteraless-chats-cli proxy-rule <conditionActive> <autoDisabled> "
 +		<< "<shouldDisable> <proxyEnabled>\n"
++		<< "  exteraless-chats-cli pangu\n"
++		<< "  exteraless-chats-cli pangu-set <0|1>\n"
++		<< "  exteraless-chats-cli pangu-apply <text>\n"
++		<< "  exteraless-chats-cli pangu-tags <text> <offset> <length>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10085,6 +10280,62 @@ index 0000000..dd6432f
 +		PrintStickerTime();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("pangu")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().panguOnSending() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("pangu-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setPanguOnSending(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("pangu-apply")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		std::cout
++			<< Exteraless::ApplyPangu(arguments[2]).toUtf8().constData()
++			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("pangu-tags")) {
++		if (arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto offset = arguments[3].toInt(&ok);
++		if (!ok || offset < 0) {
++			return PrintUsage();
++		}
++		const auto length = arguments[4].toInt(&ok);
++		if (!ok || length < 0) {
++			return PrintUsage();
++		}
++		const auto &text = arguments[2];
++		const auto pangu = Exteraless::ApplyPanguWithMap(text);
++		const auto from = std::clamp(offset, 0, int(text.size()));
++		const auto to = std::clamp(offset + length, from, int(text.size()));
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"), pangu.text },
++			{ QStringLiteral("offset"), pangu.map[from] },
++			{ QStringLiteral("length"),
++				pangu.map[to] - pangu.map[from] },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("proxy-rule")) {
 +		if (arguments.size() != 6) {
 +			return PrintUsage();
@@ -10498,10 +10749,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..5585e55
+index 0000000..e9c57c8
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2358 @@
+@@ -0,0 +1,2449 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -10661,6 +10912,7 @@ index 0000000..5585e55
 +        ("deletedmark-set with wrong count", ["deletedmark-set", "1"]),
 +        ("vpn-name without name", ["vpn-name"]),
 +        ("proxy-rule with wrong count", ["proxy-rule", "0"]),
++        ("pangu-apply without text", ["pangu-apply"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -10967,7 +11219,7 @@ index 0000000..5585e55
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 48,
++            len(section) == 49,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -10988,7 +11240,7 @@ index 0000000..5585e55
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 53,
++            sum(len(value) for value in exported.values()) == 54,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -11008,7 +11260,7 @@ index 0000000..5585e55
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 53,
++                data.get("applied") == 54,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -11090,6 +11342,7 @@ index 0000000..5585e55
 +            "OEChatsUseDeletedIcon": False,
 +            "OEChatsCustomDeletedMark": "del",
 +            "OEChatsDeletedMarkColor": 16711680,
++            "OEChatsPanguOnSending": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -11111,7 +11364,7 @@ index 0000000..5585e55
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 53,
++            data.get("applied") == 54,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -11171,6 +11424,10 @@ index 0000000..5585e55
 +            "backup full ghost status",
 +            section.get("OEGhostShowStatus") is True,
 +            section.get("OEGhostShowStatus"))
++        ledger.check(
++            "backup full pangu",
++            section.get("OEChatsPanguOnSending") is True,
++            section.get("OEChatsPanguOnSending"))
 +        ledger.check(
 +            "backup full deleted mark",
 +            section.get("OEChatsTranslucentDeleted") is False
@@ -11286,10 +11543,10 @@ index 0000000..5585e55
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 53",
++            "backup legacy eight completed to 54",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (48, 3, 2),
++             len(sections["mainconfig"])) == (49, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -12109,6 +12366,7 @@ index 0000000..5585e55
 +            "OEChatsUseDeletedIcon": False,
 +            "OEChatsCustomDeletedMark": "del",
 +            "OEChatsDeletedMarkColor": 16711680,
++            "OEChatsPanguOnSending": True,
 +        },
 +    }
 +    data = json_call(
@@ -12804,6 +13062,88 @@ index 0000000..5585e55
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_pangu(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "pangu-defaults")
++    data = json_call(ledger, cli, ["pangu"], env, "pangu defaults")
++    if data is not None:
++        ledger.check(
++            "pangu default off",
++            data.get("enabled") is False,
++            data)
++
++    cases = [
++        ("中文test", "中文 test"),
++        ("test中文", "test 中文"),
++        ("中文test中文", "中文 test 中文"),
++        ("中文 test", "中文 test"),
++        ("123中文", "123 中文"),
++        ("中文123", "中文 123"),
++        ("日本語テスト", "日本語テスト"),
++        ("한국어test", "한국어 test"),
++        ("abc def", "abc def"),
++    ]
++    for text, expected in cases:
++        result = run(cli, ["pangu-apply", text])
++        actual = result.stdout.rstrip("\n")
++        ledger.check(
++            f"pangu apply {text}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    data = json_call(
++        ledger, cli, ["pangu-tags", "中文test", "2", "4"], env,
++        "pangu tags")
++    if data is not None:
++        ledger.check(
++            "pangu tags shifted",
++            data.get("text") == "中文 test"
++            and data.get("offset") == 3
++            and data.get("length") == 4,
++            data)
++
++    env = make_env(work / "pangu-set")
++    data = json_call(
++        ledger, cli, ["pangu-set", "1"], env, "pangu set")
++    if data is not None:
++        ledger.check(
++            "pangu set on",
++            data == 1,
++            data)
++    reloaded = json_call(ledger, cli, ["pangu"], env, "pangu reload")
++    if reloaded is not None:
++        ledger.check(
++            "pangu persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "pangu-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {"EnablePanguOnSending": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "pangu alias")
++    if data is not None:
++        ledger.check(
++            "pangu alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(ledger, cli, ["pangu"], env, "pangu alias read")
++    if reloaded is not None:
++        ledger.check(
++            "pangu alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -12830,6 +13170,7 @@ index 0000000..5585e55
 +        deleted_mark = check_deleted_mark(ledger, cli, work)
 +        vpn = check_vpn(ledger, cli)
 +        proxy_rules = check_proxy_rules(ledger, cli)
++        pangu = check_pangu(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -12848,6 +13189,7 @@ index 0000000..5585e55
 +    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
 +    print(f"vpn: {vpn[0] - vpn[1]} passed")
 +    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
++    print(f"pangu: {pangu[0] - pangu[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

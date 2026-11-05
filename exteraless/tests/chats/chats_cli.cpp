@@ -8,6 +8,7 @@
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
 #include "exteraless/network.h"
+#include "exteraless/pangu.h"
 #include "exteraless/proxy_rules.h"
 
 #include <QByteArray>
@@ -67,6 +68,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli vpn-name <interface>\n"
 		<< "  exteraless-chats-cli proxy-rule <conditionActive> <autoDisabled> "
 		<< "<shouldDisable> <proxyEnabled>\n"
+		<< "  exteraless-chats-cli pangu\n"
+		<< "  exteraless-chats-cli pangu-set <0|1>\n"
+		<< "  exteraless-chats-cli pangu-apply <text>\n"
+		<< "  exteraless-chats-cli pangu-tags <text> <offset> <length>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -488,6 +493,62 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("pangu")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().panguOnSending() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("pangu-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setPanguOnSending(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("pangu-apply")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::ApplyPangu(arguments[2]).toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("pangu-tags")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto offset = arguments[3].toInt(&ok);
+		if (!ok || offset < 0) {
+			return PrintUsage();
+		}
+		const auto length = arguments[4].toInt(&ok);
+		if (!ok || length < 0) {
+			return PrintUsage();
+		}
+		const auto &text = arguments[2];
+		const auto pangu = Exteraless::ApplyPanguWithMap(text);
+		const auto from = std::clamp(offset, 0, int(text.size()));
+		const auto to = std::clamp(offset + length, from, int(text.size()));
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"), pangu.text },
+			{ QStringLiteral("offset"), pangu.map[from] },
+			{ QStringLiteral("length"),
+				pangu.map[to] - pangu.map[from] },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("proxy-rule")) {

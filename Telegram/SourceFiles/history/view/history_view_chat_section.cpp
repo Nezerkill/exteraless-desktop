@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_chat_section.h"
 
+#include "exteraless/config.h"
+#include "exteraless/pangu.h"
+
 #include "history/admin_log/history_admin_log_section.h"
 #include "history/view/controls/history_view_top_controls.h"
 #include "history/view/controls/history_view_bottom_controls.h"
@@ -2563,6 +2566,25 @@ void ChatWidget::sendTextWithTags(
 		Fn<void()> done) {
 	if (!options.scheduled) {
 		_cornerButtons.clearReplyReturns();
+	}
+
+	if (Exteraless::Config::Instance().panguOnSending()) {
+		auto pangu = Exteraless::ApplyPanguWithMap(textWithTags.text);
+		if (pangu.text != textWithTags.text) {
+			for (auto &tag : textWithTags.tags) {
+				const auto from = std::clamp(
+					tag.offset,
+					0,
+					int(textWithTags.text.size()));
+				const auto to = std::clamp(
+					tag.offset + tag.length,
+					from,
+					int(textWithTags.text.size()));
+				tag.offset = pangu.map[from];
+				tag.length = pangu.map[to] - pangu.map[from];
+			}
+			textWithTags.text = std::move(pangu.text);
+		}
 	}
 
 	auto message = Api::MessageToSend(prepareSendAction(options));

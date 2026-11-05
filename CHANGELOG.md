@@ -2,6 +2,10 @@
 
 ## 2026-11-05
 
+- Chats / Pangu: настройка `OEChatsPanguOnSending` (default `false`) добавляет
+  пробелы между CJK и латиницей/цифрами при отправке; реализовано в
+  `exteraless/pangu.{h,cpp}`, смещения text-tags корректируются, Android-алиас
+  `EnablePanguOnSending` поддержан в `.extera` (всего 54 ключа).
 - Патч: база закреплена в `nix/upstream-base` (коммит `aa09910`, tree
   `4cf9e0e1…`, upstream `6fed91f`); `nix/update-patch.sh` сверяет tree-хеш,
   предупреждает о сдвинутом теге, а `--check` применяет патч в чистом
