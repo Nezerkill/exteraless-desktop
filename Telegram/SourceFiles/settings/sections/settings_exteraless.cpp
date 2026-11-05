@@ -122,6 +122,24 @@ const auto kMeta = Builder::BuildHelper({
 		}, showSeconds->lifetime());
 	}
 
+	const auto hideAi = builder.addButton({
+		.id = u"exteraless/hide-ai-editor"_q,
+		.title = tr::lng_settings_exteraless_hide_ai_editor(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().hideAiEditor()),
+		.keywords = { u"ai"_q, u"editor"_q, u"hide"_q },
+	});
+	if (hideAi) {
+		hideAi->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().hideAiEditor());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setHideAiEditor(value);
+		}, hideAi->lifetime());
+	}
+
 	const auto hidePremium = builder.addButton({
 		.id = u"exteraless/hide-premium"_q,
 		.title = tr::lng_settings_exteraless_hide_premium(),

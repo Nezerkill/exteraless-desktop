@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "boxes/send_files_box.h"
 
+#include "exteraless/config.h"
+
 #include "lang/lang_keys.h"
 #include "storage/localimageloader.h"
 #include "storage/localstorage.h"
@@ -248,6 +250,9 @@ void EditFileCaptionBox(
 				.allowPremiumEmoji = allow,
 				.fieldStyle = &st.files.caption,
 			});
+			if (Exteraless::Config::Instance().hideAiEditor()) {
+				return;
+			}
 			const auto aiButton = Ui::SetupCaptionAiButton({
 				.parent = field->parentWidget(),
 				.field = field,

@@ -9197,6 +9197,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
 "lng_settings_exteraless_hide_phone" = "Hide phone number in profile";
 "lng_settings_exteraless_hide_premium" = "Hide Premium and Credits settings";
+"lng_settings_exteraless_hide_ai_editor" = "Hide AI editor button";
 "lng_settings_exteraless_hide_help" = "Hide Help settings";
 "lng_settings_exteraless_ghost" = "Ghost Mode";
 "lng_settings_exteraless_ghost_read" = "Don't send read receipts";

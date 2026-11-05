@@ -87,12 +87,16 @@
   применяет патч к чистому worktree и печатает sha256 — PASS.
 - Сборка: `bash nix/smoke-test.sh` PASS (приложение живёт 30 с под xvfb-run);
   путь к бинарнику и `LD_LIBRARY_PATH` исправлены.
-- Chats: `exteraless/tests/chats/run_checks.py` — 353 проверки PASS
-  (44 strip, 10 reactions, 17 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 360 проверок PASS
+  (44 strip, 10 reactions, 18 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   9 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  5 silent, 5 sections, 80 backup); плагины без изменений — 32 и 213
-  проверок.
+  5 silent, 5 sections, 5 ai-editor, 81 backup); плагины без изменений —
+  32 и 213 проверок.
+- AI editor (NB-27): `OEAppearanceHideAiEditor` (default false) скрывает
+  кнопку AI в compose и caption-боксах; тумблер в General, CLI `ai-editor`
+  (5 проверок). Xvfb: тумблер записывает ключ. Саммари IV/сообщений в этой
+  версии отсутствуют — отдельные ключи не добавлялись.
 - Settings sections (NB-36): `OESettingsHidePremium`/`OESettingsHideHelp`
   (default false) убирают Premium/Credits и Help из главного экрана настроек;
   тумблеры в General, CLI `settings-sections` (5 проверок). Xvfb: после
@@ -251,8 +255,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `3f4486d5…`,
-  mtime 2026-11-05 08:33; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `c8767bed…`,
+  mtime 2026-11-05 08:50; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

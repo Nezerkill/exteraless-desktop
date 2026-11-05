@@ -67,6 +67,8 @@ public:
 	void setHidePremiumSection(bool value);
 	[[nodiscard]] bool hideHelpSection() const;
 	void setHideHelpSection(bool value);
+	[[nodiscard]] bool hideAiEditor() const;
+	void setHideAiEditor(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

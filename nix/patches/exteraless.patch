@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..c30b59a 100644
+index ffc8ec9..937a4cc 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,95 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,96 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -107,6 +107,7 @@ index ffc8ec9..c30b59a 100644
 +"lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
 +"lng_settings_exteraless_hide_phone" = "Hide phone number in profile";
 +"lng_settings_exteraless_hide_premium" = "Hide Premium and Credits settings";
++"lng_settings_exteraless_hide_ai_editor" = "Hide AI editor button";
 +"lng_settings_exteraless_hide_help" = "Hide Help settings";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
@@ -451,6 +452,65 @@ index 0000000..84f48fa
 +	PeerData *peer);
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/boxes/edit_caption_box.cpp b/Telegram/SourceFiles/boxes/edit_caption_box.cpp
+index bb53eeb..499baaf 100644
+--- a/Telegram/SourceFiles/boxes/edit_caption_box.cpp
++++ b/Telegram/SourceFiles/boxes/edit_caption_box.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "boxes/edit_caption_box.h"
+ 
++#include "exteraless/config.h"
++
+ #include "api/api_editing.h"
+ #include "api/api_text_entities.h"
+ #include "apiwrap.h"
+@@ -625,13 +627,15 @@ void EditCaptionBox::setupField() {
+ 		Unexpected("Action in MimeData hook.");
+ 	});
+ 
+-	_aiButton = Ui::SetupCaptionAiButton({
+-		.parent = this,
+-		.field = _field.get(),
+-		.session = &_controller->session(),
+-		.show = _controller->uiShow(),
+-		.chatStyle = chatStyle,
+-	});
++	if (!Exteraless::Config::Instance().hideAiEditor()) {
++		_aiButton = Ui::SetupCaptionAiButton({
++			.parent = this,
++			.field = _field.get(),
++			.session = &_controller->session(),
++			.show = _controller->uiShow(),
++			.chatStyle = chatStyle,
++		});
++	}
+ }
+ 
+ void EditCaptionBox::setupFieldAutocomplete() {
+diff --git a/Telegram/SourceFiles/boxes/send_files_box.cpp b/Telegram/SourceFiles/boxes/send_files_box.cpp
+index 9ef989e..cc3a26a 100644
+--- a/Telegram/SourceFiles/boxes/send_files_box.cpp
++++ b/Telegram/SourceFiles/boxes/send_files_box.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "boxes/send_files_box.h"
+ 
++#include "exteraless/config.h"
++
+ #include "lang/lang_keys.h"
+ #include "storage/localimageloader.h"
+ #include "storage/localstorage.h"
+@@ -248,6 +250,9 @@ void EditFileCaptionBox(
+ 				.allowPremiumEmoji = allow,
+ 				.fieldStyle = &st.files.caption,
+ 			});
++			if (Exteraless::Config::Instance().hideAiEditor()) {
++				return;
++			}
+ 			const auto aiButton = Ui::SetupCaptionAiButton({
+ 				.parent = field->parentWidget(),
+ 				.field = field,
 diff --git a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp b/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
 index df4816a..20dcf64 100644
 --- a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
@@ -3545,6 +3605,29 @@ index 43b2003..4ce3584 100644
  	auto message = Api::MessageToSend(prepareSendAction(options));
  	message.textWithTags = textWithTags;
  	if (useWebPageDraft && _preview) {
+diff --git a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
+index f95a351..7987196 100644
+--- a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
++++ b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/controls/history_view_compose_controls.h"
+ 
++#include "exteraless/config.h"
++
+ #include "history/view/controls/history_view_bot_menu_button.h"
+ 
+ #include "base/call_delayed.h"
+@@ -5251,7 +5253,8 @@ void ComposeControls::updateControlsVisibility() {
+ }
+ 
+ void ComposeControls::updateAiButtonVisibility() {
+-	const auto hidden = !hasEnoughLinesForAi()
++	const auto hidden = Exteraless::Config::Instance().hideAiEditor()
++		|| !hasEnoughLinesForAi()
+ 		|| !_wrap->isVisible()
+ 		|| _recording.current()
+ 		|| !_field->isVisible();
 diff --git a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp b/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
 index 9971a38..58cec9f 100644
 --- a/Telegram/SourceFiles/history/view/history_view_bottom_info.cpp
@@ -4566,10 +4649,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..96449b0
+index 0000000..b1b4aab
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1010 @@
+@@ -0,0 +1,1028 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -4692,6 +4775,24 @@ index 0000000..96449b0
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setShowSeconds(value);
 +		}, showSeconds->lifetime());
++	}
++
++	const auto hideAi = builder.addButton({
++		.id = u"exteraless/hide-ai-editor"_q,
++		.title = tr::lng_settings_exteraless_hide_ai_editor(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().hideAiEditor()),
++		.keywords = { u"ai"_q, u"editor"_q, u"hide"_q },
++	});
++	if (hideAi) {
++		hideAi->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().hideAiEditor());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setHideAiEditor(value);
++		}, hideAi->lifetime());
 +	}
 +
 +	const auto hidePremium = builder.addButton({
@@ -6311,10 +6412,10 @@ index 0000000..87623c5
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..defd550
+index 0000000..b619049
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,530 @@
+@@ -0,0 +1,536 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6346,6 +6447,8 @@ index 0000000..defd550
 +constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
 +constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 +constexpr auto kHideHelpSection = "OESettingsHideHelp";
++constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
++constexpr auto kHideAiEditorAlias = "hideAiEditor";
 +constexpr auto kHidePremiumAlias = "hidePremiumSection";
 +constexpr auto kHideHelpAlias = "hideHelpSection";
 +constexpr auto kSilentByDefaultAlias = "silentMessageByDefault";
@@ -6564,6 +6667,7 @@ index 0000000..defd550
 +	extera[kSilentByDefault] = config.silentByDefault();
 +	extera[kHidePremiumSection] = config.hidePremiumSection();
 +	extera[kHideHelpSection] = config.hideHelpSection();
++	extera[kHideAiEditor] = config.hideAiEditor();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -6760,6 +6864,9 @@ index 0000000..defd550
 +		} else if ((key == kHideHelpSection || key == kHideHelpAlias)
 +			&& value.isBool()) {
 +			config.setHideHelpSection(value.toBool());
++		} else if ((key == kHideAiEditor || key == kHideAiEditorAlias)
++			&& value.isBool()) {
++			config.setHideAiEditor(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -6946,10 +7053,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..221e614
+index 0000000..0a43dc3
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,897 @@
+@@ -0,0 +1,907 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -6978,6 +7085,7 @@ index 0000000..221e614
 +constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
 +constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 +constexpr auto kHideHelpSection = "OESettingsHideHelp";
++constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7225,6 +7333,14 @@ index 0000000..221e614
 +
 +void Config::setHideHelpSection(bool value) {
 +	setValue(kHideHelpSection, value);
++}
++
++bool Config::hideAiEditor() const {
++	return boolValue(kHideAiEditor, false);
++}
++
++void Config::setHideAiEditor(bool value) {
++	setValue(kHideAiEditor, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -7651,6 +7767,7 @@ index 0000000..221e614
 +			|| key == kSilentByDefault
 +			|| key == kHidePremiumSection
 +			|| key == kHideHelpSection
++			|| key == kHideAiEditor
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -7849,10 +7966,10 @@ index 0000000..221e614
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..fb48e8b
+index 0000000..b26ea0a
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,193 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -7922,6 +8039,8 @@ index 0000000..fb48e8b
 +	void setHidePremiumSection(bool value);
 +	[[nodiscard]] bool hideHelpSection() const;
 +	void setHideHelpSection(bool value);
++	[[nodiscard]] bool hideAiEditor() const;
++	void setHideAiEditor(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -9929,10 +10048,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..d8f70bb
+index 0000000..31b1f8e
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,959 @@
+@@ -0,0 +1,983 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10012,6 +10131,8 @@ index 0000000..d8f70bb
 +		<< "  exteraless-chats-cli settings-sections\n"
 +		<< "  exteraless-chats-cli settings-sections-set <hidePremium> "
 +		<< "<hideHelp>\n"
++		<< "  exteraless-chats-cli ai-editor\n"
++		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted\n"
 +		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -10433,6 +10554,28 @@ index 0000000..d8f70bb
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-editor")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("hidden"),
++				Exteraless::Config::Instance().hideAiEditor() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-editor-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setHideAiEditor(value);
++		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("settings-sections")) {
@@ -10956,10 +11099,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..3f6a95d
+index 0000000..18242cd
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2581 @@
+@@ -0,0 +1,2638 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -11123,6 +11266,7 @@ index 0000000..3f6a95d
 +        ("silent-set with wrong count", ["silent-set"]),
 +        ("settings-sections-set with wrong count",
 +         ["settings-sections-set", "1"]),
++        ("ai-editor-set with wrong count", ["ai-editor-set"]),
 +        ("deleted-trim without json", ["deleted-trim", "10", "10"]),
 +        ("deleted-entry without json", ["deleted-entry"]),
 +    ]
@@ -11429,7 +11573,7 @@ index 0000000..3f6a95d
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 52,
++            len(section) == 53,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -11450,7 +11594,7 @@ index 0000000..3f6a95d
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 57,
++            sum(len(value) for value in exported.values()) == 58,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -11470,7 +11614,7 @@ index 0000000..3f6a95d
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 57,
++                data.get("applied") == 58,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -11556,6 +11700,7 @@ index 0000000..3f6a95d
 +            "OEChatsSilentByDefault": True,
 +            "OESettingsHidePremium": True,
 +            "OESettingsHideHelp": True,
++            "OEAppearanceHideAiEditor": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -11577,7 +11722,7 @@ index 0000000..3f6a95d
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 57,
++            data.get("applied") == 58,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -11637,6 +11782,10 @@ index 0000000..3f6a95d
 +            "backup full ghost status",
 +            section.get("OEGhostShowStatus") is True,
 +            section.get("OEGhostShowStatus"))
++        ledger.check(
++            "backup full ai editor",
++            section.get("OEAppearanceHideAiEditor") is True,
++            section.get("OEAppearanceHideAiEditor"))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -11766,10 +11915,10 @@ index 0000000..3f6a95d
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 57",
++            "backup legacy eight completed to 58",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (52, 3, 2),
++             len(sections["mainconfig"])) == (53, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -12593,6 +12742,7 @@ index 0000000..3f6a95d
 +            "OEChatsSilentByDefault": True,
 +            "OESettingsHidePremium": True,
 +            "OESettingsHideHelp": True,
++            "OEAppearanceHideAiEditor": True,
 +        },
 +    }
 +    data = json_call(
@@ -13479,6 +13629,54 @@ index 0000000..3f6a95d
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_ai_editor(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "ai-editor-defaults")
++    data = json_call(ledger, cli, ["ai-editor"], env, "ai-editor defaults")
++    if data is not None:
++        ledger.check(
++            "ai editor default shown",
++            data.get("hidden") is False,
++            data)
++
++    data = json_call(ledger, cli, ["ai-editor-set", "1"], env, "ai-editor set")
++    if data is not None:
++        ledger.check("ai editor set hidden", data == 1, data)
++    reloaded = json_call(ledger, cli, ["ai-editor"], env, "ai-editor reload")
++    if reloaded is not None:
++        ledger.check(
++            "ai editor persisted",
++            reloaded.get("hidden") is True,
++            reloaded)
++
++    env = make_env(work / "ai-editor-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"hideAiEditor": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "ai-editor alias")
++    if data is not None:
++        ledger.check(
++            "ai editor alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["ai-editor"], env, "ai-editor alias read")
++    if reloaded is not None:
++        ledger.check(
++            "ai editor alias value",
++            reloaded.get("hidden") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -13508,6 +13706,7 @@ index 0000000..3f6a95d
 +        pangu = check_pangu(ledger, cli, work)
 +        silent = check_silent(ledger, cli, work)
 +        sections = check_settings_sections(ledger, cli, work)
++        ai_editor = check_ai_editor(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -13529,6 +13728,7 @@ index 0000000..3f6a95d
 +    print(f"pangu: {pangu[0] - pangu[1]} passed")
 +    print(f"silent: {silent[0] - silent[1]} passed")
 +    print(f"sections: {sections[0] - sections[1]} passed")
++    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

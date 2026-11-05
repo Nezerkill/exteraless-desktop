@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- Appearance: `OEAppearanceHideAiEditor` (default `false`) скрывает кнопку
+  AI-редактора в поле ввода и caption-боксах; Android-алиас `hideAiEditor`
+  поддержан в `.extera` (всего 58 ключей). AI-саммари IV/сообщений в этой
+  версии tdesktop отсутствуют, поэтому `HideIvSummary`/`HideMessageSummary`
+  не добавлялись.
 - Settings: настройки `OESettingsHidePremium` и `OESettingsHideHelp`
   (default `false`) скрывают секции Premium/Credits и Help на главном экране
   настроек; Android-алиасы `hidePremiumSection`/`hideHelpSection` поддержаны

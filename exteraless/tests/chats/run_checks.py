@@ -161,6 +161,7 @@ def check_cli_args(ledger, cli):
         ("silent-set with wrong count", ["silent-set"]),
         ("settings-sections-set with wrong count",
          ["settings-sections-set", "1"]),
+        ("ai-editor-set with wrong count", ["ai-editor-set"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
     ]
@@ -467,7 +468,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 52,
+            len(section) == 53,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -488,7 +489,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 57,
+            sum(len(value) for value in exported.values()) == 58,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -508,7 +509,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 57,
+                data.get("applied") == 58,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -594,6 +595,7 @@ def check_backup(ledger, cli, work):
             "OEChatsSilentByDefault": True,
             "OESettingsHidePremium": True,
             "OESettingsHideHelp": True,
+            "OEAppearanceHideAiEditor": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -615,7 +617,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 57,
+            data.get("applied") == 58,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -675,6 +677,10 @@ def check_backup(ledger, cli, work):
             "backup full ghost status",
             section.get("OEGhostShowStatus") is True,
             section.get("OEGhostShowStatus"))
+        ledger.check(
+            "backup full ai editor",
+            section.get("OEAppearanceHideAiEditor") is True,
+            section.get("OEAppearanceHideAiEditor"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -804,10 +810,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 57",
+            "backup legacy eight completed to 58",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (52, 3, 2),
+             len(sections["mainconfig"])) == (53, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1631,6 +1637,7 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsSilentByDefault": True,
             "OESettingsHidePremium": True,
             "OESettingsHideHelp": True,
+            "OEAppearanceHideAiEditor": True,
         },
     }
     data = json_call(
@@ -2517,6 +2524,54 @@ def check_settings_sections(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ai_editor(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "ai-editor-defaults")
+    data = json_call(ledger, cli, ["ai-editor"], env, "ai-editor defaults")
+    if data is not None:
+        ledger.check(
+            "ai editor default shown",
+            data.get("hidden") is False,
+            data)
+
+    data = json_call(ledger, cli, ["ai-editor-set", "1"], env, "ai-editor set")
+    if data is not None:
+        ledger.check("ai editor set hidden", data == 1, data)
+    reloaded = json_call(ledger, cli, ["ai-editor"], env, "ai-editor reload")
+    if reloaded is not None:
+        ledger.check(
+            "ai editor persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    env = make_env(work / "ai-editor-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"hideAiEditor": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ai-editor alias")
+    if data is not None:
+        ledger.check(
+            "ai editor alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["ai-editor"], env, "ai-editor alias read")
+    if reloaded is not None:
+        ledger.check(
+            "ai editor alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2546,6 +2601,7 @@ def main():
         pangu = check_pangu(ledger, cli, work)
         silent = check_silent(ledger, cli, work)
         sections = check_settings_sections(ledger, cli, work)
+        ai_editor = check_ai_editor(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2567,6 +2623,7 @@ def main():
     print(f"pangu: {pangu[0] - pangu[1]} passed")
     print(f"silent: {silent[0] - silent[1]} passed")
     print(f"sections: {sections[0] - sections[1]} passed")
+    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "boxes/edit_caption_box.h"
 
+#include "exteraless/config.h"
+
 #include "api/api_editing.h"
 #include "api/api_text_entities.h"
 #include "apiwrap.h"
@@ -625,13 +627,15 @@ void EditCaptionBox::setupField() {
 		Unexpected("Action in MimeData hook.");
 	});
 
-	_aiButton = Ui::SetupCaptionAiButton({
-		.parent = this,
-		.field = _field.get(),
-		.session = &_controller->session(),
-		.show = _controller->uiShow(),
-		.chatStyle = chatStyle,
-	});
+	if (!Exteraless::Config::Instance().hideAiEditor()) {
+		_aiButton = Ui::SetupCaptionAiButton({
+			.parent = this,
+			.field = _field.get(),
+			.session = &_controller->session(),
+			.show = _controller->uiShow(),
+			.chatStyle = chatStyle,
+		});
+	}
 }
 
 void EditCaptionBox::setupFieldAutocomplete() {

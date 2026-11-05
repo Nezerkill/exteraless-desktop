@@ -77,6 +77,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli settings-sections\n"
 		<< "  exteraless-chats-cli settings-sections-set <hidePremium> "
 		<< "<hideHelp>\n"
+		<< "  exteraless-chats-cli ai-editor\n"
+		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted\n"
 		<< "  exteraless-chats-cli deleted-set <0|1>\n"
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
@@ -498,6 +500,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-editor")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance().hideAiEditor() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-editor-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setHideAiEditor(value);
+		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("settings-sections")) {
