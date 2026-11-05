@@ -9194,6 +9194,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_export" = "Export settings";
 "lng_settings_exteraless_import" = "Import settings";
 "lng_settings_exteraless_exact_counters" = "Show exact counters (1.23K → 1234)";
+"lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
 "lng_settings_exteraless_ghost" = "Ghost Mode";
 "lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 "lng_settings_exteraless_ghost_stories" = "Don't send story views";

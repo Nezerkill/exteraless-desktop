@@ -74,6 +74,8 @@ target_sources(Telegram PRIVATE
     ../exteraless/deleted_messages.cpp
     ../exteraless/deleted_messages.h
     ../exteraless/deleted_messages_trim.h
+    ../exteraless/format.cpp
+    ../exteraless/format.h
     ../exteraless/ghost_mode.cpp
     ../exteraless/ghost_mode.h
     ../exteraless/message_menu.h

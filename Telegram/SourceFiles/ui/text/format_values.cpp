@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/text/format_values.h"
 
+#include "exteraless/format.h"
+
 #include "base/unixtime.h"
 #include "lang/lang_keys.h"
 #include "countries/countries_instance.h"
@@ -716,7 +718,7 @@ QString FormatDialogsDate(const QDateTime &lastTime) {
 
 	if ((lastDate == nowDate)
 		|| (std::abs(lastTime.secsTo(now)) < kRecentlyInSeconds)) {
-		return QLocale().toString(lastTime.time(), QLocale::ShortFormat);
+		return Exteraless::FormatClock(lastTime.time());
 	} else if (std::abs(lastDate.daysTo(nowDate)) < 7) {
 		return langDayOfWeek(lastDate);
 	} else {

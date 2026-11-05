@@ -56,6 +56,9 @@ public:
 	[[nodiscard]] bool disableNumberRounding() const;
 	void setDisableNumberRounding(bool value);
 
+	[[nodiscard]] bool showSeconds() const;
+	void setShowSeconds(bool value);
+
 	[[nodiscard]] int proxyDisableConditions() const;
 	void setProxyDisableConditions(int value);
 

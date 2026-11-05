@@ -2,6 +2,7 @@
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages_trim.h"
+#include "exteraless/format.h"
 #include "exteraless/links.h"
 
 #include <QByteArray>
@@ -35,7 +36,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-raw\n"
 		<< "  exteraless-chats-cli config-reset\n"
 		<< "  exteraless-chats-cli general\n"
-		<< "  exteraless-chats-cli general-set <0|1>\n"
+		<< "  exteraless-chats-cli general-set <0|1> [<showSeconds:0|1>]\n"
+		<< "  exteraless-chats-cli clock <hh> <mm> <ss> <0|1> [<locale>]\n"
 		<< "  exteraless-chats-cli message-menu\n"
 		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
 		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
@@ -105,6 +107,8 @@ void PrintGeneral() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("disableNumberRounding"),
 			Exteraless::Config::Instance().disableNumberRounding() },
+		{ QStringLiteral("showSeconds"),
+			Exteraless::Config::Instance().showSeconds() },
 	});
 }
 
@@ -273,7 +277,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 	if (mode == QStringLiteral("general-set")) {
-		if (arguments.size() != 3) {
+		if (arguments.size() != 3 && arguments.size() != 4) {
 			return PrintUsage();
 		}
 		auto value = false;
@@ -281,7 +285,37 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		Exteraless::Config::Instance().setDisableNumberRounding(value);
+		if (arguments.size() == 4) {
+			auto seconds = false;
+			if (!ReadFlag(arguments[3], &seconds)) {
+				return PrintUsage();
+			}
+			Exteraless::Config::Instance().setShowSeconds(seconds);
+		}
 		PrintGeneral();
+		return 0;
+	}
+	if (mode == QStringLiteral("clock")) {
+		if (arguments.size() != 6 && arguments.size() != 7) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto h = arguments[2].toInt(&ok);
+		if (!ok || h < 0 || h > 23) return PrintUsage();
+		const auto m = arguments[3].toInt(&ok);
+		if (!ok || m < 0 || m > 59) return PrintUsage();
+		const auto s = arguments[4].toInt(&ok);
+		if (!ok || s < 0 || s > 59) return PrintUsage();
+		auto withSeconds = false;
+		if (!ReadFlag(arguments[5], &withSeconds)) return PrintUsage();
+		const auto locale = (arguments.size() == 7)
+			? QLocale(arguments[6])
+			: QLocale();
+		std::cout
+			<< Exteraless::FormatClock(QTime(h, m, s), withSeconds, locale)
+				.toUtf8()
+				.constData()
+			<< '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("message-menu")) {

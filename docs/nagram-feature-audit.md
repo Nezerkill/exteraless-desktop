@@ -103,8 +103,8 @@ config, general, backup, strip, reactions, cli), `run_checks.py` (сканер
 | Строки `OE*` в Android-коде | 179 уникальных | — | — | строки в коде, не настройки |
 | Файлы `app/exteraless` | 268 | — | 269 java + 12 kotlin | разные шаблоны поиска |
 | **Всего настроек Android** | **≈400** | **≈600 уникальных** | — | пересечения ключей между `NaConfig`/`NekoConfig` и экранами exteraless; `val` против `addConfig`; геттеры против ключей |
-| **Ключей форка desktop** | **36** | **36** | 36 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
-| Ключей `.extera` | 8 | 8 | 36 | на момент аудита было 8, после NB-04 и NB-11 — все 36 desktop-ключей |
+| **Ключей форка desktop** | **37** | **37** | 37 объявлено, 1 мёртвый (`OEGhostSendOfflineAfterOnline`) | оба отчёта сошлись; отчёт 1 дополнительно отмечал 3 тестовых литерала в поиске |
+| Ключей `.extera` | 8 | 8 | 37 | на момент аудита было 8, после NB-04, NB-11, NB-07 — все 37 desktop-ключей |
 | Локализация `strings_oe*` | 1045 строк | — | — | — |
 | Локализация desktop-секции | 41 ключ `lng_settings_exteraless*` | 11 | 41 | на момент аудита было 11, после NB-03 — 41 ключ, все подписи секции переведены на `tr::` |
 
@@ -226,7 +226,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Сброс настроек Exteraless | `resetSettings` | ✅ кнопка Reset с подтверждением (NB-05) |
 | Точные счётчики | `OEGeneralDisableNumberRounding` | ✅ `lang/lang_tag.cpp` |
 | Относительное «был в сети» | `OERelativeLastSeen` | ✅ `data/data_peer_values.cpp` |
-| Время с секундами | `NekoConfig.showSeconds` | ❌ (`history/view/history_view_bottom_info.cpp`, `dialogs/ui/dialogs_layout.cpp`) |
+| Время с секундами | `NekoConfig.showSeconds` | ✅ `OEGeneralShowSeconds` (NB-07), `FormatClock` в `history_view_bottom_info` и `format_values` |
 | Фильтр Zalgo | `NaConfig.zalgoFilter` | ❌ (`ui/text/*`, `data/data_messages.cpp`) |
 | Boost скачивания/загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | ❌ (`data/data_download_manager.cpp`, `mtproto/session_private.cpp`) |
 | IPv6 / DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | ❌ (`mtproto/connection_*`), upstream умеет IPv6 в настройках соединения |
@@ -602,10 +602,10 @@ M-нумерацию:
 `OEGhostReadExclusions`, `OEGhostTypingExclusions`, `OEMainMenuOrder`,
 `OEPillStackEnabled`, `OEPillStackPills`, `OEPluginStates`.
 
-## 13. Приложение B. Ключи `.extera` (36)
+## 13. Приложение B. Ключи `.extera` (37)
 
-Секция `exteraconfig` (32): `relativeLastSeen`, `addCommaAfterMention`,
-`disableNumberRounding`, `doNotUseProxy`, `removeMessageTail`,
+Секция `exteraconfig` (33): `relativeLastSeen`, `addCommaAfterMention`,
+`disableNumberRounding`, `formatTimeWithSeconds`, `doNotUseProxy`, `removeMessageTail`,
 `hideReactionsInChannels`, `hideReactionsInGroups`,
 `hideReactionsInPrivateChats`, `OEGhostSendReadPackets`,
 `OEGhostSendReadStories`, `OEGhostSendOnline`, `OEGhostSendUploadProgress`,

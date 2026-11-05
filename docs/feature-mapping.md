@@ -26,7 +26,8 @@ New `Exteraless` section in tdesktop Settings with subsections:
   - relative last seen (`OERelativeLastSeen`, default `false`);
   - comma after mention (`OEAddCommaAfterMention`, default `true`);
   - exact counters instead of `K/M/B` (`OEGeneralDisableNumberRounding`,
-    default `false`).
+    default `false`);
+  - show seconds in timestamps (`OEGeneralShowSeconds`, default `false`).
 - **Appearance** — not ported: section radius, separate headers and square FAB
   have no desktop analog, because tdesktop rounds and arranges those surfaces
   with its own styles, and no `OEAppearance*` key is implemented. Avatar
@@ -82,11 +83,11 @@ Desktop behavior of the Chats keys:
   `start`, `feature`, `share`, `trk`, `ns_campaign`, `pk_campaign`,
   `at_medium`, `spm`, `sc_cid` and `WT.mc_id` are kept, and percent-encoded
   names are never decoded.
-- `.extera` backup carries all 36 desktop keys in three sections
-  (`exteraconfig` 32, `pillstackconfig` 2, `mainconfig` 2); the old
+- `.extera` backup carries all 37 desktop keys in three sections
+  (`exteraconfig` 33, `pillstackconfig` 2, `mainconfig` 2); the old
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
-- Verification: the chats runner has 193 checks, the plugin manifest runner 32,
+- Verification: the chats runner has 204 checks, the plugin manifest runner 32,
   and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
@@ -115,7 +116,7 @@ inactive and the setting UI says so.
 ### Backup
 
 `.extera` is a JSON document wrapped in invisible Unicode characters. It
-contains all 36 desktop keys in three sections: `exteraconfig` (32 keys),
+contains all 37 desktop keys in three sections: `exteraconfig` (33 keys),
 `pillstackconfig` (2 keys) and `mainconfig` (2 keys). Import validates every
 known key, applies only the right type and range, and reports the rest as
 unknown; entries in `pillstackconfig`/`mainconfig` and unknown top-level

@@ -76,7 +76,7 @@
 | Локализация секции | — | `settings/sections/settings_exteraless.cpp`, `Telegram/Resources/langs/lang.strings` | ✅ 41 ключ `lng_settings_exteraless*` в `lang.strings`, все подписи в `settings_exteraless.cpp` переведены на `tr::` |
 
 Проверки, на которые опирается статус: `exteraless/tests/chats/run_checks.py`
-(193 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
+(204 проверки: strip, reactions, cli, config, general, deleted, reset, workdir, menu, backup),
 `exteraless/tests/plugins/run_checks.py` (32) и
 `exteraless/tests/plugins/run_host_checks.py` (213 — bwrap-host, IPC, пути,
 timeout, state). Все три прогоняются на текущем дереве со статусом PASS.
@@ -91,7 +91,7 @@ timeout, state). Все три прогоняются на текущем дер
 | NB-04 | Полный экспорт/импорт `.extera` для всех 25 ключей с отчётом о неизвестных | `EtgBackup`, `InvisibleEncryptor` | `exteraless/backup.cpp`, `exteraless/config.cpp` | S · низкий | `exteraless/tests/chats/run_checks.py` + CLI-импорт файла с новыми ключами | ✅ 2026-11-05: 25 ключей в секциях `exteraconfig`/`pillstackconfig`/`mainconfig`, валидация типов, целочисленности и диапазонов, санитизация exclusions/plugins, сброс производного `OEProxyAutoDisabled`, unknown с префиксом секции; round-trip CLI | R1 P0-2 |
 | NB-05 | Сброс настроек Exteraless (кнопка + подтверждение) | `resetSettings` | `settings/sections/settings_exteraless.cpp`, `exteraless/config.cpp` | S · низкий | сброс → дефолты, `exteraless.json` без OE-ключей | ✅ 2026-11-05: `Config::reset()`, кнопка Reset с подтверждением, пересоздание секции, CLI-группа `reset` (7 проверок), Xvfb smoke | R1 P0-3 |
 | NB-06 | Путь конфига, совместимый с `-workdir` | — | `exteraless/config.cpp` (путь данных), `core/application.cpp` | S · средний (миграция существующего файла) | запуск с `-workdir /tmp/x`: файл создаётся там, старый профиль читается | ✅ 2026-11-05: `Config::setWorkingDir()` + `cWorkingDir()` из Application, копирование старого файла при первом запуске, CLI `EXTERALESS_WORKDIR` (8 проверок), Xvfb-миграция на копии профиля | R1 P0-4 |
-| NB-07 | Время с секундами | `NekoConfig.showSeconds` | `history/view/history_view_bottom_info.cpp`, `dialogs/ui/dialogs_layout.cpp`, `history_view_element.cpp` | S · средний (время рисуется в нескольких местах) | CLI форматтера (`HH:mm` / `HH:mm:ss`, полночь, локаль) + Xvfb: чат и список | ⬜ | R1 P0-5, R2 §6.2 |
+| NB-07 | Время с секундами | `NekoConfig.showSeconds` | `exteraless/format.{h,cpp}`, `history/view/history_view_bottom_info.cpp`, `ui/text/format_values.cpp`, `settings/sections/settings_exteraless.cpp` | S · средний (время рисуется в нескольких местах) | CLI форматтера (`HH:mm` / `HH:mm:ss`, полночь, локаль) + Xvfb: чат и список | ✅ 2026-11-05: `OEGeneralShowSeconds`, `Exteraless::FormatClock`, тумблер в General, CLI general/clock (17 проверок), Xvfb показал секунды в чате и списке | R1 P0-5, R2 §6.2 |
 | NB-08 | Фильтр Zalgo | `NaConfig.zalgoFilter` | `ui/text/*`, `data/data_messages.cpp` | S · средний (ломает раскладку при агрессивном фильтре) | CLI чистой функции + Xvfb: текст с комбинирующими знаками ровно рендерится, БД не меняется | ⬜ | R1 P0-6 |
 | NB-09 | Показать ID и DC в профиле | `NekoConfig.showIdAndDc`, `NaConfig.idDcType` | `info/profile/info_profile_values.cpp`, `info/profile/info_profile_top_bar.cpp` | S · низкий | Xvfb: профиль контакта и свой, значение копируется | ⬜ | R1 P0-7 |
 | NB-10 | Скрыть истории в шапке списка чатов | `NaConfig.hideStoriesFromHeader` | `dialogs/dialogs_widget.cpp` (stories strip) | S · низкий | Xvfb: полоса историй исчезает, строки не сдвигаются | ⬜ | R1 P0-8 |
@@ -240,15 +240,13 @@ NB-03 (✅).
 (`history_inner_widget.cpp` и `history_view_context_menu.cpp`), CLI `menu`
 (8 проверок), Xvfb подтвердил скрытие `Pin` в чате.
 
-Следующие задачи батча: NB-07, NB-37.
+**NB-07 «Время с секундами» (`showSeconds` → `OEGeneralShowSeconds`) — закрыто 2026-11-05.**
+Функция `Exteraless::FormatClock`, тумблер «Show seconds in timestamps» в
+General, вызовы в `history_view_bottom_info.cpp` и `format_values.cpp`,
+ключ `formatTimeWithSeconds` в `.extera`, CLI `general/clock` (17 проверок),
+Xvfb подтвердил секунды в сообщениях и списке чатов.
 
-**NB-07 «Время с секундами» (`showSeconds` → `OEGeneralShowSeconds`).**
-Код: `exteraless/format.{h,cpp}` с `FormatClock(QTime, bool withSeconds)` —
-чистая функция, тестируемая CLI; вызовы в
-`history/view/history_view_bottom_info.cpp` (`layoutDateText`) и
-`dialogs/ui/dialogs_layout.cpp`. Безопасность: меняется только строка
-времени, геометрия считается по font metrics. Проверка: CLI (`HH:mm` /
-`HH:mm:ss`, полночь, `00:00:00`, локаль) + Xvfb-скрин чата и списка чатов.
+Следующая задача батча: NB-37.
 
 **NB-37 «Скрыть телефон в профиле» (`hidePhone` → `OEGeneralHidePhone`).**
 Код: `info/profile/info_profile_values.cpp` (`PhoneValue`,

@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_bottom_info.h"
 
+#include "exteraless/format.h"
+
 #include "ui/chat/message_bubble.h"
 #include "ui/chat/chat_style.h"
 #include "ui/effects/reaction_fly_animation.h"
@@ -71,7 +73,7 @@ namespace {
 
 [[nodiscard]] QString FormatEditedDate(QDateTime sent, QDateTime edited) {
 	const auto today = QDateTime::currentDateTime().date();
-	const auto time = QLocale().toString(edited.time(), QLocale::ShortFormat);
+	const auto time = Exteraless::FormatClock(edited.time());
 	if (sent.date() == today && edited.date() == today) {
 		return tr::lng_edited_at(tr::now, lt_time, time);
 	}
@@ -505,7 +507,7 @@ void BottomInfo::layoutDateText() {
 		: edited + ((_data.flags
 			& (Data::Flag::ForwardedDate | Data::Flag::FullDate))
 		? Ui::FormatDateTimeSavedFrom(_data.date)
-		: QLocale().toString(_data.date.time(), QLocale::ShortFormat));
+		: Exteraless::FormatClock(_data.date.time()));
 	const auto afterAuthor = prefix + date;
 	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
 	const auto authorWidth = st::msgDateFont->width(author);

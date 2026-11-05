@@ -17,6 +17,7 @@ constexpr auto kVersion = 1;
 constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
+constexpr auto kShowSeconds = "OEGeneralShowSeconds";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -177,6 +178,14 @@ bool Config::disableNumberRounding() const {
 
 void Config::setDisableNumberRounding(bool value) {
 	setValue(kDisableNumberRounding, value);
+}
+
+bool Config::showSeconds() const {
+	return boolValue(kShowSeconds, false);
+}
+
+void Config::setShowSeconds(bool value) {
+	setValue(kShowSeconds, value);
 }
 
 int Config::proxyDisableConditions() const {
@@ -480,6 +489,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 		if (key == kRelativeLastSeen
 			|| key == kAddCommaAfterMention
 			|| key == kDisableNumberRounding
+			|| key == kShowSeconds
 			|| key == kProxyDisableConditions
 			|| key == kProxyAutoDisabled
 			|| key == kGhostSendReadPackets

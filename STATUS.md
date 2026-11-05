@@ -80,9 +80,18 @@
   (shellcheck ругается только на переменные upstream-сниппета). Симуляция:
   подмена D-Bus вызывается один раз, `wrapProgram` — один раз; прежний
   дублированный вариант падал на `--replace-fail`.
-- Chats: `exteraless/tests/chats/run_checks.py` — 193 проверки PASS
-  (44 strip, 10 reactions, 5 CLI, 7 config, 6 general, 27 deleted, 7 reset,
+- Chats: `exteraless/tests/chats/run_checks.py` — 204 проверки PASS
+  (44 strip, 10 reactions, 5 CLI, 7 config, 17 general, 27 deleted, 7 reset,
   8 workdir, 8 menu, 71 backup); плагины без изменений — 32 и 213 проверок.
+- Show seconds in timestamps (NB-07): настройка `OEGeneralShowSeconds`
+  (default `false`) и `Exteraless::FormatClock` форматируют время с секундами
+  в сообщениях (`BottomInfo::layoutDateText`, `FormatEditedDate`) и списке
+  чатов (`Ui::FormatDialogsDate`) с сохранением локального формата
+  (12/24-часовой, AM/PM). Ключ поддержан в `.extera` как
+  `formatTimeWithSeconds` (суммарно 37 ключей). CLI `clock` и `general`
+  (17 проверок) проверяют дефолты, C/ru/en локали, полночь и roundtrip.
+  Xvfb smoke: включение тумблера пишет `OEGeneralShowSeconds: true`, время в
+  сообщениях и в списке чатов отображает секунды (`10:07:03 PM`, `9:35:16 PM`).
 - Visible message menu items (NB-11): подсекция «Visible message menu items»
   в Chats с 11 чекбоксами `OEChatsMenu*` управляет видимостью пунктов
   сообщения в обоих виджетах истории (`history_inner_widget.cpp` и
@@ -135,8 +144,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `e4073d06…`,
-  mtime 2026-11-05 02:29; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `87f89bcc…`,
+  mtime 2026-11-05 02:53; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

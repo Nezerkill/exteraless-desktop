@@ -2,6 +2,11 @@
 
 ## 2026-11-05
 
+- General / Time: настройка `OEGeneralShowSeconds` (default `false`) и
+  функция `Exteraless::FormatClock` форматируют время с секундами в
+  сообщениях и списке чатов с сохранением 12/24-часового формата и локали;
+  Android-ключ `formatTimeWithSeconds` поддержан в `.extera` (всего 37
+  ключей), тумблер добавлен в General.
 - Chats / Context menu: добавлена подсекция «Visible message menu items»
   с 11 чекбоксами видимости пунктов меню сообщения (`Reply`, `Edit`,
   `Pin / Unpin`, `Copy text`, `Copy link`, `Copy image`, `Forward`, `Select`,

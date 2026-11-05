@@ -103,6 +103,23 @@ const auto kMeta = Builder::BuildHelper({
 		}, disableRounding->lifetime());
 	}
 
+	const auto showSeconds = builder.addButton({
+		.id = u"exteraless/show-seconds"_q,
+		.title = tr::lng_settings_exteraless_show_seconds(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().showSeconds()),
+		.keywords = { u"time"_q, u"seconds"_q, u"clock"_q },
+	});
+	if (showSeconds) {
+		showSeconds->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value != Exteraless::Config::Instance().showSeconds());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setShowSeconds(value);
+		}, showSeconds->lifetime());
+	}
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
 		.title = tr::lng_settings_exteraless_ghost(),

@@ -7,6 +7,8 @@ add_library(exteraless STATIC
     config.h
     exteraless.cpp
     exteraless.h
+    format.cpp
+    format.h
     links.cpp
     links.h
     message_menu.h
