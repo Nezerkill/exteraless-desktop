@@ -166,6 +166,9 @@ def check_cli_args(ledger, cli):
         ("plugin-filename without name", ["plugin-filename"]),
         ("send-as-set with wrong count", ["send-as-set"]),
         ("inline-math-set with wrong count", ["inline-math-set"]),
+        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
+        ("chat-folder without name", ["chat-folder"]),
+        ("chat-subfolder without args", ["chat-subfolder"]),
         ("math-eval without expression", ["math-eval"]),
         ("plugin-install without args", ["plugin-install"]),
         ("plugin-delete without args", ["plugin-delete"]),
@@ -474,7 +477,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 53,
+            len(section) == 54,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -495,7 +498,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 58,
+            sum(len(value) for value in exported.values()) == 59,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -515,7 +518,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 58,
+                data.get("applied") == 59,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -602,6 +605,7 @@ def check_backup(ledger, cli, work):
             "OEAppearanceHideAiEditor": True,
             "OEChatsHideSendAsPeer": True,
             "OEChatsInlineMathResult": True,
+            "OEGeneralSaveToChatSubfolder": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -623,7 +627,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 58,
+            data.get("applied") == 59,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -694,6 +698,10 @@ def check_backup(ledger, cli, work):
             "backup full inline math",
             section.get("OEChatsInlineMathResult") is True,
             section.get("OEChatsInlineMathResult"))
+        ledger.check(
+            "backup full save subfolder",
+            section.get("OEGeneralSaveToChatSubfolder") is True,
+            section.get("OEGeneralSaveToChatSubfolder"))
         ledger.check(
             "backup full settings sections",
             section.get("OESettingsHidePremium") is True
@@ -823,10 +831,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 58",
+            "backup legacy eight completed to 59",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (53, 3, 2),
+             len(sections["mainconfig"])) == (54, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1652,6 +1660,7 @@ def check_sticker_time(ledger, cli, work):
             "OEAppearanceHideAiEditor": True,
             "OEChatsHideSendAsPeer": True,
             "OEChatsInlineMathResult": True,
+            "OEGeneralSaveToChatSubfolder": True,
         },
     }
     data = json_call(
@@ -2843,6 +2852,96 @@ def check_inline_math(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_save_subfolder(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "save-subfolder-defaults")
+    data = json_call(
+        ledger, cli, ["save-subfolder"], env, "save-subfolder defaults")
+    if data is not None:
+        ledger.check(
+            "save subfolder default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["save-subfolder-set", "1"], env, "save-subfolder set")
+    if data is not None:
+        ledger.check("save subfolder set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["save-subfolder"], env, "save-subfolder reload")
+    if reloaded is not None:
+        ledger.check(
+            "save subfolder persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    folder_cases = [
+        ("Кифил", "Кифил"),
+        ("a/b", "a_b"),
+        ("a:b*c?", "a_b_c_"),
+        ("abc...", "abc"),
+        ("  spaced  ", "spaced"),
+        ("", "Chat"),
+        ("x" * 80, "x" * 64),
+    ]
+    for name, expected in folder_cases:
+        result = run(cli, ["chat-folder", name])
+        actual = result.stdout.rstrip("\n")
+        ledger.check(
+            f"chat folder {name[:12] or 'empty'}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    saves = work / "saves"
+    target = work / "saves" / "photo.jpg"
+    result = run(cli, ["chat-subfolder", str(target), "Кифил"])
+    resolved = result.stdout.strip()
+    expected = str(saves / "Кифил" / "photo.jpg")
+    ledger.check(
+        "chat subfolder path",
+        result.returncode == 0 and resolved == expected,
+        f"got {resolved!r}, want {expected!r}")
+    ledger.check(
+        "chat subfolder created",
+        (saves / "Кифил").is_dir(),
+        saves / "Кифил")
+
+    (saves / "Кифил" / "photo.jpg").write_text("x", encoding="utf-8")
+    result = run(cli, ["chat-subfolder", str(target), "Кифил"])
+    resolved = result.stdout.strip()
+    expected = str(saves / "Кифил" / "photo (2).jpg")
+    ledger.check(
+        "chat subfolder collision",
+        result.returncode == 0 and resolved == expected,
+        f"got {resolved!r}, want {expected!r}")
+
+    env = make_env(work / "save-subfolder-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"saveToChatSubfolder": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "save-subfolder alias")
+    if data is not None:
+        ledger.check(
+            "save subfolder alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["save-subfolder"], env, "save-subfolder alias read")
+    if reloaded is not None:
+        ledger.check(
+            "save subfolder alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -2876,6 +2975,7 @@ def main():
         pluginops = check_plugin_installer(ledger, cli, work)
         send_as = check_send_as(ledger, cli, work)
         inline_math = check_inline_math(ledger, cli, work)
+        save_subfolder = check_save_subfolder(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -2901,6 +3001,7 @@ def main():
     print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
     print(f"send-as: {send_as[0] - send_as[1]} passed")
     print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
+    print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

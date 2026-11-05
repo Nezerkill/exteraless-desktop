@@ -99,12 +99,19 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 426 проверок PASS
-  (44 strip, 10 reactions, 26 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 445 проверок PASS
+  (44 strip, 10 reactions, 29 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
-  83 backup); плагины без изменений — 32 и 213 проверок.
+  15 save-subfolder, 84 backup); плагины без изменений — 32 и 213 проверок.
+- Save to chat subfolder (NB-26): `OEGeneralSaveToChatSubfolder` (default
+  `false`) добавляет подпапку с именем чата к автоматическим сохранениям в
+  `DocumentSaveClickHandler` (имена санитизируются, коллизии получают
+  ` (2)`); «Save as...» по-прежнему спрашивает путь. CLI `save-subfolder`,
+  `chat-folder`, `chat-subfolder` (15 проверок). Xvfb: тумблер в General.
+  `customSavePath` отдельно не добавлялся — в desktop уже есть «Download
+  path» в Advanced.
 - Inline math (NB-24): `OEChatsInlineMathResult` (default `false`) вычисляет
   выражение при Space после `=`. Парсер `exteraless/math.{h,cpp}`: `+ - * / %`,
   `^`, скобки, `pi`/`e`, `sqrt`/`abs`/`sin`/`cos`/`tan`/`asin`/`acos`/`atan`/
@@ -290,8 +297,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `c2ab394c…`,
-  mtime 2026-11-05 11:35; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `f16db153…`,
+  mtime 2026-11-05 11:49; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

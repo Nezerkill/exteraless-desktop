@@ -12,6 +12,7 @@
 #include "exteraless/pangu.h"
 #include "exteraless/plugins/installer.h"
 #include "exteraless/proxy_rules.h"
+#include "exteraless/save_path.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -82,6 +83,10 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli save-subfolder\n"
+		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
+		<< "  exteraless-chats-cli chat-folder <name>\n"
+		<< "  exteraless-chats-cli chat-subfolder <path> <peerName>\n"
 		<< "  exteraless-chats-cli inline-math\n"
 		<< "  exteraless-chats-cli inline-math-set <0|1>\n"
 		<< "  exteraless-chats-cli math-eval <expression>\n"
@@ -509,6 +514,49 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("save-subfolder")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().saveToChatSubfolder() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("save-subfolder-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSaveToChatSubfolder(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("chat-folder")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::SanitizeChatFolderName(arguments[2])
+				.toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("chat-subfolder")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::ChatSubfolderSavePath(
+				arguments[2],
+				arguments[3]).toUtf8().constData()
+			<< '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("inline-math")) {

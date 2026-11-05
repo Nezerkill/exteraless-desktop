@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..0f302de 100644
+index ffc8ec9..b48de0d 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,99 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,100 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -107,6 +107,7 @@ index ffc8ec9..0f302de 100644
 +"lng_settings_exteraless_show_seconds" = "Show seconds in timestamps";
 +"lng_settings_exteraless_hide_phone" = "Hide phone number in profile";
 +"lng_settings_exteraless_hide_premium" = "Hide Premium and Credits settings";
++"lng_settings_exteraless_save_chat_subfolder" = "Save files in a folder per chat";
 +"lng_settings_exteraless_hide_ai_editor" = "Hide AI editor button";
 +"lng_settings_exteraless_hide_help" = "Hide Help settings";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
@@ -750,6 +751,51 @@ index 2de2881..50a19fb 100644
  constexpr auto AppFile = "Telegram"_cs;
  constexpr auto AppVersion = 7003001;
  constexpr auto AppVersionStr = "7.3.1";
+diff --git a/Telegram/SourceFiles/data/data_file_click_handler.cpp b/Telegram/SourceFiles/data/data_file_click_handler.cpp
+index 1eb7369..105f8e6 100644
+--- a/Telegram/SourceFiles/data/data_file_click_handler.cpp
++++ b/Telegram/SourceFiles/data/data_file_click_handler.cpp
+@@ -10,9 +10,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "core/click_handler_types.h"
+ #include "core/file_utilities.h"
+ #include "core/application.h"
++#include "core/core_settings.h"
++#include "exteraless/config.h"
++#include "exteraless/save_path.h"
+ #include "data/data_document.h"
++#include "data/data_file_origin.h"
+ #include "data/data_session.h"
+ #include "data/data_download_manager.h"
++#include "data/data_peer.h"
+ #include "data/data_photo.h"
+ #include "main/main_session.h"
+ 
+@@ -106,11 +111,24 @@ void DocumentSaveClickHandler::Save(
+ 		const auto filename = filepath.isEmpty()
+ 			? QString()
+ 			: fileinfo.fileName();
+-		const auto savename = DocumentFileNameForSave(
++		auto savename = DocumentFileNameForSave(
+ 			data,
+ 			(mode == Mode::ToNewFile),
+ 			filename,
+ 			filedir);
++		if (!savename.isEmpty()
++			&& mode != Mode::ToNewFile
++			&& !Core::App().settings().askDownloadPath()
++			&& Exteraless::Config::Instance().saveToChatSubfolder()) {
++			if (const auto message = std::get_if<Data::FileOriginMessage>(
++					&origin.data)) {
++				const auto peer = data->session().data().peer(
++					message->peer);
++				savename = Exteraless::ChatSubfolderSavePath(
++					savename,
++					peer->name());
++			}
++		}
+ 		if (!savename.isEmpty()) {
+ 			data->save(origin, savename);
+ 			if (started) {
 diff --git a/Telegram/SourceFiles/data/data_histories.cpp b/Telegram/SourceFiles/data/data_histories.cpp
 index b499715..75945d9 100644
 --- a/Telegram/SourceFiles/data/data_histories.cpp
@@ -4902,10 +4948,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..d44f0d5
+index 0000000..7a4c76f
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1050 @@
+@@ -0,0 +1,1068 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5046,6 +5092,24 @@ index 0000000..d44f0d5
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setHideAiEditor(value);
 +		}, hideAi->lifetime());
++	}
++
++	const auto saveSubfolder = builder.addButton({
++		.id = u"exteraless/save-chat-subfolder"_q,
++		.title = tr::lng_settings_exteraless_save_chat_subfolder(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().saveToChatSubfolder()),
++		.keywords = { u"save"_q, u"folder"_q, u"chat"_q },
++	});
++	if (saveSubfolder) {
++		saveSubfolder->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().saveToChatSubfolder());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setSaveToChatSubfolder(value);
++		}, saveSubfolder->lifetime());
 +	}
 +
 +	const auto hidePremium = builder.addButton({
@@ -6637,10 +6701,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..6627c1c
+index 0000000..f3e2567
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,50 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -6673,6 +6737,8 @@ index 0000000..6627c1c
 +    proxy_rules_state.cpp
 +    proxy_rules_state.h
 +    plugins/scanner.h
++    save_path.cpp
++    save_path.h
 +)
 +
 +target_link_libraries(exteraless
@@ -6691,10 +6757,10 @@ index 0000000..6627c1c
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..f776292
+index 0000000..a13c2c2
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,533 @@
+@@ -0,0 +1,540 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -6729,6 +6795,8 @@ index 0000000..f776292
 +constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
++constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
++constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 +constexpr auto kInlineMathAlias = "inlineMathResult";
 +constexpr auto kHideSendAsAlias = "hideSendAsChannel";
 +constexpr auto kHideAiEditorAlias = "hideAiEditor";
@@ -6944,6 +7012,7 @@ index 0000000..f776292
 +	extera[kHideAiEditor] = config.hideAiEditor();
 +	extera[kHideSendAsPeer] = config.hideSendAsPeer();
 +	extera[kInlineMathResult] = config.inlineMathResult();
++	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7143,6 +7212,10 @@ index 0000000..f776292
 +		} else if ((key == kInlineMathResult || key == kInlineMathAlias)
 +			&& value.isBool()) {
 +			config.setInlineMathResult(value.toBool());
++		} else if ((key == kSaveToChatSubfolder
++			|| key == kSaveToChatSubfolderAlias)
++			&& value.isBool()) {
++			config.setSaveToChatSubfolder(value.toBool());
 +		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 +			&& value.isBool()) {
 +			config.setUseDeletedIcon(value.toBool());
@@ -7329,10 +7402,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..b79370f
+index 0000000..7f65baf
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,906 @@
+@@ -0,0 +1,916 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7364,6 +7437,7 @@ index 0000000..b79370f
 +constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 +constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 +constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
++constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 +constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 +constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -7632,6 +7706,14 @@ index 0000000..b79370f
 +
 +void Config::setInlineMathResult(bool value) {
 +	setValue(kInlineMathResult, value);
++}
++
++bool Config::saveToChatSubfolder() const {
++	return boolValue(kSaveToChatSubfolder, false);
++}
++
++void Config::setSaveToChatSubfolder(bool value) {
++	setValue(kSaveToChatSubfolder, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8045,6 +8127,7 @@ index 0000000..b79370f
 +			|| key == kHideAiEditor
 +			|| key == kHideSendAsPeer
 +			|| key == kInlineMathResult
++			|| key == kSaveToChatSubfolder
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8241,10 +8324,10 @@ index 0000000..b79370f
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..8839850
+index 0000000..dfee4b4
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,195 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8320,6 +8403,8 @@ index 0000000..8839850
 +	void setHideSendAsPeer(bool value);
 +	[[nodiscard]] bool inlineMathResult() const;
 +	void setInlineMathResult(bool value);
++	[[nodiscard]] bool saveToChatSubfolder() const;
++	void setSaveToChatSubfolder(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -10761,6 +10846,100 @@ index 0000000..3bf5b81
 +	bool proxyEnabled);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/save_path.cpp b/exteraless/save_path.cpp
+new file mode 100644
+index 0000000..1e79299
+--- /dev/null
++++ b/exteraless/save_path.cpp
+@@ -0,0 +1,69 @@
++#include "exteraless/save_path.h"
++
++#include <QChar>
++#include <QDir>
++#include <QFileInfo>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMaxFolderNameLength = 64;
++constexpr auto kForbidden = "<>:\"/\\|?*";
++
++} // namespace
++
++QString SanitizeChatFolderName(const QString &name) {
++	auto result = QString();
++	result.reserve(kMaxFolderNameLength);
++	for (const auto ch : name) {
++		if (result.size() == kMaxFolderNameLength) {
++			break;
++		}
++		if (ch.unicode() < 32
++			|| QStringLiteral("<>:\"/\\|?*").contains(ch)) {
++			result += QChar::fromLatin1('_');
++		} else {
++			result += ch;
++		}
++	}
++	result = result.trimmed();
++	while (!result.isEmpty()
++		&& (result.back() == QChar::fromLatin1('.')
++			|| result.back() == QChar::fromLatin1(' '))) {
++		result.chop(1);
++	}
++	return result.isEmpty() ? QStringLiteral("Chat") : result;
++}
++
++QString ChatSubfolderSavePath(
++		const QString &filePath,
++		const QString &peerName) {
++	const auto info = QFileInfo(filePath);
++	const auto folder = info.absolutePath()
++		+ QChar::fromLatin1('/')
++		+ SanitizeChatFolderName(peerName);
++	if (!QDir().mkpath(folder)) {
++		return filePath;
++	}
++	const auto fileName = info.fileName();
++	const auto direct = folder + QChar::fromLatin1('/') + fileName;
++	if (!QFileInfo::exists(direct)) {
++		return direct;
++	}
++	const auto dot = fileName.lastIndexOf(QChar::fromLatin1('.'));
++	const auto start = (dot > 0) ? fileName.left(dot) : fileName;
++	const auto extension = (dot > 0) ? fileName.mid(dot) : QString();
++	for (auto i = 2; i != 100; ++i) {
++		const auto candidate = folder
++			+ QChar::fromLatin1('/')
++			+ start
++			+ QStringLiteral(" (%1)").arg(i)
++			+ extension;
++		if (!QFileInfo::exists(candidate)) {
++			return candidate;
++		}
++	}
++	return filePath;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/save_path.h b/exteraless/save_path.h
+new file mode 100644
+index 0000000..4ce817b
+--- /dev/null
++++ b/exteraless/save_path.h
+@@ -0,0 +1,13 @@
++#pragma once
++
++#include <QString>
++
++namespace Exteraless {
++
++[[nodiscard]] QString SanitizeChatFolderName(const QString &name);
++
++[[nodiscard]] QString ChatSubfolderSavePath(
++	const QString &filePath,
++	const QString &peerName);
++
++} // namespace Exteraless
 diff --git a/exteraless/tests/chats/CMakeLists.txt b/exteraless/tests/chats/CMakeLists.txt
 new file mode 100644
 index 0000000..05215b8
@@ -10775,10 +10954,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..87530f5
+index 0000000..94ffdd1
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1084 @@
+@@ -0,0 +1,1132 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -10793,6 +10972,7 @@ index 0000000..87530f5
 +#include "exteraless/pangu.h"
 +#include "exteraless/plugins/installer.h"
 +#include "exteraless/proxy_rules.h"
++#include "exteraless/save_path.h"
 +
 +#include <QByteArray>
 +#include <QCoreApplication>
@@ -10863,6 +11043,10 @@ index 0000000..87530f5
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli save-subfolder\n"
++		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
++		<< "  exteraless-chats-cli chat-folder <name>\n"
++		<< "  exteraless-chats-cli chat-subfolder <path> <peerName>\n"
 +		<< "  exteraless-chats-cli inline-math\n"
 +		<< "  exteraless-chats-cli inline-math-set <0|1>\n"
 +		<< "  exteraless-chats-cli math-eval <expression>\n"
@@ -11290,6 +11474,49 @@ index 0000000..87530f5
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("save-subfolder")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().saveToChatSubfolder() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("save-subfolder-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSaveToChatSubfolder(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("chat-folder")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		std::cout
++			<< Exteraless::SanitizeChatFolderName(arguments[2])
++				.toUtf8().constData()
++			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("chat-subfolder")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		std::cout
++			<< Exteraless::ChatSubfolderSavePath(
++				arguments[2],
++				arguments[3]).toUtf8().constData()
++			<< '\n';
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("inline-math")) {
@@ -11927,10 +12154,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..aa810a0
+index 0000000..505498f
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,2915 @@
+@@ -0,0 +1,3016 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12099,6 +12326,9 @@ index 0000000..aa810a0
 +        ("plugin-filename without name", ["plugin-filename"]),
 +        ("send-as-set with wrong count", ["send-as-set"]),
 +        ("inline-math-set with wrong count", ["inline-math-set"]),
++        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
++        ("chat-folder without name", ["chat-folder"]),
++        ("chat-subfolder without args", ["chat-subfolder"]),
 +        ("math-eval without expression", ["math-eval"]),
 +        ("plugin-install without args", ["plugin-install"]),
 +        ("plugin-delete without args", ["plugin-delete"]),
@@ -12407,7 +12637,7 @@ index 0000000..aa810a0
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 53,
++            len(section) == 54,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -12428,7 +12658,7 @@ index 0000000..aa810a0
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 58,
++            sum(len(value) for value in exported.values()) == 59,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -12448,7 +12678,7 @@ index 0000000..aa810a0
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 58,
++                data.get("applied") == 59,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -12535,6 +12765,7 @@ index 0000000..aa810a0
 +            "OEAppearanceHideAiEditor": True,
 +            "OEChatsHideSendAsPeer": True,
 +            "OEChatsInlineMathResult": True,
++            "OEGeneralSaveToChatSubfolder": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -12556,7 +12787,7 @@ index 0000000..aa810a0
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 58,
++            data.get("applied") == 59,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -12627,6 +12858,10 @@ index 0000000..aa810a0
 +            "backup full inline math",
 +            section.get("OEChatsInlineMathResult") is True,
 +            section.get("OEChatsInlineMathResult"))
++        ledger.check(
++            "backup full save subfolder",
++            section.get("OEGeneralSaveToChatSubfolder") is True,
++            section.get("OEGeneralSaveToChatSubfolder"))
 +        ledger.check(
 +            "backup full settings sections",
 +            section.get("OESettingsHidePremium") is True
@@ -12756,10 +12991,10 @@ index 0000000..aa810a0
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 58",
++            "backup legacy eight completed to 59",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (53, 3, 2),
++             len(sections["mainconfig"])) == (54, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -13585,6 +13820,7 @@ index 0000000..aa810a0
 +            "OEAppearanceHideAiEditor": True,
 +            "OEChatsHideSendAsPeer": True,
 +            "OEChatsInlineMathResult": True,
++            "OEGeneralSaveToChatSubfolder": True,
 +        },
 +    }
 +    data = json_call(
@@ -14776,6 +15012,96 @@ index 0000000..aa810a0
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_save_subfolder(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "save-subfolder-defaults")
++    data = json_call(
++        ledger, cli, ["save-subfolder"], env, "save-subfolder defaults")
++    if data is not None:
++        ledger.check(
++            "save subfolder default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["save-subfolder-set", "1"], env, "save-subfolder set")
++    if data is not None:
++        ledger.check("save subfolder set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["save-subfolder"], env, "save-subfolder reload")
++    if reloaded is not None:
++        ledger.check(
++            "save subfolder persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    folder_cases = [
++        ("Кифил", "Кифил"),
++        ("a/b", "a_b"),
++        ("a:b*c?", "a_b_c_"),
++        ("abc...", "abc"),
++        ("  spaced  ", "spaced"),
++        ("", "Chat"),
++        ("x" * 80, "x" * 64),
++    ]
++    for name, expected in folder_cases:
++        result = run(cli, ["chat-folder", name])
++        actual = result.stdout.rstrip("\n")
++        ledger.check(
++            f"chat folder {name[:12] or 'empty'}",
++            result.returncode == 0 and actual == expected,
++            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
++
++    saves = work / "saves"
++    target = work / "saves" / "photo.jpg"
++    result = run(cli, ["chat-subfolder", str(target), "Кифил"])
++    resolved = result.stdout.strip()
++    expected = str(saves / "Кифил" / "photo.jpg")
++    ledger.check(
++        "chat subfolder path",
++        result.returncode == 0 and resolved == expected,
++        f"got {resolved!r}, want {expected!r}")
++    ledger.check(
++        "chat subfolder created",
++        (saves / "Кифил").is_dir(),
++        saves / "Кифил")
++
++    (saves / "Кифил" / "photo.jpg").write_text("x", encoding="utf-8")
++    result = run(cli, ["chat-subfolder", str(target), "Кифил"])
++    resolved = result.stdout.strip()
++    expected = str(saves / "Кифил" / "photo (2).jpg")
++    ledger.check(
++        "chat subfolder collision",
++        result.returncode == 0 and resolved == expected,
++        f"got {resolved!r}, want {expected!r}")
++
++    env = make_env(work / "save-subfolder-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"saveToChatSubfolder": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "save-subfolder alias")
++    if data is not None:
++        ledger.check(
++            "save subfolder alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["save-subfolder"], env, "save-subfolder alias read")
++    if reloaded is not None:
++        ledger.check(
++            "save subfolder alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -14809,6 +15135,7 @@ index 0000000..aa810a0
 +        pluginops = check_plugin_installer(ledger, cli, work)
 +        send_as = check_send_as(ledger, cli, work)
 +        inline_math = check_inline_math(ledger, cli, work)
++        save_subfolder = check_save_subfolder(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -14834,6 +15161,7 @@ index 0000000..aa810a0
 +    print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
 +    print(f"send-as: {send_as[0] - send_as[1]} passed")
 +    print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
++    print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

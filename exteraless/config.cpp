@@ -29,6 +29,7 @@ constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
+constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kUseDeletedIcon = "OEChatsUseDeletedIcon";
 constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
@@ -297,6 +298,14 @@ bool Config::inlineMathResult() const {
 
 void Config::setInlineMathResult(bool value) {
 	setValue(kInlineMathResult, value);
+}
+
+bool Config::saveToChatSubfolder() const {
+	return boolValue(kSaveToChatSubfolder, false);
+}
+
+void Config::setSaveToChatSubfolder(bool value) {
+	setValue(kSaveToChatSubfolder, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -710,6 +719,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kHideAiEditor
 			|| key == kHideSendAsPeer
 			|| key == kInlineMathResult
+			|| key == kSaveToChatSubfolder
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

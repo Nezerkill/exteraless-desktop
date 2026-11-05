@@ -2,6 +2,12 @@
 
 ## 2026-11-05
 
+- General / Files: настройка `OEGeneralSaveToChatSubfolder` (default `false`)
+  сохраняет автоматически скачиваемые файлы в подпапку с именем чата внутри
+  папки загрузок (`exteraless/save_path.{h,cpp}`, безопасные имена, суффикс
+  ` (2)` при коллизии); Android-алиас `saveToChatSubfolder` поддержан в
+  `.extera` (всего 59 ключей). `customSavePath` отдельно не добавлялся:
+  в desktop уже есть настройка «Download path» в Advanced.
 - Chats / Inline math: настройка `OEChatsInlineMathResult` (default `false`)
   вычисляет выражение при нажатии Space после `=`: `2+2=` → `2+2=4 `.
   Парсер (`exteraless/math.{h,cpp}`) поддерживает `+ - * / % ^`, скобки,

@@ -73,6 +73,8 @@ public:
 	void setHideSendAsPeer(bool value);
 	[[nodiscard]] bool inlineMathResult() const;
 	void setInlineMathResult(bool value);
+	[[nodiscard]] bool saveToChatSubfolder() const;
+	void setSaveToChatSubfolder(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

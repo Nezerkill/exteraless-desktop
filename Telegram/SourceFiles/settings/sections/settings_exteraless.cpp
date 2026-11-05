@@ -140,6 +140,24 @@ const auto kMeta = Builder::BuildHelper({
 		}, hideAi->lifetime());
 	}
 
+	const auto saveSubfolder = builder.addButton({
+		.id = u"exteraless/save-chat-subfolder"_q,
+		.title = tr::lng_settings_exteraless_save_chat_subfolder(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().saveToChatSubfolder()),
+		.keywords = { u"save"_q, u"folder"_q, u"chat"_q },
+	});
+	if (saveSubfolder) {
+		saveSubfolder->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().saveToChatSubfolder());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setSaveToChatSubfolder(value);
+		}, saveSubfolder->lifetime());
+	}
+
 	const auto hidePremium = builder.addButton({
 		.id = u"exteraless/hide-premium"_q,
 		.title = tr::lng_settings_exteraless_hide_premium(),

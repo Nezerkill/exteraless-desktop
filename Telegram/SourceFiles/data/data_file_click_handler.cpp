@@ -10,9 +10,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/click_handler_types.h"
 #include "core/file_utilities.h"
 #include "core/application.h"
+#include "core/core_settings.h"
+#include "exteraless/config.h"
+#include "exteraless/save_path.h"
 #include "data/data_document.h"
+#include "data/data_file_origin.h"
 #include "data/data_session.h"
 #include "data/data_download_manager.h"
+#include "data/data_peer.h"
 #include "data/data_photo.h"
 #include "main/main_session.h"
 
@@ -106,11 +111,24 @@ void DocumentSaveClickHandler::Save(
 		const auto filename = filepath.isEmpty()
 			? QString()
 			: fileinfo.fileName();
-		const auto savename = DocumentFileNameForSave(
+		auto savename = DocumentFileNameForSave(
 			data,
 			(mode == Mode::ToNewFile),
 			filename,
 			filedir);
+		if (!savename.isEmpty()
+			&& mode != Mode::ToNewFile
+			&& !Core::App().settings().askDownloadPath()
+			&& Exteraless::Config::Instance().saveToChatSubfolder()) {
+			if (const auto message = std::get_if<Data::FileOriginMessage>(
+					&origin.data)) {
+				const auto peer = data->session().data().peer(
+					message->peer);
+				savename = Exteraless::ChatSubfolderSavePath(
+					savename,
+					peer->name());
+			}
+		}
 		if (!savename.isEmpty()) {
 			data->save(origin, savename);
 			if (started) {

@@ -32,6 +32,8 @@ constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
+constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
+constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 constexpr auto kInlineMathAlias = "inlineMathResult";
 constexpr auto kHideSendAsAlias = "hideSendAsChannel";
 constexpr auto kHideAiEditorAlias = "hideAiEditor";
@@ -247,6 +249,7 @@ QString BuildBackup() {
 	extera[kHideAiEditor] = config.hideAiEditor();
 	extera[kHideSendAsPeer] = config.hideSendAsPeer();
 	extera[kInlineMathResult] = config.inlineMathResult();
+	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -446,6 +449,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kInlineMathResult || key == kInlineMathAlias)
 			&& value.isBool()) {
 			config.setInlineMathResult(value.toBool());
+		} else if ((key == kSaveToChatSubfolder
+			|| key == kSaveToChatSubfolderAlias)
+			&& value.isBool()) {
+			config.setSaveToChatSubfolder(value.toBool());
 		} else if ((key == kUseDeletedIcon || key == kUseDeletedIconAlias)
 			&& value.isBool()) {
 			config.setUseDeletedIcon(value.toBool());
