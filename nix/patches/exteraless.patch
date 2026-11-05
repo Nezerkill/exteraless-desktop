@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..082e3d5 100644
+index ffc8ec9..8bf4080 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,132 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,138 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -158,6 +158,12 @@ index ffc8ec9..082e3d5 100644
 +"lng_settings_exteraless_decoration_snow" = "Snowflakes";
 +"lng_settings_exteraless_decoration_fireworks" = "Fireworks";
 +"lng_settings_exteraless_decoration_date" = "Depends on date";
++"lng_settings_exteraless_shortcuts" = "Admin shortcuts in the profile";
++"lng_settings_exteraless_shortcut_administrators" = "Administrators";
++"lng_settings_exteraless_shortcut_recent_actions" = "Recent actions";
++"lng_settings_exteraless_shortcut_statistics" = "Statistics";
++"lng_settings_exteraless_shortcut_permissions" = "Permissions";
++"lng_settings_exteraless_shortcut_members" = "Members";
 +"lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 +"lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 +"lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";
@@ -5579,10 +5585,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..628ef06
+index 0000000..3b65e54
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1502 @@
+@@ -0,0 +1,1552 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -6531,6 +6537,56 @@ index 0000000..628ef06
 +		menuSettings.deleteMsg,
 +		[](bool value) {
 +			Exteraless::Config::Instance().setChatsMenuDelete(value);
++		});
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chats/shortcuts"_q,
++		.title = tr::lng_settings_exteraless_shortcuts(),
++	});
++	addChatsToggle(
++		u"exteraless/chats/shortcuts/administrators"_q,
++		tr::lng_settings_exteraless_shortcut_administrators(),
++		{ u"admin"_q, u"shortcut"_q, u"profile"_q },
++		Exteraless::Config::Instance().chatShortcutAdministrators(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatShortcutAdministrators(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/shortcuts/recent-actions"_q,
++		tr::lng_settings_exteraless_shortcut_recent_actions(),
++		{ u"admin"_q, u"log"_q, u"shortcut"_q },
++		Exteraless::Config::Instance().chatShortcutRecentActions(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatShortcutRecentActions(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/shortcuts/statistics"_q,
++		tr::lng_settings_exteraless_shortcut_statistics(),
++		{ u"admin"_q, u"stats"_q, u"shortcut"_q },
++		Exteraless::Config::Instance().chatShortcutStatistics(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatShortcutStatistics(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/shortcuts/permissions"_q,
++		tr::lng_settings_exteraless_shortcut_permissions(),
++		{ u"admin"_q, u"rights"_q, u"shortcut"_q },
++		Exteraless::Config::Instance().chatShortcutPermissions(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatShortcutPermissions(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/shortcuts/members"_q,
++		tr::lng_settings_exteraless_shortcut_members(),
++		{ u"admin"_q, u"members"_q, u"shortcut"_q },
++		Exteraless::Config::Instance().chatShortcutMembers(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setChatShortcutMembers(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -7665,7 +7721,7 @@ index 5975e0e..6ee9b2c 100644
  	object_ptr<Ui::FlatLabel> _setEmojiStatus;
  	std::unique_ptr<Info::Profile::EmojiStatusPanel> _emojiStatusPanel;
 diff --git a/Telegram/SourceFiles/window/window_peer_menu.cpp b/Telegram/SourceFiles/window/window_peer_menu.cpp
-index 56d2e56..0336afb 100644
+index 56d2e56..47e57a5 100644
 --- a/Telegram/SourceFiles/window/window_peer_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_peer_menu.cpp
 @@ -15,6 +15,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -7678,7 +7734,16 @@ index 56d2e56..0336afb 100644
  #include "chat_helpers/share_message_phrase_factory.h"
  #include "ui/basic_click_handlers.h"
  #include "ui/controls/userpic_button.h"
-@@ -314,6 +317,8 @@ private:
+@@ -100,6 +103,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "info/profile/info_profile_values.h"
+ #include "info/statistics/info_statistics_widget.h"
+ #include "info/stories/info_stories_widget.h"
++#include "exteraless/config.h"
++#include "history/admin_log/history_admin_log_section.h"
+ #include "data/components/scheduled_messages.h"
+ #include "data/components/welcome_messages.h"
+ #include "data/notify/data_notify_settings.h"
+@@ -314,6 +319,8 @@ private:
  	void addToggleUnreadMark();
  	void addToggleArchive();
  	void addClearHistory();
@@ -7687,7 +7752,7 @@ index 56d2e56..0336afb 100644
  	void addDeleteChat();
  	void addLeaveChat();
  	void addJoinChat();
-@@ -859,8 +864,96 @@ void Filler::addToggleArchive() {
+@@ -859,8 +866,96 @@ void Filler::addToggleArchive() {
  	SetActionText(archiveAction, std::move(actionText));
  }
  
@@ -7786,7 +7851,7 @@ index 56d2e56..0336afb 100644
  		return;
  	}
  	const auto channel = _peer->asChannel();
-@@ -1023,6 +1116,9 @@ void Filler::addBanFromChannel() {
+@@ -1023,6 +1118,9 @@ void Filler::addBanFromChannel() {
  }
  
  void Filler::addViewDiscussion() {
@@ -7796,7 +7861,7 @@ index 56d2e56..0336afb 100644
  	const auto channel = _peer->asBroadcast();
  	if (!channel) {
  		return;
-@@ -1295,6 +1391,9 @@ void Filler::addManageChat() {
+@@ -1295,6 +1393,9 @@ void Filler::addManageChat() {
  }
  
  void Filler::addBoostChat() {
@@ -7806,7 +7871,7 @@ index 56d2e56..0336afb 100644
  	if (const auto channel = _peer->asChannel()) {
  		if (channel->isMonoforum()) {
  			return;
-@@ -1928,6 +2027,8 @@ void Filler::fillContextMenuActions() {
+@@ -1928,6 +2029,8 @@ void Filler::fillContextMenuActions() {
  		}
  	}
  	addBanFromChannel();
@@ -7815,7 +7880,7 @@ index 56d2e56..0336afb 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -1952,6 +2053,8 @@ void Filler::fillHistoryActions() {
+@@ -1952,6 +2055,8 @@ void Filler::fillHistoryActions() {
  	addExportChat();
  	addTranslate();
  	addReport();
@@ -7824,7 +7889,81 @@ index 56d2e56..0336afb 100644
  	addClearHistory();
  	addDeleteChat();
  	addLeaveChat();
-@@ -4446,7 +4549,11 @@ void FillSenderUserpicMenu(
+@@ -4359,10 +4464,73 @@ Fn<void()> DeleteSublistHandler(
+ 	};
+ }
+ 
++namespace {
++
++void AddAdminShortcuts(
++		not_null<SessionController*> controller,
++		not_null<PeerData*> peer,
++		const PeerMenuCallback &addAction) {
++	const auto channel = peer->asChannel();
++	const auto &config = Exteraless::Config::Instance();
++	auto added = false;
++	const auto add = [&](
++			const QString &text,
++			Fn<void()> handler,
++			const style::icon *icon) {
++		addAction(text, std::move(handler), icon);
++		added = true;
++	};
++	if (config.chatShortcutPermissions()) {
++		add(tr::lng_manage_peer_permissions(tr::now), [=] {
++			ShowEditChatPermissions(controller, peer);
++		}, &st::menuIconPermissions);
++	}
++	if (config.chatShortcutAdministrators()) {
++		add(tr::lng_manage_peer_administrators(tr::now), [=] {
++			ParticipantsBoxController::Start(
++				controller,
++				peer,
++				ParticipantsBoxController::Role::Admins);
++		}, &st::menuIconAdmin);
++	}
++	if (config.chatShortcutMembers()) {
++		add(tr::lng_manage_peer_members(tr::now), [=] {
++			ParticipantsBoxController::Start(
++				controller,
++				peer,
++				ParticipantsBoxController::Role::Members);
++		}, &st::menuIconGroups);
++	}
++	if (channel && config.chatShortcutRecentActions()) {
++		add(tr::lng_manage_peer_recent_actions(tr::now), [=] {
++			controller->showSection(
++				std::make_shared<AdminLog::SectionMemento>(channel));
++		}, &st::menuIconGroupLog);
++	}
++	if (channel
++		&& config.chatShortcutStatistics()
++		&& (channel->flags() & ChannelDataFlag::CanGetStatistics)) {
++		add(tr::lng_stats_title(tr::now), [=] {
++			controller->showSection(Info::Statistics::Make(channel, {}, {}));
++		}, &st::menuIconStats);
++	}
++	if (added) {
++		addAction({ .isSeparator = true });
++	}
++}
++
++} // namespace
++
+ void FillDialogsEntryMenu(
+ 		not_null<SessionController*> controller,
+ 		Dialogs::EntryState request,
+ 		const PeerMenuCallback &callback) {
++	const auto peer = request.key.peer();
++	if (peer
++		&& request.section == Dialogs::EntryState::Section::Profile
++		&& EditPeerInfoBox::Available(peer)) {
++		AddAdminShortcuts(controller, peer, callback);
++	}
+ 	Filler(controller, request, callback).fill();
+ }
+ 
+@@ -4446,7 +4614,11 @@ void FillSenderUserpicMenu(
  	if (const auto guard = mention ? fieldForMention : nullptr) {
  		addAction(tr::lng_context_mention(tr::now), crl::guard(guard, [=] {
  			if (!username.isEmpty()) {
@@ -7937,10 +8076,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..45d1d67
+index 0000000..d543168
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,698 @@
+@@ -0,0 +1,733 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7994,6 +8133,11 @@ index 0000000..45d1d67
 +constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 +constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 +constexpr auto kDecoration = "OEAppearanceChatDecoration";
++constexpr auto kShortcutAdministrators = "OEChatsShortcutAdministrators";
++constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
++constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
++constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
++constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
 +constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 +constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 +constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -8017,6 +8161,11 @@ index 0000000..45d1d67
 +constexpr auto kFalseBottomAliasUpper = "FalseBottom";
 +constexpr auto kActionBarDecorationAlias = "actionBarDecoration";
 +constexpr auto kChatDecorationAlias = "chatDecoration";
++constexpr auto kShortcutAdministratorsAlias = "ChannelAdministrators";
++constexpr auto kShortcutRecentActionsAlias = "EventLog";
++constexpr auto kShortcutStatisticsAlias = "Statistics";
++constexpr auto kShortcutPermissionsAlias = "ChannelPermissions";
++constexpr auto kShortcutMembersAlias = "GroupMembers";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 +constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -8257,6 +8406,11 @@ index 0000000..45d1d67
 +	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 +	extera[kFalseBottom] = config.falseBottom();
 +	extera[kDecoration] = config.decoration();
++	extera[kShortcutAdministrators] = config.chatShortcutAdministrators();
++	extera[kShortcutRecentActions] = config.chatShortcutRecentActions();
++	extera[kShortcutStatistics] = config.chatShortcutStatistics();
++	extera[kShortcutPermissions] = config.chatShortcutPermissions();
++	extera[kShortcutMembers] = config.chatShortcutMembers();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -8548,6 +8702,26 @@ index 0000000..45d1d67
 +			&& value.toInt() >= 0
 +			&& value.toInt() <= 3) {
 +			config.setDecoration(value.toInt());
++		} else if ((key == kShortcutAdministrators
++			|| key == kShortcutAdministratorsAlias)
++			&& value.isBool()) {
++			config.setChatShortcutAdministrators(value.toBool());
++		} else if ((key == kShortcutRecentActions
++			|| key == kShortcutRecentActionsAlias)
++			&& value.isBool()) {
++			config.setChatShortcutRecentActions(value.toBool());
++		} else if ((key == kShortcutStatistics
++			|| key == kShortcutStatisticsAlias)
++			&& value.isBool()) {
++			config.setChatShortcutStatistics(value.toBool());
++		} else if ((key == kShortcutPermissions
++			|| key == kShortcutPermissionsAlias)
++			&& value.isBool()) {
++			config.setChatShortcutPermissions(value.toBool());
++		} else if ((key == kShortcutMembers
++			|| key == kShortcutMembersAlias)
++			&& value.isBool()) {
++			config.setChatShortcutMembers(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -8740,10 +8914,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..cc1ae34
+index 0000000..b4c1130
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1110 @@
+@@ -0,0 +1,1160 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -8795,6 +8969,11 @@ index 0000000..cc1ae34
 +constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 +constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 +constexpr auto kDecoration = "OEAppearanceChatDecoration";
++constexpr auto kShortcutAdministrators = "OEChatsShortcutAdministrators";
++constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
++constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
++constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
++constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -9230,6 +9409,46 @@ index 0000000..cc1ae34
 +	setValue(kDecoration, std::clamp(value, 0, 3));
 +}
 +
++bool Config::chatShortcutAdministrators() const {
++	return boolValue(kShortcutAdministrators, false);
++}
++
++void Config::setChatShortcutAdministrators(bool value) {
++	setValue(kShortcutAdministrators, value);
++}
++
++bool Config::chatShortcutRecentActions() const {
++	return boolValue(kShortcutRecentActions, false);
++}
++
++void Config::setChatShortcutRecentActions(bool value) {
++	setValue(kShortcutRecentActions, value);
++}
++
++bool Config::chatShortcutStatistics() const {
++	return boolValue(kShortcutStatistics, false);
++}
++
++void Config::setChatShortcutStatistics(bool value) {
++	setValue(kShortcutStatistics, value);
++}
++
++bool Config::chatShortcutPermissions() const {
++	return boolValue(kShortcutPermissions, false);
++}
++
++void Config::setChatShortcutPermissions(bool value) {
++	setValue(kShortcutPermissions, value);
++}
++
++bool Config::chatShortcutMembers() const {
++	return boolValue(kShortcutMembers, false);
++}
++
++void Config::setChatShortcutMembers(bool value) {
++	setValue(kShortcutMembers, value);
++}
++
 +bool Config::useDeletedIcon() const {
 +	return boolValue(kUseDeletedIcon, true);
 +}
@@ -9660,6 +9879,11 @@ index 0000000..cc1ae34
 +			|| key == kAlwaysShowDownloadIcon
 +			|| key == kFalseBottom
 +			|| key == kDecoration
++			|| key == kShortcutAdministrators
++			|| key == kShortcutRecentActions
++			|| key == kShortcutStatistics
++			|| key == kShortcutPermissions
++			|| key == kShortcutMembers
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -9856,10 +10080,10 @@ index 0000000..cc1ae34
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..1daa490
+index 0000000..aa209e0
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,241 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -9973,6 +10197,16 @@ index 0000000..1daa490
 +	void setFalseBottom(bool value);
 +	[[nodiscard]] int decoration() const;
 +	void setDecoration(int value);
++	[[nodiscard]] bool chatShortcutAdministrators() const;
++	void setChatShortcutAdministrators(bool value);
++	[[nodiscard]] bool chatShortcutRecentActions() const;
++	void setChatShortcutRecentActions(bool value);
++	[[nodiscard]] bool chatShortcutStatistics() const;
++	void setChatShortcutStatistics(bool value);
++	[[nodiscard]] bool chatShortcutPermissions() const;
++	void setChatShortcutPermissions(bool value);
++	[[nodiscard]] bool chatShortcutMembers() const;
++	void setChatShortcutMembers(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -12569,10 +12803,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..7014045
+index 0000000..05f9ecb
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1472 @@
+@@ -0,0 +1,1524 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -12673,6 +12907,9 @@ index 0000000..7014045
 +		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
 +		<< "  exteraless-chats-cli decoration\n"
 +		<< "  exteraless-chats-cli decoration-set <0|1|2|3>\n"
++		<< "  exteraless-chats-cli shortcuts\n"
++		<< "  exteraless-chats-cli shortcuts-set <admins> <recent> "
++		<< "<stats> <perms> <members>\n"
 +		<< "  exteraless-chats-cli chat-menu\n"
 +		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 +		<< "<viewDeleted> <clearDeleted>\n"
@@ -13230,6 +13467,55 @@ index 0000000..7014045
 +		}
 +		Exteraless::Config::Instance().setDecoration(value);
 +		std::cout << value << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("shortcuts")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		const auto &config = Exteraless::Config::Instance();
++		PrintJson(QJsonObject{
++			{ QStringLiteral("administrators"),
++				config.chatShortcutAdministrators() },
++			{ QStringLiteral("recentActions"),
++				config.chatShortcutRecentActions() },
++			{ QStringLiteral("statistics"),
++				config.chatShortcutStatistics() },
++			{ QStringLiteral("permissions"),
++				config.chatShortcutPermissions() },
++			{ QStringLiteral("members"),
++				config.chatShortcutMembers() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("shortcuts-set")) {
++		if (arguments.size() != 7) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 5>();
++		for (auto i = 0; i != 5; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setChatShortcutAdministrators(flags[0]);
++		config.setChatShortcutRecentActions(flags[1]);
++		config.setChatShortcutStatistics(flags[2]);
++		config.setChatShortcutPermissions(flags[3]);
++		config.setChatShortcutMembers(flags[4]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("administrators"),
++				config.chatShortcutAdministrators() },
++			{ QStringLiteral("recentActions"),
++				config.chatShortcutRecentActions() },
++			{ QStringLiteral("statistics"),
++				config.chatShortcutStatistics() },
++			{ QStringLiteral("permissions"),
++				config.chatShortcutPermissions() },
++			{ QStringLiteral("members"),
++				config.chatShortcutMembers() },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("chat-menu")) {
@@ -14109,10 +14395,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..78f58f9
+index 0000000..4c4f974
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3848 @@
+@@ -0,0 +1,3936 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -14297,6 +14583,7 @@ index 0000000..78f58f9
 +        ("false-bottom-set with wrong count", ["false-bottom-set"]),
 +        ("decoration-set with wrong count", ["decoration-set"]),
 +        ("decoration-set out of range", ["decoration-set", "7"]),
++        ("shortcuts-set with wrong count", ["shortcuts-set"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -14609,7 +14896,7 @@ index 0000000..78f58f9
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 72,
++            len(section) == 77,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -14630,7 +14917,7 @@ index 0000000..78f58f9
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 77,
++            sum(len(value) for value in exported.values()) == 82,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -14650,7 +14937,7 @@ index 0000000..78f58f9
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 77,
++                data.get("applied") == 82,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -14756,6 +15043,11 @@ index 0000000..78f58f9
 +            "OEChatsAlwaysShowDownloadIcon": True,
 +            "OEPrivacyFalseBottom": True,
 +            "OEAppearanceChatDecoration": 1,
++            "OEChatsShortcutAdministrators": True,
++            "OEChatsShortcutRecentActions": True,
++            "OEChatsShortcutStatistics": True,
++            "OEChatsShortcutPermissions": True,
++            "OEChatsShortcutMembers": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -14777,7 +15069,7 @@ index 0000000..78f58f9
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 77,
++            data.get("applied") == 82,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -14876,6 +15168,12 @@ index 0000000..78f58f9
 +            "backup full decoration",
 +            section.get("OEAppearanceChatDecoration") == 1,
 +            section.get("OEAppearanceChatDecoration"))
++        ledger.check(
++            "backup full shortcuts",
++            section.get("OEChatsShortcutAdministrators") is True
++            and section.get("OEChatsShortcutMembers") is True,
++            {key: section.get(key) for key in section
++             if key.startswith("OEChatsShortcut")})
 +        ledger.check(
 +            "backup full disable link preview",
 +            section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -15039,10 +15337,10 @@ index 0000000..78f58f9
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 77",
++            "backup legacy eight completed to 82",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (72, 3, 2),
++             len(sections["mainconfig"])) == (77, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -15887,6 +16185,11 @@ index 0000000..78f58f9
 +            "OEChatsAlwaysShowDownloadIcon": True,
 +            "OEPrivacyFalseBottom": True,
 +            "OEAppearanceChatDecoration": 1,
++            "OEChatsShortcutAdministrators": True,
++            "OEChatsShortcutRecentActions": True,
++            "OEChatsShortcutStatistics": True,
++            "OEChatsShortcutPermissions": True,
++            "OEChatsShortcutMembers": True,
 +        },
 +    }
 +    data = json_call(
@@ -17864,6 +18167,75 @@ index 0000000..78f58f9
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_shortcuts(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "shortcuts-defaults")
++    data = json_call(ledger, cli, ["shortcuts"], env, "shortcuts defaults")
++    if data is not None:
++        ledger.check(
++            "shortcuts default off",
++            data == {
++                "administrators": False,
++                "recentActions": False,
++                "statistics": False,
++                "permissions": False,
++                "members": False,
++            },
++            data)
++
++    data = json_call(
++        ledger, cli, ["shortcuts-set", "1", "1", "1", "1", "1"], env,
++        "shortcuts set")
++    if data is not None:
++        ledger.check(
++            "shortcuts set all on",
++            all(data.get(key) is True for key in (
++                "administrators", "recentActions", "statistics",
++                "permissions", "members")),
++            data)
++
++    reloaded = json_call(
++        ledger, cli, ["shortcuts"], env, "shortcuts reload")
++    if reloaded is not None:
++        ledger.check(
++            "shortcuts persisted",
++            reloaded.get("administrators") is True
++            and reloaded.get("members") is True,
++            reloaded)
++
++    env = make_env(work / "shortcuts-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "ChannelAdministrators": True,
++            "EventLog": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "shortcuts alias")
++    if data is not None:
++        ledger.check(
++            "shortcuts alias applied",
++            data.get("applied") == 2 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["shortcuts"], env, "shortcuts alias read")
++    if reloaded is not None:
++        ledger.check(
++            "shortcuts alias value",
++            reloaded.get("administrators") is True
++            and reloaded.get("recentActions") is True
++            and reloaded.get("statistics") is False,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -17909,6 +18281,7 @@ index 0000000..78f58f9
 +        always_show_download = check_always_show_download(ledger, cli, work)
 +        false_bottom = check_false_bottom(ledger, cli, work)
 +        decoration = check_decoration(ledger, cli, work)
++        shortcuts = check_shortcuts(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -17949,6 +18322,7 @@ index 0000000..78f58f9
 +          f"{always_show_download[0] - always_show_download[1]} passed")
 +    print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
 +    print(f"decoration: {decoration[0] - decoration[1]} passed")
++    print(f"shortcuts: {shortcuts[0] - shortcuts[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

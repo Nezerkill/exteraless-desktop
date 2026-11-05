@@ -182,6 +182,7 @@ def check_cli_args(ledger, cli):
         ("false-bottom-set with wrong count", ["false-bottom-set"]),
         ("decoration-set with wrong count", ["decoration-set"]),
         ("decoration-set out of range", ["decoration-set", "7"]),
+        ("shortcuts-set with wrong count", ["shortcuts-set"]),
         ("ghost-schedule-decide with wrong count",
          ["ghost-schedule-decide", "1"]),
         ("chat-folder without name", ["chat-folder"]),
@@ -494,7 +495,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 72,
+            len(section) == 77,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -515,7 +516,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 77,
+            sum(len(value) for value in exported.values()) == 82,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -535,7 +536,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 77,
+                data.get("applied") == 82,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -641,6 +642,11 @@ def check_backup(ledger, cli, work):
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
+            "OEChatsShortcutAdministrators": True,
+            "OEChatsShortcutRecentActions": True,
+            "OEChatsShortcutStatistics": True,
+            "OEChatsShortcutPermissions": True,
+            "OEChatsShortcutMembers": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -662,7 +668,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 77,
+            data.get("applied") == 82,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -761,6 +767,12 @@ def check_backup(ledger, cli, work):
             "backup full decoration",
             section.get("OEAppearanceChatDecoration") == 1,
             section.get("OEAppearanceChatDecoration"))
+        ledger.check(
+            "backup full shortcuts",
+            section.get("OEChatsShortcutAdministrators") is True
+            and section.get("OEChatsShortcutMembers") is True,
+            {key: section.get(key) for key in section
+             if key.startswith("OEChatsShortcut")})
         ledger.check(
             "backup full disable link preview",
             section.get("OEChatsDisableLinkPreviewByDefault") is True,
@@ -924,10 +936,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 77",
+            "backup legacy eight completed to 82",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (72, 3, 2),
+             len(sections["mainconfig"])) == (77, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1772,6 +1784,11 @@ def check_sticker_time(ledger, cli, work):
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
+            "OEChatsShortcutAdministrators": True,
+            "OEChatsShortcutRecentActions": True,
+            "OEChatsShortcutStatistics": True,
+            "OEChatsShortcutPermissions": True,
+            "OEChatsShortcutMembers": True,
         },
     }
     data = json_call(
@@ -3749,6 +3766,75 @@ def check_decoration(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_shortcuts(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "shortcuts-defaults")
+    data = json_call(ledger, cli, ["shortcuts"], env, "shortcuts defaults")
+    if data is not None:
+        ledger.check(
+            "shortcuts default off",
+            data == {
+                "administrators": False,
+                "recentActions": False,
+                "statistics": False,
+                "permissions": False,
+                "members": False,
+            },
+            data)
+
+    data = json_call(
+        ledger, cli, ["shortcuts-set", "1", "1", "1", "1", "1"], env,
+        "shortcuts set")
+    if data is not None:
+        ledger.check(
+            "shortcuts set all on",
+            all(data.get(key) is True for key in (
+                "administrators", "recentActions", "statistics",
+                "permissions", "members")),
+            data)
+
+    reloaded = json_call(
+        ledger, cli, ["shortcuts"], env, "shortcuts reload")
+    if reloaded is not None:
+        ledger.check(
+            "shortcuts persisted",
+            reloaded.get("administrators") is True
+            and reloaded.get("members") is True,
+            reloaded)
+
+    env = make_env(work / "shortcuts-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "ChannelAdministrators": True,
+            "EventLog": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "shortcuts alias")
+    if data is not None:
+        ledger.check(
+            "shortcuts alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["shortcuts"], env, "shortcuts alias read")
+    if reloaded is not None:
+        ledger.check(
+            "shortcuts alias value",
+            reloaded.get("administrators") is True
+            and reloaded.get("recentActions") is True
+            and reloaded.get("statistics") is False,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3794,6 +3880,7 @@ def main():
         always_show_download = check_always_show_download(ledger, cli, work)
         false_bottom = check_false_bottom(ledger, cli, work)
         decoration = check_decoration(ledger, cli, work)
+        shortcuts = check_shortcuts(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3834,6 +3921,7 @@ def main():
           f"{always_show_download[0] - always_show_download[1]} passed")
     print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
     print(f"decoration: {decoration[0] - decoration[1]} passed")
+    print(f"shortcuts: {shortcuts[0] - shortcuts[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

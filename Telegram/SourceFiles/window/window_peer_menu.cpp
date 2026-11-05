@@ -103,6 +103,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_values.h"
 #include "info/statistics/info_statistics_widget.h"
 #include "info/stories/info_stories_widget.h"
+#include "exteraless/config.h"
+#include "history/admin_log/history_admin_log_section.h"
 #include "data/components/scheduled_messages.h"
 #include "data/components/welcome_messages.h"
 #include "data/notify/data_notify_settings.h"
@@ -4462,10 +4464,73 @@ Fn<void()> DeleteSublistHandler(
 	};
 }
 
+namespace {
+
+void AddAdminShortcuts(
+		not_null<SessionController*> controller,
+		not_null<PeerData*> peer,
+		const PeerMenuCallback &addAction) {
+	const auto channel = peer->asChannel();
+	const auto &config = Exteraless::Config::Instance();
+	auto added = false;
+	const auto add = [&](
+			const QString &text,
+			Fn<void()> handler,
+			const style::icon *icon) {
+		addAction(text, std::move(handler), icon);
+		added = true;
+	};
+	if (config.chatShortcutPermissions()) {
+		add(tr::lng_manage_peer_permissions(tr::now), [=] {
+			ShowEditChatPermissions(controller, peer);
+		}, &st::menuIconPermissions);
+	}
+	if (config.chatShortcutAdministrators()) {
+		add(tr::lng_manage_peer_administrators(tr::now), [=] {
+			ParticipantsBoxController::Start(
+				controller,
+				peer,
+				ParticipantsBoxController::Role::Admins);
+		}, &st::menuIconAdmin);
+	}
+	if (config.chatShortcutMembers()) {
+		add(tr::lng_manage_peer_members(tr::now), [=] {
+			ParticipantsBoxController::Start(
+				controller,
+				peer,
+				ParticipantsBoxController::Role::Members);
+		}, &st::menuIconGroups);
+	}
+	if (channel && config.chatShortcutRecentActions()) {
+		add(tr::lng_manage_peer_recent_actions(tr::now), [=] {
+			controller->showSection(
+				std::make_shared<AdminLog::SectionMemento>(channel));
+		}, &st::menuIconGroupLog);
+	}
+	if (channel
+		&& config.chatShortcutStatistics()
+		&& (channel->flags() & ChannelDataFlag::CanGetStatistics)) {
+		add(tr::lng_stats_title(tr::now), [=] {
+			controller->showSection(Info::Statistics::Make(channel, {}, {}));
+		}, &st::menuIconStats);
+	}
+	if (added) {
+		addAction({ .isSeparator = true });
+	}
+}
+
+} // namespace
+
 void FillDialogsEntryMenu(
 		not_null<SessionController*> controller,
 		Dialogs::EntryState request,
 		const PeerMenuCallback &callback) {
+	const auto peer = request.key.peer();
+	if (peer
+		&& request.section == Dialogs::EntryState::Section::Profile
+		&& EditPeerInfoBox::Available(peer)) {
+		AddAdminShortcuts(controller, peer, callback);
+	}
 	Filler(controller, request, callback).fill();
 }
 

@@ -51,6 +51,11 @@ constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 constexpr auto kDecoration = "OEAppearanceChatDecoration";
+constexpr auto kShortcutAdministrators = "OEChatsShortcutAdministrators";
+constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
+constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
+constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
+constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
 constexpr auto kChatMenuBoostAlias = "chatMenuItemBoostGroup";
 constexpr auto kChatMenuLinkedAlias = "chatMenuItemLinkedChat";
 constexpr auto kChatMenuViewDeletedAlias = "chatMenuItemViewDeleted";
@@ -74,6 +79,11 @@ constexpr auto kFalseBottomAlias = "falseBottom";
 constexpr auto kFalseBottomAliasUpper = "FalseBottom";
 constexpr auto kActionBarDecorationAlias = "actionBarDecoration";
 constexpr auto kChatDecorationAlias = "chatDecoration";
+constexpr auto kShortcutAdministratorsAlias = "ChannelAdministrators";
+constexpr auto kShortcutRecentActionsAlias = "EventLog";
+constexpr auto kShortcutStatisticsAlias = "Statistics";
+constexpr auto kShortcutPermissionsAlias = "ChannelPermissions";
+constexpr auto kShortcutMembersAlias = "GroupMembers";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
 constexpr auto kSeekDurationAlias = "doubleTapSeekDuration";
@@ -314,6 +324,11 @@ QString BuildBackup() {
 	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 	extera[kFalseBottom] = config.falseBottom();
 	extera[kDecoration] = config.decoration();
+	extera[kShortcutAdministrators] = config.chatShortcutAdministrators();
+	extera[kShortcutRecentActions] = config.chatShortcutRecentActions();
+	extera[kShortcutStatistics] = config.chatShortcutStatistics();
+	extera[kShortcutPermissions] = config.chatShortcutPermissions();
+	extera[kShortcutMembers] = config.chatShortcutMembers();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -605,6 +620,26 @@ BackupImportResult ApplyBackup(const QString &text) {
 			&& value.toInt() >= 0
 			&& value.toInt() <= 3) {
 			config.setDecoration(value.toInt());
+		} else if ((key == kShortcutAdministrators
+			|| key == kShortcutAdministratorsAlias)
+			&& value.isBool()) {
+			config.setChatShortcutAdministrators(value.toBool());
+		} else if ((key == kShortcutRecentActions
+			|| key == kShortcutRecentActionsAlias)
+			&& value.isBool()) {
+			config.setChatShortcutRecentActions(value.toBool());
+		} else if ((key == kShortcutStatistics
+			|| key == kShortcutStatisticsAlias)
+			&& value.isBool()) {
+			config.setChatShortcutStatistics(value.toBool());
+		} else if ((key == kShortcutPermissions
+			|| key == kShortcutPermissionsAlias)
+			&& value.isBool()) {
+			config.setChatShortcutPermissions(value.toBool());
+		} else if ((key == kShortcutMembers
+			|| key == kShortcutMembersAlias)
+			&& value.isBool()) {
+			config.setChatShortcutMembers(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

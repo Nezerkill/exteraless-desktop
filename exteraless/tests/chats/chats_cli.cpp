@@ -98,6 +98,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
 		<< "  exteraless-chats-cli decoration\n"
 		<< "  exteraless-chats-cli decoration-set <0|1|2|3>\n"
+		<< "  exteraless-chats-cli shortcuts\n"
+		<< "  exteraless-chats-cli shortcuts-set <admins> <recent> "
+		<< "<stats> <perms> <members>\n"
 		<< "  exteraless-chats-cli chat-menu\n"
 		<< "  exteraless-chats-cli chat-menu-set <boost> <linked> "
 		<< "<viewDeleted> <clearDeleted>\n"
@@ -655,6 +658,55 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setDecoration(value);
 		std::cout << value << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("shortcuts")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("administrators"),
+				config.chatShortcutAdministrators() },
+			{ QStringLiteral("recentActions"),
+				config.chatShortcutRecentActions() },
+			{ QStringLiteral("statistics"),
+				config.chatShortcutStatistics() },
+			{ QStringLiteral("permissions"),
+				config.chatShortcutPermissions() },
+			{ QStringLiteral("members"),
+				config.chatShortcutMembers() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("shortcuts-set")) {
+		if (arguments.size() != 7) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 5>();
+		for (auto i = 0; i != 5; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setChatShortcutAdministrators(flags[0]);
+		config.setChatShortcutRecentActions(flags[1]);
+		config.setChatShortcutStatistics(flags[2]);
+		config.setChatShortcutPermissions(flags[3]);
+		config.setChatShortcutMembers(flags[4]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("administrators"),
+				config.chatShortcutAdministrators() },
+			{ QStringLiteral("recentActions"),
+				config.chatShortcutRecentActions() },
+			{ QStringLiteral("statistics"),
+				config.chatShortcutStatistics() },
+			{ QStringLiteral("permissions"),
+				config.chatShortcutPermissions() },
+			{ QStringLiteral("members"),
+				config.chatShortcutMembers() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("chat-menu")) {

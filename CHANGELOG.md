@@ -2,6 +2,15 @@
 
 ## 2026-11-05
 
+- Chats / Admin shortcuts: пять настроек `OEChatsShortcutAdministrators`,
+  `OEChatsShortcutRecentActions`, `OEChatsShortcutStatistics`,
+  `OEChatsShortcutPermissions`, `OEChatsShortcutMembers` (все default
+  `false`) добавляют быстрые пункты Administrators, Recent actions,
+  Statistics, Permissions и Members в начало меню «…» профиля канала/группы,
+  если пользователь админ. Statistics показывается только при
+  `CanGetStatistics`. Android-алиасы `ChannelAdministrators`, `EventLog`,
+  `Statistics`, `ChannelPermissions`, `GroupMembers` поддержаны в `.extera`
+  (всего 82 ключа).
 - Appearance / Chat decoration: настройка `OEAppearanceChatDecoration`
   (default `0` = выключено) рисует снежинки (`1`), фейерверк (`2`) или декор
   по дате (`3`, снежинки в декабре и январе) поверх шапки чата; слой прозрачен

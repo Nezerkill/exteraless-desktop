@@ -111,6 +111,16 @@ public:
 	void setFalseBottom(bool value);
 	[[nodiscard]] int decoration() const;
 	void setDecoration(int value);
+	[[nodiscard]] bool chatShortcutAdministrators() const;
+	void setChatShortcutAdministrators(bool value);
+	[[nodiscard]] bool chatShortcutRecentActions() const;
+	void setChatShortcutRecentActions(bool value);
+	[[nodiscard]] bool chatShortcutStatistics() const;
+	void setChatShortcutStatistics(bool value);
+	[[nodiscard]] bool chatShortcutPermissions() const;
+	void setChatShortcutPermissions(bool value);
+	[[nodiscard]] bool chatShortcutMembers() const;
+	void setChatShortcutMembers(bool value);
 	[[nodiscard]] bool useDeletedIcon() const;
 	void setUseDeletedIcon(bool value);
 	[[nodiscard]] QString customDeletedMark() const;

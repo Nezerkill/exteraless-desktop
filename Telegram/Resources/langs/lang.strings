@@ -9248,6 +9248,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_decoration_snow" = "Snowflakes";
 "lng_settings_exteraless_decoration_fireworks" = "Fireworks";
 "lng_settings_exteraless_decoration_date" = "Depends on date";
+"lng_settings_exteraless_shortcuts" = "Admin shortcuts in the profile";
+"lng_settings_exteraless_shortcut_administrators" = "Administrators";
+"lng_settings_exteraless_shortcut_recent_actions" = "Recent actions";
+"lng_settings_exteraless_shortcut_statistics" = "Statistics";
+"lng_settings_exteraless_shortcut_permissions" = "Permissions";
+"lng_settings_exteraless_shortcut_members" = "Members";
 "lng_settings_exteraless_chat_menu" = "Visible chat menu items";
 "lng_settings_exteraless_chat_menu_boost" = "Show Boost";
 "lng_settings_exteraless_chat_menu_linked" = "Show the linked chat";

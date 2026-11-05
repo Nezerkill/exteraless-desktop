@@ -49,6 +49,11 @@ constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 constexpr auto kDecoration = "OEAppearanceChatDecoration";
+constexpr auto kShortcutAdministrators = "OEChatsShortcutAdministrators";
+constexpr auto kShortcutRecentActions = "OEChatsShortcutRecentActions";
+constexpr auto kShortcutStatistics = "OEChatsShortcutStatistics";
+constexpr auto kShortcutPermissions = "OEChatsShortcutPermissions";
+constexpr auto kShortcutMembers = "OEChatsShortcutMembers";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -484,6 +489,46 @@ void Config::setDecoration(int value) {
 	setValue(kDecoration, std::clamp(value, 0, 3));
 }
 
+bool Config::chatShortcutAdministrators() const {
+	return boolValue(kShortcutAdministrators, false);
+}
+
+void Config::setChatShortcutAdministrators(bool value) {
+	setValue(kShortcutAdministrators, value);
+}
+
+bool Config::chatShortcutRecentActions() const {
+	return boolValue(kShortcutRecentActions, false);
+}
+
+void Config::setChatShortcutRecentActions(bool value) {
+	setValue(kShortcutRecentActions, value);
+}
+
+bool Config::chatShortcutStatistics() const {
+	return boolValue(kShortcutStatistics, false);
+}
+
+void Config::setChatShortcutStatistics(bool value) {
+	setValue(kShortcutStatistics, value);
+}
+
+bool Config::chatShortcutPermissions() const {
+	return boolValue(kShortcutPermissions, false);
+}
+
+void Config::setChatShortcutPermissions(bool value) {
+	setValue(kShortcutPermissions, value);
+}
+
+bool Config::chatShortcutMembers() const {
+	return boolValue(kShortcutMembers, false);
+}
+
+void Config::setChatShortcutMembers(bool value) {
+	setValue(kShortcutMembers, value);
+}
+
 bool Config::useDeletedIcon() const {
 	return boolValue(kUseDeletedIcon, true);
 }
@@ -914,6 +959,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kAlwaysShowDownloadIcon
 			|| key == kFalseBottom
 			|| key == kDecoration
+			|| key == kShortcutAdministrators
+			|| key == kShortcutRecentActions
+			|| key == kShortcutStatistics
+			|| key == kShortcutPermissions
+			|| key == kShortcutMembers
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

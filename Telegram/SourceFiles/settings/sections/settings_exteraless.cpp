@@ -949,6 +949,56 @@ const auto kMeta = Builder::BuildHelper({
 		});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/shortcuts"_q,
+		.title = tr::lng_settings_exteraless_shortcuts(),
+	});
+	addChatsToggle(
+		u"exteraless/chats/shortcuts/administrators"_q,
+		tr::lng_settings_exteraless_shortcut_administrators(),
+		{ u"admin"_q, u"shortcut"_q, u"profile"_q },
+		Exteraless::Config::Instance().chatShortcutAdministrators(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatShortcutAdministrators(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/shortcuts/recent-actions"_q,
+		tr::lng_settings_exteraless_shortcut_recent_actions(),
+		{ u"admin"_q, u"log"_q, u"shortcut"_q },
+		Exteraless::Config::Instance().chatShortcutRecentActions(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatShortcutRecentActions(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/shortcuts/statistics"_q,
+		tr::lng_settings_exteraless_shortcut_statistics(),
+		{ u"admin"_q, u"stats"_q, u"shortcut"_q },
+		Exteraless::Config::Instance().chatShortcutStatistics(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatShortcutStatistics(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/shortcuts/permissions"_q,
+		tr::lng_settings_exteraless_shortcut_permissions(),
+		{ u"admin"_q, u"rights"_q, u"shortcut"_q },
+		Exteraless::Config::Instance().chatShortcutPermissions(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatShortcutPermissions(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/shortcuts/members"_q,
+		tr::lng_settings_exteraless_shortcut_members(),
+		{ u"admin"_q, u"members"_q, u"shortcut"_q },
+		Exteraless::Config::Instance().chatShortcutMembers(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatShortcutMembers(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/chats/double-tap"_q,
 		.title = tr::lng_settings_exteraless_double_tap_title(),
 	});
