@@ -2302,15 +2302,20 @@ void OverlayWidget::fillContextMenuActions(
 			[=] { copyRecognitionSelection(); },
 			&st::mediaMenuIconCopy);
 	}
-	if (!hasRecognitionSelection && !hasCopyMediaRestriction()) {
-		if ((_document && documentContentShown()) || (_photo && _photoMedia->loaded())) {
-			addAction(
-				((_document && _streamed)
-					? tr::lng_mediaview_copy_frame(tr::now)
-					: tr::lng_mediaview_copy(tr::now)),
-				[=] { copyMedia(); },
-				&st::mediaMenuIconCopy);
-		}
+	const auto copyAllowed = !hasRecognitionSelection
+		&& !hasCopyMediaRestriction()
+		&& ((_document && documentContentShown())
+			|| (_photo && _photoMedia->loaded()))
+		&& (((_document && _streamed)
+			? Exteraless::Config::Instance().mediaViewerMenuCopyFrame()
+			: Exteraless::Config::Instance().mediaViewerMenuCopyPhoto()));
+	if (copyAllowed) {
+		addAction(
+			((_document && _streamed)
+				? tr::lng_mediaview_copy_frame(tr::now)
+				: tr::lng_mediaview_copy(tr::now)),
+			[=] { copyMedia(); },
+			&st::mediaMenuIconCopy);
 	}
 	if ((_photo && _photo->hasAttachedStickers())
 		|| (_document && _document->hasAttachedStickers())) {
@@ -2319,7 +2324,9 @@ void OverlayWidget::fillContextMenuActions(
 			[=] { showAttachedStickers(); },
 			&st::mediaMenuIconStickers);
 	}
-	if (_message && _message->allowsForward()) {
+	if (_message
+		&& _message->allowsForward()
+		&& Exteraless::Config::Instance().mediaViewerMenuForward()) {
 		addAction(
 			tr::lng_mediaview_forward(tr::now),
 			[=] { forwardMedia(); },
@@ -2350,7 +2357,9 @@ void OverlayWidget::fillContextMenuActions(
 			}, state->lifetime);
 		}
 	}
-	if (story && story->canShare()) {
+	if (story
+		&& story->canShare()
+		&& Exteraless::Config::Instance().mediaViewerMenuForward()) {
 		addAction(tr::lng_mediaview_forward(tr::now), [=] {
 			_stories->shareRequested();
 		}, &st::mediaMenuIconForward);
@@ -2420,6 +2429,9 @@ void OverlayWidget::fillContextMenuActions(
 				return;
 			}
 		} else {
+			return;
+		}
+		if (!Exteraless::Config::Instance().mediaViewerMenuSetProfile()) {
 			return;
 		}
 		const auto photo = _photo;

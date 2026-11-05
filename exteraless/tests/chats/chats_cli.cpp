@@ -88,6 +88,9 @@ using Exteraless::ChatsSettings;
 		<< "<hideHelp>\n"
 		<< "  exteraless-chats-cli ai-editor\n"
 		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
+		<< "  exteraless-chats-cli media-menu\n"
+		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
+		<< "<copyPhoto> <setProfile>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli edited-mark\n"
@@ -527,6 +530,44 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintStickerTime();
+		return 0;
+	}
+	if (mode == QStringLiteral("media-menu")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("forward"), config.mediaViewerMenuForward() },
+			{ QStringLiteral("copyFrame"), config.mediaViewerMenuCopyFrame() },
+			{ QStringLiteral("copyPhoto"), config.mediaViewerMenuCopyPhoto() },
+			{ QStringLiteral("setProfile"),
+				config.mediaViewerMenuSetProfile() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("media-menu-set")) {
+		if (arguments.size() != 6) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 4>();
+		for (auto i = 0; i != 4; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setMediaViewerMenuForward(flags[0]);
+		config.setMediaViewerMenuCopyFrame(flags[1]);
+		config.setMediaViewerMenuCopyPhoto(flags[2]);
+		config.setMediaViewerMenuSetProfile(flags[3]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("forward"), config.mediaViewerMenuForward() },
+			{ QStringLiteral("copyFrame"), config.mediaViewerMenuCopyFrame() },
+			{ QStringLiteral("copyPhoto"), config.mediaViewerMenuCopyPhoto() },
+			{ QStringLiteral("setProfile"),
+				config.mediaViewerMenuSetProfile() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("forward-date")) {

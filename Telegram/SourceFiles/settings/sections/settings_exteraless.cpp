@@ -339,6 +339,57 @@ const auto kMeta = Builder::BuildHelper({
 				.setGhostSendUploadProgressLocked(value);
 		});
 	builder.addSubsectionTitle({
+		.id = u"exteraless/media-viewer-menu"_q,
+		.title = tr::lng_settings_exteraless_media_menu(),
+	});
+	const auto addMediaToggle = [&](
+			QString id,
+			rpl::producer<QString> title,
+			bool current,
+			Fn<void(bool)> setter) {
+		const auto toggle = builder.addCheckbox({
+			.id = std::move(id),
+			.title = std::move(title),
+			.checked = current,
+			.keywords = { u"media"_q, u"menu"_q },
+		});
+		if (toggle) {
+			toggle->checkedChanges(
+			) | rpl::on_next([=](bool value) {
+				setter(value);
+			}, toggle->lifetime());
+		}
+	};
+	addMediaToggle(
+		u"exteraless/media-menu/forward"_q,
+		tr::lng_settings_exteraless_media_menu_forward(),
+		Exteraless::Config::Instance().mediaViewerMenuForward(),
+		[](bool value) {
+			Exteraless::Config::Instance().setMediaViewerMenuForward(value);
+		});
+	addMediaToggle(
+		u"exteraless/media-menu/copy-frame"_q,
+		tr::lng_settings_exteraless_media_menu_copy_frame(),
+		Exteraless::Config::Instance().mediaViewerMenuCopyFrame(),
+		[](bool value) {
+			Exteraless::Config::Instance().setMediaViewerMenuCopyFrame(value);
+		});
+	addMediaToggle(
+		u"exteraless/media-menu/copy-photo"_q,
+		tr::lng_settings_exteraless_media_menu_copy_photo(),
+		Exteraless::Config::Instance().mediaViewerMenuCopyPhoto(),
+		[](bool value) {
+			Exteraless::Config::Instance().setMediaViewerMenuCopyPhoto(value);
+		});
+	addMediaToggle(
+		u"exteraless/media-menu/set-profile"_q,
+		tr::lng_settings_exteraless_media_menu_set_profile(),
+		Exteraless::Config::Instance().mediaViewerMenuSetProfile(),
+		[](bool value) {
+			Exteraless::Config::Instance().setMediaViewerMenuSetProfile(value);
+		});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/chats"_q,
 		.title = tr::lng_settings_exteraless_chats(),
 	});

@@ -99,13 +99,21 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 56 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 485 проверок PASS
-  (44 strip, 10 reactions, 34 CLI, 7 config, 22 general, 27 deleted,
+- Chats: `exteraless/tests/chats/run_checks.py` — 492 проверки PASS
+  (44 strip, 10 reactions, 35 CLI, 7 config, 22 general, 27 deleted,
   7 deleted-entry, 7 reset, 8 workdir, 8 menu, 22 doubletap, 14 stickertime,
   12 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
   5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as, 31 inline-math,
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 6 edited-mark,
-  5 forward-date, 88 backup); плагины без изменений — 32 и 213 проверок.
+  5 forward-date, 5 media-menu, 89 backup); плагины без изменений — 32 и 213
+  проверок.
+- Media viewer menu (NB-80): `OEMediaViewerMenuForward`,
+  `OEMediaViewerMenuCopyFrame`, `OEMediaViewerMenuCopyPhoto`,
+  `OEMediaViewerMenuSetProfile` (default `true`) скрывают соответствующие
+  пункты меню; CLI `media-menu` (5 проверок). Xvfb: при выключенных ключах
+  в меню фото остались только Go To Message, Delete, Save As..., View all
+  photos. `NoQuoteForward`/`ScanQRCode` неприменимы — таких пунктов в
+  desktop нет.
 - Forward date (NB-67): `OEChatsShowForwardDate` (default `false`) дописывает
   `· дата время` к заголовку пересланного сообщения; CLI `forward-date`
   (5 проверок). Проверено логом: заголовок содержит
@@ -318,8 +326,8 @@
   проверены только CLI. После включения настройки уже открытый чат сохраняет
   старые tail/reactions, реакции в pinned bar обновляются только после
   перезапуска; unread capsule читается на каждой перерисовке.
-- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `469bb1aa…`,
-  mtime 2026-11-05 13:59; GNU ld по-прежнему упирается в debug-info overflow,
+- Chats/General, сборка: итоговый `out/bin/Telegram` sha256 `77ca59b3…`,
+  mtime 2026-11-05 14:12; GNU ld по-прежнему упирается в debug-info overflow,
   поэтому затронутые TU собраны точечно и финальный линк выполнен LLD.
   `ninja -C out -n Telegram` после этого не показывает compile/link edges
   (только glob/CMake re-run).

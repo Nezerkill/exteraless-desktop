@@ -38,6 +38,15 @@ constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
+constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
+constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
+constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
+constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
+constexpr auto kMediaViewerMenuForwardAlias = "mediaViewerMenuItemForward";
+constexpr auto kMediaViewerMenuCopyFrameAlias = "mediaViewerMenuItemCopyFrame";
+constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
+constexpr auto kMediaViewerMenuSetProfileAlias
+	= "mediaViewerMenuItemSetProfilePhoto";
 constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
 constexpr auto kUseEditedIconAlias = "useEditedIcon";
 constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
@@ -265,6 +274,10 @@ QString BuildBackup() {
 	extera[kUseEditedIcon] = config.useEditedIcon();
 	extera[kCustomEditedMark] = config.customEditedMark();
 	extera[kShowForwardDate] = config.showForwardDate();
+	extera[kMediaViewerMenuForward] = config.mediaViewerMenuForward();
+	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
+	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
+	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
 	extera[kUseDeletedIcon] = config.useDeletedIcon();
 	extera[kCustomDeletedMark] = config.customDeletedMark();
 	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -488,6 +501,22 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
 			&& value.isBool()) {
 			config.setShowForwardDate(value.toBool());
+		} else if ((key == kMediaViewerMenuForward
+			|| key == kMediaViewerMenuForwardAlias)
+			&& value.isBool()) {
+			config.setMediaViewerMenuForward(value.toBool());
+		} else if ((key == kMediaViewerMenuCopyFrame
+			|| key == kMediaViewerMenuCopyFrameAlias)
+			&& value.isBool()) {
+			config.setMediaViewerMenuCopyFrame(value.toBool());
+		} else if ((key == kMediaViewerMenuCopyPhoto
+			|| key == kMediaViewerMenuCopyPhotoAlias)
+			&& value.isBool()) {
+			config.setMediaViewerMenuCopyPhoto(value.toBool());
+		} else if ((key == kMediaViewerMenuSetProfile
+			|| key == kMediaViewerMenuSetProfileAlias)
+			&& value.isBool()) {
+			config.setMediaViewerMenuSetProfile(value.toBool());
 		} else if (key == kSeekDurationAlias
 			&& value.isDouble()
 			&& value.toInt() >= 0

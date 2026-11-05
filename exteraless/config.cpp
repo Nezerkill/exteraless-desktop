@@ -35,6 +35,10 @@ constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
+constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
+constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
+constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
+constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 
 constexpr auto kMaxEditedMarkLength = 16;
 
@@ -364,6 +368,38 @@ bool Config::showForwardDate() const {
 
 void Config::setShowForwardDate(bool value) {
 	setValue(kShowForwardDate, value);
+}
+
+bool Config::mediaViewerMenuForward() const {
+	return boolValue(kMediaViewerMenuForward, true);
+}
+
+void Config::setMediaViewerMenuForward(bool value) {
+	setValue(kMediaViewerMenuForward, value);
+}
+
+bool Config::mediaViewerMenuCopyFrame() const {
+	return boolValue(kMediaViewerMenuCopyFrame, true);
+}
+
+void Config::setMediaViewerMenuCopyFrame(bool value) {
+	setValue(kMediaViewerMenuCopyFrame, value);
+}
+
+bool Config::mediaViewerMenuCopyPhoto() const {
+	return boolValue(kMediaViewerMenuCopyPhoto, true);
+}
+
+void Config::setMediaViewerMenuCopyPhoto(bool value) {
+	setValue(kMediaViewerMenuCopyPhoto, value);
+}
+
+bool Config::mediaViewerMenuSetProfile() const {
+	return boolValue(kMediaViewerMenuSetProfile, true);
+}
+
+void Config::setMediaViewerMenuSetProfile(bool value) {
+	setValue(kMediaViewerMenuSetProfile, value);
 }
 
 bool Config::useDeletedIcon() const {
@@ -783,6 +819,10 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kUseEditedIcon
 			|| key == kCustomEditedMark
 			|| key == kShowForwardDate
+			|| key == kMediaViewerMenuForward
+			|| key == kMediaViewerMenuCopyFrame
+			|| key == kMediaViewerMenuCopyPhoto
+			|| key == kMediaViewerMenuSetProfile
 			|| key == kUseDeletedIcon
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor

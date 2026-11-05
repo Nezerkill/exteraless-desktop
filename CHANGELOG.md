@@ -2,6 +2,13 @@
 
 ## 2026-11-05
 
+- Media viewer / Menu: четыре настройки `OEMediaViewerMenuForward`,
+  `OEMediaViewerMenuCopyFrame`, `OEMediaViewerMenuCopyPhoto`,
+  `OEMediaViewerMenuSetProfile` (все default `true`) скрывают пункты
+  Forward, Copy Frame, Copy и Set as profile photo; Android-алиасы
+  `mediaViewerMenuItem*` поддержаны в `.extera` (всего 68 ключей),
+  чекбоксы — в подсекции «Media viewer menu». `NoQuoteForward` и
+  `ScanQRCode` не применимы: в desktop таких пунктов нет.
 - Chats / Forwards: настройка `OEChatsShowForwardDate` (default `false`)
   дописывает дату оригинала в заголовок «Forwarded from …» (`· 5 нояб.
   13:39`); Android-алиас `dateOfForwardedMsg` поддержан в `.extera` (всего

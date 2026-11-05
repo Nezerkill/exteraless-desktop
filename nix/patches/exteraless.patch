@@ -85,10 +85,10 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..5e44a3e 100644
+index ffc8ec9..342b196 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,107 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9182,112 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -143,6 +143,11 @@ index ffc8ec9..5e44a3e 100644
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
++"lng_settings_exteraless_media_menu" = "Media viewer menu";
++"lng_settings_exteraless_media_menu_forward" = "Show Forward";
++"lng_settings_exteraless_media_menu_copy_frame" = "Show Copy Frame";
++"lng_settings_exteraless_media_menu_copy_photo" = "Show Copy";
++"lng_settings_exteraless_media_menu_set_profile" = "Show Set as profile photo";
 +"lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
 +"lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
 +"lng_settings_exteraless_default" = "Default";
@@ -4823,7 +4828,7 @@ index 2721c7a..6bfa900 100644
  	_mtp->writeKeysRequests(
  	) | rpl::filter([=] {
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..573f0d7 100644
+index 2acbe80..dc90897 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 @@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -4850,7 +4855,69 @@ index 2acbe80..573f0d7 100644
  constexpr auto kFrameStepFallbackFps = 30.;
  constexpr auto kFrameStepThrottleMs = crl::time(150);
  
-@@ -7328,11 +7334,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -2296,15 +2302,20 @@ void OverlayWidget::fillContextMenuActions(
+ 			[=] { copyRecognitionSelection(); },
+ 			&st::mediaMenuIconCopy);
+ 	}
+-	if (!hasRecognitionSelection && !hasCopyMediaRestriction()) {
+-		if ((_document && documentContentShown()) || (_photo && _photoMedia->loaded())) {
+-			addAction(
+-				((_document && _streamed)
+-					? tr::lng_mediaview_copy_frame(tr::now)
+-					: tr::lng_mediaview_copy(tr::now)),
+-				[=] { copyMedia(); },
+-				&st::mediaMenuIconCopy);
+-		}
++	const auto copyAllowed = !hasRecognitionSelection
++		&& !hasCopyMediaRestriction()
++		&& ((_document && documentContentShown())
++			|| (_photo && _photoMedia->loaded()))
++		&& (((_document && _streamed)
++			? Exteraless::Config::Instance().mediaViewerMenuCopyFrame()
++			: Exteraless::Config::Instance().mediaViewerMenuCopyPhoto()));
++	if (copyAllowed) {
++		addAction(
++			((_document && _streamed)
++				? tr::lng_mediaview_copy_frame(tr::now)
++				: tr::lng_mediaview_copy(tr::now)),
++			[=] { copyMedia(); },
++			&st::mediaMenuIconCopy);
+ 	}
+ 	if ((_photo && _photo->hasAttachedStickers())
+ 		|| (_document && _document->hasAttachedStickers())) {
+@@ -2313,7 +2324,9 @@ void OverlayWidget::fillContextMenuActions(
+ 			[=] { showAttachedStickers(); },
+ 			&st::mediaMenuIconStickers);
+ 	}
+-	if (_message && _message->allowsForward()) {
++	if (_message
++		&& _message->allowsForward()
++		&& Exteraless::Config::Instance().mediaViewerMenuForward()) {
+ 		addAction(
+ 			tr::lng_mediaview_forward(tr::now),
+ 			[=] { forwardMedia(); },
+@@ -2344,7 +2357,9 @@ void OverlayWidget::fillContextMenuActions(
+ 			}, state->lifetime);
+ 		}
+ 	}
+-	if (story && story->canShare()) {
++	if (story
++		&& story->canShare()
++		&& Exteraless::Config::Instance().mediaViewerMenuForward()) {
+ 		addAction(tr::lng_mediaview_forward(tr::now), [=] {
+ 			_stories->shareRequested();
+ 		}, &st::mediaMenuIconForward);
+@@ -2416,6 +2431,9 @@ void OverlayWidget::fillContextMenuActions(
+ 		} else {
+ 			return;
+ 		}
++		if (!Exteraless::Config::Instance().mediaViewerMenuSetProfile()) {
++			return;
++		}
+ 		const auto photo = _photo;
+ 		const auto peer = _peer;
+ 		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
+@@ -7328,11 +7346,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -4864,7 +4931,7 @@ index 2acbe80..573f0d7 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7390,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7402,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -5105,10 +5172,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..b5b41ca
+index 0000000..0962c06
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1177 @@
+@@ -0,0 +1,1228 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -5449,6 +5516,57 @@ index 0000000..b5b41ca
 +			Exteraless::Config::Instance()
 +				.setGhostSendUploadProgressLocked(value);
 +		});
++	builder.addSubsectionTitle({
++		.id = u"exteraless/media-viewer-menu"_q,
++		.title = tr::lng_settings_exteraless_media_menu(),
++	});
++	const auto addMediaToggle = [&](
++			QString id,
++			rpl::producer<QString> title,
++			bool current,
++			Fn<void(bool)> setter) {
++		const auto toggle = builder.addCheckbox({
++			.id = std::move(id),
++			.title = std::move(title),
++			.checked = current,
++			.keywords = { u"media"_q, u"menu"_q },
++		});
++		if (toggle) {
++			toggle->checkedChanges(
++			) | rpl::on_next([=](bool value) {
++				setter(value);
++			}, toggle->lifetime());
++		}
++	};
++	addMediaToggle(
++		u"exteraless/media-menu/forward"_q,
++		tr::lng_settings_exteraless_media_menu_forward(),
++		Exteraless::Config::Instance().mediaViewerMenuForward(),
++		[](bool value) {
++			Exteraless::Config::Instance().setMediaViewerMenuForward(value);
++		});
++	addMediaToggle(
++		u"exteraless/media-menu/copy-frame"_q,
++		tr::lng_settings_exteraless_media_menu_copy_frame(),
++		Exteraless::Config::Instance().mediaViewerMenuCopyFrame(),
++		[](bool value) {
++			Exteraless::Config::Instance().setMediaViewerMenuCopyFrame(value);
++		});
++	addMediaToggle(
++		u"exteraless/media-menu/copy-photo"_q,
++		tr::lng_settings_exteraless_media_menu_copy_photo(),
++		Exteraless::Config::Instance().mediaViewerMenuCopyPhoto(),
++		[](bool value) {
++			Exteraless::Config::Instance().setMediaViewerMenuCopyPhoto(value);
++		});
++	addMediaToggle(
++		u"exteraless/media-menu/set-profile"_q,
++		tr::lng_settings_exteraless_media_menu_set_profile(),
++		Exteraless::Config::Instance().mediaViewerMenuSetProfile(),
++		[](bool value) {
++			Exteraless::Config::Instance().setMediaViewerMenuSetProfile(value);
++		});
++
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/chats"_q,
 +		.title = tr::lng_settings_exteraless_chats(),
@@ -7025,10 +7143,10 @@ index 0000000..ef68146
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..76cda66
+index 0000000..1f3f41d
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,581 @@
+@@ -0,0 +1,610 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -7069,6 +7187,15 @@ index 0000000..76cda66
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 +constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
++constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
++constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
++constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
++constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
++constexpr auto kMediaViewerMenuForwardAlias = "mediaViewerMenuItemForward";
++constexpr auto kMediaViewerMenuCopyFrameAlias = "mediaViewerMenuItemCopyFrame";
++constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
++constexpr auto kMediaViewerMenuSetProfileAlias
++	= "mediaViewerMenuItemSetProfilePhoto";
 +constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
 +constexpr auto kUseEditedIconAlias = "useEditedIcon";
 +constexpr auto kCustomEditedMarkAlias = "customEditedMessage";
@@ -7296,6 +7423,10 @@ index 0000000..76cda66
 +	extera[kUseEditedIcon] = config.useEditedIcon();
 +	extera[kCustomEditedMark] = config.customEditedMark();
 +	extera[kShowForwardDate] = config.showForwardDate();
++	extera[kMediaViewerMenuForward] = config.mediaViewerMenuForward();
++	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
++	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
++	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
 +	extera[kUseDeletedIcon] = config.useDeletedIcon();
 +	extera[kCustomDeletedMark] = config.customDeletedMark();
 +	extera[kDeletedMarkColor] = config.deletedMarkColor();
@@ -7519,6 +7650,22 @@ index 0000000..76cda66
 +		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
 +			&& value.isBool()) {
 +			config.setShowForwardDate(value.toBool());
++		} else if ((key == kMediaViewerMenuForward
++			|| key == kMediaViewerMenuForwardAlias)
++			&& value.isBool()) {
++			config.setMediaViewerMenuForward(value.toBool());
++		} else if ((key == kMediaViewerMenuCopyFrame
++			|| key == kMediaViewerMenuCopyFrameAlias)
++			&& value.isBool()) {
++			config.setMediaViewerMenuCopyFrame(value.toBool());
++		} else if ((key == kMediaViewerMenuCopyPhoto
++			|| key == kMediaViewerMenuCopyPhotoAlias)
++			&& value.isBool()) {
++			config.setMediaViewerMenuCopyPhoto(value.toBool());
++		} else if ((key == kMediaViewerMenuSetProfile
++			|| key == kMediaViewerMenuSetProfileAlias)
++			&& value.isBool()) {
++			config.setMediaViewerMenuSetProfile(value.toBool());
 +		} else if (key == kSeekDurationAlias
 +			&& value.isDouble()
 +			&& value.toInt() >= 0
@@ -7711,10 +7858,10 @@ index 0000000..d6877e0
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..0605aca
+index 0000000..c442cf0
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,979 @@
+@@ -0,0 +1,1019 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -7752,6 +7899,10 @@ index 0000000..0605aca
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 +constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
++constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
++constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
++constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
++constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 +
 +constexpr auto kMaxEditedMarkLength = 16;
 +
@@ -8081,6 +8232,38 @@ index 0000000..0605aca
 +
 +void Config::setShowForwardDate(bool value) {
 +	setValue(kShowForwardDate, value);
++}
++
++bool Config::mediaViewerMenuForward() const {
++	return boolValue(kMediaViewerMenuForward, true);
++}
++
++void Config::setMediaViewerMenuForward(bool value) {
++	setValue(kMediaViewerMenuForward, value);
++}
++
++bool Config::mediaViewerMenuCopyFrame() const {
++	return boolValue(kMediaViewerMenuCopyFrame, true);
++}
++
++void Config::setMediaViewerMenuCopyFrame(bool value) {
++	setValue(kMediaViewerMenuCopyFrame, value);
++}
++
++bool Config::mediaViewerMenuCopyPhoto() const {
++	return boolValue(kMediaViewerMenuCopyPhoto, true);
++}
++
++void Config::setMediaViewerMenuCopyPhoto(bool value) {
++	setValue(kMediaViewerMenuCopyPhoto, value);
++}
++
++bool Config::mediaViewerMenuSetProfile() const {
++	return boolValue(kMediaViewerMenuSetProfile, true);
++}
++
++void Config::setMediaViewerMenuSetProfile(bool value) {
++	setValue(kMediaViewerMenuSetProfile, value);
 +}
 +
 +bool Config::useDeletedIcon() const {
@@ -8500,6 +8683,10 @@ index 0000000..0605aca
 +			|| key == kUseEditedIcon
 +			|| key == kCustomEditedMark
 +			|| key == kShowForwardDate
++			|| key == kMediaViewerMenuForward
++			|| key == kMediaViewerMenuCopyFrame
++			|| key == kMediaViewerMenuCopyPhoto
++			|| key == kMediaViewerMenuSetProfile
 +			|| key == kUseDeletedIcon
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
@@ -8696,10 +8883,10 @@ index 0000000..0605aca
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..fa0cd3e
+index 0000000..4fc9f9c
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,213 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -8787,6 +8974,14 @@ index 0000000..fa0cd3e
 +	void setCustomEditedMark(const QString &value);
 +	[[nodiscard]] bool showForwardDate() const;
 +	void setShowForwardDate(bool value);
++	[[nodiscard]] bool mediaViewerMenuForward() const;
++	void setMediaViewerMenuForward(bool value);
++	[[nodiscard]] bool mediaViewerMenuCopyFrame() const;
++	void setMediaViewerMenuCopyFrame(bool value);
++	[[nodiscard]] bool mediaViewerMenuCopyPhoto() const;
++	void setMediaViewerMenuCopyPhoto(bool value);
++	[[nodiscard]] bool mediaViewerMenuSetProfile() const;
++	void setMediaViewerMenuSetProfile(bool value);
 +	[[nodiscard]] bool useDeletedIcon() const;
 +	void setUseDeletedIcon(bool value);
 +	[[nodiscard]] QString customDeletedMark() const;
@@ -11383,10 +11578,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..dbcc118
+index 0000000..86f5aee
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,1266 @@
+@@ -0,0 +1,1307 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -11477,6 +11672,9 @@ index 0000000..dbcc118
 +		<< "<hideHelp>\n"
 +		<< "  exteraless-chats-cli ai-editor\n"
 +		<< "  exteraless-chats-cli ai-editor-set <0|1>\n"
++		<< "  exteraless-chats-cli media-menu\n"
++		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
++		<< "<copyPhoto> <setProfile>\n"
 +		<< "  exteraless-chats-cli forward-date\n"
 +		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 +		<< "  exteraless-chats-cli edited-mark\n"
@@ -11916,6 +12114,44 @@ index 0000000..dbcc118
 +			return PrintUsage();
 +		}
 +		PrintStickerTime();
++		return 0;
++	}
++	if (mode == QStringLiteral("media-menu")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		const auto &config = Exteraless::Config::Instance();
++		PrintJson(QJsonObject{
++			{ QStringLiteral("forward"), config.mediaViewerMenuForward() },
++			{ QStringLiteral("copyFrame"), config.mediaViewerMenuCopyFrame() },
++			{ QStringLiteral("copyPhoto"), config.mediaViewerMenuCopyPhoto() },
++			{ QStringLiteral("setProfile"),
++				config.mediaViewerMenuSetProfile() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("media-menu-set")) {
++		if (arguments.size() != 6) {
++			return PrintUsage();
++		}
++		auto flags = std::array<bool, 4>();
++		for (auto i = 0; i != 4; ++i) {
++			if (!ReadFlag(arguments[2 + i], &flags[i])) {
++				return PrintUsage();
++			}
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setMediaViewerMenuForward(flags[0]);
++		config.setMediaViewerMenuCopyFrame(flags[1]);
++		config.setMediaViewerMenuCopyPhoto(flags[2]);
++		config.setMediaViewerMenuSetProfile(flags[3]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("forward"), config.mediaViewerMenuForward() },
++			{ QStringLiteral("copyFrame"), config.mediaViewerMenuCopyFrame() },
++			{ QStringLiteral("copyPhoto"), config.mediaViewerMenuCopyPhoto() },
++			{ QStringLiteral("setProfile"),
++				config.mediaViewerMenuSetProfile() },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("forward-date")) {
@@ -12717,10 +12953,10 @@ index 0000000..0b46db4
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..8d9b8e4
+index 0000000..b0d573d
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,3329 @@
+@@ -0,0 +1,3419 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -12894,6 +13130,7 @@ index 0000000..8d9b8e4
 +        ("seek-duration-set without value", ["seek-duration-set"]),
 +        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
 +        ("forward-date-set with wrong count", ["forward-date-set"]),
++        ("media-menu-set with wrong count", ["media-menu-set", "1"]),
 +        ("ghost-schedule-decide with wrong count",
 +         ["ghost-schedule-decide", "1"]),
 +        ("chat-folder without name", ["chat-folder"]),
@@ -13206,7 +13443,7 @@ index 0000000..8d9b8e4
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 59,
++            len(section) == 63,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -13227,7 +13464,7 @@ index 0000000..8d9b8e4
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 64,
++            sum(len(value) for value in exported.values()) == 68,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -13247,7 +13484,7 @@ index 0000000..8d9b8e4
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 64,
++                data.get("applied") == 68,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -13340,6 +13577,10 @@ index 0000000..8d9b8e4
 +            "OEChatsUseEditedIcon": True,
 +            "OEChatsCustomEditedMark": "изм.",
 +            "OEChatsShowForwardDate": True,
++            "OEMediaViewerMenuForward": False,
++            "OEMediaViewerMenuCopyFrame": False,
++            "OEMediaViewerMenuCopyPhoto": True,
++            "OEMediaViewerMenuSetProfile": False,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -13361,7 +13602,7 @@ index 0000000..8d9b8e4
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 64,
++            data.get("applied") == 68,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -13444,6 +13685,16 @@ index 0000000..8d9b8e4
 +            "backup full seek duration",
 +            section.get("OEChatsSeekDuration") == 15,
 +            section.get("OEChatsSeekDuration"))
++        ledger.check(
++            "backup full media menu",
++            section.get("OEMediaViewerMenuForward") is False
++            and section.get("OEMediaViewerMenuCopyFrame") is False
++            and section.get("OEMediaViewerMenuCopyPhoto") is True
++            and section.get("OEMediaViewerMenuSetProfile") is False,
++            (section.get("OEMediaViewerMenuForward"),
++             section.get("OEMediaViewerMenuCopyFrame"),
++             section.get("OEMediaViewerMenuCopyPhoto"),
++             section.get("OEMediaViewerMenuSetProfile")))
 +        ledger.check(
 +            "backup full forward date",
 +            section.get("OEChatsShowForwardDate") is True,
@@ -13583,10 +13834,10 @@ index 0000000..8d9b8e4
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 64",
++            "backup legacy eight completed to 68",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (59, 3, 2),
++             len(sections["mainconfig"])) == (63, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -14418,6 +14669,10 @@ index 0000000..8d9b8e4
 +            "OEChatsUseEditedIcon": True,
 +            "OEChatsCustomEditedMark": "изм.",
 +            "OEChatsShowForwardDate": True,
++            "OEMediaViewerMenuForward": False,
++            "OEMediaViewerMenuCopyFrame": False,
++            "OEMediaViewerMenuCopyPhoto": True,
++            "OEMediaViewerMenuSetProfile": False,
 +        },
 +    }
 +    data = json_call(
@@ -15970,6 +16225,75 @@ index 0000000..8d9b8e4
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_media_menu(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "media-menu-defaults")
++    data = json_call(ledger, cli, ["media-menu"], env, "media-menu defaults")
++    if data is not None:
++        ledger.check(
++            "media menu defaults",
++            data.get("forward") is True
++            and data.get("copyFrame") is True
++            and data.get("copyPhoto") is True
++            and data.get("setProfile") is True,
++            data)
++
++    data = json_call(
++        ledger, cli, ["media-menu-set", "0", "1", "0", "1"], env,
++        "media-menu set")
++    if data is not None:
++        ledger.check(
++            "media menu set",
++            data.get("forward") is False
++            and data.get("copyFrame") is True
++            and data.get("copyPhoto") is False
++            and data.get("setProfile") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["media-menu"], env, "media-menu reload")
++    if reloaded is not None:
++        ledger.check(
++            "media menu persisted",
++            reloaded.get("forward") is False
++            and reloaded.get("copyPhoto") is False,
++            reloaded)
++
++    env = make_env(work / "media-menu-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "mediaViewerMenuItemForward": False,
++            "mediaViewerMenuItemCopyFrame": False,
++            "mediaViewerMenuItemCopyPhoto": False,
++            "mediaViewerMenuItemSetProfilePhoto": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "media-menu alias")
++    if data is not None:
++        ledger.check(
++            "media menu alias applied",
++            data.get("applied") == 4 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["media-menu"], env, "media-menu alias read")
++    if reloaded is not None:
++        ledger.check(
++            "media menu alias values",
++            reloaded.get("forward") is False
++            and reloaded.get("copyFrame") is False
++            and reloaded.get("copyPhoto") is False
++            and reloaded.get("setProfile") is False,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -16008,6 +16332,7 @@ index 0000000..8d9b8e4
 +        seek_duration = check_seek_duration(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
++        media_menu = check_media_menu(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -16038,6 +16363,7 @@ index 0000000..8d9b8e4
 +    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
++    print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(
