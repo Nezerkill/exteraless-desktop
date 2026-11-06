@@ -167,6 +167,11 @@ constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
 constexpr auto kAiEndpoint = "OEAiEndpoint";
 constexpr auto kAiModel = "OEAiModel";
 constexpr auto kAiApiKey = "OEAiApiKey";
+constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
+
+[[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
+	return value.isEmpty() ? QStringLiteral("ru") : value;
+}
 
 [[nodiscard]] int SanitizeAudioBitrate(int value) {
 	switch (value) {
@@ -1311,6 +1316,15 @@ void Config::setAiApiKey(const QString &value) {
 	setValue(kAiApiKey, value);
 }
 
+QString Config::recognitionLanguage() const {
+	return SanitizeRecognitionLanguage(
+		stringValue(kGeneralRecognitionLanguage, QString()));
+}
+
+void Config::setRecognitionLanguage(const QString &value) {
+	setValue(kGeneralRecognitionLanguage, SanitizeRecognitionLanguage(value));
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -1498,7 +1512,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kTranslationDeepLFormality
 			|| key == kAiEndpoint
 			|| key == kAiModel
-			|| key == kAiApiKey) {
+			|| key == kAiApiKey
+			|| key == kGeneralRecognitionLanguage) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

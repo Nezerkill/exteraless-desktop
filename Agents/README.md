@@ -59,7 +59,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (891 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, download-boost, subtitles, avatar-corners, section-radius, backup);
+  (897 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, download-boost, subtitles, avatar-corners, section-radius, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
@@ -98,7 +98,14 @@ sibling-чекаутом: `../exteraless`.
   upstream-цепочкой, провайдеры — `lang/translate_google_provider.cpp` и
   `lang/translate_deepl_provider.cpp`, в экспорт `.extera` ключи не попадают.
   Пункт «AI assistant» правит `OEAiEndpoint`/`OEAiModel` и маскированное поле
-  `OEAiApiKey` (в `.extera` ключ не экспортируется).
+  `OEAiApiKey` (в `.extera` ключ не экспортируется). Пункт «Speech
+  recognition language» хранит язык распознавания в
+  `OEGeneralRecognitionLanguage` (строка, default `ru`; пустое значение →
+  `ru`, алиас `recognitionLanguage`) и выбирает его из шести языков
+  (ru, en, de, fr, es, it); самого распознавания нет — пункт «Transcribe
+  offline» в контекстном меню голосовых показывает тост
+  `lng_media_view_transcribe_offline_na` («Offline model is not installed»),
+  CLI 2 режима (`recognition-language`, `recognition-language-set <code>`).
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
   сообщений, показывает реакции и метки reply/forward/edited, а также
   значок/кастомную метку, прозрачность и цвет (NB-20); inline-показ в чате —
@@ -141,7 +148,7 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 123 desktop-ключа в секциях `exteraconfig`,
+  декодируются. Backup пишет все 130 desktop-ключей в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние. Полосу историй
   над списком чатов скрывает `OEChatsHideStoriesHeader` (default `false`,

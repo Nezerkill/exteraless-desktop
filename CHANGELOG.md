@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-07
+
+- Речь / Vosk-заглушка (NB-51): `OEGeneralRecognitionLanguage` (строка,
+  default `ru`; пустое значение → `ru`) и алиас `recognitionLanguage` задают
+  язык распознавания, санитайзер подставляет `ru` только для пустой строки.
+  В Exteraless Chats пункт «Speech recognition language» открывает
+  `Ui::Radioenum` из шести языков (ru, en, de, fr, es, it) и пишет код в
+  конфиг, а в контекстном меню голосовых пункт «Transcribe offline» показывает
+  тост `lng_media_view_transcribe_offline_na` — распознавания нет, только
+  заглушка. Два lang-ключа `lng_settings_exteraless_recognition_language` и
+  `lng_media_view_transcribe_offline_na`; CLI 2 режима
+  (`recognition-language`, `recognition-language-set <code>`), код при
+  установке тримится и приводится к нижнему регистру, пустой даёт usage;
+  `check_recognition` — 6 проверок (5 + 1 на неверный вызов CLI, группа `cli`
+  не росла — 61); раннеры 897/32/213 PASS (backup 101); `.extera` — 130
+  ключей (125 + 3 + 2, сверено с legacy-кортежем `run_checks`); `kKeysCount`
+  11222 (`kTagsCount` 185); sha256 патча `90e76178…`, `nix flake check` PASS.
+  Ограничения: самого Vosk нет — в nixpkgs его нет, нужна деривация (или
+  whisper/kaldi), поэтому офлайн-распознавания не существует; скачивание
+  моделей, серверная транскрипция как альтернатива и валидация кода языка в
+  CLI (принимается любая непустая строка) — follow-up. Xvfb-смоук не
+  выполнялся.
+
 ## 2026-11-06
 
 - Chats / AI-ассистент, MVP (NB-48): `OEAiEndpoint` (строка, default

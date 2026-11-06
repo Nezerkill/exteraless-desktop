@@ -307,6 +307,9 @@ public:
 	[[nodiscard]] QString aiApiKey() const;
 	void setAiApiKey(const QString &value);
 
+	[[nodiscard]] QString recognitionLanguage() const;
+	void setRecognitionLanguage(const QString &value);
+
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;

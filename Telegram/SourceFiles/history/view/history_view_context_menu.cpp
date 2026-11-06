@@ -525,6 +525,11 @@ void AddDocumentActions(
 				Menu::RateTranscribeCallbackFactory(item)));
 		}
 	}
+	if (document->isVoiceMessage()) {
+		menu->addAction(u"Transcribe offline"_q, [] {
+			Ui::Toast::Show(tr::lng_media_view_transcribe_offline_na(tr::now));
+		});
+	}
 	AddSaveDocumentAction(menu, item, document, list);
 	AddCopyFilename(
 		menu,

@@ -107,7 +107,7 @@ index 811707d..bbd7372 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..61943b8 100644
+index ffc8ec9..36e6ae8 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -119,7 +119,7 @@ index ffc8ec9..61943b8 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,222 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,224 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -340,6 +340,8 @@ index ffc8ec9..61943b8 100644
 +"lng_settings_exteraless_ai_endpoint" = "Endpoint";
 +"lng_settings_exteraless_ai_model" = "Model";
 +"lng_settings_exteraless_ai_key" = "API key";
++"lng_settings_exteraless_recognition_language" = "Speech recognition language";
++"lng_media_view_transcribe_offline_na" = "Offline model is not installed";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -5687,7 +5689,7 @@ index 28e423b..bf0736c 100644
  	updateInnerVisibleArea();
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-index 3e25a13..89e051b 100644
+index 3e25a13..8451997 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 @@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -5728,7 +5730,19 @@ index 3e25a13..89e051b 100644
  	}
  	if (photo->hasAttachedStickers()) {
  		const auto controller = list->controller();
-@@ -530,6 +535,9 @@ void AddDocumentActions(
+@@ -520,6 +525,11 @@ void AddDocumentActions(
+ 				Menu::RateTranscribeCallbackFactory(item)));
+ 		}
+ 	}
++	if (document->isVoiceMessage()) {
++		menu->addAction(u"Transcribe offline"_q, [] {
++			Ui::Toast::Show(tr::lng_media_view_transcribe_offline_na(tr::now));
++		});
++	}
+ 	AddSaveDocumentAction(menu, item, document, list);
+ 	AddCopyFilename(
+ 		menu,
+@@ -530,6 +540,9 @@ void AddDocumentActions(
  void AddPostLinkAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request) {
@@ -5738,7 +5752,7 @@ index 3e25a13..89e051b 100644
  	const auto item = request.item;
  	if (!item
  		|| !item->hasDirectLink()
-@@ -625,6 +633,9 @@ void AddForwardAction(
+@@ -625,6 +638,9 @@ void AddForwardAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5748,7 +5762,7 @@ index 3e25a13..89e051b 100644
  	AddForwardSelectedAction(menu, request, list);
  	AddForwardMessageAction(menu, request, list);
  }
-@@ -827,6 +838,9 @@ bool AddReplyToMessageAction(
+@@ -827,6 +843,9 @@ bool AddReplyToMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5758,7 +5772,7 @@ index 3e25a13..89e051b 100644
  	const auto context = list->elementContext();
  	const auto item = request.quote.item
  		? request.quote.item
-@@ -945,6 +959,9 @@ bool AddEditMessageAction(
+@@ -945,6 +964,9 @@ bool AddEditMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5768,7 +5782,7 @@ index 3e25a13..89e051b 100644
  	if (!HasEditMessageAction(request, list)) {
  		return false;
  	}
-@@ -1010,6 +1027,9 @@ bool AddPinMessageAction(
+@@ -1010,6 +1032,9 @@ bool AddPinMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5778,7 +5792,7 @@ index 3e25a13..89e051b 100644
  	const auto context = list->elementContext();
  	const auto item = request.item;
  	if (!item || !item->isRegular()) {
-@@ -1206,6 +1226,9 @@ void AddDeleteAction(
+@@ -1206,6 +1231,9 @@ void AddDeleteAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5788,7 +5802,7 @@ index 3e25a13..89e051b 100644
  	if (!AddDeleteSelectedAction(menu, request, list)) {
  		AddDeleteMessageAction(menu, request, list);
  	}
-@@ -1245,6 +1268,9 @@ void AddReportAction(
+@@ -1245,6 +1273,9 @@ void AddReportAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5798,7 +5812,7 @@ index 3e25a13..89e051b 100644
  	const auto item = request.item;
  	if (!request.selectedItems.empty()) {
  		return;
-@@ -1314,6 +1340,9 @@ bool AddSelectMessageAction(
+@@ -1314,6 +1345,9 @@ bool AddSelectMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5808,7 +5822,7 @@ index 3e25a13..89e051b 100644
  	const auto item = request.item;
  	if (request.overSelection && !request.selectedItems.empty()) {
  		return false;
-@@ -1402,11 +1431,14 @@ void AddMessageActions(
+@@ -1402,11 +1436,14 @@ void AddMessageActions(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -5824,7 +5838,7 @@ index 3e25a13..89e051b 100644
  	AddDownloadFilesAction(menu, request, list);
  	AddSaveRichHtmlAction(menu, request, list);
  	AddReportAction(menu, request, list);
-@@ -1422,6 +1454,10 @@ void AddMessageActions(
+@@ -1422,6 +1459,10 @@ void AddMessageActions(
  		AddEphemeralAboutAction(menu, request.item);
  	}
  	AddRescheduleAction(menu, request, list);
@@ -5835,7 +5849,7 @@ index 3e25a13..89e051b 100644
  }
  
  void AddCopyLinkAction(
-@@ -1812,7 +1848,8 @@ void FillContextMenuItems(
+@@ -1812,7 +1853,8 @@ void FillContextMenuItems(
  
  	if (request.overSelection
  		&& !list->hasCopyRestrictionForSelected()
@@ -5845,7 +5859,7 @@ index 3e25a13..89e051b 100644
  		const auto text = request.selectedItems.empty()
  			? tr::lng_context_copy_selected(tr::now)
  			: tr::lng_context_copy_selected_items(tr::now);
-@@ -1822,7 +1859,8 @@ void FillContextMenuItems(
+@@ -1822,7 +1864,8 @@ void FillContextMenuItems(
  	}
  	if (request.overSelection
  		&& view
@@ -5855,7 +5869,7 @@ index 3e25a13..89e051b 100644
  		const auto owner = &view->history()->owner();
  		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
  			if (const auto item = owner->message(itemId)) {
-@@ -1878,7 +1916,8 @@ void FillContextMenuItems(
+@@ -1878,7 +1921,8 @@ void FillContextMenuItems(
  			AddDocumentActions(result, document, view->data(), list);
  		}
  		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
@@ -5865,7 +5879,7 @@ index 3e25a13..89e051b 100644
  				const auto asGroup = (request.pointState != PointState::GroupPart);
  				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
-@@ -1905,7 +1944,8 @@ void FillContextMenuItems(
+@@ -1905,7 +1949,8 @@ void FillContextMenuItems(
  				: item->originalText();
  			if ((!item->translation() || !item->history()->translatedTo())
  				&& !translate.text.isEmpty()
@@ -5875,7 +5889,7 @@ index 3e25a13..89e051b 100644
  				result->addAction(tr::lng_context_translate(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
  						list->controller()->show(Box(
-@@ -1919,6 +1959,14 @@ void FillContextMenuItems(
+@@ -1919,6 +1964,14 @@ void FillContextMenuItems(
  					}
  				}, &st::menuIconTranslate);
  			}
@@ -5890,7 +5904,7 @@ index 3e25a13..89e051b 100644
  		}
  	}
  
-@@ -2367,7 +2415,8 @@ void AddPollActions(
+@@ -2367,7 +2420,8 @@ void AddPollActions(
  		for (const auto &answer : poll->answers) {
  			text.append('\n').append(radio).append(answer.text);
  		}
@@ -8828,10 +8842,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..c23c894
+index 0000000..807bfd2
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2753 @@
+@@ -0,0 +1,2834 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -9742,6 +9756,87 @@ index 0000000..c23c894
 +			}));
 +		},
 +		.keywords = { u"audio"_q, u"bitrate"_q, u"opus"_q },
++	});
++
++	const auto recognitionLanguageCodes = std::vector<QString>{
++		u"ru"_q,
++		u"en"_q,
++		u"de"_q,
++		u"fr"_q,
++		u"es"_q,
++		u"it"_q,
++	};
++	const auto recognitionLanguageName = [](const QString &code) {
++		if (code == u"en"_q) {
++			return u"English"_q;
++		} else if (code == u"de"_q) {
++			return u"German"_q;
++		} else if (code == u"fr"_q) {
++			return u"French"_q;
++		} else if (code == u"es"_q) {
++			return u"Spanish"_q;
++		} else if (code == u"it"_q) {
++			return u"Italian"_q;
++		}
++		return u"Russian"_q;
++	};
++	const auto recognitionLanguageIndex = [=](const QString &code) {
++		for (auto i = 0; i != int(recognitionLanguageCodes.size()); ++i) {
++			if (recognitionLanguageCodes[i] == code) {
++				return i;
++			}
++		}
++		return 0;
++	};
++	const auto recognitionLanguage = std::make_shared<rpl::variable<QString>>(
++		recognitionLanguageName(
++			Exteraless::Config::Instance().recognitionLanguage()));
++	builder.addButton({
++		.id = u"exteraless/recognition-language"_q,
++		.title = tr::lng_settings_exteraless_recognition_language(),
++		.st = &st::settingsButtonNoIcon,
++		.label = recognitionLanguage->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				recognitionLanguageIndex(
++					Exteraless::Config::Instance().recognitionLanguage()));
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_recognition_language());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto i = 0; i != int(recognitionLanguageCodes.size()); ++i) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							i,
++							recognitionLanguageName(
++								recognitionLanguageCodes[i]),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int index) {
++					const auto code = recognitionLanguageCodes[index];
++					Exteraless::Config::Instance()
++						.setRecognitionLanguage(code);
++					recognitionLanguage->force_assign(
++						recognitionLanguageName(code));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = {
++			u"recognition"_q,
++			u"speech"_q,
++			u"voice"_q,
++			u"language"_q,
++		},
 +	});
 +
 +	builder.addSubsectionTitle({
@@ -13346,10 +13441,10 @@ index 0000000..eb180ae
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..58b25bc
+index 0000000..49d611b
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1173 @@
+@@ -0,0 +1,1181 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -13636,6 +13731,8 @@ index 0000000..58b25bc
 +constexpr auto kAiEndpointAlias = "aiEndpoint";
 +constexpr auto kAiModelAlias = "aiModel";
 +constexpr auto kAiApiKeyAlias = "aiApiKey";
++constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
++constexpr auto kRecognitionLanguageAlias = "recognitionLanguage";
 +
 +constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 +constexpr auto kShowReportButton = "showReportButton";
@@ -13899,6 +13996,7 @@ index 0000000..58b25bc
 +	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 +	extera[kAiEndpoint] = config.aiEndpoint();
 +	extera[kAiModel] = config.aiModel();
++	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -14497,6 +14595,11 @@ index 0000000..58b25bc
 +			&& value.isString()) {
 +			// WHY: old backups carry the secret; import accepts, export omits.
 +			config.setAiApiKey(value.toString());
++		} else if ((key == kGeneralRecognitionLanguage
++			|| key == kRecognitionLanguageAlias)
++			&& value.isString()
++			&& !value.toString().isEmpty()) {
++			config.setRecognitionLanguage(value.toString());
 +		} else {
 +			return false;
 +		}
@@ -14647,10 +14750,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..ee58d60
+index 0000000..22ace3e
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1675 @@
+@@ -0,0 +1,1690 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -14820,6 +14923,11 @@ index 0000000..ee58d60
 +constexpr auto kAiEndpoint = "OEAiEndpoint";
 +constexpr auto kAiModel = "OEAiModel";
 +constexpr auto kAiApiKey = "OEAiApiKey";
++constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
++
++[[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
++	return value.isEmpty() ? QStringLiteral("ru") : value;
++}
 +
 +[[nodiscard]] int SanitizeAudioBitrate(int value) {
 +	switch (value) {
@@ -15964,6 +16072,15 @@ index 0000000..ee58d60
 +	setValue(kAiApiKey, value);
 +}
 +
++QString Config::recognitionLanguage() const {
++	return SanitizeRecognitionLanguage(
++		stringValue(kGeneralRecognitionLanguage, QString()));
++}
++
++void Config::setRecognitionLanguage(const QString &value) {
++	setValue(kGeneralRecognitionLanguage, SanitizeRecognitionLanguage(value));
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -16151,7 +16268,8 @@ index 0000000..ee58d60
 +			|| key == kTranslationDeepLFormality
 +			|| key == kAiEndpoint
 +			|| key == kAiModel
-+			|| key == kAiApiKey) {
++			|| key == kAiApiKey
++			|| key == kGeneralRecognitionLanguage) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -16328,10 +16446,10 @@ index 0000000..ee58d60
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..bdcc96e
+index 0000000..2addbaf
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,338 @@
+@@ -0,0 +1,341 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -16640,6 +16758,9 @@ index 0000000..bdcc96e
 +	void setAiModel(const QString &value);
 +	[[nodiscard]] QString aiApiKey() const;
 +	void setAiApiKey(const QString &value);
++
++	[[nodiscard]] QString recognitionLanguage() const;
++	void setRecognitionLanguage(const QString &value);
 +
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 +	void setPluginEnabled(const QString &id, bool enabled);
@@ -19578,10 +19699,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..25de124
+index 0000000..791259b
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2831 @@
+@@ -0,0 +1,2859 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -19763,6 +19884,8 @@ index 0000000..25de124
 +		<< "<key>\n"
 +		<< "  exteraless-chats-cli translation-formality\n"
 +		<< "  exteraless-chats-cli translation-formality-set <0..2>\n"
++		<< "  exteraless-chats-cli recognition-language\n"
++		<< "  exteraless-chats-cli recognition-language-set <code>\n"
 +		<< "  exteraless-chats-cli ai-config\n"
 +		<< "  exteraless-chats-cli ai-config-set-endpoint <url>\n"
 +		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
@@ -19919,6 +20042,13 @@ index 0000000..25de124
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("formality"),
 +			Exteraless::Config::Instance().translationDeepLFormality() },
++	});
++}
++
++void PrintRecognitionLanguage() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("language"),
++			Exteraless::Config::Instance().recognitionLanguage() },
 +	});
 +}
 +
@@ -21237,6 +21367,25 @@ index 0000000..25de124
 +		}
 +		Exteraless::Config::Instance().setTranslationDeepLFormality(value);
 +		PrintTranslationFormality();
++		return 0;
++	}
++	if (mode == QStringLiteral("recognition-language")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintRecognitionLanguage();
++		return 0;
++	}
++	if (mode == QStringLiteral("recognition-language-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto code = arguments[2].trimmed().toLower();
++		if (code.isEmpty()) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setRecognitionLanguage(code);
++		PrintRecognitionLanguage();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("ai-config")) {
@@ -22574,10 +22723,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..5014fac
+index 0000000..71cec6c
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6823 @@
+@@ -0,0 +1,6895 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -23201,7 +23350,7 @@ index 0000000..5014fac
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 124,
++            len(section) == 125,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -23222,7 +23371,7 @@ index 0000000..5014fac
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 129,
++            sum(len(value) for value in exported.values()) == 130,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -23242,7 +23391,7 @@ index 0000000..5014fac
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 129,
++                data.get("applied") == 130,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -23402,6 +23551,7 @@ index 0000000..5014fac
 +            "OETranslationDeepLFormality": 1,
 +            "OEAiEndpoint": "https://full.test/v1",
 +            "OEAiModel": "full-model",
++            "OEGeneralRecognitionLanguage": "de",
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -23423,7 +23573,7 @@ index 0000000..5014fac
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 129,
++            data.get("applied") == 130,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -23717,10 +23867,10 @@ index 0000000..5014fac
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 124",
++            "backup legacy eight completed to 125",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (124, 3, 2),
++             len(sections["mainconfig"])) == (125, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -29241,6 +29391,75 @@ index 0000000..5014fac
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_recognition(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "recognition-defaults")
++    data = json_call(
++        ledger, cli, ["recognition-language"], env,
++        "recognition language defaults")
++    if data is not None:
++        ledger.check(
++            "recognition language default ru",
++            data.get("language") == "ru",
++            data)
++
++    data = json_call(
++        ledger, cli, ["recognition-language-set", "en"], env,
++        "recognition language set en")
++    if data is not None:
++        ledger.check(
++            "recognition language set en",
++            data.get("language") == "en",
++            data)
++    reloaded = json_call(
++        ledger, cli, ["recognition-language"], env,
++        "recognition language reload")
++    if reloaded is not None:
++        ledger.check(
++            "recognition language persisted",
++            reloaded.get("language") == "en",
++            reloaded)
++
++    env = make_env(work / "recognition-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "recognitionLanguage": "de",
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "recognition alias import")
++    if data is not None:
++        ledger.check(
++            "recognition alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["recognition-language"], env,
++        "recognition alias reload")
++    if reloaded is not None:
++        ledger.check(
++            "recognition alias value",
++            reloaded.get("language") == "de",
++            reloaded)
++
++    for name, arguments in [
++            ("recognition language set without value",
++             ["recognition-language-set"])]:
++        result = run(cli, arguments, env=env)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -29311,6 +29530,7 @@ index 0000000..5014fac
 +        update_channel = check_update_channel(ledger, cli, work)
 +        translation = check_translation(ledger, cli, work)
 +        ai = check_ai(ledger, cli, work)
++        recognition = check_recognition(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
@@ -29387,6 +29607,7 @@ index 0000000..5014fac
 +          f"{update_channel[0] - update_channel[1]} passed")
 +    print(f"translation: {translation[0] - translation[1]} passed")
 +    print(f"ai: {ai[0] - ai[1]} passed")
++    print(f"recognition: {recognition[0] - recognition[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")

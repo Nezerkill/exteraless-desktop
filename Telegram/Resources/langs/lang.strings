@@ -9401,5 +9401,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_ai_endpoint" = "Endpoint";
 "lng_settings_exteraless_ai_model" = "Model";
 "lng_settings_exteraless_ai_key" = "API key";
+"lng_settings_exteraless_recognition_language" = "Speech recognition language";
+"lng_media_view_transcribe_offline_na" = "Offline model is not installed";
 
 // Keys finished

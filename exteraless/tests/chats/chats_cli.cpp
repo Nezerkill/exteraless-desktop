@@ -179,6 +179,8 @@ using Exteraless::ChatsSettings;
 		<< "<key>\n"
 		<< "  exteraless-chats-cli translation-formality\n"
 		<< "  exteraless-chats-cli translation-formality-set <0..2>\n"
+		<< "  exteraless-chats-cli recognition-language\n"
+		<< "  exteraless-chats-cli recognition-language-set <code>\n"
 		<< "  exteraless-chats-cli ai-config\n"
 		<< "  exteraless-chats-cli ai-config-set-endpoint <url>\n"
 		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
@@ -335,6 +337,13 @@ void PrintTranslationFormality() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("formality"),
 			Exteraless::Config::Instance().translationDeepLFormality() },
+	});
+}
+
+void PrintRecognitionLanguage() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("language"),
+			Exteraless::Config::Instance().recognitionLanguage() },
 	});
 }
 
@@ -1653,6 +1662,25 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setTranslationDeepLFormality(value);
 		PrintTranslationFormality();
+		return 0;
+	}
+	if (mode == QStringLiteral("recognition-language")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintRecognitionLanguage();
+		return 0;
+	}
+	if (mode == QStringLiteral("recognition-language-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto code = arguments[2].trimmed().toLower();
+		if (code.isEmpty()) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setRecognitionLanguage(code);
+		PrintRecognitionLanguage();
 		return 0;
 	}
 	if (mode == QStringLiteral("ai-config")) {

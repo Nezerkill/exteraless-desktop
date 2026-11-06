@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 124,
+            len(section) == 125,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 129,
+            sum(len(value) for value in exported.values()) == 130,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 129,
+                data.get("applied") == 130,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -822,6 +822,7 @@ def check_backup(ledger, cli, work):
             "OETranslationDeepLFormality": 1,
             "OEAiEndpoint": "https://full.test/v1",
             "OEAiModel": "full-model",
+            "OEGeneralRecognitionLanguage": "de",
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -843,7 +844,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 129,
+            data.get("applied") == 130,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1137,10 +1138,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 124",
+            "backup legacy eight completed to 125",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (124, 3, 2),
+             len(sections["mainconfig"])) == (125, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6661,6 +6662,75 @@ def check_ai(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_recognition(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "recognition-defaults")
+    data = json_call(
+        ledger, cli, ["recognition-language"], env,
+        "recognition language defaults")
+    if data is not None:
+        ledger.check(
+            "recognition language default ru",
+            data.get("language") == "ru",
+            data)
+
+    data = json_call(
+        ledger, cli, ["recognition-language-set", "en"], env,
+        "recognition language set en")
+    if data is not None:
+        ledger.check(
+            "recognition language set en",
+            data.get("language") == "en",
+            data)
+    reloaded = json_call(
+        ledger, cli, ["recognition-language"], env,
+        "recognition language reload")
+    if reloaded is not None:
+        ledger.check(
+            "recognition language persisted",
+            reloaded.get("language") == "en",
+            reloaded)
+
+    env = make_env(work / "recognition-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "recognitionLanguage": "de",
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "recognition alias import")
+    if data is not None:
+        ledger.check(
+            "recognition alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["recognition-language"], env,
+        "recognition alias reload")
+    if reloaded is not None:
+        ledger.check(
+            "recognition alias value",
+            reloaded.get("language") == "de",
+            reloaded)
+
+    for name, arguments in [
+            ("recognition language set without value",
+             ["recognition-language-set"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -6731,6 +6801,7 @@ def main():
         update_channel = check_update_channel(ledger, cli, work)
         translation = check_translation(ledger, cli, work)
         ai = check_ai(ledger, cli, work)
+        recognition = check_recognition(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
@@ -6807,6 +6878,7 @@ def main():
           f"{update_channel[0] - update_channel[1]} passed")
     print(f"translation: {translation[0] - translation[1]} passed")
     print(f"ai: {ai[0] - ai[1]} passed")
+    print(f"recognition: {recognition[0] - recognition[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")

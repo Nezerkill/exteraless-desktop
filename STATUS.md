@@ -1,6 +1,6 @@
 # Статус порта Exteraless Desktop
 
-Обновлено: 2026-11-06.
+Обновлено: 2026-11-07.
 
 ## Готово
 
@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 891 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 897 проверок PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,11 +111,33 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  19 update-channel, 32 translation, 23 ai, 10 download-boost,
+  19 update-channel, 32 translation, 23 ai, 6 recognition, 10 download-boost,
   48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   101 backup);
   плагины без изменений — 32 и 213 проверок.
+- Речь / Vosk-заглушка (NB-51): `OEGeneralRecognitionLanguage` (строка,
+  default `ru`; пустое значение → `ru`) и алиас `recognitionLanguage` хранят
+  язык распознавания — санитайзер подставляет `ru` только для пустой строки,
+  список языков не проверяется. В Exteraless Chats пункт «Speech recognition
+  language» открывает `Ui::Radioenum` из шести языков (ru, en, de, fr, es,
+  it) и пишет код в конфиг; в контекстном меню голосовых пункт «Transcribe
+  offline» показывает тост `lng_media_view_transcribe_offline_na` —
+  распознавания нет, это заглушка. Два lang-ключа
+  (`lng_settings_exteraless_recognition_language`,
+  `lng_media_view_transcribe_offline_na`); CLI 2 режима
+  (`recognition-language`, `recognition-language-set <code>`), код при
+  установке тримится и приводится к нижнему регистру, пустой даёт usage;
+  `check_recognition` — 6 проверок (5 + 1 на неверный вызов CLI, группа
+  `cli` не росла — 61; счётчик выше 897, backup 101, плагины 32 и 213 без
+  изменений); `.extera` — 130 ключей (125 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`); `kKeysCount` 11222 (`kTagsCount` 185);
+  sha256 патча `90e76178…`, `nix flake check` PASS. Ограничения: самого Vosk
+  нет — в nixpkgs его нет, нужна деривация (или whisper/kaldi), поэтому
+  офлайн-распознавания не существует; Xvfb-смоук не выполнялся. Follow-up:
+  подключить Vosk/whisper, скачивание моделей, серверная транскрипция как
+  альтернатива и валидация кода языка в CLI (сейчас принимается любая
+  непустая строка).
 - AI-ассистент, MVP (NB-48): `OEAiEndpoint` (строка, default
   `https://api.openai.com/v1`), `OEAiModel` (строка, default `gpt-4o-mini`) и
   `OEAiApiKey` (строка, default пусто; секрет — в `.extera`/бэкап не

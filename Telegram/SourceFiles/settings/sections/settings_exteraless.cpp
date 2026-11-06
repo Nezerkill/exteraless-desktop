@@ -910,6 +910,87 @@ const auto kMeta = Builder::BuildHelper({
 		.keywords = { u"audio"_q, u"bitrate"_q, u"opus"_q },
 	});
 
+	const auto recognitionLanguageCodes = std::vector<QString>{
+		u"ru"_q,
+		u"en"_q,
+		u"de"_q,
+		u"fr"_q,
+		u"es"_q,
+		u"it"_q,
+	};
+	const auto recognitionLanguageName = [](const QString &code) {
+		if (code == u"en"_q) {
+			return u"English"_q;
+		} else if (code == u"de"_q) {
+			return u"German"_q;
+		} else if (code == u"fr"_q) {
+			return u"French"_q;
+		} else if (code == u"es"_q) {
+			return u"Spanish"_q;
+		} else if (code == u"it"_q) {
+			return u"Italian"_q;
+		}
+		return u"Russian"_q;
+	};
+	const auto recognitionLanguageIndex = [=](const QString &code) {
+		for (auto i = 0; i != int(recognitionLanguageCodes.size()); ++i) {
+			if (recognitionLanguageCodes[i] == code) {
+				return i;
+			}
+		}
+		return 0;
+	};
+	const auto recognitionLanguage = std::make_shared<rpl::variable<QString>>(
+		recognitionLanguageName(
+			Exteraless::Config::Instance().recognitionLanguage()));
+	builder.addButton({
+		.id = u"exteraless/recognition-language"_q,
+		.title = tr::lng_settings_exteraless_recognition_language(),
+		.st = &st::settingsButtonNoIcon,
+		.label = recognitionLanguage->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				recognitionLanguageIndex(
+					Exteraless::Config::Instance().recognitionLanguage()));
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_recognition_language());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto i = 0; i != int(recognitionLanguageCodes.size()); ++i) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							i,
+							recognitionLanguageName(
+								recognitionLanguageCodes[i]),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int index) {
+					const auto code = recognitionLanguageCodes[index];
+					Exteraless::Config::Instance()
+						.setRecognitionLanguage(code);
+					recognitionLanguage->force_assign(
+						recognitionLanguageName(code));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = {
+			u"recognition"_q,
+			u"speech"_q,
+			u"voice"_q,
+			u"language"_q,
+		},
+	});
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
 		.title = tr::lng_settings_exteraless_ghost(),

@@ -284,6 +284,8 @@ constexpr auto kAiApiKey = "OEAiApiKey";
 constexpr auto kAiEndpointAlias = "aiEndpoint";
 constexpr auto kAiModelAlias = "aiModel";
 constexpr auto kAiApiKeyAlias = "aiApiKey";
+constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
+constexpr auto kRecognitionLanguageAlias = "recognitionLanguage";
 
 constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 constexpr auto kShowReportButton = "showReportButton";
@@ -547,6 +549,7 @@ QString BuildBackup() {
 	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 	extera[kAiEndpoint] = config.aiEndpoint();
 	extera[kAiModel] = config.aiModel();
+	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -1145,6 +1148,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 			&& value.isString()) {
 			// WHY: old backups carry the secret; import accepts, export omits.
 			config.setAiApiKey(value.toString());
+		} else if ((key == kGeneralRecognitionLanguage
+			|| key == kRecognitionLanguageAlias)
+			&& value.isString()
+			&& !value.toString().isEmpty()) {
+			config.setRecognitionLanguage(value.toString());
 		} else {
 			return false;
 		}
