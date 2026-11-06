@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 818 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 825 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -112,8 +112,32 @@
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
   19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
-  8 header-style, 7 spoilers-direct, 101 backup); плагины без изменений —
-  32 и 213 проверок.
+  8 header-style, 7 spoilers-direct, 7 formatting-buttons, 101 backup);
+  плагины без изменений — 32 и 213 проверок.
+- Тулбар форматирования (NB-89, вторая половина):
+  `OEChatsShowFormattingButtons` (bool, default `false`, алиас
+  `showFormattingButtons`) показывает над полем ввода ряд из восьми
+  `Ui::LinkButton` — B, I, U, S, `</>`, `⊘`, `❝` и ссылка. Теговые кнопки
+  вызывают `Ui::InputField::toggleCurrentMarkdownTag` только при
+  `markdownEnabledState().enabledForTag(tag)`, последняя —
+  `editCurrentMarkdownLink`; у кнопок `Qt::NoFocus`, accessible name из
+  `lng_menu_formatting_*`, шаг — `st::defaultLinkButton.font->height / 2`.
+  Видимость пересчитывает `updateFormattingButtons` (вызовы из
+  `initKeyHandler` и `updateControlsVisibility`), высота ряда входит в
+  `updateHeight`, а `updateControlsGeometry` поднимает шапку на его высоту.
+  Тумблер «Show formatting buttons» в Chats, один lang-ключ
+  `lng_settings_exteraless_chats_show_formatting_buttons`, CLI
+  `formatting-buttons`/`formatting-buttons-set`, `check_formatting_buttons` —
+  7 проверок, две из них на неверный вызов CLI (счётчик выше 825, CLI 61,
+  backup 101, плагины 32 и 213 без изменений); `.extera` — 123 ключа
+  (118 + 3 + 2, сверено с legacy-кортежем `run_checks`), экспортируется как
+  `showFormattingButtons`, импорт принимает и
+  `OEChatsShowFormattingButtons`; `kKeysCount` 11206 (`kTagsCount` 185);
+  sha256 патча `e81c0789…`, `nix flake check` PASS. Ограничения: ряд
+  появляется при следующем обновлении видимости контролов, перезапуск не
+  нужен; глифы `⊘` и `❝` — компромисс `LinkButton` (иконок нет);
+  markdown-парсер и подсветка синтаксиса не делались; Xvfb-смоук не
+  выполнялся.
 - Стили шапки чата (NB-63): `OEChatsChatHeaderStyle` (int `0..2`, default `0`;
   `0` — upstream, `1` — iOS-центровка, `2` — M3) центрирует имя и статус шапки
   внутри доступной ширины (`headerAvail` — `width()` минус `_leftTaken` и
@@ -159,8 +183,7 @@
   sha256 патча `cfa7a617…`, `nix flake check` PASS. Ограничения: спойлер
   раскрывается после перестройки текста, а не мгновенно — открытый чат
   обновится на ближайшем событии; счётчики и превью чувствительного, платного
-  и TTL-медиа остаются как в upstream; Xvfb-смоук не выполнялся. Тулбар
-  форматирования (вторая половина NB-89) не сделан — follow-up.
+  и TTL-медиа остаются как в upstream; Xvfb-смоук не выполнялся..
 - Мини-аватарки отправителей (NB-62): `OEChatsSenderMiniAvatars` (bool,
   default `false`, алиас `senderMiniAvatars`) рисует мини-аватарку отправителя
   в превью диалога. Пейнт — в `PaintRow` (`dialogs/ui/dialogs_layout.cpp`) перед

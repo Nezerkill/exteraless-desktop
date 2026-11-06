@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 117,
+            len(section) == 118,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 122,
+            sum(len(value) for value in exported.values()) == 123,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 122,
+                data.get("applied") == 123,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -813,6 +813,7 @@ def check_backup(ledger, cli, work):
             "showIdAndDc": True,
             "zalgoFilter": True,
             "showSpoilersDirectly": True,
+            "showFormattingButtons": True,
             "OEGeneralUsePersianCalendar": True,
             "OEGeneralPersianCalendarLatin": True,
         },
@@ -836,7 +837,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 122,
+            data.get("applied") == 123,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1130,10 +1131,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 117",
+            "backup legacy eight completed to 118",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (117, 3, 2),
+             len(sections["mainconfig"])) == (118, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -2949,6 +2950,72 @@ def check_spoilers_direct(ledger, cli, work):
              ["spoilers-direct-set"]),
             ("spoilers-direct-set invalid value",
              ["spoilers-direct-set", "2"])):
+        result = run(cli, arguments)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_formatting_buttons(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "formatting-buttons-defaults")
+    data = json_call(
+        ledger, cli, ["formatting-buttons"], env,
+        "formatting-buttons defaults")
+    if data is not None:
+        ledger.check(
+            "formatting buttons default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["formatting-buttons-set", "1"], env,
+        "formatting-buttons set")
+    if data is not None:
+        ledger.check("formatting buttons set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["formatting-buttons"], env,
+        "formatting-buttons reload")
+    if reloaded is not None:
+        ledger.check(
+            "formatting buttons persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "formatting-buttons-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"showFormattingButtons": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "formatting-buttons alias")
+    if data is not None:
+        ledger.check(
+            "formatting buttons alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["formatting-buttons"], env,
+        "formatting-buttons alias read")
+    if reloaded is not None:
+        ledger.check(
+            "formatting buttons alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    for name, arguments in (
+            ("formatting-buttons-set with wrong count",
+             ["formatting-buttons-set"]),
+            ("formatting-buttons-set invalid value",
+             ["formatting-buttons-set", "2"])):
         result = run(cli, arguments)
         ledger.check(
             f"cli {name}",
@@ -6115,6 +6182,7 @@ def main():
         pangu = check_pangu(ledger, cli, work)
         zalgo = check_zalgo(ledger, cli, work)
         spoilers_direct = check_spoilers_direct(ledger, cli, work)
+        formatting_buttons = check_formatting_buttons(ledger, cli, work)
         silent = check_silent(ledger, cli, work)
         sections = check_settings_sections(ledger, cli, work)
         ai_editor = check_ai_editor(ledger, cli, work)
@@ -6176,6 +6244,8 @@ def main():
     print(f"zalgo: {zalgo[0] - zalgo[1]} passed")
     print(f"spoilers-direct: "
           f"{spoilers_direct[0] - spoilers_direct[1]} passed")
+    print(f"formatting-buttons: "
+          f"{formatting_buttons[0] - formatting_buttons[1]} passed")
     print(f"silent: {silent[0] - silent[1]} passed")
     print(f"sections: {sections[0] - sections[1]} passed")
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")

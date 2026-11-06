@@ -481,9 +481,21 @@ link-filter в `InitElementTextPart`, тот же флаг на `_textCache` в
 (`data/data_media_types.cpp`) различает случаи: спойлер снимается только у
 обычного пользовательского медиа, а TTL, `isMediaSensitive()` и платное медиа
 (`invoice()->isPaidMedia`) его сохраняют, `hasSpoiler()` не тронут. В desktop
-из остального — только upstream-поведение (markdown при вставке, ссылки);
-тулбар форматирования, markdown-парсер и подсветка синтаксиса (вторая половина
-NB-89) отсутствуют.
+из остального — только upstream-поведение (markdown при вставке, ссылки).
+Тулбар форматирования — ✅ NB-89 (вторая половина):
+`OEChatsShowFormattingButtons` (bool, default `false`, алиас
+`showFormattingButtons`) показывает над полем ввода ряд из восьми
+`Ui::LinkButton` (B, I, U, S, `</>`, `⊘`, `❝` и ссылка); теговые кнопки
+переиспользуют `Ui::InputField::toggleCurrentMarkdownTag` (только при
+`markdownEnabledState().enabledForTag(tag)`), последняя —
+`editCurrentMarkdownLink`; у кнопок `Qt::NoFocus`, accessible name берётся из
+готовых `lng_menu_formatting_*`. Видимость по ключу пересчитывает
+`updateFormattingButtons`, высота ряда входит в `updateHeight` и поднимает
+шапку в `updateControlsGeometry`, тумблер «Show formatting buttons» в Chats,
+один lang-ключ, CLI `formatting-buttons`/`formatting-buttons-set`; глифы
+`⊘`/`❝` — компромисс `LinkButton` (иконок нет). Выбора markdown-парсера,
+порядка и состава кнопок (`showText*`, `textStyleOrder`) и подсветки
+синтаксиса (`syntaxhighlight/*`) по-прежнему нет.
 
 ### 6.19 Речь: Vosk и транскрипция
 

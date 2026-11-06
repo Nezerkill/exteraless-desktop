@@ -2,6 +2,29 @@
 
 ## 2026-11-06
 
+- Chats / Тулбар форматирования (NB-89, вторая половина):
+  `OEChatsShowFormattingButtons` (bool, default `false`, алиас
+  `showFormattingButtons`) показывает над полем ввода ряд из восьми
+  `Ui::LinkButton`: B, I, U, S, `</>`, `⊘`, `❝` и ссылка. Теговые кнопки
+  переиспользуют `Ui::InputField::toggleCurrentMarkdownTag` (только когда
+  `markdownEnabledState().enabledForTag(tag)`), последняя —
+  `editCurrentMarkdownLink`; фокус у поля не отбирается (`Qt::NoFocus`),
+  accessible name берётся из готовых `lng_menu_formatting_*`, а шаг между
+  кнопками — `st::defaultLinkButton.font->height / 2`. Видимость решает
+  `updateFormattingButtons` (вызовы из `initKeyHandler` и
+  `updateControlsVisibility`), высота ряда входит в `updateHeight`, а
+  `updateControlsGeometry` поднимает шапку на его высоту. Тумблер «Show
+  formatting buttons» в Chats, один lang-ключ
+  `lng_settings_exteraless_chats_show_formatting_buttons`, CLI
+  `formatting-buttons` и `formatting-buttons-set`,
+  `check_formatting_buttons` — 7 проверок (две на неверный вызов CLI, группа
+  `cli` не росла — 61); раннеры 825/32/213 PASS (backup 101); `.extera` — 123
+  ключа (118 + 3 + 2, сверено с legacy-кортежем `run_checks`), ключ пишется
+  как `showFormattingButtons`; `kKeysCount` 11206 (`kTagsCount` 185); sha256
+  патча `e81c0789…`, `nix flake check` PASS. Ограничения: ряд появляется при
+  следующем обновлении видимости контролов — перезапуск не нужен; глифы `⊘` и
+  `❝` — компромисс `LinkButton` (иконок нет); markdown-парсер и подсветка
+  синтаксиса не делались; Xvfb-смоук не выполнялся.
 - Chats / Спойлеры сразу (NB-89, первая половина): `OEChatsShowSpoilersDirectly`
   (bool, default `false`, алиас `showSpoilersDirectly`) раскрывает спойлеры
   без нажатия. В `InitElementTextPart` режим добавляет
@@ -21,8 +44,7 @@
   Ограничения: спойлер раскрывается после перестройки текста, а не мгновенно —
   открытый чат обновится на ближайшем событии; счётчики и превью
   чувствительного, платного и TTL-медиа остаются как в upstream; Xvfb-смоук не
-  выполнялся. Тулбар форматирования (вторая половина NB-89) не сделан —
-  follow-up.
+  выполнялся..
 - Chats / Стили шапки чата (NB-63): `OEChatsChatHeaderStyle` (int `0..2`,
   default `0`; `0` — upstream, `1` — iOS-центровка, `2` — M3) перестраивает
   шапку чата. При `1` и `2` имя и статус центрируются внутри доступной ширины

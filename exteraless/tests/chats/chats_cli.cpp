@@ -102,6 +102,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli zalgo-tags <text> <offset> <length>\n"
 		<< "  exteraless-chats-cli spoilers-direct\n"
 		<< "  exteraless-chats-cli spoilers-direct-set <0|1>\n"
+		<< "  exteraless-chats-cli formatting-buttons\n"
+		<< "  exteraless-chats-cli formatting-buttons-set <0|1>\n"
 		<< "  exteraless-chats-cli silent\n"
 		<< "  exteraless-chats-cli silent-set <0|1>\n"
 		<< "  exteraless-chats-cli settings-sections\n"
@@ -2131,6 +2133,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		Exteraless::Config::Instance().setShowSpoilersDirectly(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("formatting-buttons")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().showFormattingButtons() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("formatting-buttons-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setShowFormattingButtons(value);
 		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}

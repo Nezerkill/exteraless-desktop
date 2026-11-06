@@ -273,6 +273,8 @@ public:
 	void setZalgoFilter(bool value);
 	[[nodiscard]] bool showSpoilersDirectly() const;
 	void setShowSpoilersDirectly(bool value);
+	[[nodiscard]] bool showFormattingButtons() const;
+	void setShowFormattingButtons(bool value);
 	void setChatsMenuReply(bool value);
 	void setChatsMenuEdit(bool value);
 	void setChatsMenuPin(bool value);

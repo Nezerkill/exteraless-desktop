@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..d0ac679 100644
+index ffc8ec9..a9d2f1f 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..d0ac679 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,207 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,208 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -170,6 +170,7 @@ index ffc8ec9..d0ac679 100644
 +"lng_settings_exteraless_chats_pangu" = "Add spaces between CJK and Latin on send";
 +"lng_settings_exteraless_chats_zalgo_filter" = "Filter Zalgo text";
 +"lng_settings_exteraless_chats_show_spoilers_directly" = "Show spoilers without tapping";
++"lng_settings_exteraless_chats_show_formatting_buttons" = "Show formatting buttons";
 +"lng_settings_exteraless_chats_silent_by_default" = "Send messages silently by default";
 +"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 +"lng_settings_exteraless_chats_hide_gift" = "Hide the Gift button in profiles";
@@ -4996,7 +4997,7 @@ index c4b790a..a7351bb 100644
  	QPointer<Ui::IconButton> _giftToChannel;
  	QPointer<Ui::IconButton> _directMessage;
 diff --git a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
-index f95a351..6f65edd 100644
+index f95a351..d82263c 100644
 --- a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
 +++ b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
 @@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -5064,7 +5065,24 @@ index f95a351..6f65edd 100644
  constexpr auto kCommonModifiers = 0
  	| Qt::ShiftModifier
  	| Qt::MetaModifier
-@@ -3278,6 +3329,8 @@ void ComposeControls::initField() {
+@@ -2845,6 +2896,7 @@ void ComposeControls::init() {
+ 	}
+ 	_tabbedSelectorToggle->setAccessibleName(tr::lng_emoji_sticker_gif(tr::now));
+ 
++	initFormattingButtons();
+ 	initField();
+ 	initTabbedSelector();
+ 	initSendButton();
+@@ -3210,6 +3262,8 @@ void ComposeControls::initKeyHandler() {
+ 			? Result::Cancel
+ 			: Result::Continue;
+ 	});
++
++	updateFormattingButtons();
+ }
+ 
+ void ComposeControls::initField() {
+@@ -3278,6 +3332,8 @@ void ComposeControls::initField() {
  	_field->setEditLanguageCallback(DefaultEditLanguageCallback(_show));
  
  	const auto rawTextEdit = _field->rawTextEdit().get();
@@ -5073,7 +5091,106 @@ index f95a351..6f65edd 100644
  	rpl::merge(
  		_field->scrollTop().changes() | rpl::to_empty,
  		base::qt_signal_producer(
-@@ -5251,7 +5304,8 @@ void ComposeControls::updateControlsVisibility() {
+@@ -4667,6 +4723,68 @@ void ComposeControls::initExpandButton() {
+ 	});
+ }
+ 
++void ComposeControls::initFormattingButtons() {
++	struct Item {
++		QString text;
++		QString tag;
++		QString name;
++	};
++	const auto items = std::vector<Item>{
++		{ u"B"_q, Ui::InputField::kTagBold,
++			tr::lng_menu_formatting_bold(tr::now) },
++		{ u"I"_q, Ui::InputField::kTagItalic,
++			tr::lng_menu_formatting_italic(tr::now) },
++		{ u"U"_q, Ui::InputField::kTagUnderline,
++			tr::lng_menu_formatting_underline(tr::now) },
++		{ u"S"_q, Ui::InputField::kTagStrikeOut,
++			tr::lng_menu_formatting_strike_out(tr::now) },
++		{ u"</>"_q, Ui::InputField::kTagCode,
++			tr::lng_menu_formatting_monospace(tr::now) },
++		{ u"⊘"_q, Ui::InputField::kTagSpoiler,
++			tr::lng_menu_formatting_spoiler(tr::now) },
++		{ u"❝"_q, Ui::InputField::kTagBlockquote,
++			tr::lng_menu_formatting_blockquote(tr::now) },
++		{ u"🔗"_q, QString(),
++			tr::lng_menu_formatting_link_edit(tr::now) },
++	};
++	_formattingButtons = std::make_unique<Ui::RpWidget>(_wrap.get());
++	const auto parent = _formattingButtons.get();
++	const auto skip = st::defaultLinkButton.font->height / 2;
++	auto left = 0;
++	auto height = 0;
++	for (const auto &item : items) {
++		const auto button = Ui::CreateChild<Ui::LinkButton>(
++			parent,
++			item.text);
++		button->resizeToWidth(button->naturalWidth());
++		button->setFocusPolicy(Qt::NoFocus);
++		button->setAccessibleName(item.name);
++		button->moveToLeft(left, 0);
++		left += button->width() + skip;
++		height = std::max(height, button->height());
++		const auto tag = item.tag;
++		button->setClickedCallback([=] {
++			if (tag.isEmpty()) {
++				_field->editCurrentMarkdownLink();
++			} else if (_field->markdownEnabledState().enabledForTag(tag)) {
++				_field->toggleCurrentMarkdownTag(tag);
++			}
++		});
++	}
++	_formattingButtons->resize(std::max(left - skip, 0), height);
++	_formattingButtons->hide();
++}
++
++void ComposeControls::updateFormattingButtons() {
++	const auto shown = Exteraless::Config::Instance().showFormattingButtons();
++	if (shown == !_formattingButtons->isHidden()) {
++		return;
++	}
++	_formattingButtons->setVisible(shown);
++	updateHeight();
++	updateControlsGeometry(_wrap->size());
++}
++
+ void ComposeControls::showRichEditor() {
+ 	if (!_regularWindow || !_history || !_sendActionFactory) {
+ 		return;
+@@ -5106,6 +5224,9 @@ void ComposeControls::updateControlsGeometry(QSize size) {
+ 	}
+ 	const auto fieldHeight = composeFieldHeight();
+ 	const auto fieldTop = size.height() - _st.padding.bottom() - fieldHeight;
++	const auto formattingHeight = _formattingButtons->isHidden()
++		? 0
++		: _formattingButtons->height();
+ 	_field->moveToLeft(left, fieldTop);
+ 	if (_richDraftPreview) {
+ 		_richDraftPreview->moveToLeft(left, fieldTop);
+@@ -5114,11 +5235,14 @@ void ComposeControls::updateControlsGeometry(QSize size) {
+ 		_fieldDisabled->resize(size.width(), st::historySendSize.height());
+ 		_fieldDisabled->moveToLeft(left, fieldTop);
+ 	}
++	if (formattingHeight) {
++		_formattingButtons->moveToLeft(left, fieldTop - formattingHeight);
++	}
+ 
+ 	_header->resizeToWidth(size.width());
+ 	_header->moveToLeft(
+ 		0,
+-		fieldTop - _st.padding.top() - _header->height());
++		fieldTop - formattingHeight - _st.padding.top() - _header->height());
+ 
+ 	auto right = 0;
+ 	if (_starsReaction) {
+@@ -5248,10 +5372,12 @@ void ComposeControls::updateControlsVisibility() {
+ 	updateSendAsFileVisibility();
+ 	updateExpandButtonVisibility();
+ 	updateDiscardRichDraftVisibility();
++	updateFormattingButtons();
  }
  
  void ComposeControls::updateAiButtonVisibility() {
@@ -5083,7 +5200,7 @@ index f95a351..6f65edd 100644
  		|| !_wrap->isVisible()
  		|| _recording.current()
  		|| !_field->isVisible();
-@@ -5649,6 +5703,7 @@ bool ComposeControls::updateSendAsButton(
+@@ -5649,6 +5775,7 @@ bool ComposeControls::updateSendAsButton(
  		? Main::SendAsType::VideoStream
  		: Main::SendAsType::Message;
  	if (!_features.sendAs
@@ -5091,6 +5208,40 @@ index f95a351..6f65edd 100644
  		|| !peer
  		|| isEditingMessage()
  		|| !session().sendAsPeers().shouldChoose({ peer, type })) {
+@@ -5837,8 +5964,12 @@ int ComposeControls::composeFieldHeight() const {
+ }
+ 
+ void ComposeControls::updateHeight() {
++	const auto formattingHeight = _formattingButtons->isHidden()
++		? 0
++		: _formattingButtons->height();
+ 	const auto height = (_header->isDisplayed() ? _header->height() : 0)
+ 		+ _st.padding.top()
++		+ formattingHeight
+ 		+ composeFieldHeight()
+ 		+ _st.padding.bottom();
+ 	if (height != _wrap->height()) {
+diff --git a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.h b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.h
+index 49b796d..a5b8215 100644
+--- a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.h
++++ b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.h
+@@ -405,6 +405,8 @@ private:
+ 	void initExpandButton();
+ 	void updateExpandButtonVisibility();
+ 	void updateExpandButtonGeometry();
++	void initFormattingButtons();
++	void updateFormattingButtons();
+ 	[[nodiscard]] bool canShowRichEditor() const;
+ 	void showRichEditor();
+ 	void showRichEditorWithPaste(std::shared_ptr<QMimeData> data);
+@@ -588,6 +590,7 @@ private:
+ 	std::shared_ptr<QMimeData> _pendingRichPaste;
+ 	const not_null<Ui::InputField*> _field;
+ 	std::unique_ptr<Controls::RichDraftPreview> _richDraftPreview;
++	std::unique_ptr<Ui::RpWidget> _formattingButtons;
+ 	base::unique_qptr<Ui::RpWidget> _fieldDisabled;
+ 	Ui::IconButton * const _botCommandStart = nullptr;
+ 	std::unique_ptr<BotMenuButton> _botMenu;
 diff --git a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp b/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp
 index ad09615..07f3cd9 100644
 --- a/Telegram/SourceFiles/history/view/controls/history_view_webpage_processor.cpp
@@ -8119,10 +8270,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..05c708e
+index 0000000..fa2b1e1
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2464 @@
+@@ -0,0 +1,2473 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -9261,6 +9412,15 @@ index 0000000..05c708e
 +		Exteraless::Config::Instance().showSpoilersDirectly(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setShowSpoilersDirectly(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/show-formatting-buttons"_q,
++		tr::lng_settings_exteraless_chats_show_formatting_buttons(),
++		{ u"formatting"_q, u"buttons"_q, u"input"_q },
++		Exteraless::Config::Instance().showFormattingButtons(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setShowFormattingButtons(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/silent-by-default"_q,
@@ -11960,10 +12120,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..3070335
+index 0000000..a77bbd1
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1098 @@
+@@ -0,0 +1,1105 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -12184,6 +12344,7 @@ index 0000000..3070335
 +constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
 +constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
++constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 +constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
 +constexpr auto kChatsHidePanelsOnScroll = "OEChatsHidePanelsOnScroll";
 +constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
@@ -12202,6 +12363,7 @@ index 0000000..3070335
 +constexpr auto kZalgoFilter = "zalgoFilter";
 +constexpr auto kZalgoFilterUpper = "ZalgoFilter";
 +constexpr auto kShowSpoilersDirectly = "showSpoilersDirectly";
++constexpr auto kShowFormattingButtons = "showFormattingButtons";
 +constexpr auto kStickerTimeMode = "stickerTimeMode";
 +constexpr auto kStickerSizeAlias = "stickerSize";
 +constexpr auto kStickerShapeAlias = "stickerShape";
@@ -12482,6 +12644,7 @@ index 0000000..3070335
 +	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
 +	extera[kZalgoFilter] = config.zalgoFilter();
 +	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
++	extera[kShowFormattingButtons] = config.showFormattingButtons();
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -12975,6 +13138,10 @@ index 0000000..3070335
 +			|| key == kShowSpoilersDirectly)
 +			&& value.isBool()) {
 +			config.setShowSpoilersDirectly(value.toBool());
++		} else if ((key == kChatsShowFormattingButtons
++			|| key == kShowFormattingButtons)
++			&& value.isBool()) {
++			config.setShowFormattingButtons(value.toBool());
 +		} else if ((key == kChatsHideArchive
 +			|| key == kHideArchiveAlias
 +			|| key == kHideArchiveAliasUpper
@@ -13186,10 +13353,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..bb5ac11
+index 0000000..a9b2e51
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1572 @@
+@@ -0,0 +1,1582 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -13339,6 +13506,7 @@ index 0000000..bb5ac11
 +constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
 +constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
++constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 +constexpr auto kChatsDisableAutoDownloadingArchive
 +	= "OEChatsDisableAutoDownloadingArchive";
 +constexpr auto kChatsBlockWin32ExecutableFiles
@@ -14410,6 +14578,14 @@ index 0000000..bb5ac11
 +	setValue(kChatsShowSpoilersDirectly, value);
 +}
 +
++bool Config::showFormattingButtons() const {
++	return boolValue(kChatsShowFormattingButtons, false);
++}
++
++void Config::setShowFormattingButtons(bool value) {
++	setValue(kChatsShowFormattingButtons, value);
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -14586,6 +14762,7 @@ index 0000000..bb5ac11
 +			|| key == kChatsBlockWin32ExecutableFiles
 +			|| key == kChatsZalgoFilter
 +			|| key == kChatsShowSpoilersDirectly
++			|| key == kChatsShowFormattingButtons
 +			|| key == kChatsAvatarRadius
 +			|| key == kChatsChatHeaderStyle) {
 +			accepted.insert(key, i.value());
@@ -14764,10 +14941,10 @@ index 0000000..bb5ac11
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..32cae40
+index 0000000..a800606
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,316 @@
+@@ -0,0 +1,318 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -15043,6 +15220,8 @@ index 0000000..32cae40
 +	void setZalgoFilter(bool value);
 +	[[nodiscard]] bool showSpoilersDirectly() const;
 +	void setShowSpoilersDirectly(bool value);
++	[[nodiscard]] bool showFormattingButtons() const;
++	void setShowFormattingButtons(bool value);
 +	void setChatsMenuReply(bool value);
 +	void setChatsMenuEdit(bool value);
 +	void setChatsMenuPin(bool value);
@@ -17992,10 +18171,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..e05108b
+index 0000000..1d7083b
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2591 @@
+@@ -0,0 +1,2615 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -18100,6 +18279,8 @@ index 0000000..e05108b
 +		<< "  exteraless-chats-cli zalgo-tags <text> <offset> <length>\n"
 +		<< "  exteraless-chats-cli spoilers-direct\n"
 +		<< "  exteraless-chats-cli spoilers-direct-set <0|1>\n"
++		<< "  exteraless-chats-cli formatting-buttons\n"
++		<< "  exteraless-chats-cli formatting-buttons-set <0|1>\n"
 +		<< "  exteraless-chats-cli silent\n"
 +		<< "  exteraless-chats-cli silent-set <0|1>\n"
 +		<< "  exteraless-chats-cli settings-sections\n"
@@ -20132,6 +20313,28 @@ index 0000000..e05108b
 +		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
++	if (mode == QStringLiteral("formatting-buttons")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().showFormattingButtons() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("formatting-buttons-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setShowFormattingButtons(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
 +	if (mode == QStringLiteral("proxy-rule")) {
 +		if (arguments.size() != 6) {
 +			return PrintUsage();
@@ -20748,10 +20951,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..e10f7ef
+index 0000000..9d2f3d5
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6237 @@
+@@ -0,0 +1,6307 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -21375,7 +21578,7 @@ index 0000000..e10f7ef
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 117,
++            len(section) == 118,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -21396,7 +21599,7 @@ index 0000000..e10f7ef
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 122,
++            sum(len(value) for value in exported.values()) == 123,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -21416,7 +21619,7 @@ index 0000000..e10f7ef
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 122,
++                data.get("applied") == 123,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -21567,6 +21770,7 @@ index 0000000..e10f7ef
 +            "showIdAndDc": True,
 +            "zalgoFilter": True,
 +            "showSpoilersDirectly": True,
++            "showFormattingButtons": True,
 +            "OEGeneralUsePersianCalendar": True,
 +            "OEGeneralPersianCalendarLatin": True,
 +        },
@@ -21590,7 +21794,7 @@ index 0000000..e10f7ef
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 122,
++            data.get("applied") == 123,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -21884,10 +22088,10 @@ index 0000000..e10f7ef
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 117",
++            "backup legacy eight completed to 118",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (117, 3, 2),
++             len(sections["mainconfig"])) == (118, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -23703,6 +23907,72 @@ index 0000000..e10f7ef
 +             ["spoilers-direct-set"]),
 +            ("spoilers-direct-set invalid value",
 +             ["spoilers-direct-set", "2"])):
++        result = run(cli, arguments)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++def check_formatting_buttons(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "formatting-buttons-defaults")
++    data = json_call(
++        ledger, cli, ["formatting-buttons"], env,
++        "formatting-buttons defaults")
++    if data is not None:
++        ledger.check(
++            "formatting buttons default off",
++            data.get("enabled") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["formatting-buttons-set", "1"], env,
++        "formatting-buttons set")
++    if data is not None:
++        ledger.check("formatting buttons set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["formatting-buttons"], env,
++        "formatting-buttons reload")
++    if reloaded is not None:
++        ledger.check(
++            "formatting buttons persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "formatting-buttons-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"showFormattingButtons": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "formatting-buttons alias")
++    if data is not None:
++        ledger.check(
++            "formatting buttons alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["formatting-buttons"], env,
++        "formatting-buttons alias read")
++    if reloaded is not None:
++        ledger.check(
++            "formatting buttons alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    for name, arguments in (
++            ("formatting-buttons-set with wrong count",
++             ["formatting-buttons-set"]),
++            ("formatting-buttons-set invalid value",
++             ["formatting-buttons-set", "2"])):
 +        result = run(cli, arguments)
 +        ledger.check(
 +            f"cli {name}",
@@ -26869,6 +27139,7 @@ index 0000000..e10f7ef
 +        pangu = check_pangu(ledger, cli, work)
 +        zalgo = check_zalgo(ledger, cli, work)
 +        spoilers_direct = check_spoilers_direct(ledger, cli, work)
++        formatting_buttons = check_formatting_buttons(ledger, cli, work)
 +        silent = check_silent(ledger, cli, work)
 +        sections = check_settings_sections(ledger, cli, work)
 +        ai_editor = check_ai_editor(ledger, cli, work)
@@ -26930,6 +27201,8 @@ index 0000000..e10f7ef
 +    print(f"zalgo: {zalgo[0] - zalgo[1]} passed")
 +    print(f"spoilers-direct: "
 +          f"{spoilers_direct[0] - spoilers_direct[1]} passed")
++    print(f"formatting-buttons: "
++          f"{formatting_buttons[0] - formatting_buttons[1]} passed")
 +    print(f"silent: {silent[0] - silent[1]} passed")
 +    print(f"sections: {sections[0] - sections[1]} passed")
 +    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")

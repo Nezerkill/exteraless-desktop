@@ -2896,6 +2896,7 @@ void ComposeControls::init() {
 	}
 	_tabbedSelectorToggle->setAccessibleName(tr::lng_emoji_sticker_gif(tr::now));
 
+	initFormattingButtons();
 	initField();
 	initTabbedSelector();
 	initSendButton();
@@ -3261,6 +3262,8 @@ void ComposeControls::initKeyHandler() {
 			? Result::Cancel
 			: Result::Continue;
 	});
+
+	updateFormattingButtons();
 }
 
 void ComposeControls::initField() {
@@ -4720,6 +4723,68 @@ void ComposeControls::initExpandButton() {
 	});
 }
 
+void ComposeControls::initFormattingButtons() {
+	struct Item {
+		QString text;
+		QString tag;
+		QString name;
+	};
+	const auto items = std::vector<Item>{
+		{ u"B"_q, Ui::InputField::kTagBold,
+			tr::lng_menu_formatting_bold(tr::now) },
+		{ u"I"_q, Ui::InputField::kTagItalic,
+			tr::lng_menu_formatting_italic(tr::now) },
+		{ u"U"_q, Ui::InputField::kTagUnderline,
+			tr::lng_menu_formatting_underline(tr::now) },
+		{ u"S"_q, Ui::InputField::kTagStrikeOut,
+			tr::lng_menu_formatting_strike_out(tr::now) },
+		{ u"</>"_q, Ui::InputField::kTagCode,
+			tr::lng_menu_formatting_monospace(tr::now) },
+		{ u"⊘"_q, Ui::InputField::kTagSpoiler,
+			tr::lng_menu_formatting_spoiler(tr::now) },
+		{ u"❝"_q, Ui::InputField::kTagBlockquote,
+			tr::lng_menu_formatting_blockquote(tr::now) },
+		{ u"🔗"_q, QString(),
+			tr::lng_menu_formatting_link_edit(tr::now) },
+	};
+	_formattingButtons = std::make_unique<Ui::RpWidget>(_wrap.get());
+	const auto parent = _formattingButtons.get();
+	const auto skip = st::defaultLinkButton.font->height / 2;
+	auto left = 0;
+	auto height = 0;
+	for (const auto &item : items) {
+		const auto button = Ui::CreateChild<Ui::LinkButton>(
+			parent,
+			item.text);
+		button->resizeToWidth(button->naturalWidth());
+		button->setFocusPolicy(Qt::NoFocus);
+		button->setAccessibleName(item.name);
+		button->moveToLeft(left, 0);
+		left += button->width() + skip;
+		height = std::max(height, button->height());
+		const auto tag = item.tag;
+		button->setClickedCallback([=] {
+			if (tag.isEmpty()) {
+				_field->editCurrentMarkdownLink();
+			} else if (_field->markdownEnabledState().enabledForTag(tag)) {
+				_field->toggleCurrentMarkdownTag(tag);
+			}
+		});
+	}
+	_formattingButtons->resize(std::max(left - skip, 0), height);
+	_formattingButtons->hide();
+}
+
+void ComposeControls::updateFormattingButtons() {
+	const auto shown = Exteraless::Config::Instance().showFormattingButtons();
+	if (shown == !_formattingButtons->isHidden()) {
+		return;
+	}
+	_formattingButtons->setVisible(shown);
+	updateHeight();
+	updateControlsGeometry(_wrap->size());
+}
+
 void ComposeControls::showRichEditor() {
 	if (!_regularWindow || !_history || !_sendActionFactory) {
 		return;
@@ -5159,6 +5224,9 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 	}
 	const auto fieldHeight = composeFieldHeight();
 	const auto fieldTop = size.height() - _st.padding.bottom() - fieldHeight;
+	const auto formattingHeight = _formattingButtons->isHidden()
+		? 0
+		: _formattingButtons->height();
 	_field->moveToLeft(left, fieldTop);
 	if (_richDraftPreview) {
 		_richDraftPreview->moveToLeft(left, fieldTop);
@@ -5167,11 +5235,14 @@ void ComposeControls::updateControlsGeometry(QSize size) {
 		_fieldDisabled->resize(size.width(), st::historySendSize.height());
 		_fieldDisabled->moveToLeft(left, fieldTop);
 	}
+	if (formattingHeight) {
+		_formattingButtons->moveToLeft(left, fieldTop - formattingHeight);
+	}
 
 	_header->resizeToWidth(size.width());
 	_header->moveToLeft(
 		0,
-		fieldTop - _st.padding.top() - _header->height());
+		fieldTop - formattingHeight - _st.padding.top() - _header->height());
 
 	auto right = 0;
 	if (_starsReaction) {
@@ -5301,6 +5372,7 @@ void ComposeControls::updateControlsVisibility() {
 	updateSendAsFileVisibility();
 	updateExpandButtonVisibility();
 	updateDiscardRichDraftVisibility();
+	updateFormattingButtons();
 }
 
 void ComposeControls::updateAiButtonVisibility() {
@@ -5892,8 +5964,12 @@ int ComposeControls::composeFieldHeight() const {
 }
 
 void ComposeControls::updateHeight() {
+	const auto formattingHeight = _formattingButtons->isHidden()
+		? 0
+		: _formattingButtons->height();
 	const auto height = (_header->isDisplayed() ? _header->height() : 0)
 		+ _st.padding.top()
+		+ formattingHeight
 		+ composeFieldHeight()
 		+ _st.padding.bottom();
 	if (height != _wrap->height()) {

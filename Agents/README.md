@@ -52,7 +52,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (818 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, download-boost, subtitles, avatar-corners, backup);
+  (825 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, download-boost, subtitles, avatar-corners, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
@@ -120,7 +120,7 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 122 desktop-ключа в секциях `exteraconfig`,
+  декодируются. Backup пишет все 123 desktop-ключа в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние. Полосу историй
   над списком чатов скрывает `OEChatsHideStoriesHeader` (default `false`,
@@ -141,8 +141,18 @@ sibling-чекаутом: `../exteraless`.
   `EffectiveSpoiler` (`data/data_media_types.cpp`) снимает спойлер только у
   обычного пользовательского медиа, а TTL, `isMediaSensitive()` и платное
   медиа спойлер сохраняют (`hasSpoiler()` не тронут), поэтому значение
-  применяется после перестройки текста, а не мгновенно. Размер стикеров задаёт
-  `OEChatsStickerSize` (4..20, default 14, слайдер «Sticker size» в Chats):
+  применяется после перестройки текста, а не мгновенно. Тулбар форматирования
+  включает `OEChatsShowFormattingButtons` (bool, default `false`, тумблер «Show
+  formatting buttons» в Chats, бэкап-ключ `showFormattingButtons`): над полем
+  ввода появляется ряд из восьми `Ui::LinkButton` (B, I, U, S, `</>`, `⊘`, `❝`
+  и ссылка), теговые кнопки вызывают `toggleCurrentMarkdownTag` только при
+  `markdownEnabledState().enabledForTag(tag)`, последняя —
+  `editCurrentMarkdownLink`, фокус у поля не отбирается (`Qt::NoFocus`), высота
+  ряда входит в `updateHeight` и поднимает шапку в `updateControlsGeometry`, а
+  видимость пересчитывает `updateFormattingButtons` при обновлении видимости
+  контролов, поэтому включение видно при следующем показе без рестарта. Размер
+  стикеров задаёт `OEChatsStickerSize` (4..20, default 14, слайдер «Sticker
+  size» в Chats):
   `Sticker::Size()` считает множитель `1 + (v - 14) / 15` от 224 px с клампом
   50..336 px; при 14 работает upstream `OptionStickerSize`, алиас
   `stickerSize` в `.extera` принимается с округлением, а размер применяется

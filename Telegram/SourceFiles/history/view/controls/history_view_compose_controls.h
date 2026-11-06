@@ -405,6 +405,8 @@ private:
 	void initExpandButton();
 	void updateExpandButtonVisibility();
 	void updateExpandButtonGeometry();
+	void initFormattingButtons();
+	void updateFormattingButtons();
 	[[nodiscard]] bool canShowRichEditor() const;
 	void showRichEditor();
 	void showRichEditorWithPaste(std::shared_ptr<QMimeData> data);
@@ -588,6 +590,7 @@ private:
 	std::shared_ptr<QMimeData> _pendingRichPaste;
 	const not_null<Ui::InputField*> _field;
 	std::unique_ptr<Controls::RichDraftPreview> _richDraftPreview;
+	std::unique_ptr<Ui::RpWidget> _formattingButtons;
 	base::unique_qptr<Ui::RpWidget> _fieldDisabled;
 	Ui::IconButton * const _botCommandStart = nullptr;
 	std::unique_ptr<BotMenuButton> _botMenu;
