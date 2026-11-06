@@ -2,6 +2,74 @@
 
 ## 2026-11-06
 
+- Media / Внешние субтитры (NB-32), фаза 2: рендер, меню и память по видео.
+  `media_subtitles.{h,cpp}` (`Telegram/CMakeLists.txt`) добавляют
+  `Exteraless::Subtitles`: он помнит путь, метку и разобранные реплики для
+  каждого видео, а выбор переживает перезапуск — карта `doc_<id>` →
+  `{path, label}` лежит в `OESubtitlesFiles` (JSON-объект, не больше
+  128 видео, ключ проверяет `ValidVideoKey`). При импорте `.extera` карта
+  проходит через `SanitizeSubtitlesFiles` — принимаются только строковые
+  `path` и `label`, записи без пути отбрасываются, а
+  `Config::setSubtitlesFiles` не сохраняет не-объект. Второй ключ —
+  `OEMediaViewerMenuSubtitles` (bool, default `true`) с тумблером в
+  подсекции «Media viewer menu»; lang-ключей три —
+  `lng_mediaview_subtitles_choose`, `lng_mediaview_subtitles_disable` и
+  `lng_settings_exteraless_media_menu_subtitles`. В меню медиавьюера два
+  пункта: «Choose Subtitles File» открывает `FileDialog` с фильтром
+  `*.srt *.vtt`, а «Disable Subtitles» показывается только при выбранном
+  файле; гейт `canShowSubtitles()` — видео-документ без webpage и без
+  стрима. Позиция приходит из `UpdateVideo` в `handleStreamingUpdate` и из
+  `updatePlaybackState`, а `refreshSubtitlesText` перерисовывает оверлей
+  только когда текст активной реплики сменился. Рендер —
+  `paintSubtitles(QRect, float64)` в `Renderer` и в трёх бэкендах (raster,
+  OpenGL со своим `_subtitlesImage`, RHI), контент общий
+  (`paintSubtitlesContent`): скруглённый прямоугольник
+  `mediaviewSubtitleBg` и текст `mediaviewSubtitleFg` — алиасы
+  `mediaviewCaptionBg`/`mediaviewCaptionFg` — по центру над нижней панелью.
+  Вызов стоит после opacity-блока, поэтому fullscreen (`opacity = 0`) тоже
+  видит субтитры. `.extera` — 111 ключей (`exteraconfig` 106 +
+  `pillstackconfig` 3 + `mainconfig` 2, сверено с legacy-кортежем
+  `run_checks` `(106, 3, 2)`); раннеры 734/32/213 PASS (backup 100),
+  `kKeysCount` 11183, sha256 патча `80ade745…`. Ограничения: PiP и stories
+  не покрыты, preload и streaming остались на 128K, CLI и раннеры проверяют
+  только парсер — отдельной проверки меню и пер-видео памяти нет,
+  Xvfb-смоук не выполнялся, `nix flake check` не запускался в docs-задаче;
+  пикер для `alwaysAsk` — это NB-55, не эта задача.
+- Chats / Внешние субтитры (NB-32), фаза 1: парсер
+  `exteraless/subtitles.{h,cpp}` — `ParseSubtitles`, `ActiveCueText` и
+  `VideoKey`. Читаются SRT и WebVTT: тайм-код принимает `.` и `,`, номер
+  реплики необязателен, заголовок `WEBVTT` и директивы `NOTE`/`STYLE`/
+  `REGION` пропускаются, теги `<...>` и `{...}` вырезаются, CRLF и CR
+  сводятся к LF, а декодер понимает UTF-8 с BOM и без, плюс UTF-16 LE/BE по
+  BOM. Реплики сортируются по старту, активный интервал end-exclusive
+  (`position < end`), перекрывающиеся реплики склеиваются через `\n`.
+  Шесть фикстур (`basic.srt`, `basic.vtt`, `overlap.srt`, `tags.srt`,
+  `broken.srt`, `bom-utf16.srt`), CLI `subtitles-parse`, `subtitles-active` и
+  `subtitles-key`; `check_subtitles` — 48 проверок, итого 734 PASS (backup 100,
+  CLI 58) плюс 32 и 213 у плагинов. `.gitattributes` закрепляет
+  `exteraless/tests/chats/fixtures/*.srt -text`, иначе CRLF-фикстура
+  схлопнется при checkout. Новых `OE`-ключей нет, `.extera` не менялся;
+  sha256 патча `8c587ce7…`, `nix flake check` PASS. Фаза 2 (рендер в четырёх
+  бэкендах, меню выбора/отключения и пер-видео память) не сделана — follow-up.
+- General / Bot privacy (NB-55): `OEGeneralBotPrivacyEnabled` (bool, default
+  `false`), `OEGeneralBotPrivacyAccount` (int `-1..15`, default `-1`, 1-based
+  индекс `orderedAccounts`) и `OEGeneralBotPrivacyAlwaysAsk` (bool, default
+  `false`) — ссылка на бота открывается в выбранном аккаунте. Хук
+  `RouteBotToPrivacyAccount` в `SessionNavigation::showPeerByLinkResolved`
+  (`window/window_session_controller.cpp`) стоит перед всеми пятью ветками
+  резолва, переключает аккаунт через `Core::App().domain().maybeActivate()` и
+  отдаёт ссылку контроллеру целевого окна; `index <= 0` означает Off, индекс
+  вне `orderedAccounts` даёт тост, а рекурсию отсекает сравнение аккаунта и
+  контроллера. Алиасы `botPrivacyEnabled`, `botPrivacyUserId` и `alwaysAsk`
+  принимаются в `.extera` (всего 109 ключей: 104 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`), в General — тумблер, селектор Off/1..N и
+  тумблер «Always ask…», четыре lang-ключа, CLI — `bot-privacy` и
+  `bot-privacy-set`; `check_bot_privacy` — 9 проверок плюс две на неверный
+  вызов CLI, итого 683 PASS (backup 100) плюс 32 и 213 у плагинов;
+  `kKeysCount` 11180, sha256 патча `ba0d94a7…`, `nix flake check` PASS.
+  Follow-up: пикера для `alwaysAsk` пока нет — режим только маршрутизирует без
+  вопроса; четыре тоста остаются английскими литералами без lang-ключей;
+  `unblock` в текущем аккаунте при `startAutoSubmit` не сделан.
 - Chats / Boost скачивания и загрузки (NB-76): `OEChatsDownloadSpeedBoost`
   (int `0..2`, default `0`) и `OEChatsUploadBoost` (bool, default `false`).
   Загрузка — пул сессий 1/2/4 и часть 128K/512K/1M (`BoostedDownloadPartSize()`
@@ -45,7 +113,7 @@
   `OEChatsChannelBottomButton` (int 0/1/2, default `1`). Приветственный стикер
   отсекается гейтом в `GenerateChatIntro`, панели закрываются через
   `hidePanelsAnimated` в `onScroll`, нижняя кнопка канала: `0` — скрыть,
-  `1` — mute, `2` — пока mute (Discuss — follow-up). Алиасы
+  `1` — mute, `2` — Discuss (кнопка, навигация по `discussionLink`). Алиасы
   `disableGreetingSticker`, `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`,
   `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0).
   `.extera` — 102 ключа (99 + 3, сверено с legacy-кортежем `run_checks`), два

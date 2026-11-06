@@ -33,7 +33,8 @@ constexpr auto kSpeedBoostOffset = kChapterOffset + 4;
 constexpr auto kFooterOffset = kSpeedBoostOffset + 4;
 constexpr auto kCaptionOffset = kFooterOffset + 4;
 constexpr auto kGroupThumbsOffset = kCaptionOffset + 4;
-constexpr auto kControlsOffset = kGroupThumbsOffset + 4;
+constexpr auto kSubtitlesOffset = kGroupThumbsOffset + 4;
+constexpr auto kControlsOffset = kSubtitlesOffset + 4;
 constexpr auto kControlValues = 4 * 4 + 4 * 4; // over + icon
 
 [[nodiscard]] ShaderPart FragmentApplyControlsFade() {
@@ -148,6 +149,7 @@ OverlayWidget::RendererGL::RendererGL(not_null<OverlayWidget*> owner)
 		_saveMsgImage.invalidate();
 		_footerImage.invalidate();
 		_captionImage.invalidate();
+		_subtitlesImage.invalidate();
 		invalidateControls();
 	}, _lifetime);
 
@@ -169,7 +171,7 @@ OverlayWidget::RendererGL::RendererGL(not_null<OverlayWidget*> owner)
 }
 
 void OverlayWidget::RendererGL::init(QOpenGLFunctions &f) {
-	constexpr auto kQuads = 11;
+	constexpr auto kQuads = 12;
 	constexpr auto kQuadVertices = kQuads * 4;
 	constexpr auto kQuadValues = kQuadVertices * 4;
 	constexpr auto kControlsValues = kControlsCount * kControlValues;
@@ -969,6 +971,15 @@ void OverlayWidget::RendererGL::paintCaption(QRect outer, float64 opacity) {
 		const auto newOuter = QRect(QPoint(), outer.size());
 		_owner->paintCaptionContent(p, newOuter, newOuter, opacity);
 	}, kCaptionOffset, true);
+}
+
+void OverlayWidget::RendererGL::paintSubtitles(
+		QRect outer,
+		float64 opacity) {
+	paintUsingRaster(_subtitlesImage, outer, [&](Painter &&p) {
+		const auto newOuter = QRect(QPoint(), outer.size());
+		_owner->paintSubtitlesContent(p, newOuter, newOuter, opacity);
+	}, kSubtitlesOffset, true);
 }
 
 void OverlayWidget::RendererGL::paintGroupThumbs(

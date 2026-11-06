@@ -619,9 +619,69 @@ void SessionNavigation::showMessageByLinkResolved(
 	}
 }
 
+namespace {
+
+[[nodiscard]] bool RouteBotToPrivacyAccount(
+		not_null<Window::SessionController*> controller,
+		not_null<PeerData*> peer,
+		const PeerByLinkInfo &info) {
+	if (!peer->isBot()) {
+		return false;
+	}
+	const auto &config = Exteraless::Config::Instance();
+	if (!config.botPrivacyEnabled()) {
+		return false;
+	}
+	const auto index = config.botPrivacyAccount();
+	const auto list = Core::App().domain().orderedAccounts();
+	if (index <= 0 || index > int(list.size())) {
+		Ui::Toast::Show({
+			.text = { u"Bot privacy account is not configured."_q },
+		});
+		return true;
+	}
+	const auto account = list[index - 1];
+	if (account == &controller->session().account()) {
+		return false;
+	}
+	const auto window = Core::App().windowFor({ account });
+	if (!window) {
+		Ui::Toast::Show({
+			.text = { u"Bot privacy account is not available."_q },
+		});
+		return true;
+	}
+	if (&window->account() != account) {
+		Core::App().domain().maybeActivate(account);
+		if (&window->account() != account) {
+			Ui::Toast::Show({
+				.text = { u"Could not switch to the bot privacy account."_q },
+			});
+			return true;
+		}
+	}
+	const auto target = window->sessionController();
+	if (!target) {
+		Ui::Toast::Show({
+			.text = { u"Bot privacy account is not available."_q },
+		});
+		return true;
+	}
+	if (target == controller) {
+		return false;
+	}
+	target->showPeerByLink(info);
+	return true;
+}
+
+} // namespace
+
 void SessionNavigation::showPeerByLinkResolved(
 		not_null<PeerData*> peer,
 		const PeerByLinkInfo &info) {
+	if (RouteBotToPrivacyAccount(parentController(), peer, info)) {
+		return;
+	}
 	auto params = SectionShow{
 		SectionShow::Way::Forward
 	};

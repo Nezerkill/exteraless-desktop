@@ -71,6 +71,7 @@ private:
 		const style::icon &icon) override;
 	void paintFooter(QRect outer, float64 opacity) override;
 	void paintCaption(QRect outer, float64 opacity) override;
+	void paintSubtitles(QRect outer, float64 opacity) override;
 	void paintGroupThumbs(QRect outer, float64 opacity) override;
 	void paintRoundedCorners(int radius) override;
 	void paintStoriesSiblingPart(
@@ -151,6 +152,7 @@ private:
 	Ui::GL::Image _speedBoostImage;
 	Ui::GL::Image _footerImage;
 	Ui::GL::Image _captionImage;
+	Ui::GL::Image _subtitlesImage;
 	Ui::GL::Image _groupThumbsImage;
 	Ui::GL::Image _controlsImage;
 

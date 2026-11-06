@@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_mediaview_save_as" = "Save As...";
 "lng_mediaview_copy" = "Copy";
 "lng_mediaview_copy_frame" = "Copy Frame";
+"lng_mediaview_subtitles_choose" = "Choose Subtitles File";
+"lng_mediaview_subtitles_disable" = "Disable Subtitles";
 "lng_mediaview_forward" = "Forward";
 "lng_mediaview_share_at_time" = "Share at {time}";
 "lng_mediaview_delete" = "Delete";
@@ -9202,6 +9204,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_save_chat_subfolder" = "Save files in a folder per chat";
 "lng_settings_exteraless_hide_ai_editor" = "Hide AI editor button";
 "lng_settings_exteraless_hide_help" = "Hide Help settings";
+"lng_settings_exteraless_bot_privacy_enabled" = "Open bots in a dedicated account";
+"lng_settings_exteraless_bot_privacy_account" = "Bot account";
+"lng_settings_exteraless_bot_privacy_account_off" = "Off";
+"lng_settings_exteraless_bot_privacy_always_ask" = "Always ask which account to use";
 "lng_settings_exteraless_ghost" = "Ghost Mode";
 "lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 "lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -9295,6 +9301,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_media_menu_copy_frame" = "Show Copy Frame";
 "lng_settings_exteraless_media_menu_copy_photo" = "Show Copy";
 "lng_settings_exteraless_media_menu_set_profile" = "Show Set as profile photo";
+"lng_settings_exteraless_media_menu_subtitles" = "Show Subtitles";
 "lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
 "lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
 "lng_settings_exteraless_default" = "Default";

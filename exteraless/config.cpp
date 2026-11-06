@@ -44,6 +44,8 @@ constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
+constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
+constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -78,6 +80,9 @@ constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
 constexpr auto kMaxDeletedMarkLength = 32;
 constexpr auto kHidePhone = "OEGeneralHidePhone";
+constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
+constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
+constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -475,6 +480,27 @@ void Config::setMediaViewerMenuSetProfile(bool value) {
 	setValue(kMediaViewerMenuSetProfile, value);
 }
 
+bool Config::mediaViewerMenuSubtitles() const {
+	return boolValue(kMediaViewerMenuSubtitles, true);
+}
+
+void Config::setMediaViewerMenuSubtitles(bool value) {
+	setValue(kMediaViewerMenuSubtitles, value);
+}
+
+QString Config::subtitlesFiles() const {
+	return stringValue(kSubtitlesFiles, QString());
+}
+
+void Config::setSubtitlesFiles(const QString &value) {
+	auto error = QJsonParseError{0, QJsonParseError::NoError};
+	const auto document = QJsonDocument::fromJson(value.toUtf8(), &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return;
+	}
+	setValue(kSubtitlesFiles, value);
+}
+
 bool Config::chatMenuBoost() const {
 	return boolValue(kChatMenuBoost, true);
 }
@@ -645,6 +671,30 @@ bool Config::hidePhone() const {
 
 void Config::setHidePhone(bool value) {
 	setValue(kHidePhone, value);
+}
+
+bool Config::botPrivacyEnabled() const {
+	return boolValue(kGeneralBotPrivacyEnabled, false);
+}
+
+void Config::setBotPrivacyEnabled(bool value) {
+	setValue(kGeneralBotPrivacyEnabled, value);
+}
+
+int Config::botPrivacyAccount() const {
+	return std::clamp(intValue(kGeneralBotPrivacyAccount, -1), -1, 15);
+}
+
+void Config::setBotPrivacyAccount(int value) {
+	setValue(kGeneralBotPrivacyAccount, std::clamp(value, -1, 15));
+}
+
+bool Config::botPrivacyAlwaysAsk() const {
+	return boolValue(kGeneralBotPrivacyAsk, false);
+}
+
+void Config::setBotPrivacyAlwaysAsk(bool value) {
+	setValue(kGeneralBotPrivacyAsk, value);
 }
 
 int Config::proxyDisableConditions() const {
@@ -1140,6 +1190,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kMediaViewerMenuCopyFrame
 			|| key == kMediaViewerMenuCopyPhoto
 			|| key == kMediaViewerMenuSetProfile
+			|| key == kMediaViewerMenuSubtitles
+			|| key == kSubtitlesFiles
 			|| key == kChatMenuBoost
 			|| key == kChatMenuLinked
 			|| key == kChatMenuViewDeleted
@@ -1161,6 +1213,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor
 			|| key == kHidePhone
+			|| key == kGeneralBotPrivacyEnabled
+			|| key == kGeneralBotPrivacyAccount
+			|| key == kGeneralBotPrivacyAsk
 			|| key == kProxyDisableConditions
 			|| key == kProxyAutoDisabled
 			|| key == kGhostSendReadPackets

@@ -50,6 +50,8 @@ constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
+constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
+constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -131,6 +133,12 @@ constexpr auto kCustomDeletedMarkAlias = "CustomDeletedMark";
 constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 constexpr auto kHidePhone = "OEGeneralHidePhone";
+constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
+constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
+constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
+constexpr auto kBotPrivacyEnabledAlias = "botPrivacyEnabled";
+constexpr auto kBotPrivacyUserIdAlias = "botPrivacyUserId";
+constexpr auto kBotPrivacyAlwaysAskAlias = "alwaysAsk";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
 constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -296,6 +304,31 @@ constexpr auto kSectionMain = "mainconfig";
 	return true;
 }
 
+[[nodiscard]] QJsonObject SanitizeSubtitlesFiles(const QJsonValue &value) {
+	if (!value.isObject()) {
+		return QJsonObject();
+	}
+	auto result = QJsonObject();
+	const auto files = value.toObject();
+	for (auto i = files.begin(); i != files.end(); ++i) {
+		if (!i.value().isObject()) {
+			continue;
+		}
+		const auto entry = i.value().toObject();
+		const auto path = entry.value(QStringLiteral("path"));
+		if (!path.isString() || path.toString().isEmpty()) {
+			continue;
+		}
+		auto sanitized = QJsonObject();
+		sanitized[QStringLiteral("path")] = path.toString();
+		const auto label = entry.value(QStringLiteral("label"));
+		sanitized[QStringLiteral("label")]
+			= label.isString() ? label.toString() : QString();
+		result.insert(i.key(), sanitized);
+	}
+	return result;
+}
+
 } // namespace
 
 QString EncodeInvisible(const QByteArray &json) {
@@ -342,6 +375,9 @@ QString BuildBackup() {
 	extera[kFormatTimeWithSeconds] = config.showSeconds();
 	extera[kShowIdAndDc] = config.showIdDc();
 	extera[kHidePhoneNumber] = config.hidePhone();
+	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
+	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
+	extera[kGeneralBotPrivacyAsk] = config.botPrivacyAlwaysAsk();
 	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 	extera[kRemoveMessageTail] = chats.removeMessageTail;
 	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -386,6 +422,9 @@ QString BuildBackup() {
 	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
 	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
+	extera[kMediaViewerMenuSubtitles] = config.mediaViewerMenuSubtitles();
+	extera[kSubtitlesFiles] = QJsonDocument::fromJson(
+		config.subtitlesFiles().toUtf8()).object();
 	extera[kChatMenuBoost] = config.chatMenuBoost();
 	extera[kChatMenuLinked] = config.chatMenuLinked();
 	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
@@ -541,6 +580,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 			&& value.isBool()) {
 			config.setHidePhone(value.toBool());
+		} else if ((key == kGeneralBotPrivacyEnabled
+			|| key == kBotPrivacyEnabledAlias)
+			&& value.isBool()) {
+			config.setBotPrivacyEnabled(value.toBool());
+		} else if ((key == kGeneralBotPrivacyAccount
+			|| key == kBotPrivacyUserIdAlias)
+			&& value.isDouble()) {
+			config.setBotPrivacyAccount(value.toInt());
+		} else if ((key == kGeneralBotPrivacyAsk
+			|| key == kBotPrivacyAlwaysAskAlias)
+			&& value.isBool()) {
+			config.setBotPrivacyAlwaysAsk(value.toBool());
 		} else if ((key == kShowIdAndDc || key == kShowIdDc)
 			&& value.isBool()) {
 			config.setShowIdDc(value.toBool());
@@ -678,6 +729,12 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kMediaViewerMenuSetProfileAlias)
 			&& value.isBool()) {
 			config.setMediaViewerMenuSetProfile(value.toBool());
+		} else if (key == kMediaViewerMenuSubtitles && value.isBool()) {
+			config.setMediaViewerMenuSubtitles(value.toBool());
+		} else if (key == kSubtitlesFiles && value.isObject()) {
+			config.setSubtitlesFiles(QString::fromUtf8(
+				QJsonDocument(SanitizeSubtitlesFiles(value))
+					.toJson(QJsonDocument::Compact)));
 		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
 			&& value.isBool()) {
 			config.setChatMenuBoost(value.toBool());

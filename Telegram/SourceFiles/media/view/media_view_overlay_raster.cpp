@@ -325,6 +325,14 @@ void OverlayWidget::RendererSW::paintCaption(QRect outer, float64 opacity) {
 	}
 }
 
+void OverlayWidget::RendererSW::paintSubtitles(
+		QRect outer,
+		float64 opacity) {
+	if (outer.intersects(_clipOuter)) {
+		_owner->paintSubtitlesContent(*_p, outer, _clipOuter, opacity);
+	}
+}
+
 void OverlayWidget::RendererSW::paintGroupThumbs(
 		QRect outer,
 		float64 opacity) {

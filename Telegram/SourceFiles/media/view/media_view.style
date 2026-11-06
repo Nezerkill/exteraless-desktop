@@ -288,6 +288,9 @@ mediaviewCaptionPadding: margins(11px, 6px, 11px, 6px);
 mediaviewCaptionMargin: size(11px, 11px);
 mediaviewCaptionRadius: 6px;
 
+mediaviewSubtitleBg: mediaviewCaptionBg;
+mediaviewSubtitleFg: mediaviewCaptionFg;
+
 mediaviewGroupPadding: margins(0px, 14px, 0px, 14px);
 mediaviewGroupHeight: 80px;
 mediaviewGroupWidth: 56px;

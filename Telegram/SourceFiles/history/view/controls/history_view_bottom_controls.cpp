@@ -152,6 +152,7 @@ void BottomControls::updateControlsVisibility() {
 		toggleOne(_joinChannel.get());
 		toggleOne(_joinGroup.get());
 		toggleOne(_muteUnmute.get());
+		toggleOne(_discuss.get());
 		toggleOne(_botStart.get());
 		toggleOne(_unblock.get());
 	};
@@ -167,6 +168,8 @@ void BottomControls::updateControlsVisibility() {
 			toggle(_joinGroup.get());
 		} else if (isMuteUnmute()) {
 			toggle(_muteUnmute.get());
+		} else if (isDiscuss()) {
+			toggle(_discuss.get());
 		} else if (isBotStart()) {
 			toggle(_botStart.get());
 		} else {
@@ -184,6 +187,7 @@ bool BottomControls::isButtonActive() const {
 		return isBlocked()
 			|| isJoinChannel()
 			|| isMuteUnmute()
+			|| isDiscuss()
 			|| isBotStart()
 			|| isReportMessages();
 	} else if (_mode == BottomControlsMode::Replies) {
@@ -242,6 +246,10 @@ void BottomControls::setupButtons() {
 			this,
 			tr::lng_channel_mute(tr::now).toUpper(),
 			st::historyComposeButton);
+		_discuss = std::make_unique<Ui::FlatButton>(
+			this,
+			tr::lng_profile_action_short_discuss(tr::now).toUpper(),
+			st::historyComposeButton);
 		_reportMessages = std::make_unique<Ui::FlatButton>(
 			this,
 			QString(),
@@ -250,6 +258,7 @@ void BottomControls::setupButtons() {
 		_botStart->hide();
 		_joinChannel->hide();
 		_muteUnmute->hide();
+		_discuss->hide();
 		_reportMessages->hide();
 		_unblock->setClickedCallback([=] {
 			_actionRequests.fire(BottomControlsAction::Unblock);
@@ -262,6 +271,9 @@ void BottomControls::setupButtons() {
 		});
 		_muteUnmute->setClickedCallback([=] {
 			_actionRequests.fire(BottomControlsAction::MuteUnmute);
+		});
+		_discuss->setClickedCallback([=] {
+			_actionRequests.fire(BottomControlsAction::Discuss);
 		});
 		_reportMessages->setClickedCallback([=] {
 			_actionRequests.fire(BottomControlsAction::Report);
@@ -337,9 +349,12 @@ void BottomControls::setupOverlayIconButton(
 	}, button->lifetime());
 	rpl::combine(
 		_muteUnmute->shownValue(),
-		_joinChannel->shownValue()
-	) | rpl::on_next([=](bool muteUnmute, bool joinChannel) {
-		const auto newParent = (muteUnmute && !joinChannel)
+		_joinChannel->shownValue(),
+		_discuss->shownValue()
+	) | rpl::on_next([=](bool muteUnmute, bool joinChannel, bool discuss) {
+		const auto newParent = discuss
+			? _discuss.get()
+			: (muteUnmute && !joinChannel)
 			? _muteUnmute.get()
 			: (joinChannel && !muteUnmute)
 			? _joinChannel.get()
@@ -568,11 +583,24 @@ bool BottomControls::isMuteUnmute() const {
 	if (_mode != BottomControlsMode::History) {
 		return false;
 	}
-	return Exteraless::Config::Instance().chatsSettings().channelBottomButton != 0
+	return Exteraless::Config::Instance().chatsSettings().channelBottomButton == 1
 		&& ((_peer->isBroadcast() && !_peer->asChannel()->canPostMessages())
 			|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer))
 			|| _peer->isRepliesChat()
 			|| _peer->isVerifyCodes());
+}
+
+bool BottomControls::isDiscuss() const {
+	if (_mode != BottomControlsMode::History) {
+		return false;
+	}
+	if (Exteraless::Config::Instance().chatsSettings().channelBottomButton != 2) {
+		return false;
+	}
+	const auto channel = _peer->asChannel();
+	return channel
+		&& ((channel->isBroadcast() && !channel->canPostMessages())
+			|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer)));
 }
 
 bool BottomControls::isReportMessages() const {
@@ -609,6 +637,9 @@ void BottomControls::resizeEvent(QResizeEvent *e) {
 	}
 	if (_muteUnmute) {
 		_muteUnmute->setGeometry(fullRect);
+	}
+	if (_discuss) {
+		_discuss->setGeometry(fullRect);
 	}
 	if (_reportMessages) {
 		_reportMessages->setGeometry(fullRect);

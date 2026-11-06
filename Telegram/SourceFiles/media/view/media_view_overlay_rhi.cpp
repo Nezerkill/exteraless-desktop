@@ -1719,6 +1719,18 @@ void OverlayWidget::RendererRhi::paintCaption(
 	}, true);
 }
 
+void OverlayWidget::RendererRhi::paintSubtitles(
+		QRect outer,
+		float64 opacity) {
+	if (outer.isEmpty() || opacity <= 0.) {
+		return;
+	}
+	paintUsingRaster(outer, [&](Painter &p) {
+		const auto newOuter = QRect(QPoint(), outer.size());
+		_owner->paintSubtitlesContent(p, newOuter, newOuter, opacity);
+	}, true);
+}
+
 void OverlayWidget::RendererRhi::paintGroupThumbs(
 		QRect outer,
 		float64 opacity) {

@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..9d9ccf9 100644
+index 811707d..9218496 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,35 @@ endif()
+@@ -70,6 +70,37 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -37,6 +37,8 @@ index 811707d..9d9ccf9 100644
 +    ../exteraless/proxy_rules_state.h
 +    SourceFiles/boxes/deleted_messages_box.cpp
 +    SourceFiles/boxes/deleted_messages_box.h
++    SourceFiles/exteraless/media_subtitles.cpp
++    SourceFiles/exteraless/media_subtitles.h
 +    SourceFiles/exteraless/pill_stack.cpp
 +    SourceFiles/exteraless/pill_stack.h
 +    SourceFiles/exteraless/plugins_box.cpp
@@ -48,7 +50,7 @@ index 811707d..9d9ccf9 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +138,7 @@ PRIVATE
+@@ -109,6 +140,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -56,7 +58,7 @@ index 811707d..9d9ccf9 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1710,7 @@ PRIVATE
+@@ -1680,6 +1712,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -64,7 +66,7 @@ index 811707d..9d9ccf9 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1928,8 @@ PRIVATE
+@@ -1897,6 +1930,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -73,7 +75,7 @@ index 811707d..9d9ccf9 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2563,10 @@ else()
+@@ -2530,6 +2565,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -85,10 +87,19 @@ index 811707d..9d9ccf9 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..455ad87 100644
+index ffc8ec9..6d283f4 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -9182,4 +9182,180 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ "lng_mediaview_save_as" = "Save As...";
+ "lng_mediaview_copy" = "Copy";
+ "lng_mediaview_copy_frame" = "Copy Frame";
++"lng_mediaview_subtitles_choose" = "Choose Subtitles File";
++"lng_mediaview_subtitles_disable" = "Disable Subtitles";
+ "lng_mediaview_forward" = "Forward";
+ "lng_mediaview_share_at_time" = "Share at {time}";
+ "lng_mediaview_delete" = "Delete";
+@@ -9182,4 +9184,185 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -112,6 +123,10 @@ index ffc8ec9..455ad87 100644
 +"lng_settings_exteraless_save_chat_subfolder" = "Save files in a folder per chat";
 +"lng_settings_exteraless_hide_ai_editor" = "Hide AI editor button";
 +"lng_settings_exteraless_hide_help" = "Hide Help settings";
++"lng_settings_exteraless_bot_privacy_enabled" = "Open bots in a dedicated account";
++"lng_settings_exteraless_bot_privacy_account" = "Bot account";
++"lng_settings_exteraless_bot_privacy_account_off" = "Off";
++"lng_settings_exteraless_bot_privacy_always_ask" = "Always ask which account to use";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 +"lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -205,6 +220,7 @@ index ffc8ec9..455ad87 100644
 +"lng_settings_exteraless_media_menu_copy_frame" = "Show Copy Frame";
 +"lng_settings_exteraless_media_menu_copy_photo" = "Show Copy";
 +"lng_settings_exteraless_media_menu_set_profile" = "Show Set as profile photo";
++"lng_settings_exteraless_media_menu_subtitles" = "Show Subtitles";
 +"lng_settings_exteraless_chats_custom_edited" = "Custom edited label";
 +"lng_settings_exteraless_chats_custom_edited_hint" = "Label instead of \"edited\"";
 +"lng_settings_exteraless_default" = "Default";
@@ -1362,6 +1378,186 @@ index 2bdf47a..e66bf76 100644
  		result.erase(ranges::find(result, Key{ Tab::Downloads }));
  	}
  	return result;
+diff --git a/Telegram/SourceFiles/exteraless/media_subtitles.cpp b/Telegram/SourceFiles/exteraless/media_subtitles.cpp
+new file mode 100644
+index 0000000..0f2b5a8
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/media_subtitles.cpp
+@@ -0,0 +1,133 @@
++#include "exteraless/media_subtitles.h"
++
++#include "base/basic_types.h"
++#include "exteraless/config.h"
++
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++
++#include <optional>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMaxStoredVideos = 128;
++
++[[nodiscard]] QJsonObject ReadStore() {
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(
++		Config::Instance().subtitlesFiles().toUtf8(),
++		&error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return {};
++	}
++	return document.object();
++}
++
++void WriteStore(const QJsonObject &store) {
++	Config::Instance().setSubtitlesFiles(QString::fromUtf8(
++		QJsonDocument(store).toJson(QJsonDocument::Compact)));
++}
++
++[[nodiscard]] QString StoredPath(const QJsonObject &store, qint64 docId) {
++	const auto key = VideoKey(docId);
++	if (!Subtitles::ValidVideoKey(key)) {
++		return {};
++	}
++	const auto path = store.value(key).toObject().value(
++		u"path"_q).toString();
++	return QFileInfo(path).isFile() ? path : QString();
++}
++
++[[nodiscard]] std::optional<Subtitles::State> ReadState(const QString &path) {
++	auto file = QFile(path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	auto cues = ParseSubtitles(file.readAll());
++	if (cues.isEmpty()) {
++		return std::nullopt;
++	}
++	return Subtitles::State{
++		.path = path,
++		.label = QFileInfo(path).fileName(),
++		.cues = std::move(cues),
++	};
++}
++
++} // namespace
++
++bool Subtitles::ValidVideoKey(const QString &key) {
++	if (!key.startsWith(u"doc_"_q)) {
++		return false;
++	}
++	auto ok = false;
++	const auto docId = key.mid(4).toLongLong(&ok);
++	return ok && docId >= 0 && (VideoKey(docId) == key);
++}
++
++Subtitles::State *Subtitles::find(qint64 docId) {
++	if (const auto i = _states.find(docId); i != _states.end()) {
++		return &i->second;
++	}
++	const auto path = StoredPath(ReadStore(), docId);
++	if (path.isEmpty()) {
++		return nullptr;
++	}
++	auto state = ReadState(path);
++	if (!state) {
++		return nullptr;
++	}
++	const auto inserted = _states.emplace(docId, std::move(*state));
++	return &inserted.first->second;
++}
++
++bool Subtitles::load(qint64 docId, const QString &path) {
++	auto state = ReadState(path);
++	if (!state) {
++		return false;
++	}
++	_states[docId] = std::move(*state);
++	persist(docId);
++	return true;
++}
++
++void Subtitles::disable(qint64 docId) {
++	_states.erase(docId);
++	persist(docId);
++}
++
++QString Subtitles::textAt(qint64 docId, qint64 position) {
++	const auto state = find(docId);
++	return state ? ActiveCueText(state->cues, position) : QString();
++}
++
++void Subtitles::persist(qint64 docId) const {
++	auto store = ReadStore();
++	const auto videoKey = VideoKey(docId);
++	const auto i = _states.find(docId);
++	if (i == _states.end()) {
++		if (!store.contains(videoKey)) {
++			return;
++		}
++		store.remove(videoKey);
++	} else {
++		auto entry = QJsonObject();
++		entry[u"path"_q] = i->second.path;
++		entry[u"label"_q] = i->second.label;
++		store[videoKey] = entry;
++	}
++	for (const auto &storedKey : store.keys()) {
++		if (store.size() <= kMaxStoredVideos) {
++			break;
++		} else if (storedKey != videoKey) {
++			store.remove(storedKey);
++		}
++	}
++	WriteStore(store);
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/media_subtitles.h b/Telegram/SourceFiles/exteraless/media_subtitles.h
+new file mode 100644
+index 0000000..ca87602
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/media_subtitles.h
+@@ -0,0 +1,35 @@
++#pragma once
++
++#include "exteraless/subtitles.h"
++
++#include <QList>
++#include <QString>
++
++#include <map>
++
++namespace Exteraless {
++
++class Subtitles final {
++public:
++	struct State {
++		QString path;
++		QString label;
++		QList<Cue> cues;
++	};
++
++	[[nodiscard]] static bool ValidVideoKey(const QString &key);
++
++	State *find(qint64 docId);
++	[[nodiscard]] bool load(qint64 docId, const QString &path);
++	void disable(qint64 docId);
++
++	[[nodiscard]] QString textAt(qint64 docId, qint64 position);
++
++private:
++	void persist(qint64 docId) const;
++
++	std::map<qint64, State> _states;
++
++};
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
 new file mode 100644
 index 0000000..db3fa5e
@@ -4351,7 +4547,7 @@ index 43b2003..184bd64 100644
  			if (k->key() == Qt::Key_Up) {
  #ifdef Q_OS_MAC
 diff --git a/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.cpp b/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.cpp
-index c34d06a..6ea7b7b 100644
+index c34d06a..583975b 100644
 --- a/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.cpp
 +++ b/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.cpp
 @@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -4362,7 +4558,77 @@ index c34d06a..6ea7b7b 100644
  #include "history/history.h"
  #include "history/history_item_helpers.h"
  #include "history/view/controls/compose_controls_common.h"
-@@ -567,10 +568,11 @@ bool BottomControls::isMuteUnmute() const {
+@@ -151,6 +152,7 @@ void BottomControls::updateControlsVisibility() {
+ 		toggleOne(_joinChannel.get());
+ 		toggleOne(_joinGroup.get());
+ 		toggleOne(_muteUnmute.get());
++		toggleOne(_discuss.get());
+ 		toggleOne(_botStart.get());
+ 		toggleOne(_unblock.get());
+ 	};
+@@ -166,6 +168,8 @@ void BottomControls::updateControlsVisibility() {
+ 			toggle(_joinGroup.get());
+ 		} else if (isMuteUnmute()) {
+ 			toggle(_muteUnmute.get());
++		} else if (isDiscuss()) {
++			toggle(_discuss.get());
+ 		} else if (isBotStart()) {
+ 			toggle(_botStart.get());
+ 		} else {
+@@ -183,6 +187,7 @@ bool BottomControls::isButtonActive() const {
+ 		return isBlocked()
+ 			|| isJoinChannel()
+ 			|| isMuteUnmute()
++			|| isDiscuss()
+ 			|| isBotStart()
+ 			|| isReportMessages();
+ 	} else if (_mode == BottomControlsMode::Replies) {
+@@ -241,6 +246,10 @@ void BottomControls::setupButtons() {
+ 			this,
+ 			tr::lng_channel_mute(tr::now).toUpper(),
+ 			st::historyComposeButton);
++		_discuss = std::make_unique<Ui::FlatButton>(
++			this,
++			tr::lng_profile_action_short_discuss(tr::now).toUpper(),
++			st::historyComposeButton);
+ 		_reportMessages = std::make_unique<Ui::FlatButton>(
+ 			this,
+ 			QString(),
+@@ -249,6 +258,7 @@ void BottomControls::setupButtons() {
+ 		_botStart->hide();
+ 		_joinChannel->hide();
+ 		_muteUnmute->hide();
++		_discuss->hide();
+ 		_reportMessages->hide();
+ 		_unblock->setClickedCallback([=] {
+ 			_actionRequests.fire(BottomControlsAction::Unblock);
+@@ -262,6 +272,9 @@ void BottomControls::setupButtons() {
+ 		_muteUnmute->setClickedCallback([=] {
+ 			_actionRequests.fire(BottomControlsAction::MuteUnmute);
+ 		});
++		_discuss->setClickedCallback([=] {
++			_actionRequests.fire(BottomControlsAction::Discuss);
++		});
+ 		_reportMessages->setClickedCallback([=] {
+ 			_actionRequests.fire(BottomControlsAction::Report);
+ 		});
+@@ -336,9 +349,12 @@ void BottomControls::setupOverlayIconButton(
+ 	}, button->lifetime());
+ 	rpl::combine(
+ 		_muteUnmute->shownValue(),
+-		_joinChannel->shownValue()
+-	) | rpl::on_next([=](bool muteUnmute, bool joinChannel) {
+-		const auto newParent = (muteUnmute && !joinChannel)
++		_joinChannel->shownValue(),
++		_discuss->shownValue()
++	) | rpl::on_next([=](bool muteUnmute, bool joinChannel, bool discuss) {
++		const auto newParent = discuss
++			? _discuss.get()
++			: (muteUnmute && !joinChannel)
+ 			? _muteUnmute.get()
+ 			: (joinChannel && !muteUnmute)
+ 			? _joinChannel.get()
+@@ -567,10 +583,24 @@ bool BottomControls::isMuteUnmute() const {
  	if (_mode != BottomControlsMode::History) {
  		return false;
  	}
@@ -4370,14 +4636,65 @@ index c34d06a..6ea7b7b 100644
 -		|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer))
 -		|| _peer->isRepliesChat()
 -		|| _peer->isVerifyCodes();
-+	return Exteraless::Config::Instance().chatsSettings().channelBottomButton != 0
++	return Exteraless::Config::Instance().chatsSettings().channelBottomButton == 1
 +		&& ((_peer->isBroadcast() && !_peer->asChannel()->canPostMessages())
 +			|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer))
 +			|| _peer->isRepliesChat()
 +			|| _peer->isVerifyCodes());
++}
++
++bool BottomControls::isDiscuss() const {
++	if (_mode != BottomControlsMode::History) {
++		return false;
++	}
++	if (Exteraless::Config::Instance().chatsSettings().channelBottomButton != 2) {
++		return false;
++	}
++	const auto channel = _peer->asChannel();
++	return channel
++		&& ((channel->isBroadcast() && !channel->canPostMessages())
++			|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer)));
  }
  
  bool BottomControls::isReportMessages() const {
+@@ -608,6 +638,9 @@ void BottomControls::resizeEvent(QResizeEvent *e) {
+ 	if (_muteUnmute) {
+ 		_muteUnmute->setGeometry(fullRect);
+ 	}
++	if (_discuss) {
++		_discuss->setGeometry(fullRect);
++	}
+ 	if (_reportMessages) {
+ 		_reportMessages->setGeometry(fullRect);
+ 	}
+diff --git a/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.h b/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.h
+index c4b790a..a7351bb 100644
+--- a/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.h
++++ b/Telegram/SourceFiles/history/view/controls/history_view_bottom_controls.h
+@@ -42,6 +42,7 @@ enum class BottomControlsAction {
+ 	JoinChannel,
+ 	JoinGroup,
+ 	MuteUnmute,
++	Discuss,
+ 	Report,
+ };
+ 
+@@ -106,6 +107,7 @@ private:
+ 	[[nodiscard]] bool isJoinChannel() const;
+ 	[[nodiscard]] bool isJoinGroup() const;
+ 	[[nodiscard]] bool isMuteUnmute() const;
++	[[nodiscard]] bool isDiscuss() const;
+ 	[[nodiscard]] bool isReportMessages() const;
+ 	[[nodiscard]] bool isChoosingTheme() const;
+ 
+@@ -124,6 +126,7 @@ private:
+ 	std::unique_ptr<Ui::FlatButton> _joinChannel;
+ 	std::unique_ptr<Ui::FlatButton> _joinGroup;
+ 	std::unique_ptr<Ui::FlatButton> _muteUnmute;
++	std::unique_ptr<Ui::FlatButton> _discuss;
+ 	std::unique_ptr<Ui::FlatButton> _reportMessages;
+ 	QPointer<Ui::IconButton> _giftToChannel;
+ 	QPointer<Ui::IconButton> _directMessage;
 diff --git a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp b/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
 index f95a351..6f65edd 100644
 --- a/Telegram/SourceFiles/history/view/controls/history_view_compose_controls.cpp
@@ -4621,7 +4938,7 @@ index 9971a38..6c1e80e 100644
  	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
  	const auto authorWidth = st::msgDateFont->width(author);
 diff --git a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
-index 28e423b..b432f49 100644
+index 28e423b..bf0736c 100644
 --- a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
 @@ -7,6 +7,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -4637,7 +4954,30 @@ index 28e423b..b432f49 100644
  #include "history/admin_log/history_admin_log_section.h"
  #include "history/view/controls/history_view_top_controls.h"
  #include "history/view/controls/history_view_bottom_controls.h"
-@@ -2326,6 +2332,9 @@ Api::SendAction ChatWidget::prepareSendAction(
+@@ -886,6 +892,22 @@ ChatWidget::ChatWidget(
+ 		case BottomControlsAction::MuteUnmute:
+ 			toggleMuteUnmute();
+ 			break;
++		case BottomControlsAction::Discuss: {
++			const auto channel = _peer->asChannel();
++			if (!channel) {
++				break;
++			}
++			if (channel->invitePeekExpires()) {
++				this->controller()->showToast(
++					tr::lng_channel_invite_private(tr::now));
++			} else if (const auto chat = channel->discussionLink()) {
++				this->controller()->showPeerHistory(
++					chat,
++					Window::SectionShow::Way::Forward);
++			} else {
++				_peer->updateFull();
++			}
++		} break;
+ 		case BottomControlsAction::Report:
+ 			reportSelectedMessages();
+ 			break;
+@@ -2326,6 +2348,9 @@ Api::SendAction ChatWidget::prepareSendAction(
  	}
  
  	result.options.sendAs = _composeControls->sendAsPeer();
@@ -4647,7 +4987,7 @@ index 28e423b..b432f49 100644
  	result.options.suggest = suggestOptions();
  	result.clearDraft = !Iv::Editor::IsComposeBoxOpen(
  		&session(),
-@@ -2565,6 +2574,42 @@ void ChatWidget::sendTextWithTags(
+@@ -2565,6 +2590,42 @@ void ChatWidget::sendTextWithTags(
  		_cornerButtons.clearReplyReturns();
  	}
  
@@ -4690,7 +5030,7 @@ index 28e423b..b432f49 100644
  	auto message = Api::MessageToSend(prepareSendAction(options));
  	message.textWithTags = textWithTags;
  	if (useCurrentWebPageDraft) {
-@@ -4538,6 +4583,9 @@ void ChatWidget::onScroll() {
+@@ -4538,6 +4599,9 @@ void ChatWidget::onScroll() {
  	}
  	if (!_synteticScrollEvent) {
  		_lastUserScrolled = crl::now();
@@ -6285,19 +6625,179 @@ index 2721c7a..6bfa900 100644
  	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
  	_mtp->writeKeysRequests(
  	) | rpl::filter([=] {
+diff --git a/Telegram/SourceFiles/media/view/media_view.style b/Telegram/SourceFiles/media/view/media_view.style
+index 8e69f8d..6913998 100644
+--- a/Telegram/SourceFiles/media/view/media_view.style
++++ b/Telegram/SourceFiles/media/view/media_view.style
+@@ -288,6 +288,9 @@ mediaviewCaptionPadding: margins(11px, 6px, 11px, 6px);
+ mediaviewCaptionMargin: size(11px, 11px);
+ mediaviewCaptionRadius: 6px;
+ 
++mediaviewSubtitleBg: mediaviewCaptionBg;
++mediaviewSubtitleFg: mediaviewCaptionFg;
++
+ mediaviewGroupPadding: margins(0px, 14px, 0px, 14px);
+ mediaviewGroupHeight: 80px;
+ mediaviewGroupWidth: 56px;
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_opengl.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_opengl.cpp
+index 2f80f30..dd17abb 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_opengl.cpp
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_opengl.cpp
+@@ -33,7 +33,8 @@ constexpr auto kSpeedBoostOffset = kChapterOffset + 4;
+ constexpr auto kFooterOffset = kSpeedBoostOffset + 4;
+ constexpr auto kCaptionOffset = kFooterOffset + 4;
+ constexpr auto kGroupThumbsOffset = kCaptionOffset + 4;
+-constexpr auto kControlsOffset = kGroupThumbsOffset + 4;
++constexpr auto kSubtitlesOffset = kGroupThumbsOffset + 4;
++constexpr auto kControlsOffset = kSubtitlesOffset + 4;
+ constexpr auto kControlValues = 4 * 4 + 4 * 4; // over + icon
+ 
+ [[nodiscard]] ShaderPart FragmentApplyControlsFade() {
+@@ -148,6 +149,7 @@ OverlayWidget::RendererGL::RendererGL(not_null<OverlayWidget*> owner)
+ 		_saveMsgImage.invalidate();
+ 		_footerImage.invalidate();
+ 		_captionImage.invalidate();
++		_subtitlesImage.invalidate();
+ 		invalidateControls();
+ 	}, _lifetime);
+ 
+@@ -169,7 +171,7 @@ OverlayWidget::RendererGL::RendererGL(not_null<OverlayWidget*> owner)
+ }
+ 
+ void OverlayWidget::RendererGL::init(QOpenGLFunctions &f) {
+-	constexpr auto kQuads = 11;
++	constexpr auto kQuads = 12;
+ 	constexpr auto kQuadVertices = kQuads * 4;
+ 	constexpr auto kQuadValues = kQuadVertices * 4;
+ 	constexpr auto kControlsValues = kControlsCount * kControlValues;
+@@ -971,6 +973,15 @@ void OverlayWidget::RendererGL::paintCaption(QRect outer, float64 opacity) {
+ 	}, kCaptionOffset, true);
+ }
+ 
++void OverlayWidget::RendererGL::paintSubtitles(
++		QRect outer,
++		float64 opacity) {
++	paintUsingRaster(_subtitlesImage, outer, [&](Painter &&p) {
++		const auto newOuter = QRect(QPoint(), outer.size());
++		_owner->paintSubtitlesContent(p, newOuter, newOuter, opacity);
++	}, kSubtitlesOffset, true);
++}
++
+ void OverlayWidget::RendererGL::paintGroupThumbs(
+ 		QRect outer,
+ 		float64 opacity) {
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_opengl.h b/Telegram/SourceFiles/media/view/media_view_overlay_opengl.h
+index 680e444..621ab02 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_opengl.h
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_opengl.h
+@@ -71,6 +71,7 @@ private:
+ 		const style::icon &icon) override;
+ 	void paintFooter(QRect outer, float64 opacity) override;
+ 	void paintCaption(QRect outer, float64 opacity) override;
++	void paintSubtitles(QRect outer, float64 opacity) override;
+ 	void paintGroupThumbs(QRect outer, float64 opacity) override;
+ 	void paintRoundedCorners(int radius) override;
+ 	void paintStoriesSiblingPart(
+@@ -151,6 +152,7 @@ private:
+ 	Ui::GL::Image _speedBoostImage;
+ 	Ui::GL::Image _footerImage;
+ 	Ui::GL::Image _captionImage;
++	Ui::GL::Image _subtitlesImage;
+ 	Ui::GL::Image _groupThumbsImage;
+ 	Ui::GL::Image _controlsImage;
+ 
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_raster.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_raster.cpp
+index 9619141..cb9b966 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_raster.cpp
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_raster.cpp
+@@ -325,6 +325,14 @@ void OverlayWidget::RendererSW::paintCaption(QRect outer, float64 opacity) {
+ 	}
+ }
+ 
++void OverlayWidget::RendererSW::paintSubtitles(
++		QRect outer,
++		float64 opacity) {
++	if (outer.intersects(_clipOuter)) {
++		_owner->paintSubtitlesContent(*_p, outer, _clipOuter, opacity);
++	}
++}
++
+ void OverlayWidget::RendererSW::paintGroupThumbs(
+ 		QRect outer,
+ 		float64 opacity) {
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_raster.h b/Telegram/SourceFiles/media/view/media_view_overlay_raster.h
+index 7a75930..5de9f9f 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_raster.h
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_raster.h
+@@ -55,6 +55,7 @@ private:
+ 		const style::icon &icon) override;
+ 	void paintFooter(QRect outer, float64 opacity) override;
+ 	void paintCaption(QRect outer, float64 opacity) override;
++	void paintSubtitles(QRect outer, float64 opacity) override;
+ 	void paintGroupThumbs(QRect outer, float64 opacity) override;
+ 	void paintRoundedCorners(int radius) override;
+ 	void paintStoriesSiblingPart(
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_renderer.h b/Telegram/SourceFiles/media/view/media_view_overlay_renderer.h
+index a77a33e..10426e8 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_renderer.h
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_renderer.h
+@@ -45,6 +45,7 @@ public:
+ 		const style::icon &icon) = 0;
+ 	virtual void paintFooter(QRect outer, float64 opacity) = 0;
+ 	virtual void paintCaption(QRect outer, float64 opacity) = 0;
++	virtual void paintSubtitles(QRect outer, float64 opacity) = 0;
+ 	virtual void paintGroupThumbs(QRect outer, float64 opacity) = 0;
+ 	virtual void paintRoundedCorners(int radius) = 0;
+ 	virtual void paintStoriesSiblingPart(
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_rhi.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_rhi.cpp
+index fe61046..99d5b1a 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_rhi.cpp
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_rhi.cpp
+@@ -1719,6 +1719,18 @@ void OverlayWidget::RendererRhi::paintCaption(
+ 	}, true);
+ }
+ 
++void OverlayWidget::RendererRhi::paintSubtitles(
++		QRect outer,
++		float64 opacity) {
++	if (outer.isEmpty() || opacity <= 0.) {
++		return;
++	}
++	paintUsingRaster(outer, [&](Painter &p) {
++		const auto newOuter = QRect(QPoint(), outer.size());
++		_owner->paintSubtitlesContent(p, newOuter, newOuter, opacity);
++	}, true);
++}
++
+ void OverlayWidget::RendererRhi::paintGroupThumbs(
+ 		QRect outer,
+ 		float64 opacity) {
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_rhi.h b/Telegram/SourceFiles/media/view/media_view_overlay_rhi.h
+index 059d22f..bd2e53e 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_rhi.h
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_rhi.h
+@@ -78,6 +78,7 @@ private:
+ 		const style::icon &icon) override;
+ 	void paintFooter(QRect outer, float64 opacity) override;
+ 	void paintCaption(QRect outer, float64 opacity) override;
++	void paintSubtitles(QRect outer, float64 opacity) override;
+ 	void paintGroupThumbs(QRect outer, float64 opacity) override;
+ 	void paintRoundedCorners(int radius) override;
+ 	void paintStoriesSiblingPart(
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..dc90897 100644
+index 2acbe80..4121a66 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "boxes/premium_preview_box.h"
  #include "calls/calls_instance.h"
  #include "core/application.h"
 +#include "exteraless/config.h"
++#include "exteraless/media_subtitles.h"
  #include "core/click_handler_types.h"
  #include "core/core_screenshot_protection.h"
  #include "core/file_utilities.h"
-@@ -205,8 +206,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
+@@ -205,8 +207,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
  constexpr auto kZoomToScreenLevel = 1024;
  constexpr auto kPinchZoomStep = 0.25;
  constexpr auto kOverlayLoaderPriority = 2;
@@ -6313,7 +6813,7 @@ index 2acbe80..dc90897 100644
  constexpr auto kFrameStepFallbackFps = 30.;
  constexpr auto kFrameStepThrottleMs = crl::time(150);
  
-@@ -2296,15 +2302,20 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2296,15 +2303,20 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { copyRecognitionSelection(); },
  			&st::mediaMenuIconCopy);
  	}
@@ -6343,7 +6843,7 @@ index 2acbe80..dc90897 100644
  	}
  	if ((_photo && _photo->hasAttachedStickers())
  		|| (_document && _document->hasAttachedStickers())) {
-@@ -2313,7 +2324,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2313,7 +2325,9 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { showAttachedStickers(); },
  			&st::mediaMenuIconStickers);
  	}
@@ -6354,7 +6854,7 @@ index 2acbe80..dc90897 100644
  		addAction(
  			tr::lng_mediaview_forward(tr::now),
  			[=] { forwardMedia(); },
-@@ -2344,7 +2357,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2344,11 +2358,26 @@ void OverlayWidget::fillContextMenuActions(
  			}, state->lifetime);
  		}
  	}
@@ -6365,7 +6865,24 @@ index 2acbe80..dc90897 100644
  		addAction(tr::lng_mediaview_forward(tr::now), [=] {
  			_stories->shareRequested();
  		}, &st::mediaMenuIconForward);
-@@ -2416,6 +2431,9 @@ void OverlayWidget::fillContextMenuActions(
+ 	}
++	if (canShowSubtitles()
++		&& Exteraless::Config::Instance().mediaViewerMenuSubtitles()) {
++		addAction(
++			tr::lng_mediaview_subtitles_choose(tr::now),
++			[=] { chooseSubtitles(); },
++			&st::mediaMenuIconShowInFolder);
++		if (hasChosenSubtitles()) {
++			addAction(
++				tr::lng_mediaview_subtitles_disable(tr::now),
++				[=] { disableSubtitles(); },
++				&st::mediaMenuIconCancel);
++		}
++	}
+ 	const auto canDelete = [&] {
+ 		if (story && story->canDelete()) {
+ 			return true;
+@@ -2416,6 +2445,9 @@ void OverlayWidget::fillContextMenuActions(
  		} else {
  			return;
  		}
@@ -6375,7 +6892,190 @@ index 2acbe80..dc90897 100644
  		const auto photo = _photo;
  		const auto peer = _peer;
  		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
-@@ -7328,11 +7346,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -3445,6 +3477,79 @@ void OverlayWidget::shareAtTime() {
+ 	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
+ }
+ 
++bool OverlayWidget::canShowSubtitles() const {
++	const auto media = _message ? _message->media() : nullptr;
++	return _document
++		&& media
++		&& _streamed
++		&& _document == media->document()
++		&& _document->isVideoFile()
++		&& !media->webpage()
++		&& !_videoStream;
++}
++
++void OverlayWidget::ensureSubtitlesState() {
++	if (!_document) {
++		return;
++	}
++	const auto documentId = static_cast<qint64>(_document->id);
++	if (_subtitles && _subtitlesDocumentId == documentId) {
++		return;
++	}
++	if (!_subtitles) {
++		_subtitles = std::make_unique<Exteraless::Subtitles>();
++	}
++	_subtitlesDocumentId = documentId;
++	_subtitles->find(documentId);
++}
++
++void OverlayWidget::refreshSubtitlesText() {
++	const auto text = (_subtitles && _subtitlesDocumentId && canShowSubtitles())
++		? _subtitles->textAt(_subtitlesDocumentId, _streamedPosition)
++		: QString();
++	if (_subtitlesText != text) {
++		_subtitlesText = text;
++		update();
++	}
++}
++
++bool OverlayWidget::hasChosenSubtitles() {
++	ensureSubtitlesState();
++	return _subtitles && _subtitles->find(_subtitlesDocumentId);
++}
++
++void OverlayWidget::chooseSubtitles() {
++	if (!canShowSubtitles()) {
++		return;
++	}
++	ensureSubtitlesState();
++	const auto documentId = static_cast<qint64>(_document->id);
++	FileDialog::GetOpenPath(
++		_window.get(),
++		u"Choose subtitles"_q,
++		u"Subtitle files (*.srt *.vtt)"_q,
++		crl::guard(_window, [=](FileDialog::OpenResult &&result) {
++			if (result.paths.isEmpty()
++				|| !_subtitles
++				|| _subtitlesDocumentId != documentId) {
++				return;
++			}
++			if (_subtitles->load(documentId, result.paths.front())) {
++				refreshSubtitlesText();
++				update();
++			}
++		}));
++}
++
++void OverlayWidget::disableSubtitles() {
++	if (!_subtitles || !_subtitlesDocumentId) {
++		return;
++	}
++	_subtitles->disable(_subtitlesDocumentId);
++	_subtitlesText.clear();
++	update();
++}
++
+ void OverlayWidget::downloadMedia() {
+ 	if (!_photo && !_document) {
+ 		return;
+@@ -5284,6 +5389,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
+ 		Core::App().updateNonIdle();
+ 		updatePlaybackState();
+ 		_streamedPosition = update.position;
++		refreshSubtitlesText();
+ 	}, [&](PreloadedAudio) {
+ 		updatePlaybackState();
+ 	}, [&](UpdateAudio) {
+@@ -6046,6 +6152,7 @@ void OverlayWidget::playbackPauseMusic() {
+ void OverlayWidget::updatePlaybackState() {
+ 	Expects(_streamed != nullptr);
+ 
++	ensureSubtitlesState();
+ 	refreshSystemMediaControls();
+ 	if (!_streamed->controls && !_stories) {
+ 		return;
+@@ -6063,6 +6170,7 @@ void OverlayWidget::updatePlaybackState() {
+ 			_stories->updatePlayback(state);
+ 		}
+ 	}
++	refreshSubtitlesText();
+ }
+ 
+ void OverlayWidget::setSystemMediaControls(
+@@ -6487,6 +6595,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
+ 				opacity);
+ 		}
+ 	}
++	const auto subtitlesRect = subtitlesGeometry();
++	if (!subtitlesRect.isEmpty()) {
++		renderer->paintSubtitles(subtitlesRect, 1.);
++	}
+ 	checkGroupThumbsAnimation();
+ 	if (const auto radius = _window->manualRoundingRadius()) {
+ 		renderer->paintRoundedCorners(radius);
+@@ -7279,6 +7391,67 @@ QRect OverlayWidget::captionGeometry() const {
+ 		_stories ? _stories->repostCaptionPadding() : QMargins());
+ }
+ 
++QRect OverlayWidget::subtitlesGeometry() const {
++	if (_subtitlesText.isEmpty() || !canShowSubtitles()) {
++		return QRect();
++	}
++	const auto content = finalContentRect();
++	const auto padding = st::mediaviewCaptionPadding;
++	const auto skip = st::mediaviewCaptionMargin;
++	const auto &font = st::mediaviewCaptionStyle.font;
++	const auto lines = _subtitlesText.split(u'\n');
++	auto textWidth = 0;
++	for (const auto &line : lines) {
++		textWidth = std::max(textWidth, font->width(line));
++	}
++	const auto available = std::max(
++		content.width() - 2 * skip.width() - padding.left() - padding.right(),
++		1);
++	textWidth = std::min(textWidth, available);
++	const auto width = textWidth + padding.left() + padding.right();
++	const auto height = int(lines.size()) * font->height
++		+ padding.top()
++		+ padding.bottom();
++	const auto bottomSkip = st::mediaviewControllerSize.height()
++		+ st::mediaviewCaptionPadding.bottom()
++		+ skip.height();
++	return QRect(
++		content.x() + (content.width() - width) / 2,
++		content.y() + content.height() - height - bottomSkip,
++		width,
++		height);
++}
++
++void OverlayWidget::paintSubtitlesContent(
++		Painter &p,
++		QRect outer,
++		QRect clip,
++		float64 opacity) {
++	const auto inner = outer.marginsRemoved(st::mediaviewCaptionPadding);
++	if (inner.isEmpty() || !inner.intersects(clip)) {
++		return;
++	}
++	p.setOpacity(opacity);
++	p.setPen(Qt::NoPen);
++	p.setBrush(st::mediaviewSubtitleBg);
++	p.drawRoundedRect(
++		outer,
++		st::mediaviewCaptionRadius,
++		st::mediaviewCaptionRadius);
++	const auto &font = st::mediaviewCaptionStyle.font;
++	p.setFont(font);
++	p.setPen(st::mediaviewSubtitleFg);
++	auto top = inner.y();
++	for (const auto &line : _subtitlesText.split(u'\n')) {
++		p.drawText(
++			QRect(inner.x(), top, inner.width(), font->height),
++			Qt::AlignHCenter | Qt::AlignTop,
++			font->elided(line, inner.width()));
++		top += font->height;
++	}
++	p.setOpacity(1.);
++}
++
+ void OverlayWidget::paintGroupThumbsContent(
+ 		Painter &p,
+ 		QRect outer,
+@@ -7328,11 +7501,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -6389,7 +7089,7 @@ index 2acbe80..dc90897 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7402,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7557,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -6402,6 +7102,58 @@ index 2acbe80..dc90897 100644
  			}
  			return;
  		}
+diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
+index 40d67d4..aa92ef8 100644
+--- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
++++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
+@@ -42,6 +42,10 @@ class DocumentMedia;
+ struct StoriesContext;
+ } // namespace Data
+ 
++namespace Exteraless {
++class Subtitles;
++} // namespace Exteraless
++
+ namespace Ui {
+ class DropdownMenu;
+ class PopupMenu;
+@@ -329,6 +333,13 @@ private:
+ 	[[nodiscard]] TimeId shareAtVideoTimestamp() const;
+ 	void shareAtTime();
+ 
++	[[nodiscard]] bool canShowSubtitles() const;
++	void ensureSubtitlesState();
++	void refreshSubtitlesText();
++	[[nodiscard]] bool hasChosenSubtitles();
++	void chooseSubtitles();
++	void disableSubtitles();
++
+ 	void showSaveMsgToast(const QString &path, auto phrase);
+ 	void showSaveMsgToastWith(
+ 		const QString &path,
+@@ -552,6 +563,12 @@ private:
+ 		QRect clip,
+ 		float64 opacity);
+ 	[[nodiscard]] QRect captionGeometry() const;
++	void paintSubtitlesContent(
++		Painter &p,
++		QRect outer,
++		QRect clip,
++		float64 opacity);
++	[[nodiscard]] QRect subtitlesGeometry() const;
+ 	void paintGroupThumbsContent(
+ 		Painter &p,
+ 		QRect outer,
+@@ -735,6 +752,9 @@ private:
+ 	std::unique_ptr<PipWrap> _pip;
+ 	QImage _streamedQualityChangeFrame;
+ 	crl::time _streamedPosition = 0;
++	std::unique_ptr<Exteraless::Subtitles> _subtitles;
++	qint64 _subtitlesDocumentId = 0;
++	QString _subtitlesText;
+ 	SystemMediaControlsVideoSink *_smtcSink = nullptr;
+ 	DocumentData *_smtcDocument = nullptr;
+ 	bool _smtcThumbnailSet = false;
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 index d25fe3b..59d169d 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
@@ -6630,10 +7382,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..a3d85e3
+index 0000000..e0d0e18
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,1980 @@
+@@ -0,0 +1,2093 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -6647,6 +7399,7 @@ index 0000000..a3d85e3
 +#include "base/options.h"
 +#include "core/application.h"
 +#include "core/file_utilities.h"
++#include "main/main_account.h"
 +#include "main/main_domain.h"
 +#include "main/main_session.h"
 +#include "settings.h"
@@ -6659,6 +7412,7 @@ index 0000000..a3d85e3
 +#include "styles/style_layers.h"
 +#include "data/data_session.h"
 +#include "data/data_chat_filters.h"
++#include "data/data_user.h"
 +#include "dialogs/dialogs_entry.h"
 +#include "lang/lang_keys.h"
 +#include "settings/settings_builder.h"
@@ -6993,6 +7747,110 @@ index 0000000..a3d85e3
 +		}, hidePhone->lifetime());
 +	}
 +
++	const auto botPrivacyEnabled = builder.addButton({
++		.id = u"exteraless/bot-privacy/enabled"_q,
++		.title = tr::lng_settings_exteraless_bot_privacy_enabled(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().botPrivacyEnabled()),
++		.keywords = { u"bot"_q, u"privacy"_q, u"account"_q },
++	});
++	if (botPrivacyEnabled) {
++		botPrivacyEnabled->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().botPrivacyEnabled());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setBotPrivacyEnabled(value);
++		}, botPrivacyEnabled->lifetime());
++	}
++
++	const auto botPrivacyAccountLabel = [](int value) {
++		const auto accounts = Core::App().domain().orderedAccounts();
++		if (value <= 0 || value > int(accounts.size())) {
++			return tr::lng_settings_exteraless_bot_privacy_account_off(
++				tr::now);
++		}
++		const auto session = accounts[value - 1]->maybeSession();
++		return session
++			? session->user()->name()
++			: tr::lng_settings_exteraless_bot_privacy_account(
++				tr::now);
++	};
++	const auto botPrivacyAccount = std::make_shared<rpl::variable<QString>>(
++		botPrivacyAccountLabel(
++			Exteraless::Config::Instance().botPrivacyAccount()));
++	builder.addButton({
++		.id = u"exteraless/bot-privacy/account"_q,
++		.title = tr::lng_settings_exteraless_bot_privacy_account(),
++		.st = &st::settingsButtonNoIcon,
++		.label = botPrivacyAccount->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto currentAccount
++				= Exteraless::Config::Instance().botPrivacyAccount();
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				(currentAccount > 0) ? currentAccount : 0);
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_bot_privacy_account());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				inner->add(
++					object_ptr<Ui::Radioenum<int>>(
++						inner,
++						group,
++						0,
++						tr::lng_settings_exteraless_bot_privacy_account_off(
++							tr::now),
++						st::settingsSendType),
++					st::settingsSendTypePadding);
++				const auto accounts
++					= Core::App().domain().orderedAccounts();
++				for (auto i = 0; i != int(accounts.size()); ++i) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							i + 1,
++							botPrivacyAccountLabel(i + 1),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance()
++						.setBotPrivacyAccount(value);
++					botPrivacyAccount->force_assign(
++						botPrivacyAccountLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"bot"_q, u"privacy"_q, u"account"_q, u"ask"_q },
++	});
++
++	const auto botPrivacyAlwaysAsk = builder.addButton({
++		.id = u"exteraless/bot-privacy/always-ask"_q,
++		.title = tr::lng_settings_exteraless_bot_privacy_always_ask(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().botPrivacyAlwaysAsk()),
++		.keywords = { u"bot"_q, u"privacy"_q, u"ask"_q, u"account"_q },
++	});
++	if (botPrivacyAlwaysAsk) {
++		botPrivacyAlwaysAsk->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().botPrivacyAlwaysAsk());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setBotPrivacyAlwaysAsk(value);
++		}, botPrivacyAlwaysAsk->lifetime());
++	}
++
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/ghost"_q,
 +		.title = tr::lng_settings_exteraless_ghost(),
@@ -7219,6 +8077,13 @@ index 0000000..a3d85e3
 +		Exteraless::Config::Instance().mediaViewerMenuSetProfile(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setMediaViewerMenuSetProfile(value);
++		});
++	addMediaToggle(
++		u"exteraless/media-menu/subtitles"_q,
++		tr::lng_settings_exteraless_media_menu_subtitles(),
++		Exteraless::Config::Instance().mediaViewerMenuSubtitles(),
++		[](bool value) {
++			Exteraless::Config::Instance().setMediaViewerMenuSubtitles(value);
 +		});
 +
 +	builder.addSubsectionTitle({
@@ -9719,7 +10584,7 @@ index 56d2e56..47e57a5 100644
  				fieldForMention->insertTag(
  					peer->shortName(),
 diff --git a/Telegram/SourceFiles/window/window_session_controller.cpp b/Telegram/SourceFiles/window/window_session_controller.cpp
-index df2166f..bbddd3c 100644
+index df2166f..cc8b6f8 100644
 --- a/Telegram/SourceFiles/window/window_session_controller.cpp
 +++ b/Telegram/SourceFiles/window/window_session_controller.cpp
 @@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -9730,7 +10595,77 @@ index df2166f..bbddd3c 100644
  #include "apiwrap.h"
  #include "api/api_cloud_password.h"
  #include "api/api_text_entities.h"
-@@ -4163,9 +4164,15 @@ bool CheckAndJumpToNearChatsFilter(
+@@ -618,9 +619,69 @@ void SessionNavigation::showMessageByLinkResolved(
+ 	}
+ }
+ 
++namespace {
++
++[[nodiscard]] bool RouteBotToPrivacyAccount(
++		not_null<Window::SessionController*> controller,
++		not_null<PeerData*> peer,
++		const PeerByLinkInfo &info) {
++	if (!peer->isBot()) {
++		return false;
++	}
++	const auto &config = Exteraless::Config::Instance();
++	if (!config.botPrivacyEnabled()) {
++		return false;
++	}
++	const auto index = config.botPrivacyAccount();
++	const auto list = Core::App().domain().orderedAccounts();
++	if (index <= 0 || index > int(list.size())) {
++		Ui::Toast::Show({
++			.text = { u"Bot privacy account is not configured."_q },
++		});
++		return true;
++	}
++	const auto account = list[index - 1];
++	if (account == &controller->session().account()) {
++		return false;
++	}
++	const auto window = Core::App().windowFor({ account });
++	if (!window) {
++		Ui::Toast::Show({
++			.text = { u"Bot privacy account is not available."_q },
++		});
++		return true;
++	}
++	if (&window->account() != account) {
++		Core::App().domain().maybeActivate(account);
++		if (&window->account() != account) {
++			Ui::Toast::Show({
++				.text = { u"Could not switch to the bot privacy account."_q },
++			});
++			return true;
++		}
++	}
++	const auto target = window->sessionController();
++	if (!target) {
++		Ui::Toast::Show({
++			.text = { u"Bot privacy account is not available."_q },
++		});
++		return true;
++	}
++	if (target == controller) {
++		return false;
++	}
++	target->showPeerByLink(info);
++	return true;
++}
++
++} // namespace
++
+ void SessionNavigation::showPeerByLinkResolved(
+ 		not_null<PeerData*> peer,
+ 		const PeerByLinkInfo &info) {
++	if (RouteBotToPrivacyAccount(parentController(), peer, info)) {
++		return;
++	}
+ 	auto params = SectionShow{
+ 		SectionShow::Way::Forward
+ 	};
+@@ -4163,9 +4224,15 @@ bool CheckAndJumpToNearChatsFilter(
  		return false;
  	}
  	if (jump) {
@@ -9760,10 +10695,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..edbf074
+index 0000000..5dc5319
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,56 @@
 +add_library(exteraless STATIC
 +    backup.cpp
 +    backup.h
@@ -9800,6 +10735,8 @@ index 0000000..edbf074
 +    plugins/scanner.h
 +    save_path.cpp
 +    save_path.h
++    subtitles.cpp
++    subtitles.h
 +    zalgo.cpp
 +    zalgo.h
 +)
@@ -9820,10 +10757,10 @@ index 0000000..edbf074
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..fb7b0ff
+index 0000000..fbe1290
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,949 @@
+@@ -0,0 +1,1006 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -9876,6 +10813,8 @@ index 0000000..fb7b0ff
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
++constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
++constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -9957,6 +10896,12 @@ index 0000000..fb7b0ff
 +constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 +constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
++constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
++constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
++constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
++constexpr auto kBotPrivacyEnabledAlias = "botPrivacyEnabled";
++constexpr auto kBotPrivacyUserIdAlias = "botPrivacyUserId";
++constexpr auto kBotPrivacyAlwaysAskAlias = "alwaysAsk";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
 +constexpr auto kRemoveMessageTail = "removeMessageTail";
 +constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -10122,6 +11067,31 @@ index 0000000..fb7b0ff
 +	return true;
 +}
 +
++[[nodiscard]] QJsonObject SanitizeSubtitlesFiles(const QJsonValue &value) {
++	if (!value.isObject()) {
++		return QJsonObject();
++	}
++	auto result = QJsonObject();
++	const auto files = value.toObject();
++	for (auto i = files.begin(); i != files.end(); ++i) {
++		if (!i.value().isObject()) {
++			continue;
++		}
++		const auto entry = i.value().toObject();
++		const auto path = entry.value(QStringLiteral("path"));
++		if (!path.isString() || path.toString().isEmpty()) {
++			continue;
++		}
++		auto sanitized = QJsonObject();
++		sanitized[QStringLiteral("path")] = path.toString();
++		const auto label = entry.value(QStringLiteral("label"));
++		sanitized[QStringLiteral("label")]
++			= label.isString() ? label.toString() : QString();
++		result.insert(i.key(), sanitized);
++	}
++	return result;
++}
++
 +} // namespace
 +
 +QString EncodeInvisible(const QByteArray &json) {
@@ -10168,6 +11138,9 @@ index 0000000..fb7b0ff
 +	extera[kFormatTimeWithSeconds] = config.showSeconds();
 +	extera[kShowIdAndDc] = config.showIdDc();
 +	extera[kHidePhoneNumber] = config.hidePhone();
++	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
++	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
++	extera[kGeneralBotPrivacyAsk] = config.botPrivacyAlwaysAsk();
 +	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 +	extera[kRemoveMessageTail] = chats.removeMessageTail;
 +	extera[kHideReactionsInChannels] = chats.hideReactionsChannels;
@@ -10212,6 +11185,9 @@ index 0000000..fb7b0ff
 +	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 +	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
 +	extera[kMediaViewerMenuSetProfile] = config.mediaViewerMenuSetProfile();
++	extera[kMediaViewerMenuSubtitles] = config.mediaViewerMenuSubtitles();
++	extera[kSubtitlesFiles] = QJsonDocument::fromJson(
++		config.subtitlesFiles().toUtf8()).object();
 +	extera[kChatMenuBoost] = config.chatMenuBoost();
 +	extera[kChatMenuLinked] = config.chatMenuLinked();
 +	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
@@ -10367,6 +11343,18 @@ index 0000000..fb7b0ff
 +		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 +			&& value.isBool()) {
 +			config.setHidePhone(value.toBool());
++		} else if ((key == kGeneralBotPrivacyEnabled
++			|| key == kBotPrivacyEnabledAlias)
++			&& value.isBool()) {
++			config.setBotPrivacyEnabled(value.toBool());
++		} else if ((key == kGeneralBotPrivacyAccount
++			|| key == kBotPrivacyUserIdAlias)
++			&& value.isDouble()) {
++			config.setBotPrivacyAccount(value.toInt());
++		} else if ((key == kGeneralBotPrivacyAsk
++			|| key == kBotPrivacyAlwaysAskAlias)
++			&& value.isBool()) {
++			config.setBotPrivacyAlwaysAsk(value.toBool());
 +		} else if ((key == kShowIdAndDc || key == kShowIdDc)
 +			&& value.isBool()) {
 +			config.setShowIdDc(value.toBool());
@@ -10504,6 +11492,12 @@ index 0000000..fb7b0ff
 +			|| key == kMediaViewerMenuSetProfileAlias)
 +			&& value.isBool()) {
 +			config.setMediaViewerMenuSetProfile(value.toBool());
++		} else if (key == kMediaViewerMenuSubtitles && value.isBool()) {
++			config.setMediaViewerMenuSubtitles(value.toBool());
++		} else if (key == kSubtitlesFiles && value.isObject()) {
++			config.setSubtitlesFiles(QString::fromUtf8(
++				QJsonDocument(SanitizeSubtitlesFiles(value))
++					.toJson(QJsonDocument::Compact)));
 +		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
 +			&& value.isBool()) {
 +			config.setChatMenuBoost(value.toBool());
@@ -10896,10 +11890,10 @@ index 0000000..52592ec
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..1d288d0
+index 0000000..1246f5f
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1395 @@
+@@ -0,0 +1,1450 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -10946,6 +11940,8 @@ index 0000000..1d288d0
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
++constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
++constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -10980,6 +11976,9 @@ index 0000000..1d288d0
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
 +constexpr auto kMaxDeletedMarkLength = 32;
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
++constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
++constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
++constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 +constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
@@ -11377,6 +12376,27 @@ index 0000000..1d288d0
 +	setValue(kMediaViewerMenuSetProfile, value);
 +}
 +
++bool Config::mediaViewerMenuSubtitles() const {
++	return boolValue(kMediaViewerMenuSubtitles, true);
++}
++
++void Config::setMediaViewerMenuSubtitles(bool value) {
++	setValue(kMediaViewerMenuSubtitles, value);
++}
++
++QString Config::subtitlesFiles() const {
++	return stringValue(kSubtitlesFiles, QString());
++}
++
++void Config::setSubtitlesFiles(const QString &value) {
++	auto error = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(value.toUtf8(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return;
++	}
++	setValue(kSubtitlesFiles, value);
++}
++
 +bool Config::chatMenuBoost() const {
 +	return boolValue(kChatMenuBoost, true);
 +}
@@ -11547,6 +12567,30 @@ index 0000000..1d288d0
 +
 +void Config::setHidePhone(bool value) {
 +	setValue(kHidePhone, value);
++}
++
++bool Config::botPrivacyEnabled() const {
++	return boolValue(kGeneralBotPrivacyEnabled, false);
++}
++
++void Config::setBotPrivacyEnabled(bool value) {
++	setValue(kGeneralBotPrivacyEnabled, value);
++}
++
++int Config::botPrivacyAccount() const {
++	return std::clamp(intValue(kGeneralBotPrivacyAccount, -1), -1, 15);
++}
++
++void Config::setBotPrivacyAccount(int value) {
++	setValue(kGeneralBotPrivacyAccount, std::clamp(value, -1, 15));
++}
++
++bool Config::botPrivacyAlwaysAsk() const {
++	return boolValue(kGeneralBotPrivacyAsk, false);
++}
++
++void Config::setBotPrivacyAlwaysAsk(bool value) {
++	setValue(kGeneralBotPrivacyAsk, value);
 +}
 +
 +int Config::proxyDisableConditions() const {
@@ -12042,6 +13086,8 @@ index 0000000..1d288d0
 +			|| key == kMediaViewerMenuCopyFrame
 +			|| key == kMediaViewerMenuCopyPhoto
 +			|| key == kMediaViewerMenuSetProfile
++			|| key == kMediaViewerMenuSubtitles
++			|| key == kSubtitlesFiles
 +			|| key == kChatMenuBoost
 +			|| key == kChatMenuLinked
 +			|| key == kChatMenuViewDeleted
@@ -12063,6 +13109,9 @@ index 0000000..1d288d0
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
 +			|| key == kHidePhone
++			|| key == kGeneralBotPrivacyEnabled
++			|| key == kGeneralBotPrivacyAccount
++			|| key == kGeneralBotPrivacyAsk
 +			|| key == kProxyDisableConditions
 +			|| key == kProxyAutoDisabled
 +			|| key == kGhostSendReadPackets
@@ -12297,10 +13346,10 @@ index 0000000..1d288d0
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..e6ce671
+index 0000000..4480a14
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,281 @@
+@@ -0,0 +1,292 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -12404,6 +13453,10 @@ index 0000000..e6ce671
 +	void setMediaViewerMenuCopyPhoto(bool value);
 +	[[nodiscard]] bool mediaViewerMenuSetProfile() const;
 +	void setMediaViewerMenuSetProfile(bool value);
++	[[nodiscard]] bool mediaViewerMenuSubtitles() const;
++	void setMediaViewerMenuSubtitles(bool value);
++	[[nodiscard]] QString subtitlesFiles() const;
++	void setSubtitlesFiles(const QString &value);
 +	[[nodiscard]] bool chatMenuBoost() const;
 +	void setChatMenuBoost(bool value);
 +	[[nodiscard]] bool chatMenuLinked() const;
@@ -12447,6 +13500,13 @@ index 0000000..e6ce671
 +
 +	[[nodiscard]] bool hidePhone() const;
 +	void setHidePhone(bool value);
++
++	[[nodiscard]] bool botPrivacyEnabled() const;
++	void setBotPrivacyEnabled(bool value);
++	[[nodiscard]] int botPrivacyAccount() const;
++	void setBotPrivacyAccount(int value);
++	[[nodiscard]] bool botPrivacyAlwaysAsk() const;
++	void setBotPrivacyAlwaysAsk(bool value);
 +
 +	[[nodiscard]] int proxyDisableConditions() const;
 +	void setProxyDisableConditions(int value);
@@ -15110,6 +16170,300 @@ index 0000000..4ce817b
 +	const QString &peerName);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/subtitles.cpp b/exteraless/subtitles.cpp
+new file mode 100644
+index 0000000..79edc80
+--- /dev/null
++++ b/exteraless/subtitles.cpp
+@@ -0,0 +1,261 @@
++#include "exteraless/subtitles.h"
++
++#include <QStringList>
++
++#include <algorithm>
++#include <utility>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] QString DecodeUtf16(const QByteArray &data, bool littleEndian) {
++	const auto raw = reinterpret_cast<const uchar*>(data.constData());
++	const auto size = data.size();
++	auto result = QString();
++	result.reserve((size - 2) / 2);
++	for (auto i = 2; i + 1 < size; i += 2) {
++		const auto first = littleEndian ? raw[i] : raw[i + 1];
++		const auto second = littleEndian ? raw[i + 1] : raw[i];
++		result += QChar(ushort(first | (second << 8)));
++	}
++	return result;
++}
++
++[[nodiscard]] QString Decode(const QByteArray &data) {
++	if (data.size() >= 3
++		&& uchar(data[0]) == 0xEF
++		&& uchar(data[1]) == 0xBB
++		&& uchar(data[2]) == 0xBF) {
++		return QString::fromUtf8(data.constData() + 3, data.size() - 3);
++	} else if (data.size() >= 2
++		&& uchar(data[0]) == 0xFF
++		&& uchar(data[1]) == 0xFE) {
++		return DecodeUtf16(data, true);
++	} else if (data.size() >= 2
++		&& uchar(data[0]) == 0xFE
++		&& uchar(data[1]) == 0xFF) {
++		return DecodeUtf16(data, false);
++	}
++	return QString::fromUtf8(data);
++}
++
++[[nodiscard]] bool StartsWithWord(const QString &line, QStringView word) {
++	if (word.isEmpty() || !QStringView(line).startsWith(word)) {
++		return false;
++	}
++	if (line.size() == word.size()) {
++		return true;
++	}
++	const auto next = line[word.size()];
++	return next.isSpace() || next == u'#' || next == u'-' || next == u':';
++}
++
++[[nodiscard]] bool IsDirective(const QString &line) {
++	return StartsWithWord(line, u"NOTE")
++		|| StartsWithWord(line, u"STYLE")
++		|| StartsWithWord(line, u"REGION");
++}
++
++[[nodiscard]] bool ParseInteger(QStringView text, qint64 limit, qint64 &value) {
++	if (text.isEmpty() || text.size() > 9) {
++		return false;
++	}
++	auto result = qint64(0);
++	for (const auto ch : text) {
++		const auto digit = int(ch.unicode()) - u'0';
++		if (digit < 0 || digit > 9) {
++			return false;
++		}
++		result = result * 10 + digit;
++	}
++	if (result > limit) {
++		return false;
++	}
++	value = result;
++	return true;
++}
++
++[[nodiscard]] bool ParseTimestamp(QStringView text, qint64 &milliseconds) {
++	text = text.trimmed();
++	const auto parts = text.split(u':');
++	if (parts.size() != 2 && parts.size() != 3) {
++		return false;
++	}
++	auto seconds = parts.back();
++	auto fraction = QStringView();
++	const auto dot = seconds.indexOf(u'.');
++	const auto comma = seconds.indexOf(u',');
++	const auto separator = (dot >= 0) ? dot : comma;
++	if (separator >= 0) {
++		fraction = seconds.mid(separator + 1);
++		seconds = seconds.first(separator);
++	}
++	if (fraction.size() > 3) {
++		fraction = fraction.first(3);
++	}
++	auto secondsValue = qint64(0);
++	auto fractionValue = qint64(0);
++	if (!ParseInteger(seconds, 10000, secondsValue)) {
++		return false;
++	}
++	if (!fraction.isEmpty()) {
++		if (!ParseInteger(fraction, 999, fractionValue)) {
++			return false;
++		}
++		for (auto i = fraction.size(); i != 3; ++i) {
++			fractionValue *= 10;
++		}
++	}
++	auto minutesValue = qint64(0);
++	auto hoursValue = qint64(0);
++	if (parts.size() == 2) {
++		if (!ParseInteger(parts[0], 10000, minutesValue)) {
++			return false;
++		}
++	} else {
++		if (!ParseInteger(parts[0], 1000, hoursValue)
++			|| !ParseInteger(parts[1], 10000, minutesValue)) {
++			return false;
++		}
++	}
++	milliseconds = ((hoursValue * 60 + minutesValue) * 60 + secondsValue) * 1000
++		+ fractionValue;
++	return true;
++}
++
++[[nodiscard]] bool ParseTiming(const QString &line, qint64 &start, qint64 &end) {
++	const auto arrow = line.indexOf(QStringLiteral("-->"));
++	if (arrow < 0) {
++		return false;
++	}
++	const auto before = QStringView(line).left(arrow).trimmed();
++	auto after = QStringView(line).mid(arrow + 3).trimmed();
++	for (auto i = qsizetype(0); i != after.size(); ++i) {
++		if (after[i].isSpace()) {
++			after = after.left(i);
++			break;
++		}
++	}
++	return ParseTimestamp(before, start) && ParseTimestamp(after, end);
++}
++
++[[nodiscard]] QString StripTags(QString text) {
++	for (auto i = qsizetype(0); i != text.size();) {
++		const auto ch = text[i];
++		if (ch != u'<' && ch != u'{') {
++			++i;
++			continue;
++		}
++		const auto close = (ch == u'<') ? u'>' : u'}';
++		const auto position = text.indexOf(close, i + 1);
++		if (position <= 0) {
++			++i;
++			continue;
++		}
++		text.remove(i, position - i + 1);
++	}
++	return text;
++}
++
++[[nodiscard]] bool HasTiming(const QString &line) {
++	return line.contains(QStringLiteral("-->"));
++}
++
++[[nodiscard]] QString TextFromLines(const QStringList &lines) {
++	auto result = QString();
++	for (const auto &line : lines) {
++		const auto cleaned = StripTags(line).trimmed();
++		if (cleaned.isEmpty()) {
++			continue;
++		}
++		if (!result.isEmpty()) {
++			result += u'\n';
++		}
++		result += cleaned;
++	}
++	return result;
++}
++
++} // namespace
++
++QList<Cue> ParseSubtitles(const QByteArray &data) {
++	auto cues = QList<Cue>();
++	if (data.isEmpty()) {
++		return cues;
++	}
++	auto text = Decode(data);
++	text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
++	text.replace(u'\r', u'\n');
++	const auto lines = text.split(u'\n');
++	const auto count = lines.size();
++	auto index = qsizetype(0);
++	while (index < count) {
++		const auto line = lines[index].trimmed();
++		if (line.isEmpty()) {
++			++index;
++			continue;
++		}
++		if (line.startsWith(QStringLiteral("WEBVTT"))) {
++			++index;
++			continue;
++		}
++		if (IsDirective(line)) {
++			while (index < count) {
++				const auto current = lines[index].trimmed();
++				if (current.isEmpty() || HasTiming(current)) {
++					break;
++				}
++				++index;
++			}
++			continue;
++		}
++		auto start = qint64(0);
++		auto end = qint64(0);
++		if (!ParseTiming(line, start, end)) {
++			++index;
++			continue;
++		}
++		auto textLines = QStringList();
++		auto next = index + 1;
++		while (next < count) {
++			const auto current = lines[next];
++			const auto trimmed = current.trimmed();
++			if (trimmed.isEmpty() || HasTiming(trimmed)) {
++				break;
++			}
++			textLines.append(current);
++			++next;
++		}
++		auto cueText = TextFromLines(textLines);
++		if (!cueText.isEmpty()) {
++			cues.append(Cue{ start, end, std::move(cueText) });
++		}
++		index = next;
++	}
++	std::sort(cues.begin(), cues.end(), [](const Cue &a, const Cue &b) {
++		return a.start < b.start;
++	});
++	return cues;
++}
++
++QString ActiveCueText(const QList<Cue> &cues, qint64 position) {
++	auto result = QString();
++	for (const auto &cue : cues) {
++		if (cue.text.isEmpty()
++			|| position < cue.start
++			|| position >= cue.end) {
++			continue;
++		}
++		if (!result.isEmpty()) {
++			result += u'\n';
++		}
++		result += cue.text;
++	}
++	return result;
++}
++
++QString VideoKey(qint64 docId) {
++	return QStringLiteral("doc_%1").arg(docId);
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/subtitles.h b/exteraless/subtitles.h
+new file mode 100644
+index 0000000..642fb0b
+--- /dev/null
++++ b/exteraless/subtitles.h
+@@ -0,0 +1,21 @@
++#pragma once
++
++#include <QByteArray>
++#include <QList>
++#include <QString>
++
++namespace Exteraless {
++
++struct Cue {
++	qint64 start = 0;
++	qint64 end = 0;
++	QString text;
++};
++
++[[nodiscard]] QList<Cue> ParseSubtitles(const QByteArray &data);
++
++[[nodiscard]] QString ActiveCueText(const QList<Cue> &cues, qint64 position);
++
++[[nodiscard]] QString VideoKey(qint64 docId);
++
++} // namespace Exteraless
 diff --git a/exteraless/tests/chats/CMakeLists.txt b/exteraless/tests/chats/CMakeLists.txt
 new file mode 100644
 index 0000000..05215b8
@@ -15124,10 +16478,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..4f5c263
+index 0000000..b58264c
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2157 @@
+@@ -0,0 +1,2266 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -15144,10 +16498,12 @@ index 0000000..4f5c263
 +#include "exteraless/plugins/installer.h"
 +#include "exteraless/proxy_rules.h"
 +#include "exteraless/save_path.h"
++#include "exteraless/subtitles.h"
 +#include "exteraless/zalgo.h"
 +
 +#include <QByteArray>
 +#include <QCoreApplication>
++#include <QFile>
 +#include <QJsonArray>
 +#include <QJsonDocument>
 +#include <QJsonObject>
@@ -15178,6 +16534,9 @@ index 0000000..4f5c263
 +		<< "  exteraless-chats-cli config-reset\n"
 +		<< "  exteraless-chats-cli general\n"
 +		<< "  exteraless-chats-cli general-set <0|1> [<showSeconds:0|1>]\n"
++		<< "  exteraless-chats-cli bot-privacy\n"
++		<< "  exteraless-chats-cli bot-privacy-set <enabled 0|1> "
++		<< "<account -1..15> <ask 0|1>\n"
 +		<< "  exteraless-chats-cli id-dc\n"
 +		<< "  exteraless-chats-cli id-dc-set <0|1>\n"
 +		<< "  exteraless-chats-cli id-dc-format <bareId> <dc> <0|1>\n"
@@ -15311,7 +16670,10 @@ index 0000000..4f5c263
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
 +		<< "  exteraless-chats-cli backup-export-current\n"
 +		<< "  exteraless-chats-cli backup-import <base64>\n"
-+		<< "  exteraless-chats-cli backup-import-json <json>\n";
++		<< "  exteraless-chats-cli backup-import-json <json>\n"
++		<< "  exteraless-chats-cli subtitles-parse <file>\n"
++		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
++		<< "  exteraless-chats-cli subtitles-key <docId>\n";
 +	return 2;
 +}
 +
@@ -15356,6 +16718,15 @@ index 0000000..4f5c263
 +	std::cout << '\n';
 +}
 +
++[[nodiscard]] bool ReadFileBytes(const QString &path, QByteArray *bytes) {
++	auto file = QFile(path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return false;
++	}
++	*bytes = file.readAll();
++	return true;
++}
++
 +void PrintChats() {
 +	PrintJson(QJsonObject{
 +		{ QStringLiteral("chats"),
@@ -15371,6 +16742,15 @@ index 0000000..4f5c263
 +			Exteraless::Config::Instance().showSeconds() },
 +		{ QStringLiteral("hidePhone"),
 +			Exteraless::Config::Instance().hidePhone() },
++	});
++}
++
++void PrintBotPrivacy() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("enabled"), config.botPrivacyEnabled() },
++		{ QStringLiteral("account"), config.botPrivacyAccount() },
++		{ QStringLiteral("alwaysAsk"), config.botPrivacyAlwaysAsk() },
 +	});
 +}
 +
@@ -15653,6 +17033,33 @@ index 0000000..4f5c263
 +			Exteraless::Config::Instance().setHidePhone(hide);
 +		}
 +		PrintGeneral();
++		return 0;
++	}
++	if (mode == QStringLiteral("bot-privacy")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintBotPrivacy();
++		return 0;
++	}
++	if (mode == QStringLiteral("bot-privacy-set")) {
++		if (arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto enabled = false;
++		auto ask = false;
++		auto ok = false;
++		const auto account = arguments[3].toInt(&ok);
++		if (!ReadFlag(arguments[2], &enabled)
++			|| !ok
++			|| !ReadFlag(arguments[4], &ask)) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setBotPrivacyEnabled(enabled);
++		config.setBotPrivacyAccount(account);
++		config.setBotPrivacyAlwaysAsk(ask);
++		PrintBotPrivacy();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("id-dc")) {
@@ -17283,8 +18690,147 @@ index 0000000..4f5c263
 +		PrintImportResult(Exteraless::ApplyBackup(encoded));
 +		return 0;
 +	}
++	if (mode == QStringLiteral("subtitles-parse")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		auto cues = QJsonArray();
++		for (const auto &cue : Exteraless::ParseSubtitles(bytes)) {
++			cues.append(QJsonObject{
++				{ QStringLiteral("start"), cue.start },
++				{ QStringLiteral("end"), cue.end },
++				{ QStringLiteral("text"), cue.text },
++			});
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("cues"), cues },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("subtitles-active")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto position = arguments[3].toLongLong(&ok);
++		if (!ok || position < 0) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"),
++				Exteraless::ActiveCueText(
++					Exteraless::ParseSubtitles(bytes),
++					position) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("subtitles-key")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto docId = arguments[2].toLongLong(&ok);
++		if (!ok || docId < 0) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("key"), Exteraless::VideoKey(docId) },
++		});
++		return 0;
++	}
 +	return PrintUsage();
 +}
+diff --git a/exteraless/tests/chats/fixtures/basic.srt b/exteraless/tests/chats/fixtures/basic.srt
+new file mode 100644
+index 0000000..77ffc76
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/basic.srt
+@@ -0,0 +1,13 @@
++1
++00:00:01,000 --> 00:00:03,500
++First line
++Second line
++
++2
++00:00:05,000 --> 00:00:07,000
++Middle cue
++
++3
++00:00:09,250 --> 00:00:11,000
++Last cue
++
+diff --git a/exteraless/tests/chats/fixtures/basic.vtt b/exteraless/tests/chats/fixtures/basic.vtt
+new file mode 100644
+index 0000000..a3c87c8
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/basic.vtt
+@@ -0,0 +1,11 @@
++WEBVTT
++
++NOTE This comment block is ignored.
++
++1
++00:00:01.000 --> 00:00:03.000 align:start position:10%
++First vtt cue
++
++00:00:05.000 --> 00:00:06.500
++Second vtt cue
++
+diff --git a/exteraless/tests/chats/fixtures/bom-utf16.srt b/exteraless/tests/chats/fixtures/bom-utf16.srt
+new file mode 100644
+index 0000000000000000000000000000000000000000..1cd2f17b6f592785b927a1aefe24c864193d1876
+GIT binary patch
+literal 194
+zcmezW&yazO!GOVl!3s_qGU$NW1`G-ex(vDub_@z&K0<{NTm=_HC_@N?8-p%`A%hu%
+t0z)!GDMKoQ0z*DS9z!Yv7XufA5r+B3aNW4fH-W3bWqt`mIYU0!d;rnR7DoU8
+
+literal 0
+HcmV?d00001
+
+diff --git a/exteraless/tests/chats/fixtures/broken.srt b/exteraless/tests/chats/fixtures/broken.srt
+new file mode 100644
+index 0000000..64dc265
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/broken.srt
+@@ -0,0 +1,15 @@
++1
++00:00:01,000 --> 00:00:02,000
++Valid one
++
++2
++00:00:xx,000 --> 00:00:04,000
++Broken timing
++
++3
++00:00:05,000 --> 00:00:06,000
++Valid two
++
++4
++00:00:07,000 --> 00:00:08,000
++No trailing blank line
+\ No newline at end of file
+diff --git a/exteraless/tests/chats/fixtures/overlap.srt b/exteraless/tests/chats/fixtures/overlap.srt
+new file mode 100644
+index 0000000..ab8b113
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/overlap.srt
+@@ -0,0 +1,8 @@
++1
++00:00:01,000 --> 00:00:05,000
++First overlapping
++
++2
++00:00:03,000 --> 00:00:07,000
++Second overlapping
++
 diff --git a/exteraless/tests/chats/fixtures/reactions.tsv b/exteraless/tests/chats/fixtures/reactions.tsv
 new file mode 100644
 index 0000000..7c64c57
@@ -17347,12 +18893,26 @@ index 0000000..0b46db4
 +//example.com/?utm_source=x	//example.com/?utm_source=x
 +https://example.com/a?	https://example.com/a?
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
+diff --git a/exteraless/tests/chats/fixtures/tags.srt b/exteraless/tests/chats/fixtures/tags.srt
+new file mode 100644
+index 0000000..5c9da70
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/tags.srt
+@@ -0,0 +1,8 @@
++1
++00:00:02,000 --> 00:00:04,000
++<i>Italic</i> and <b>bold</b>
++
++2
++00:00:06,000 --> 00:00:08,000
++{\an8}Top positioned
++
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..63a660b
+index 0000000..0c3d47e
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,5154 @@
+@@ -0,0 +1,5490 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -17521,6 +19081,9 @@ index 0000000..63a660b
 +        ("plugin-filename without name", ["plugin-filename"]),
 +        ("send-as-set with wrong count", ["send-as-set"]),
 +        ("profile-buttons-set with wrong count", ["profile-buttons-set"]),
++        ("bot-privacy-set with wrong count", ["bot-privacy-set", "1", "2"]),
++        ("bot-privacy-set invalid enabled",
++         ["bot-privacy-set", "2", "1", "0"]),
 +        ("inline-math-set with wrong count", ["inline-math-set"]),
 +        ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
 +        ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
@@ -17565,6 +19128,9 @@ index 0000000..63a660b
 +        ("autodownload-archive-set with wrong count",
 +         ["autodownload-archive-set"]),
 +        ("win32-exe-set with wrong count", ["win32-exe-set"]),
++        ("subtitles-parse without file", ["subtitles-parse"]),
++        ("subtitles-active without position", ["subtitles-active", "a.srt"]),
++        ("subtitles-key without id", ["subtitles-key"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -17702,6 +19268,104 @@ index 0000000..63a660b
 +        f"got {actual!r}")
 +
 +    return ledger.checks - before_checks, len(ledger.failures) - before_failures
++
++
++def check_bot_privacy(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "bot-privacy-defaults")
++    data = json_call(
++        ledger, cli, ["bot-privacy"], env, "bot privacy defaults")
++    if data is not None:
++        ledger.check(
++            "bot privacy defaults",
++            data.get("enabled") is False
++            and data.get("account") == -1
++            and data.get("alwaysAsk") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["bot-privacy-set", "1", "2", "1"], env,
++        "bot privacy set")
++    if data is not None:
++        ledger.check(
++            "bot privacy set",
++            data.get("enabled") is True
++            and data.get("account") == 2
++            and data.get("alwaysAsk") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["bot-privacy"], env, "bot privacy reload")
++    if reloaded is not None:
++        ledger.check(
++            "bot privacy persisted",
++            reloaded.get("enabled") is True
++            and reloaded.get("account") == 2
++            and reloaded.get("alwaysAsk") is True,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["bot-privacy-set", "1", "0", "1"], env,
++        "bot privacy account zero")
++    if data is not None:
++        ledger.check(
++            "bot privacy account zero is off",
++            data.get("account") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["bot-privacy-set", "1", "99", "1"], env,
++        "bot privacy clamp high")
++    if data is not None:
++        ledger.check(
++            "bot privacy account clamped to 15",
++            data.get("account") == 15,
++            data)
++    data = json_call(
++        ledger, cli, ["bot-privacy-set", "0", "-9", "0"], env,
++        "bot privacy clamp low")
++    if data is not None:
++        ledger.check(
++            "bot privacy account clamped to -1",
++            data.get("account") == -1,
++            data)
++        ledger.check(
++            "bot privacy disabled",
++            data.get("enabled") is False
++            and data.get("alwaysAsk") is False,
++            data)
++
++    env = make_env(work / "bot-privacy-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "botPrivacyEnabled": True,
++            "botPrivacyUserId": 3,
++            "alwaysAsk": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "bot privacy alias")
++    if data is not None:
++        ledger.check(
++            "bot privacy alias applied",
++            data.get("applied") == 3 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["bot-privacy"], env, "bot privacy alias read")
++    if reloaded is not None:
++        ledger.check(
++            "bot privacy alias values",
++            reloaded.get("enabled") is True
++            and reloaded.get("account") == 3
++            and reloaded.get("alwaysAsk") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
 +
 +
 +def check_config(ledger, cli, work):
@@ -17868,7 +19532,7 @@ index 0000000..63a660b
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 101,
++            len(section) == 106,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -17889,7 +19553,7 @@ index 0000000..63a660b
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 106,
++            sum(len(value) for value in exported.values()) == 111,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -17909,7 +19573,7 @@ index 0000000..63a660b
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 106,
++                data.get("applied") == 111,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -18030,6 +19694,10 @@ index 0000000..63a660b
 +            "OEChatsWideChannelPosts": True,
 +            "OEChatsDisableAutoDownloadingArchive": True,
 +            "OEChatsBlockWin32ExecutableFiles": False,
++            "OEMediaViewerMenuSubtitles": False,
++            "OESubtitlesFiles": {
++                "doc_1": {"path": "/tmp/a.srt", "label": "en"},
++            },
 +            "OEChatsAlwaysShowDownloadIcon": True,
 +            "OEPrivacyFalseBottom": True,
 +            "OEAppearanceChatDecoration": 1,
@@ -18041,6 +19709,9 @@ index 0000000..63a660b
 +            "OEChatsGroupedMessageMenu": True,
 +            "OEChatsDefaultDeleteMenu": True,
 +            "OEChatsShowResultsBeforeVoting": True,
++            "OEGeneralBotPrivacyEnabled": True,
++            "OEGeneralBotPrivacyAccount": 2,
++            "OEGeneralBotPrivacyAlwaysAsk": True,
 +            "hideStoriesFromHeader": True,
 +            "showIdAndDc": True,
 +            "zalgoFilter": True,
@@ -18065,7 +19736,7 @@ index 0000000..63a660b
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 106,
++            data.get("applied") == 111,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -18355,10 +20026,10 @@ index 0000000..63a660b
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 101",
++            "backup legacy eight completed to 106",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (101, 3, 2),
++             len(sections["mainconfig"])) == (106, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -22279,6 +23950,227 @@ index 0000000..63a660b
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_subtitles(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    def parse(name):
++        path = FIXTURES / name
++        result = run(cli, ["subtitles-parse", str(path)])
++        if result.returncode != 0:
++            ledger.check(
++                f"subtitles parse {name}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(f"subtitles parse {name}", False, f"json: {error}")
++            return None
++        cues = payload.get("cues")
++        if not isinstance(cues, list):
++            ledger.check(f"subtitles parse {name}", False, payload)
++            return None
++        ledger.check(f"subtitles parse {name}", True)
++        return cues
++
++    def active(name, position):
++        result = run(
++            cli, ["subtitles-active", str(FIXTURES / name), str(position)])
++        if result.returncode != 0:
++            ledger.check(
++                f"subtitles active {name} @{position}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            text = json.loads(result.stdout).get("text")
++        except json.JSONDecodeError as error:
++            ledger.check(
++                f"subtitles active {name} @{position}",
++                False,
++                f"json: {error}")
++            return None
++        ledger.check(
++            f"subtitles active {name} @{position}",
++            isinstance(text, str),
++            text)
++        return text if isinstance(text, str) else None
++
++    cues = parse("basic.srt")
++    if cues is not None:
++        ledger.check("basic cue count", len(cues) == 3, len(cues))
++        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
++        ledger.check(
++            "basic cue times",
++            bounds == [(1000, 3500), (5000, 7000), (9250, 11000)],
++            bounds)
++        text = cues[0].get("text") if cues else None
++        ledger.check(
++            "basic multiline text",
++            text == "First line\nSecond line",
++            repr(text))
++        ledger.check(
++            "basic crlf normalized",
++            all("\r" not in str(cue.get("text")) for cue in cues),
++            [cue.get("text") for cue in cues])
++
++    text = active("basic.srt", 1000)
++    ledger.check(
++        "basic active at cue start",
++        text == "First line\nSecond line",
++        repr(text))
++    text = active("basic.srt", 9250)
++    ledger.check("basic active at last start", text == "Last cue", repr(text))
++    text = active("basic.srt", 999)
++    ledger.check("basic inactive before first cue", text == "", repr(text))
++    gap_mid = (3500 + 5000) // 2
++    text = active("basic.srt", gap_mid)
++    ledger.check(
++        "basic inactive between cues",
++        text == "",
++        repr(text))
++
++    cues = parse("tags.srt")
++    if cues is not None:
++        texts = [cue.get("text") for cue in cues]
++        ledger.check("tags cue count", len(cues) == 2, len(cues))
++        ledger.check(
++            "tags markup stripped",
++            texts == ["Italic and bold", "Top positioned"],
++            texts)
++
++    cues = parse("bom-utf16.srt")
++    if cues is not None:
++        texts = [cue.get("text") for cue in cues]
++        ledger.check("bom cue count", len(cues) == 2, len(cues))
++        ledger.check(
++            "bom utf-16 decoded",
++            texts == ["UTF-16 cue one", "UTF-16 cue two"],
++            texts)
++        ledger.check(
++            "bom marker dropped",
++            all("\ufeff" not in str(text) for text in texts),
++            texts)
++
++    cues = parse("basic.vtt")
++    if cues is not None:
++        texts = [cue.get("text") for cue in cues]
++        ledger.check("vtt cue count", len(cues) == 2, len(cues))
++        ledger.check(
++            "vtt header and note skipped",
++            texts == ["First vtt cue", "Second vtt cue"],
++            texts)
++        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
++        ledger.check(
++            "vtt cue times",
++            bounds == [(1000, 3000), (5000, 6500)],
++            bounds)
++
++    cues = parse("overlap.srt")
++    if cues is not None:
++        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
++        ledger.check("overlap cue count", len(cues) == 2, len(cues))
++        ledger.check(
++            "overlap cue times",
++            bounds == [(1000, 5000), (3000, 7000)],
++            bounds)
++        text = active("overlap.srt", 4000)
++        if text is not None:
++            first = text.find("First overlapping")
++            second = text.find("Second overlapping")
++            ledger.check(
++                "overlap cues joined in order",
++                first >= 0 and second > first,
++                repr(text))
++    text = active("overlap.srt", 2000)
++    ledger.check(
++        "overlap first cue alone",
++        text is not None
++        and "First overlapping" in text
++        and "Second overlapping" not in text,
++        repr(text))
++    text = active("overlap.srt", 6000)
++    ledger.check(
++        "overlap second cue alone",
++        text is not None
++        and "Second overlapping" in text
++        and "First overlapping" not in text,
++        repr(text))
++
++    cues = parse("broken.srt")
++    if cues is not None:
++        texts = [cue.get("text") for cue in cues]
++        ledger.check("broken cue count", len(cues) == 3, len(cues))
++        ledger.check(
++            "broken bad timing skipped",
++            texts == ["Valid one", "Valid two", "No trailing blank line"],
++            texts)
++        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
++        ledger.check(
++            "broken cue times",
++            bounds == [(1000, 2000), (5000, 6000), (7000, 8000)],
++            bounds)
++    text = active("broken.srt", 7000)
++    ledger.check(
++        "broken last cue without blank line",
++        text == "No trailing blank line",
++        repr(text))
++
++    result = run(
++        cli, ["subtitles-parse", str(FIXTURES / "missing-subtitles.srt")])
++    ledger.check(
++        "subtitles parse missing file",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    keys = {}
++    for doc_id in ("12345", "67890", "12345"):
++        result = run(cli, ["subtitles-key", doc_id])
++        if result.returncode != 0:
++            ledger.check(
++                f"subtitles key {doc_id}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            continue
++        try:
++            key = json.loads(result.stdout).get("key")
++        except json.JSONDecodeError as error:
++            ledger.check(f"subtitles key {doc_id}", False, f"json: {error}")
++            continue
++        ledger.check(
++            f"subtitles key {doc_id}",
++            isinstance(key, str) and bool(key) and doc_id in key,
++            repr(key))
++        if isinstance(key, str) and key:
++            ledger.check(
++                f"subtitles key {doc_id} filename safe",
++                all(ch not in key for ch in "/\\:*?\"<>| \t\n"),
++                repr(key))
++            keys.setdefault(doc_id, set()).add(key)
++    ledger.check(
++        "subtitles key stable",
++        all(len(values) == 1 for values in keys.values()),
++        keys)
++    representatives = {
++        doc_id: next(iter(values))
++        for doc_id, values in keys.items() if values
++    }
++    if len(representatives) == 2:
++        ledger.check(
++            "subtitles key distinct per document",
++            len(set(representatives.values())) == 2,
++            representatives)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_download_boost(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -22393,6 +24285,7 @@ index 0000000..63a660b
 +        work = Path(temp)
 +        config = check_config(ledger, cli, work)
 +        general = check_general(ledger, cli, work)
++        bot_privacy = check_bot_privacy(ledger, cli, work)
 +        deleted = check_deleted(ledger, cli, work)
 +        deleted_entry = check_deleted_entry(ledger, cli, work)
 +        reset = check_reset(ledger, cli, work)
@@ -22437,12 +24330,14 @@ index 0000000..63a660b
 +        menu_style = check_message_menu_style(ledger, cli, work)
 +        chat_misc = check_chat_misc(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
++        subtitles = check_subtitles(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
 +    print(f"cli: {cli_args[0] - cli_args[1]} passed")
 +    print(f"config: {config[0] - config[1]} passed")
 +    print(f"general: {general[0] - general[1]} passed")
++    print(f"bot-privacy: {bot_privacy[0] - bot_privacy[1]} passed")
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
 +    print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
 +    print(f"reset: {reset[0] - reset[1]} passed")
@@ -22495,6 +24390,7 @@ index 0000000..63a660b
 +          f"{menu_style[0] - menu_style[1]} passed")
 +    print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
++    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

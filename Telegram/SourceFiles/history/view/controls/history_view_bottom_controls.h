@@ -42,6 +42,7 @@ enum class BottomControlsAction {
 	JoinChannel,
 	JoinGroup,
 	MuteUnmute,
+	Discuss,
 	Report,
 };
 
@@ -106,6 +107,7 @@ private:
 	[[nodiscard]] bool isJoinChannel() const;
 	[[nodiscard]] bool isJoinGroup() const;
 	[[nodiscard]] bool isMuteUnmute() const;
+	[[nodiscard]] bool isDiscuss() const;
 	[[nodiscard]] bool isReportMessages() const;
 	[[nodiscard]] bool isChoosingTheme() const;
 
@@ -124,6 +126,7 @@ private:
 	std::unique_ptr<Ui::FlatButton> _joinChannel;
 	std::unique_ptr<Ui::FlatButton> _joinGroup;
 	std::unique_ptr<Ui::FlatButton> _muteUnmute;
+	std::unique_ptr<Ui::FlatButton> _discuss;
 	std::unique_ptr<Ui::FlatButton> _reportMessages;
 	QPointer<Ui::IconButton> _giftToChannel;
 	QPointer<Ui::IconButton> _directMessage;

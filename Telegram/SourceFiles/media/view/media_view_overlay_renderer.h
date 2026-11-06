@@ -45,6 +45,7 @@ public:
 		const style::icon &icon) = 0;
 	virtual void paintFooter(QRect outer, float64 opacity) = 0;
 	virtual void paintCaption(QRect outer, float64 opacity) = 0;
+	virtual void paintSubtitles(QRect outer, float64 opacity) = 0;
 	virtual void paintGroupThumbs(QRect outer, float64 opacity) = 0;
 	virtual void paintRoundedCorners(int radius) = 0;
 	virtual void paintStoriesSiblingPart(

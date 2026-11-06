@@ -101,6 +101,10 @@ public:
 	void setMediaViewerMenuCopyPhoto(bool value);
 	[[nodiscard]] bool mediaViewerMenuSetProfile() const;
 	void setMediaViewerMenuSetProfile(bool value);
+	[[nodiscard]] bool mediaViewerMenuSubtitles() const;
+	void setMediaViewerMenuSubtitles(bool value);
+	[[nodiscard]] QString subtitlesFiles() const;
+	void setSubtitlesFiles(const QString &value);
 	[[nodiscard]] bool chatMenuBoost() const;
 	void setChatMenuBoost(bool value);
 	[[nodiscard]] bool chatMenuLinked() const;
@@ -144,6 +148,13 @@ public:
 
 	[[nodiscard]] bool hidePhone() const;
 	void setHidePhone(bool value);
+
+	[[nodiscard]] bool botPrivacyEnabled() const;
+	void setBotPrivacyEnabled(bool value);
+	[[nodiscard]] int botPrivacyAccount() const;
+	void setBotPrivacyAccount(int value);
+	[[nodiscard]] bool botPrivacyAlwaysAsk() const;
+	void setBotPrivacyAlwaysAsk(bool value);
 
 	[[nodiscard]] int proxyDisableConditions() const;
 	void setProxyDisableConditions(int value);

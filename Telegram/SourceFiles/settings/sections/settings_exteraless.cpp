@@ -11,6 +11,7 @@
 #include "base/options.h"
 #include "core/application.h"
 #include "core/file_utilities.h"
+#include "main/main_account.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
 #include "settings.h"
@@ -23,6 +24,7 @@
 #include "styles/style_layers.h"
 #include "data/data_session.h"
 #include "data/data_chat_filters.h"
+#include "data/data_user.h"
 #include "dialogs/dialogs_entry.h"
 #include "lang/lang_keys.h"
 #include "settings/settings_builder.h"
@@ -357,6 +359,110 @@ const auto kMeta = Builder::BuildHelper({
 		}, hidePhone->lifetime());
 	}
 
+	const auto botPrivacyEnabled = builder.addButton({
+		.id = u"exteraless/bot-privacy/enabled"_q,
+		.title = tr::lng_settings_exteraless_bot_privacy_enabled(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().botPrivacyEnabled()),
+		.keywords = { u"bot"_q, u"privacy"_q, u"account"_q },
+	});
+	if (botPrivacyEnabled) {
+		botPrivacyEnabled->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().botPrivacyEnabled());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setBotPrivacyEnabled(value);
+		}, botPrivacyEnabled->lifetime());
+	}
+
+	const auto botPrivacyAccountLabel = [](int value) {
+		const auto accounts = Core::App().domain().orderedAccounts();
+		if (value <= 0 || value > int(accounts.size())) {
+			return tr::lng_settings_exteraless_bot_privacy_account_off(
+				tr::now);
+		}
+		const auto session = accounts[value - 1]->maybeSession();
+		return session
+			? session->user()->name()
+			: tr::lng_settings_exteraless_bot_privacy_account(
+				tr::now);
+	};
+	const auto botPrivacyAccount = std::make_shared<rpl::variable<QString>>(
+		botPrivacyAccountLabel(
+			Exteraless::Config::Instance().botPrivacyAccount()));
+	builder.addButton({
+		.id = u"exteraless/bot-privacy/account"_q,
+		.title = tr::lng_settings_exteraless_bot_privacy_account(),
+		.st = &st::settingsButtonNoIcon,
+		.label = botPrivacyAccount->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto currentAccount
+				= Exteraless::Config::Instance().botPrivacyAccount();
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				(currentAccount > 0) ? currentAccount : 0);
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_bot_privacy_account());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				inner->add(
+					object_ptr<Ui::Radioenum<int>>(
+						inner,
+						group,
+						0,
+						tr::lng_settings_exteraless_bot_privacy_account_off(
+							tr::now),
+						st::settingsSendType),
+					st::settingsSendTypePadding);
+				const auto accounts
+					= Core::App().domain().orderedAccounts();
+				for (auto i = 0; i != int(accounts.size()); ++i) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							i + 1,
+							botPrivacyAccountLabel(i + 1),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setBotPrivacyAccount(value);
+					botPrivacyAccount->force_assign(
+						botPrivacyAccountLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"bot"_q, u"privacy"_q, u"account"_q, u"ask"_q },
+	});
+
+	const auto botPrivacyAlwaysAsk = builder.addButton({
+		.id = u"exteraless/bot-privacy/always-ask"_q,
+		.title = tr::lng_settings_exteraless_bot_privacy_always_ask(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().botPrivacyAlwaysAsk()),
+		.keywords = { u"bot"_q, u"privacy"_q, u"ask"_q, u"account"_q },
+	});
+	if (botPrivacyAlwaysAsk) {
+		botPrivacyAlwaysAsk->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().botPrivacyAlwaysAsk());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setBotPrivacyAlwaysAsk(value);
+		}, botPrivacyAlwaysAsk->lifetime());
+	}
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,
 		.title = tr::lng_settings_exteraless_ghost(),
@@ -583,6 +689,13 @@ const auto kMeta = Builder::BuildHelper({
 		Exteraless::Config::Instance().mediaViewerMenuSetProfile(),
 		[](bool value) {
 			Exteraless::Config::Instance().setMediaViewerMenuSetProfile(value);
+		});
+	addMediaToggle(
+		u"exteraless/media-menu/subtitles"_q,
+		tr::lng_settings_exteraless_media_menu_subtitles(),
+		Exteraless::Config::Instance().mediaViewerMenuSubtitles(),
+		[](bool value) {
+			Exteraless::Config::Instance().setMediaViewerMenuSubtitles(value);
 		});
 
 	builder.addSubsectionTitle({

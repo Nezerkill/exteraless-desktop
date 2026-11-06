@@ -166,6 +166,9 @@ def check_cli_args(ledger, cli):
         ("plugin-filename without name", ["plugin-filename"]),
         ("send-as-set with wrong count", ["send-as-set"]),
         ("profile-buttons-set with wrong count", ["profile-buttons-set"]),
+        ("bot-privacy-set with wrong count", ["bot-privacy-set", "1", "2"]),
+        ("bot-privacy-set invalid enabled",
+         ["bot-privacy-set", "2", "1", "0"]),
         ("inline-math-set with wrong count", ["inline-math-set"]),
         ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
         ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
@@ -210,6 +213,9 @@ def check_cli_args(ledger, cli):
         ("autodownload-archive-set with wrong count",
          ["autodownload-archive-set"]),
         ("win32-exe-set with wrong count", ["win32-exe-set"]),
+        ("subtitles-parse without file", ["subtitles-parse"]),
+        ("subtitles-active without position", ["subtitles-active", "a.srt"]),
+        ("subtitles-key without id", ["subtitles-key"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -347,6 +353,104 @@ def check_general(ledger, cli, work):
         f"got {actual!r}")
 
     return ledger.checks - before_checks, len(ledger.failures) - before_failures
+
+
+def check_bot_privacy(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "bot-privacy-defaults")
+    data = json_call(
+        ledger, cli, ["bot-privacy"], env, "bot privacy defaults")
+    if data is not None:
+        ledger.check(
+            "bot privacy defaults",
+            data.get("enabled") is False
+            and data.get("account") == -1
+            and data.get("alwaysAsk") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["bot-privacy-set", "1", "2", "1"], env,
+        "bot privacy set")
+    if data is not None:
+        ledger.check(
+            "bot privacy set",
+            data.get("enabled") is True
+            and data.get("account") == 2
+            and data.get("alwaysAsk") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["bot-privacy"], env, "bot privacy reload")
+    if reloaded is not None:
+        ledger.check(
+            "bot privacy persisted",
+            reloaded.get("enabled") is True
+            and reloaded.get("account") == 2
+            and reloaded.get("alwaysAsk") is True,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["bot-privacy-set", "1", "0", "1"], env,
+        "bot privacy account zero")
+    if data is not None:
+        ledger.check(
+            "bot privacy account zero is off",
+            data.get("account") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["bot-privacy-set", "1", "99", "1"], env,
+        "bot privacy clamp high")
+    if data is not None:
+        ledger.check(
+            "bot privacy account clamped to 15",
+            data.get("account") == 15,
+            data)
+    data = json_call(
+        ledger, cli, ["bot-privacy-set", "0", "-9", "0"], env,
+        "bot privacy clamp low")
+    if data is not None:
+        ledger.check(
+            "bot privacy account clamped to -1",
+            data.get("account") == -1,
+            data)
+        ledger.check(
+            "bot privacy disabled",
+            data.get("enabled") is False
+            and data.get("alwaysAsk") is False,
+            data)
+
+    env = make_env(work / "bot-privacy-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "botPrivacyEnabled": True,
+            "botPrivacyUserId": 3,
+            "alwaysAsk": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "bot privacy alias")
+    if data is not None:
+        ledger.check(
+            "bot privacy alias applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["bot-privacy"], env, "bot privacy alias read")
+    if reloaded is not None:
+        ledger.check(
+            "bot privacy alias values",
+            reloaded.get("enabled") is True
+            and reloaded.get("account") == 3
+            and reloaded.get("alwaysAsk") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
 
 
 def check_config(ledger, cli, work):
@@ -513,7 +617,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 101,
+            len(section) == 106,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -534,7 +638,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 106,
+            sum(len(value) for value in exported.values()) == 111,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -554,7 +658,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 106,
+                data.get("applied") == 111,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -675,6 +779,10 @@ def check_backup(ledger, cli, work):
             "OEChatsWideChannelPosts": True,
             "OEChatsDisableAutoDownloadingArchive": True,
             "OEChatsBlockWin32ExecutableFiles": False,
+            "OEMediaViewerMenuSubtitles": False,
+            "OESubtitlesFiles": {
+                "doc_1": {"path": "/tmp/a.srt", "label": "en"},
+            },
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
@@ -686,6 +794,9 @@ def check_backup(ledger, cli, work):
             "OEChatsGroupedMessageMenu": True,
             "OEChatsDefaultDeleteMenu": True,
             "OEChatsShowResultsBeforeVoting": True,
+            "OEGeneralBotPrivacyEnabled": True,
+            "OEGeneralBotPrivacyAccount": 2,
+            "OEGeneralBotPrivacyAlwaysAsk": True,
             "hideStoriesFromHeader": True,
             "showIdAndDc": True,
             "zalgoFilter": True,
@@ -710,7 +821,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 106,
+            data.get("applied") == 111,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1000,10 +1111,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 101",
+            "backup legacy eight completed to 106",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (101, 3, 2),
+             len(sections["mainconfig"])) == (106, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -4924,6 +5035,227 @@ def check_chat_misc(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_subtitles(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    def parse(name):
+        path = FIXTURES / name
+        result = run(cli, ["subtitles-parse", str(path)])
+        if result.returncode != 0:
+            ledger.check(
+                f"subtitles parse {name}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(f"subtitles parse {name}", False, f"json: {error}")
+            return None
+        cues = payload.get("cues")
+        if not isinstance(cues, list):
+            ledger.check(f"subtitles parse {name}", False, payload)
+            return None
+        ledger.check(f"subtitles parse {name}", True)
+        return cues
+
+    def active(name, position):
+        result = run(
+            cli, ["subtitles-active", str(FIXTURES / name), str(position)])
+        if result.returncode != 0:
+            ledger.check(
+                f"subtitles active {name} @{position}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            text = json.loads(result.stdout).get("text")
+        except json.JSONDecodeError as error:
+            ledger.check(
+                f"subtitles active {name} @{position}",
+                False,
+                f"json: {error}")
+            return None
+        ledger.check(
+            f"subtitles active {name} @{position}",
+            isinstance(text, str),
+            text)
+        return text if isinstance(text, str) else None
+
+    cues = parse("basic.srt")
+    if cues is not None:
+        ledger.check("basic cue count", len(cues) == 3, len(cues))
+        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
+        ledger.check(
+            "basic cue times",
+            bounds == [(1000, 3500), (5000, 7000), (9250, 11000)],
+            bounds)
+        text = cues[0].get("text") if cues else None
+        ledger.check(
+            "basic multiline text",
+            text == "First line\nSecond line",
+            repr(text))
+        ledger.check(
+            "basic crlf normalized",
+            all("\r" not in str(cue.get("text")) for cue in cues),
+            [cue.get("text") for cue in cues])
+
+    text = active("basic.srt", 1000)
+    ledger.check(
+        "basic active at cue start",
+        text == "First line\nSecond line",
+        repr(text))
+    text = active("basic.srt", 9250)
+    ledger.check("basic active at last start", text == "Last cue", repr(text))
+    text = active("basic.srt", 999)
+    ledger.check("basic inactive before first cue", text == "", repr(text))
+    gap_mid = (3500 + 5000) // 2
+    text = active("basic.srt", gap_mid)
+    ledger.check(
+        "basic inactive between cues",
+        text == "",
+        repr(text))
+
+    cues = parse("tags.srt")
+    if cues is not None:
+        texts = [cue.get("text") for cue in cues]
+        ledger.check("tags cue count", len(cues) == 2, len(cues))
+        ledger.check(
+            "tags markup stripped",
+            texts == ["Italic and bold", "Top positioned"],
+            texts)
+
+    cues = parse("bom-utf16.srt")
+    if cues is not None:
+        texts = [cue.get("text") for cue in cues]
+        ledger.check("bom cue count", len(cues) == 2, len(cues))
+        ledger.check(
+            "bom utf-16 decoded",
+            texts == ["UTF-16 cue one", "UTF-16 cue two"],
+            texts)
+        ledger.check(
+            "bom marker dropped",
+            all("\ufeff" not in str(text) for text in texts),
+            texts)
+
+    cues = parse("basic.vtt")
+    if cues is not None:
+        texts = [cue.get("text") for cue in cues]
+        ledger.check("vtt cue count", len(cues) == 2, len(cues))
+        ledger.check(
+            "vtt header and note skipped",
+            texts == ["First vtt cue", "Second vtt cue"],
+            texts)
+        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
+        ledger.check(
+            "vtt cue times",
+            bounds == [(1000, 3000), (5000, 6500)],
+            bounds)
+
+    cues = parse("overlap.srt")
+    if cues is not None:
+        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
+        ledger.check("overlap cue count", len(cues) == 2, len(cues))
+        ledger.check(
+            "overlap cue times",
+            bounds == [(1000, 5000), (3000, 7000)],
+            bounds)
+        text = active("overlap.srt", 4000)
+        if text is not None:
+            first = text.find("First overlapping")
+            second = text.find("Second overlapping")
+            ledger.check(
+                "overlap cues joined in order",
+                first >= 0 and second > first,
+                repr(text))
+    text = active("overlap.srt", 2000)
+    ledger.check(
+        "overlap first cue alone",
+        text is not None
+        and "First overlapping" in text
+        and "Second overlapping" not in text,
+        repr(text))
+    text = active("overlap.srt", 6000)
+    ledger.check(
+        "overlap second cue alone",
+        text is not None
+        and "Second overlapping" in text
+        and "First overlapping" not in text,
+        repr(text))
+
+    cues = parse("broken.srt")
+    if cues is not None:
+        texts = [cue.get("text") for cue in cues]
+        ledger.check("broken cue count", len(cues) == 3, len(cues))
+        ledger.check(
+            "broken bad timing skipped",
+            texts == ["Valid one", "Valid two", "No trailing blank line"],
+            texts)
+        bounds = [(cue.get("start"), cue.get("end")) for cue in cues]
+        ledger.check(
+            "broken cue times",
+            bounds == [(1000, 2000), (5000, 6000), (7000, 8000)],
+            bounds)
+    text = active("broken.srt", 7000)
+    ledger.check(
+        "broken last cue without blank line",
+        text == "No trailing blank line",
+        repr(text))
+
+    result = run(
+        cli, ["subtitles-parse", str(FIXTURES / "missing-subtitles.srt")])
+    ledger.check(
+        "subtitles parse missing file",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    keys = {}
+    for doc_id in ("12345", "67890", "12345"):
+        result = run(cli, ["subtitles-key", doc_id])
+        if result.returncode != 0:
+            ledger.check(
+                f"subtitles key {doc_id}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            continue
+        try:
+            key = json.loads(result.stdout).get("key")
+        except json.JSONDecodeError as error:
+            ledger.check(f"subtitles key {doc_id}", False, f"json: {error}")
+            continue
+        ledger.check(
+            f"subtitles key {doc_id}",
+            isinstance(key, str) and bool(key) and doc_id in key,
+            repr(key))
+        if isinstance(key, str) and key:
+            ledger.check(
+                f"subtitles key {doc_id} filename safe",
+                all(ch not in key for ch in "/\\:*?\"<>| \t\n"),
+                repr(key))
+            keys.setdefault(doc_id, set()).add(key)
+    ledger.check(
+        "subtitles key stable",
+        all(len(values) == 1 for values in keys.values()),
+        keys)
+    representatives = {
+        doc_id: next(iter(values))
+        for doc_id, values in keys.items() if values
+    }
+    if len(representatives) == 2:
+        ledger.check(
+            "subtitles key distinct per document",
+            len(set(representatives.values())) == 2,
+            representatives)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_download_boost(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -5038,6 +5370,7 @@ def main():
         work = Path(temp)
         config = check_config(ledger, cli, work)
         general = check_general(ledger, cli, work)
+        bot_privacy = check_bot_privacy(ledger, cli, work)
         deleted = check_deleted(ledger, cli, work)
         deleted_entry = check_deleted_entry(ledger, cli, work)
         reset = check_reset(ledger, cli, work)
@@ -5082,12 +5415,14 @@ def main():
         menu_style = check_message_menu_style(ledger, cli, work)
         chat_misc = check_chat_misc(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
+        subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
     print(f"cli: {cli_args[0] - cli_args[1]} passed")
     print(f"config: {config[0] - config[1]} passed")
     print(f"general: {general[0] - general[1]} passed")
+    print(f"bot-privacy: {bot_privacy[0] - bot_privacy[1]} passed")
     print(f"deleted: {deleted[0] - deleted[1]} passed")
     print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
     print(f"reset: {reset[0] - reset[1]} passed")
@@ -5140,6 +5475,7 @@ def main():
           f"{menu_style[0] - menu_style[1]} passed")
     print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
+    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

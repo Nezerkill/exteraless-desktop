@@ -99,19 +99,19 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 672 проверки PASS
-  (44 strip, 10 reactions, 53 CLI, 7 config, 22 general, 27 deleted,
-  7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap, 14 stickertime,
-  11 pillorder, 19 ghost, 10 deletedmark, 10 vpn, 6 proxy-rules, 15 pangu,
-  17 zalgo, 5 silent, 5 sections, 5 ai-editor, 19 pluginops, 5 send-as,
-  5 profile-buttons, 31 inline-math, 15 save-subfolder, 12 ghost-schedule,
-  8 seek-duration, 21 sticker-size, 6 edited-mark, 5 forward-date,
-  5 media-menu, 5 chat-menu, 5 disable-link-preview, 5 hide-all-chats,
-  13 hide-archive-sort, 5 always-show-download, 7 show-results-before-voting,
-  5 false-bottom, 5 decoration, 5 shortcuts,
-  5 message-menu-style, 7 reply-style, 5 wide-posts, 15 chat-misc,
-  9 autodownload-rules, 10 download-boost, 100 backup); плагины
-  без изменений — 32 и 213 проверок.
+- Chats: `exteraless/tests/chats/run_checks.py` — 734 проверки PASS
+  (44 strip, 10 reactions, 58 CLI, 7 config, 22 general, 9 bot-privacy,
+  27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
+  14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
+  6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
+  19 pluginops, 5 send-as, 5 profile-buttons, 31 inline-math,
+  15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 21 sticker-size,
+  6 edited-mark, 5 forward-date, 5 media-menu, 5 chat-menu,
+  5 disable-link-preview, 5 hide-all-chats, 13 hide-archive-sort,
+  5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
+  5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
+  5 wide-posts, 15 chat-misc, 9 autodownload-rules, 10 download-boost,
+  48 subtitles, 100 backup); плагины без изменений — 32 и 213 проверок.
 - Profile buttons (NB-73): `OEChatsHideGiftButton`, `OEChatsHideCallButton` и
   `OEChatsHideChannelSearchButton` (все default `false`) убирают кнопки Gift и
   Call в профиле (`info/profile/info_profile_top_bar.cpp`), Call — в шапке
@@ -366,8 +366,8 @@
   `OEChatsHidePanelsOnScroll` (обе bool, default `false`) скрывают
   приветственный стикер (гейт в `GenerateChatIntro`) и закрывают панели при
   скролле (`hidePanelsAnimated` в `onScroll`); `OEChatsChannelBottomButton`
-  (int 0/1/2, default `1`) — `0` скрыть, `1` mute, `2` пока mute (Discuss —
-  follow-up). Алиасы `disableGreetingSticker`,
+  (int 0/1/2, default `1`) — `0` скрыть, `1` mute, `2` Discuss (кнопка,
+  навигация по `discussionLink`). Алиасы `disableGreetingSticker`,
   `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`, `bottomButton`/
   `BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `.extera`
   102 ключа (99 + 3, сверено с legacy-кортежем `run_checks`), два тумблера и
@@ -414,6 +414,64 @@
   слабой сети пул может сжаться из-за неизменных порогов времени (нужен замер
   MB/s), смена boost посреди загрузки меняет шаг офсета, preload/streaming
   остались на 128K, Xvfb-смоук и сетевой замер не выполнялись.
+- Bot privacy (NB-55): `OEGeneralBotPrivacyEnabled` (bool, default `false`),
+  `OEGeneralBotPrivacyAccount` (int `-1..15`, default `-1`, 1-based индекс
+  `orderedAccounts`) и `OEGeneralBotPrivacyAlwaysAsk` (bool, default `false`).
+  Ссылку на бота маршрутизирует хук `RouteBotToPrivacyAccount` в
+  `SessionNavigation::showPeerByLinkResolved`
+  (`window/window_session_controller.cpp`) — он стоит перед всеми пятью
+  ветками резолва, переключает аккаунт через
+  `Core::App().domain().maybeActivate()` и отдаёт ссылку контроллеру целевого
+  окна; `index <= 0` — Off, индекс вне `orderedAccounts` даёт тост, от
+  рекурсии спасает сравнение аккаунта и контроллера. Алиасы
+  `botPrivacyEnabled`, `botPrivacyUserId` и `alwaysAsk` в `.extera` — 109
+  ключей (104 + 3 + 2, сверено с legacy-кортежем `run_checks`), в General
+  тумблер, селектор Off/1..N и тумблер «Always ask…», четыре lang-ключа,
+  CLI `bot-privacy`/`bot-privacy-set`; `check_bot_privacy` — 9 проверок плюс
+  две на неверный вызов CLI, всего 683 PASS (backup 100, CLI 55).
+  `kKeysCount` 11180, sha256 патча `ba0d94a7…`, `nix flake check` PASS.
+  Follow-up: пикера для `alwaysAsk` нет — режим только маршрутизирует без
+  вопроса; четыре тоста остаются английскими литералами без lang-ключей;
+  `unblock` в текущем аккаунте при `startAutoSubmit` не сделан.
+- Внешние субтитры (NB-32), фаза 1: парсер `exteraless/subtitles.{h,cpp}` —
+  `ParseSubtitles`, `ActiveCueText` и `VideoKey`. Читаются SRT и WebVTT:
+  тайм-код с `.` и `,`, необязательный номер реплики, пропуск заголовка
+  `WEBVTT` и директив `NOTE`/`STYLE`/`REGION`, вырезание тегов `<...>` и
+  `{...}`, CRLF/CR → LF, UTF-8 с BOM и без плюс UTF-16 LE/BE по BOM. Реплики
+  сортируются по старту, активный интервал end-exclusive, перекрытия
+  склеиваются через `\n`. Шесть фикстур (`basic.srt`, `basic.vtt`,
+  `overlap.srt`, `tags.srt`, `broken.srt`, `bom-utf16.srt`), CLI
+  `subtitles-parse`/`subtitles-active`/`subtitles-key`, `check_subtitles` —
+  48 проверок (счётчик выше 734, CLI 58, плагины 32 и 213 без изменений).
+  `.gitattributes` закрепляет `exteraless/tests/chats/fixtures/*.srt -text` —
+  иначе CRLF-фикстура схлопнется при checkout. Новых `OE`-ключей нет,
+  `.extera` не менялся; sha256 патча `8c587ce7…`, `nix flake check` PASS.
+  Фаза 2 открыта: рендер в четырёх бэкендах, меню выбора/отключения и
+  пер-видео память — follow-up, код оверлея не тронут.
+- Внешние субтитры (NB-32), фаза 2: рендер, меню и память по видео.
+  `media_subtitles.{h,cpp}` (`Telegram/CMakeLists.txt`) добавляют
+  `Exteraless::Subtitles`: он держит путь, метку и реплики на каждое видео,
+  карта `doc_<id>` → `{path, label}` хранится в `OESubtitlesFiles`
+  (JSON-объект, кап 128 видео, `ValidVideoKey`); при импорте `.extera` она
+  проходит через `SanitizeSubtitlesFiles` (только строковые `path`/`label`,
+  записи без пути отбрасываются), а `Config::setSubtitlesFiles` не сохраняет
+  не-объект. `OEMediaViewerMenuSubtitles` (bool, default `true`) — тумблер в
+  «Media viewer menu»; lang-ключей три: `lng_mediaview_subtitles_choose`,
+  `lng_mediaview_subtitles_disable` и
+  `lng_settings_exteraless_media_menu_subtitles`. В меню медиавьюера —
+  «Choose Subtitles File» (`FileDialog` `*.srt *.vtt`) и «Disable Subtitles»
+  только при выбранном файле, гейт `canShowSubtitles()` — видео без webpage
+  и стрима. Позиция из `UpdateVideo` и `updatePlaybackState`, перерисовка
+  только при смене текста активной реплики. `paintSubtitles(QRect, float64)`
+  в `Renderer`, raster, OpenGL (`_subtitlesImage`) и RHI; контент общий —
+  `paintSubtitlesContent` со `mediaviewSubtitleBg`/`mediaviewSubtitleFg`
+  (алиасы caption); вызов после opacity-блока, поэтому fullscreen тоже видит
+  субтитры. `.extera` — 111 ключей (106 + 3 + 2, сверено с legacy-кортежем
+  `run_checks` `(106, 3, 2)`); раннеры 734/32/213 PASS (backup 100),
+  `kKeysCount` 11183, sha256 патча `80ade745…`. Ограничения: PiP и stories
+  не покрыты, preload/streaming остались 128K, CLI и раннеры проверяют
+  только парсер — проверки меню и пер-видео памяти нет, Xvfb-смоук не
+  выполнялся, `nix flake check` не запускался в docs-задаче.
 - Отложены: NB-21 (нужен SQLite), NB-33 (ждёт NB-92), NB-43 (peer в MTP-фильтре).
 - Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
   активном online-ghost отправляет новые текстовые сообщения как отложенные

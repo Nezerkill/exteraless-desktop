@@ -42,6 +42,10 @@ class DocumentMedia;
 struct StoriesContext;
 } // namespace Data
 
+namespace Exteraless {
+class Subtitles;
+} // namespace Exteraless
+
 namespace Ui {
 class DropdownMenu;
 class PopupMenu;
@@ -329,6 +333,13 @@ private:
 	[[nodiscard]] TimeId shareAtVideoTimestamp() const;
 	void shareAtTime();
 
+	[[nodiscard]] bool canShowSubtitles() const;
+	void ensureSubtitlesState();
+	void refreshSubtitlesText();
+	[[nodiscard]] bool hasChosenSubtitles();
+	void chooseSubtitles();
+	void disableSubtitles();
+
 	void showSaveMsgToast(const QString &path, auto phrase);
 	void showSaveMsgToastWith(
 		const QString &path,
@@ -552,6 +563,12 @@ private:
 		QRect clip,
 		float64 opacity);
 	[[nodiscard]] QRect captionGeometry() const;
+	void paintSubtitlesContent(
+		Painter &p,
+		QRect outer,
+		QRect clip,
+		float64 opacity);
+	[[nodiscard]] QRect subtitlesGeometry() const;
 	void paintGroupThumbsContent(
 		Painter &p,
 		QRect outer,
@@ -735,6 +752,9 @@ private:
 	std::unique_ptr<PipWrap> _pip;
 	QImage _streamedQualityChangeFrame;
 	crl::time _streamedPosition = 0;
+	std::unique_ptr<Exteraless::Subtitles> _subtitles;
+	qint64 _subtitlesDocumentId = 0;
+	QString _subtitlesText;
 	SystemMediaControlsVideoSink *_smtcSink = nullptr;
 	DocumentData *_smtcDocument = nullptr;
 	bool _smtcThumbnailSet = false;

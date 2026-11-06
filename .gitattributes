@@ -10,3 +10,9 @@ Telegram/Resources/zxcvbn/*.txt text eol=lf
 
 # Ensure lottie animations are treated as binary files
 *.lottie binary
+
+# Subtitle fixtures must keep their exact bytes: basic.srt tests CRLF input
+exteraless/tests/chats/fixtures/*.srt -text
+
+# The Nix patch embeds fixture bytes (incl. CRLF); must stay byte-identical
+nix/patches/exteraless.patch -text

@@ -14,10 +14,12 @@
 #include "exteraless/plugins/installer.h"
 #include "exteraless/proxy_rules.h"
 #include "exteraless/save_path.h"
+#include "exteraless/subtitles.h"
 #include "exteraless/zalgo.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -48,6 +50,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-reset\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1> [<showSeconds:0|1>]\n"
+		<< "  exteraless-chats-cli bot-privacy\n"
+		<< "  exteraless-chats-cli bot-privacy-set <enabled 0|1> "
+		<< "<account -1..15> <ask 0|1>\n"
 		<< "  exteraless-chats-cli id-dc\n"
 		<< "  exteraless-chats-cli id-dc-set <0|1>\n"
 		<< "  exteraless-chats-cli id-dc-format <bareId> <dc> <0|1>\n"
@@ -181,7 +186,10 @@ using Exteraless::ChatsSettings;
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
 		<< "  exteraless-chats-cli backup-export-current\n"
 		<< "  exteraless-chats-cli backup-import <base64>\n"
-		<< "  exteraless-chats-cli backup-import-json <json>\n";
+		<< "  exteraless-chats-cli backup-import-json <json>\n"
+		<< "  exteraless-chats-cli subtitles-parse <file>\n"
+		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
+		<< "  exteraless-chats-cli subtitles-key <docId>\n";
 	return 2;
 }
 
@@ -226,6 +234,15 @@ void PrintJson(const QJsonObject &root) {
 	std::cout << '\n';
 }
 
+[[nodiscard]] bool ReadFileBytes(const QString &path, QByteArray *bytes) {
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	*bytes = file.readAll();
+	return true;
+}
+
 void PrintChats() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("chats"),
@@ -241,6 +258,15 @@ void PrintGeneral() {
 			Exteraless::Config::Instance().showSeconds() },
 		{ QStringLiteral("hidePhone"),
 			Exteraless::Config::Instance().hidePhone() },
+	});
+}
+
+void PrintBotPrivacy() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("enabled"), config.botPrivacyEnabled() },
+		{ QStringLiteral("account"), config.botPrivacyAccount() },
+		{ QStringLiteral("alwaysAsk"), config.botPrivacyAlwaysAsk() },
 	});
 }
 
@@ -523,6 +549,33 @@ int main(int argc, char *argv[]) {
 			Exteraless::Config::Instance().setHidePhone(hide);
 		}
 		PrintGeneral();
+		return 0;
+	}
+	if (mode == QStringLiteral("bot-privacy")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintBotPrivacy();
+		return 0;
+	}
+	if (mode == QStringLiteral("bot-privacy-set")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto enabled = false;
+		auto ask = false;
+		auto ok = false;
+		const auto account = arguments[3].toInt(&ok);
+		if (!ReadFlag(arguments[2], &enabled)
+			|| !ok
+			|| !ReadFlag(arguments[4], &ask)) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setBotPrivacyEnabled(enabled);
+		config.setBotPrivacyAccount(account);
+		config.setBotPrivacyAlwaysAsk(ask);
+		PrintBotPrivacy();
 		return 0;
 	}
 	if (mode == QStringLiteral("id-dc")) {
@@ -2151,6 +2204,62 @@ int main(int argc, char *argv[]) {
 		const auto encoded = Exteraless::EncodeInvisible(
 			document.toJson(QJsonDocument::Compact));
 		PrintImportResult(Exteraless::ApplyBackup(encoded));
+		return 0;
+	}
+	if (mode == QStringLiteral("subtitles-parse")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		auto cues = QJsonArray();
+		for (const auto &cue : Exteraless::ParseSubtitles(bytes)) {
+			cues.append(QJsonObject{
+				{ QStringLiteral("start"), cue.start },
+				{ QStringLiteral("end"), cue.end },
+				{ QStringLiteral("text"), cue.text },
+			});
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("cues"), cues },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("subtitles-active")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto position = arguments[3].toLongLong(&ok);
+		if (!ok || position < 0) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"),
+				Exteraless::ActiveCueText(
+					Exteraless::ParseSubtitles(bytes),
+					position) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("subtitles-key")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto docId = arguments[2].toLongLong(&ok);
+		if (!ok || docId < 0) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("key"), Exteraless::VideoKey(docId) },
+		});
 		return 0;
 	}
 	return PrintUsage();

@@ -26,7 +26,14 @@ sibling-чекаутом: `../exteraless`.
     14), правило скрытия реакций и unread capsule;
   - `links.*` — `StripTracking` для http/https-ссылок;
   - `zalgo.*` — фильтр Zalgo-текста: серии из 4+ комбинирующих знаков и карта
-    смещений для пересчёта entities.
+    смещений для пересчёта entities;
+  - `subtitles.*` — парсер SRT/WebVTT: `ParseSubtitles`, `ActiveCueText` и
+    `VideoKey`; UTF-8 с BOM и без, UTF-16 LE/BE по BOM, CRLF, вырезание тегов,
+    сортировка по старту и склейка перекрывающихся реплик, активный интервал
+    end-exclusive. Рендер и выбор файла — NB-32, фаза 2: `media_subtitles.*`
+    помнит субтитры по видео (JSON-карта в `OESubtitlesFiles`), медиавьюер
+    добавляет пункты «Choose Subtitles File» и «Disable Subtitles», а реплики
+    рисуются в raster, OpenGL и RHI.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
   один `QProcess` на приложение (bwrap + Python host), JSON-lines IPC,
   проверка путей, audit-лог, load/unload и остановка host при выходе.
@@ -41,7 +48,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (672 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, autodownload-rules, download-boost, backup);
+  (734 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, autodownload-rules, download-boost, subtitles, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
@@ -86,7 +93,7 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 106 desktop-ключей в секциях `exteraconfig`,
+  декодируются. Backup пишет все 111 desktop-ключей в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
   сбрасывается, потому что это производное сетевое состояние. Полосу историй
   над списком чатов скрывает `OEChatsHideStoriesHeader` (default `false`,
@@ -149,7 +156,8 @@ sibling-чекаутом: `../exteraless`.
   `OEChatsHidePanelsOnScroll` (обе default `false`) — гейт приветственного
   стикера в `GenerateChatIntro` и закрытие панелей `hidePanelsAnimated` в
   `onScroll` — плюс `OEChatsChannelBottomButton` (int 0/1/2, default `1`:
-  `0` скрыть, `1` mute, `2` пока mute, Discuss — follow-up); алиасы
+  `0` скрыть, `1` mute, `2` Discuss — кнопка с навигацией по
+  `discussionLink`); алиасы
   `disableGreetingSticker`, `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`,
   `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton`
   (true → 0). Панели закрывает и автокомплит, hide-режим уносит gift/direct-
@@ -187,6 +195,20 @@ sibling-чекаутом: `../exteraless`.
   открытии профиля. Строка подавлена, если включён upstream-тумблер
   «Show peer ID below about» (`show-peer-id-below-about`). Тумблер — в
   General, бэкап-алиасы `showIdAndDc` (bool) и `idDcType` (число).
+- Bot privacy: ссылку на бота открывает в выделенном аккаунте
+  `OEGeneralBotPrivacyEnabled` (bool, default `false`) вместе с
+  `OEGeneralBotPrivacyAccount` (int `-1..15`, default `-1`, 1-based индекс
+  `orderedAccounts`) и `OEGeneralBotPrivacyAlwaysAsk` (bool, default `false`).
+  Хук `RouteBotToPrivacyAccount` в `SessionNavigation::showPeerByLinkResolved`
+  (`window/window_session_controller.cpp`) стоит перед всеми пятью ветками
+  резолва, переключает аккаунт через `Core::App().domain().maybeActivate()` и
+  отдаёт ссылку контроллеру целевого окна; `index <= 0` — Off, индекс вне
+  `orderedAccounts` даёт тост, рекурсию отсекает сравнение аккаунта и
+  контроллера. В General — тумблер, селектор Off/1..N и тумблер «Always
+  ask…», бэкап-алиасы `botPrivacyEnabled`/`botPrivacyUserId`/`alwaysAsk`,
+  CLI `bot-privacy`/`bot-privacy-set`. Пикера для `alwaysAsk` пока нет —
+  режим маршрутизирует без вопроса, а четыре тоста остаются английскими
+  литералами без lang-ключей.
 - Двойной тап по сообщению: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
   (-1 — как в настройках Telegram, 0 — ничего, 1/2 — любимая реакция, 4 —
   ответ); резолвер — `exteraless/doubletap.{h,cpp}`. Поддержаны ещё шесть

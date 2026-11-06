@@ -892,6 +892,22 @@ ChatWidget::ChatWidget(
 		case BottomControlsAction::MuteUnmute:
 			toggleMuteUnmute();
 			break;
+		case BottomControlsAction::Discuss: {
+			const auto channel = _peer->asChannel();
+			if (!channel) {
+				break;
+			}
+			if (channel->invitePeekExpires()) {
+				this->controller()->showToast(
+					tr::lng_channel_invite_private(tr::now));
+			} else if (const auto chat = channel->discussionLink()) {
+				this->controller()->showPeerHistory(
+					chat,
+					Window::SectionShow::Way::Forward);
+			} else {
+				_peer->updateFull();
+			}
+		} break;
 		case BottomControlsAction::Report:
 			reportSelectedMessages();
 			break;

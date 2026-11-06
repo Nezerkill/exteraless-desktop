@@ -188,7 +188,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Иконпаки / эмодзи / глиф | `icons/*` (15 файлов), `appicons/*`, `glyph/*` | ~20 | ⛔/❌ (иконки tdesktop — `lib_ui` + `.style`) |
 | Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–2, ❌ stage 3, ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
-| Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡/❌ |
+| Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡 субтитры ✅ NB-32, качество/кодеки ❌ |
 | Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ❌ |
 | Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | ❌ |
 | Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 1 формат (25 ключей) |
@@ -234,7 +234,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Сортировка списка чатов | `sortByUnread`, `sortByUnmuted`, `sortByUser`, `sortByContacts` | ✅ `sortByUnread` — `OEChatsSortByUnread` (NB-15, default `false`) через upstream-опцию `Dialogs::kOptionDialogsUnreadOnTop` (`dialogs/dialogs_entry.cpp`), индексный список не менялся; `sortByUnmuted`/`sortByUser`/`sortByContacts` — ❌ (`dialogs/dialogs_indexed_list.cpp`) |
 | Скрыть архив, свайп-архив | `hideArchive`, `openArchiveOnPull`, `doNotUnarchiveBySwipe` | ✅/➖ `OEChatsHideArchive` (NB-15, default `false`) прячет архив существующим skip-путём `_skipTopDialog` (`dialogs/dialogs_inner_widget.cpp`), `shouldBeInChatList` не менялся; свайп-архив (`openArchiveOnPull`, `doNotUnarchiveBySwipe`) — ➖ (`dialogs/dialogs_widget.cpp`) |
 | Папка сохранения и подпапка на чат | `customSavePath`, `saveToChatSubfolder` | 🟡/❌ (`data/data_download_manager.cpp`, `settings/sections/settings_advanced.cpp`) |
-| Bot privacy (выделенный аккаунт) | `OEGeneralBotPrivacyUserId`, `botPrivacyEnabled`, `alwaysAsk` | ❌ (`main/main_domain.cpp`, `Window::ShowAccountSelector`) |
+| Bot privacy (выделенный аккаунт) | `OEGeneralBotPrivacyUserId`, `botPrivacyEnabled`, `alwaysAsk` | ✅ NB-55: `OEGeneralBotPrivacyEnabled` (bool, default `false`), `OEGeneralBotPrivacyAccount` (int `-1..15`, default `-1`, 1-based индекс `orderedAccounts`) и `OEGeneralBotPrivacyAlwaysAsk` (bool, default `false`); хук `RouteBotToPrivacyAccount` в `SessionNavigation::showPeerByLinkResolved` (`window/window_session_controller.cpp`) переключает аккаунт через `Core::App().domain().maybeActivate()` и отдаёт ссылку контроллеру целевого окна, индекс `<= 0` — Off, индекс вне списка — тост; тумблер, селектор Off/1..N и тумблер ask в General; пикера для `alwaysAsk` пока нет |
 | Локальный premium, игнор ограничений | `localPremium`, `ignoreContentRestrictions` | ❌ (спорные по смыслу) |
 | Неограниченные пины | `NekoConfig.unlimitedPinnedDialogs` | ⛔ лимит серверный (`appConfig`), клиентского лимита в 7.3.1 нет |
 | Вибрация, пузырьки, proximity, батарея, Crashlytics, content capture | `disableVibration`, `disableNotificationBubbles`, `disableProximityEvents`, `batteryOptimization`, `OEGeneralCrashReports`, `OEGeneralContentCapture` | ⛔ Android/ОС |
@@ -260,7 +260,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Скрытие кнопок профиля/шапки | `hideGiftButtonInChannel`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton`, `hideSendAsPeer`, `hideCameraTile` | ❌ (`info/profile/*`, `history_view_top_bar_widget.cpp`, `compose_controls`) |
 | Медиа и качество | `alwaysSendInHD`, `preferOriginalQuality`, `hdrPhotos`, `doubleTapSeekDuration`, `swipeToPip`, `zoomSlider`, `staticZoom`, `enhancedVideoBitrate`, `defaultHlsVideoQuality`, `playerDecoder` | ❌/➖ (`media/view/*`, `media/streaming/*`; в upstream есть булев hwaccel) |
 | Автопауза и звук | `pauseVoice`, `pauseRound`, `autoPauseVideo`, `unmuteWithVolumeButtons`, `noiseSuppressAndVoiceEnhance`, `dontAutoPlayNextVoice` | ❌/⛔ (`media/audio/*`, `calls/*`) |
-| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ✅/N/A по NB-86: `OEChatsHideGreetingSticker`/`OEChatsHidePanelsOnScroll` (default `false`) — гейт в `GenerateChatIntro` и `hidePanelsAnimated` в `onScroll`, алиасы `disableGreetingSticker` и `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`; `OEChatsChannelBottomButton` (0/1/2, default 1) — hide/mute, режим 2 пока показывает mute (Discuss — follow-up), алиасы `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `keepAttachButton`/`quickTransition*` — N/A, кнопки и жеста в desktop нет; остальные ключи строки в этом переносе не участвовали |
+| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ✅/N/A по NB-86: `OEChatsHideGreetingSticker`/`OEChatsHidePanelsOnScroll` (default `false`) — гейт в `GenerateChatIntro` и `hidePanelsAnimated` в `onScroll`, алиасы `disableGreetingSticker` и `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`; `OEChatsChannelBottomButton` (0/1/2, default 1) — hide/mute/Discuss, режим 2 показывает кнопку Discuss с навигацией по `discussionLink`, алиасы `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `keepAttachButton`/`quickTransition*` — N/A, кнопки и жеста в desktop нет; остальные ключи строки в этом переносе не участвовали |
 | Камера кружков | `cameraType`, `cameraMirrorMode`, `cameraStabilization`, `extendedFps`, `alwaysSendInHD`, `hideCameraTile` | ⛔ CameraX и драйверы |
 
 ### 6.5 Ghost, удалённые и изменённые сообщения
@@ -423,15 +423,20 @@ shuffle в upstream есть. System media controls (MPRIS) — upstream
 (`OEPrivacyFalseBottom*`), скрытие телефона и ID/DC, content capture,
 игнорирование sensitive-фильтра. Desktop: локальный пароль и блокировка окна
 есть в upstream (`settings_local_passcode.cpp`, `window/window_lock_widgets.cpp`),
-скрытия секций и маршрутизации ботов нет.
+маршрутизация ботов — ✅ NB-55 (`RouteBotToPrivacyAccount`: выделенный аккаунт
+и режим ask, который пока маршрутизирует без пикера); скрытия секций и
+content capture нет.
 
 ### 6.17 Медиа: субтитры, качество, кодеки
 
 Внешние субтитры (`.srt`/`.ass`, `OESubtitles`, `OEChooseSubtitles`),
 HLS-качество по умолчанию, улучшенный битрейт, выбор декодера, GIF как видео,
 свой битрейт аудио, MP4-документ как видео, премиум-эмодзи стикером, правила
-автоскачивания архивов и `.exe`. Desktop: субтитры в видео есть, внешних
-файлов нет; правила автоскачивания по типам есть в
+автоскачивания архивов и `.exe`. Desktop: внешние субтитры — ✅ NB-32 (SRT и
+WebVTT, выбор файла и отключение из меню медиавьюера, пер-видео память в
+`OESubtitlesFiles`, рендер в raster/OpenGL/RHI), `.ass` не читается;
+HLS-качество, битрейт, декодер и GIF-как-видео отсутствуют; правила
+автоскачивания по типам есть в
 `settings/sections/settings_local_storage.cpp`, а правила для архивов и `.exe`
 — ✅ NB-60: `OEChatsDisableAutoDownloadingArchive` (bool, default `false`) и
 `OEChatsBlockWin32ExecutableFiles` (bool, default `true`) гейтят

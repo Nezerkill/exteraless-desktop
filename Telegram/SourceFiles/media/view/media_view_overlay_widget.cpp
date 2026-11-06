@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/calls_instance.h"
 #include "core/application.h"
 #include "exteraless/config.h"
+#include "exteraless/media_subtitles.h"
 #include "core/click_handler_types.h"
 #include "core/core_screenshot_protection.h"
 #include "core/file_utilities.h"
@@ -2364,6 +2365,19 @@ void OverlayWidget::fillContextMenuActions(
 			_stories->shareRequested();
 		}, &st::mediaMenuIconForward);
 	}
+	if (canShowSubtitles()
+		&& Exteraless::Config::Instance().mediaViewerMenuSubtitles()) {
+		addAction(
+			tr::lng_mediaview_subtitles_choose(tr::now),
+			[=] { chooseSubtitles(); },
+			&st::mediaMenuIconShowInFolder);
+		if (hasChosenSubtitles()) {
+			addAction(
+				tr::lng_mediaview_subtitles_disable(tr::now),
+				[=] { disableSubtitles(); },
+				&st::mediaMenuIconCancel);
+		}
+	}
 	const auto canDelete = [&] {
 		if (story && story->canDelete()) {
 			return true;
@@ -3461,6 +3475,79 @@ void OverlayWidget::shareAtTime() {
 	const auto show = uiShow();
 	const auto timestamp = shareAtVideoTimestamp();
 	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
+}
+
+bool OverlayWidget::canShowSubtitles() const {
+	const auto media = _message ? _message->media() : nullptr;
+	return _document
+		&& media
+		&& _streamed
+		&& _document == media->document()
+		&& _document->isVideoFile()
+		&& !media->webpage()
+		&& !_videoStream;
+}
+
+void OverlayWidget::ensureSubtitlesState() {
+	if (!_document) {
+		return;
+	}
+	const auto documentId = static_cast<qint64>(_document->id);
+	if (_subtitles && _subtitlesDocumentId == documentId) {
+		return;
+	}
+	if (!_subtitles) {
+		_subtitles = std::make_unique<Exteraless::Subtitles>();
+	}
+	_subtitlesDocumentId = documentId;
+	_subtitles->find(documentId);
+}
+
+void OverlayWidget::refreshSubtitlesText() {
+	const auto text = (_subtitles && _subtitlesDocumentId && canShowSubtitles())
+		? _subtitles->textAt(_subtitlesDocumentId, _streamedPosition)
+		: QString();
+	if (_subtitlesText != text) {
+		_subtitlesText = text;
+		update();
+	}
+}
+
+bool OverlayWidget::hasChosenSubtitles() {
+	ensureSubtitlesState();
+	return _subtitles && _subtitles->find(_subtitlesDocumentId);
+}
+
+void OverlayWidget::chooseSubtitles() {
+	if (!canShowSubtitles()) {
+		return;
+	}
+	ensureSubtitlesState();
+	const auto documentId = static_cast<qint64>(_document->id);
+	FileDialog::GetOpenPath(
+		_window.get(),
+		u"Choose subtitles"_q,
+		u"Subtitle files (*.srt *.vtt)"_q,
+		crl::guard(_window, [=](FileDialog::OpenResult &&result) {
+			if (result.paths.isEmpty()
+				|| !_subtitles
+				|| _subtitlesDocumentId != documentId) {
+				return;
+			}
+			if (_subtitles->load(documentId, result.paths.front())) {
+				refreshSubtitlesText();
+				update();
+			}
+		}));
+}
+
+void OverlayWidget::disableSubtitles() {
+	if (!_subtitles || !_subtitlesDocumentId) {
+		return;
+	}
+	_subtitles->disable(_subtitlesDocumentId);
+	_subtitlesText.clear();
+	update();
 }
 
 void OverlayWidget::downloadMedia() {
@@ -5302,6 +5389,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
 		Core::App().updateNonIdle();
 		updatePlaybackState();
 		_streamedPosition = update.position;
+		refreshSubtitlesText();
 	}, [&](PreloadedAudio) {
 		updatePlaybackState();
 	}, [&](UpdateAudio) {
@@ -6064,6 +6152,7 @@ void OverlayWidget::playbackPauseMusic() {
 void OverlayWidget::updatePlaybackState() {
 	Expects(_streamed != nullptr);
 
+	ensureSubtitlesState();
 	refreshSystemMediaControls();
 	if (!_streamed->controls && !_stories) {
 		return;
@@ -6081,6 +6170,7 @@ void OverlayWidget::updatePlaybackState() {
 			_stories->updatePlayback(state);
 		}
 	}
+	refreshSubtitlesText();
 }
 
 void OverlayWidget::setSystemMediaControls(
@@ -6504,6 +6594,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
 					_groupThumbs->height()),
 				opacity);
 		}
+	}
+	const auto subtitlesRect = subtitlesGeometry();
+	if (!subtitlesRect.isEmpty()) {
+		renderer->paintSubtitles(subtitlesRect, 1.);
 	}
 	checkGroupThumbsAnimation();
 	if (const auto radius = _window->manualRoundingRadius()) {
@@ -7295,6 +7389,67 @@ QRect OverlayWidget::captionGeometry() const {
 		st::mediaviewCaptionPadding
 	).marginsAdded(
 		_stories ? _stories->repostCaptionPadding() : QMargins());
+}
+
+QRect OverlayWidget::subtitlesGeometry() const {
+	if (_subtitlesText.isEmpty() || !canShowSubtitles()) {
+		return QRect();
+	}
+	const auto content = finalContentRect();
+	const auto padding = st::mediaviewCaptionPadding;
+	const auto skip = st::mediaviewCaptionMargin;
+	const auto &font = st::mediaviewCaptionStyle.font;
+	const auto lines = _subtitlesText.split(u'\n');
+	auto textWidth = 0;
+	for (const auto &line : lines) {
+		textWidth = std::max(textWidth, font->width(line));
+	}
+	const auto available = std::max(
+		content.width() - 2 * skip.width() - padding.left() - padding.right(),
+		1);
+	textWidth = std::min(textWidth, available);
+	const auto width = textWidth + padding.left() + padding.right();
+	const auto height = int(lines.size()) * font->height
+		+ padding.top()
+		+ padding.bottom();
+	const auto bottomSkip = st::mediaviewControllerSize.height()
+		+ st::mediaviewCaptionPadding.bottom()
+		+ skip.height();
+	return QRect(
+		content.x() + (content.width() - width) / 2,
+		content.y() + content.height() - height - bottomSkip,
+		width,
+		height);
+}
+
+void OverlayWidget::paintSubtitlesContent(
+		Painter &p,
+		QRect outer,
+		QRect clip,
+		float64 opacity) {
+	const auto inner = outer.marginsRemoved(st::mediaviewCaptionPadding);
+	if (inner.isEmpty() || !inner.intersects(clip)) {
+		return;
+	}
+	p.setOpacity(opacity);
+	p.setPen(Qt::NoPen);
+	p.setBrush(st::mediaviewSubtitleBg);
+	p.drawRoundedRect(
+		outer,
+		st::mediaviewCaptionRadius,
+		st::mediaviewCaptionRadius);
+	const auto &font = st::mediaviewCaptionStyle.font;
+	p.setFont(font);
+	p.setPen(st::mediaviewSubtitleFg);
+	auto top = inner.y();
+	for (const auto &line : _subtitlesText.split(u'\n')) {
+		p.drawText(
+			QRect(inner.x(), top, inner.width(), font->height),
+			Qt::AlignHCenter | Qt::AlignTop,
+			font->elided(line, inner.width()));
+		top += font->height;
+	}
+	p.setOpacity(1.);
 }
 
 void OverlayWidget::paintGroupThumbsContent(

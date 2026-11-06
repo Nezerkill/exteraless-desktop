@@ -1,0 +1,11 @@
+WEBVTT
+
+NOTE This comment block is ignored.
+
+1
+00:00:01.000 --> 00:00:03.000 align:start position:10%
+First vtt cue
+
+00:00:05.000 --> 00:00:06.500
+Second vtt cue
+
