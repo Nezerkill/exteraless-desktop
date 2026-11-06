@@ -116,6 +116,21 @@
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 103 backup);
   плагины без изменений — 32 и 213 проверок.
+- Плагины, этап 3a — настройки плагинов (NB-79.3a): `OEPluginSettings` —
+  JSON `id → {key: value}` с алиасом `pluginSettings`; лимиты: id по
+  `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, ключ ≤ 64, ≤ 128 ключей, ≤ 64 KiB,
+  глубина ≤ 4; в `.extera` ключ не экспортируется, импорт — миграция.
+  Host: `_SETTINGS` и `get_setting`/`set_setting`/`export_settings`/
+  `import_settings`, снимок в ответе `load`, dirty-персист (`saveSetting`
+  пишет сразу); бокс `ShowPluginSettingsBox` (Switch/Selector/Input/
+  Header/Divider, `Custom` — заглушка), CLI `settings-get`/`settings-set`,
+  фикстура `valid-settings.plugin`; `check_plugin_settings` — 15 проверок;
+  host-раннер 228 (213 → 228), chats 943 и плагины-сканер 32 без
+  изменений; `.extera` — 138 ключей (не тронут); `kKeysCount` 11232
+  (`kTagsCount` 185) — lang не менялся; sha256 патча `ab0d18e9…`,
+  `nix flake check` PASS. Не сделано: меню (этап 3b = NB-30), intents и
+  trust-уровни (этап 3c), пикер alwaysAsk (= NB-55). Ограничения: правки
+  бокса видны при следующем enable плагина; Xvfb-смоук не выполнялся.
 - IPv6 и DNS over HTTPS (NB-77): `OENetworkUseIPv6` (bool, default `true` вне
   Windows), `OENetworkDnsType` (int `0..1`, default `0`: `0` — built-in DoH,
   `1` — system) и `OENetworkCustomDoH` (строка, пусто — выключено), алиасы

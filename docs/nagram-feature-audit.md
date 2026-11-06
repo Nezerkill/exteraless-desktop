@@ -188,7 +188,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Drawer и навигация | `app/exteraless/drawer/*`, `MainMenuLayout` | 20 пунктов меню | 🟡 5 пунктов, порядок, аккаунты |
 | Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | ❌ MD3-плеер, ➖ MPRIS |
 | Иконпаки / эмодзи / глиф | `icons/*` (15 файлов), `appicons/*`, `glyph/*` | ~20 | ⛔/❌ (иконки tdesktop — `lib_ui` + `.style`) |
-| Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–2, ❌ stage 3, ⛔ Xposed |
+| Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–2, 🟡 stage 3: настройки ✅ NB-79.3a (`OEPluginSettings`, `ShowPluginSettingsBox`, CLI `settings-get`/`settings-set`), меню — ❌ этап 3b (NB-30), intents и trust-уровни — ❌ этап 3c, ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
 | Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡 субтитры ✅ NB-32, качество/кодеки ❌ |
 | Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ✅ NB-58 (персидский календарь): `OEGeneralUsePersianCalendar`/`OEGeneralPersianCalendarLatin` и `Exteraless::PersianDateText` через `QCalendar` Jalali (12 месяцев, цифры ASCII или `U+06F0`), подмена в `langDayOfMonth*`/`langDateTime*` меняет только `lt_date`; остальное ❌ |
@@ -437,8 +437,8 @@ shuffle в upstream есть. System media controls (MPRIS) — upstream
 | Audit-журнал | `PluginActivityLog`, `PluginActivityExport` | 🟡 пишется `tdata/plugins-audit.log`, просмотра в UI нет |
 | Watchdog, safe/unsafe, авто-safe-mode | `PluginsWatchdog`, `PluginsSafeMode`, `PluginsAutoSafeMode` | ❌ |
 | Установка / удаление / обновление | `PluginsInstallFromFile`, `PluginsDelete`, `PluginsUpdate` | 🟡 установка и удаление — NB-29 (`installer.*`, кнопки в боксе); обновление не перенесено |
-| Меню и настройки плагина | `plugins/menus`, `PluginSettingsActivity` | ❌ |
-| Intents, бэкап плагинов, Python SDK | `plugins/intents`, `PluginsBackup`, `src/main/python/*` | ❌ |
+| Меню и настройки плагина | `plugins/menus`, `PluginSettingsActivity` | 🟡 настройки — NB-79.3a: `OEPluginSettings` (JSON `id → {key: value}`, лимиты, алиас `pluginSettings`), host `get_setting`/`set_setting`, бокс `ShowPluginSettingsBox` (Switch/Selector/Input/Header/Divider, `Custom` — заглушка), CLI `settings-get`/`settings-set`; меню — ❌ этап 3b (= NB-30) |
+| Intents, бэкап плагинов, Python SDK | `plugins/intents`, `PluginsBackup`, `src/main/python/*` | ❌ intents и trust-уровни — этап 3c (открыто); бэкапа плагинов и Python SDK нет |
 | Xposed-хуки, DEX, `.elyx`, шим `ExteraConfig` | `plugins/xposed/*`, `elyx_runtime/*`, `ExteraConfig.java` | ⛔ нет ART и совместимого API |
 
 ### 6.16 Приватность и защита настроек

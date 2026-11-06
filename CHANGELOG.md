@@ -2,6 +2,30 @@
 
 ## 2026-11-07
 
+- Плагины, этап 3a — настройки плагинов (NB-79.3a): `OEPluginSettings` —
+  JSON-объект `id → {key: value}` в `tdata/exteraless.json`, алиас
+  `pluginSettings`. Санитайзер принимает id по
+  `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, ключ ≤ 64 символов, ≤ 128 ключей,
+  ≤ 64 KiB и вложенность ≤ 4, невалидные записи отбрасываются; в `.extera`
+  ключ не экспортируется, импорт принимает его как миграцию старых бэкапов.
+  Host держит `_SETTINGS`, плагину доступны
+  `get_setting`/`set_setting`/`export_settings`/`import_settings`; `load`
+  получает сохранённые значения, ответ `loaded` возвращает снимок
+  `settings` и `settings_ui`, а конфиг переписывается только если снимок
+  отличается (dirty-персист), тогда как `saveSetting` пишет сразу.
+  `ShowPluginSettingsBox` строит бокс из строк Switch/Selector/Input/
+  Header/Divider, `Custom` — заглушка «Custom settings are not supported.»;
+  правки применяются при следующем enable плагина. CLI `settings-get <id>`
+  и `settings-set <id> <key> <json>` (невалидный JSON —
+  `Invalid JSON value.`), фикстура `valid-settings.plugin`;
+  `check_plugin_settings` — 15 проверок, host-раннер 228 (= 213 + 15),
+  chats 943 и плагины-сканер 32 — без изменений; `.extera` — 138 ключей
+  (не тронут); `kKeysCount` 11232 (`kTagsCount` 185) — lang не менялся;
+  sha256 патча `ab0d18e9…`, `nix flake check` PASS. Не сделано: меню
+  плагина (этап 3b = NB-30), intents и trust-уровни (этап 3c), пикер
+  alwaysAsk (= NB-55). Ограничения: бокс пишет значения, но плагин видит их
+  только при следующем enable; Xvfb-смоук не выполнялся; предсуществующее
+  `-Wunused-result` в `plugins_box.cpp` — не из этой задачи.
 - Сеть: IPv6 и DNS over HTTPS (NB-77): `OENetworkUseIPv6` (bool, default
   `!Q_OS_WIN`), `OENetworkDnsType` (int `0..1`, default `0`: `0` — built-in
   DoH, `1` — system) и `OENetworkCustomDoH` (строка, пусто — выключено),

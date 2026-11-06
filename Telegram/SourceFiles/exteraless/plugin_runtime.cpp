@@ -1,5 +1,7 @@
 #include "exteraless/plugin_runtime.h"
 
+#include "exteraless/config.h"
+
 #include <QDateTime>
 #include <QDeadlineTimer>
 #include <QDebug>
@@ -25,6 +27,7 @@ constexpr auto kWriteTimeout = 2000;
 constexpr auto kStopTimeout = 3000;
 constexpr auto kKillTimeout = 1000;
 constexpr auto kMaxReadBuffer = 1024 * 1024;
+constexpr auto kMaxSettingsBytes = 64 * 1024;
 
 constexpr auto kSandboxUnavailable =
 	"Plugin sandbox is unavailable.";
@@ -82,6 +85,73 @@ _ALLOW_COMPILE = [False]
 _LOAD_CODE = [None]
 _IN_AUDIT = [False]
 _PLUGINS = {}
+_SETTINGS = {}
+MAX_SETTING_KEYS = 256
+MAX_SETTINGS_BYTES = 64 * 1024
+
+
+class _InvalidJson:
+    pass
+
+
+def _json_safe(value):
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        return json.loads(encoded)
+    except (TypeError, ValueError, RecursionError):
+        return _InvalidJson
+
+
+class HeaderSetting:
+    type = 'header'
+
+    def __init__(self, text):
+        self.text = str(text)
+
+
+class DividerSetting:
+    type = 'divider'
+
+    def __init__(self, text=None):
+        self.text = None if text is None else str(text)
+
+
+class SwitchSetting:
+    type = 'switch'
+
+    def __init__(self, key, text, default=False, subtext=None):
+        self.key = str(key)
+        self.text = str(text)
+        self.default = bool(default)
+        self.subtext = None if subtext is None else str(subtext)
+
+
+class SelectorSetting:
+    type = 'selector'
+
+    def __init__(self, key, text, default=0, items=(), subtext=None):
+        self.key = str(key)
+        self.text = str(text)
+        self.default = int(default)
+        self.items = [str(item) for item in items]
+        self.subtext = None if subtext is None else str(subtext)
+
+
+class InputSetting:
+    type = 'input'
+
+    def __init__(self, key, text, default=None, subtext=None):
+        self.key = str(key)
+        self.text = str(text)
+        self.default = '' if default is None else str(default)
+        self.subtext = None if subtext is None else str(subtext)
+
+
+class CustomSetting:
+    type = 'custom'
+
+    def __init__(self, *args, **kwargs):
+        pass
 
 
 class _NullSink:
@@ -120,6 +190,35 @@ class BasePlugin:
 
     def log(self, message):
         _host_log(_CURRENT_ID[0], str(message)[:500])
+
+    def get_setting(self, key, default=None):
+        if not isinstance(key, str):
+            return default
+        values = _SETTINGS.get(_CURRENT_ID[0])
+        if not isinstance(values, dict) or key not in values:
+            return default
+        value = _json_safe(values[key])
+        return default if value is _InvalidJson else value
+
+    def set_setting(self, key, value):
+        if not isinstance(key, str) or not key:
+            return
+        safe = _json_safe(value)
+        if safe is _InvalidJson:
+            return
+        values = _SETTINGS.get(_CURRENT_ID[0])
+        if not isinstance(values, dict):
+            values = {}
+            _SETTINGS[_CURRENT_ID[0]] = values
+        values[key] = safe
+
+    def export_settings(self):
+        values = _SETTINGS.get(_CURRENT_ID[0])
+        safe = _json_safe(values) if isinstance(values, dict) else None
+        return safe if isinstance(safe, dict) else {}
+
+    def import_settings(self, settings):
+        _SETTINGS[_CURRENT_ID[0]] = _sanitize_settings(settings)
 
 
 PROTOCOL = os.fdopen(os.dup(1), 'wb', buffering=0)
@@ -402,6 +501,151 @@ def _find_plugin(module):
     return None, 'Plugin must declare a BasePlugin instance or subclass.'
 
 
+def _bounded_text(value, limit=200):
+    if not isinstance(value, str):
+        return ''
+    return value[:limit]
+
+
+def _sanitize_settings(value):
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    total = 0
+    for key, item in value.items():
+        if not isinstance(key, str) or not key or len(key) > 64:
+            continue
+        if len(result) >= MAX_SETTING_KEYS:
+            break
+        safe = _json_safe(item)
+        if safe is _InvalidJson:
+            continue
+        size = len(json.dumps(safe, ensure_ascii=False).encode('utf-8'))
+        if total + size > MAX_SETTINGS_BYTES:
+            continue
+        result[key] = safe
+        total += size
+    return result
+
+
+def _settings_snapshot(plugin_id):
+    values = _SETTINGS.get(plugin_id)
+    return _sanitize_settings(values) if isinstance(values, dict) else {}
+
+
+def _restore_settings(plugin_id, previous):
+    if previous is None:
+        _SETTINGS.pop(plugin_id, None)
+    else:
+        _SETTINGS[plugin_id] = previous
+
+
+def _setting_field(item, name, fallback=None):
+    if isinstance(item, dict):
+        return item.get(name, fallback)
+    return getattr(item, name, fallback)
+
+
+def _setting_entry(item, plugin_id):
+    kind = _setting_field(item, 'type')
+    if kind == 'header':
+        text = _bounded_text(_setting_field(item, 'text'))
+        return {'type': 'header', 'text': text} if text else None
+    if kind == 'divider':
+        entry = {'type': 'divider'}
+        text = _bounded_text(_setting_field(item, 'text'))
+        if text:
+            entry['text'] = text
+        return entry
+    if kind == 'custom':
+        return {'type': 'custom'}
+    key = _setting_field(item, 'key')
+    if not isinstance(key, str) or not key:
+        return None
+    values = _SETTINGS.get(plugin_id)
+    values = values if isinstance(values, dict) else {}
+    page = _bounded_text(_setting_field(item, 'text'))
+    subtext = _bounded_text(_setting_field(item, 'subtext'))
+    if kind == 'switch':
+        default = bool(_setting_field(item, 'default', False))
+        value = values.get(key, default)
+        entry = {
+            'type': 'switch',
+            'key': key[:64],
+            'text': page,
+            'value': value if isinstance(value, bool) else default,
+        }
+        if subtext:
+            entry['subtext'] = subtext
+        return entry
+    if kind == 'selector':
+        options = _setting_field(item, 'items')
+        if isinstance(options, (list, tuple)):
+            options = [_bounded_text(option) for option in options]
+            options = [option for option in options if option]
+        else:
+            options = []
+        if not options:
+            return None
+        default = _setting_field(item, 'default', 0)
+        default = (default if isinstance(default, int)
+                   and not isinstance(default, bool) else 0)
+        if default < 0 or default >= len(options):
+            default = 0
+        value = values.get(key, default)
+        value = (value if isinstance(value, int)
+                 and not isinstance(value, bool) else default)
+        if value < 0 or value >= len(options):
+            value = default
+        entry = {
+            'type': 'selector',
+            'key': key[:64],
+            'text': page,
+            'items': options,
+            'value': value,
+            'default': default,
+        }
+        if subtext:
+            entry['subtext'] = subtext
+        return entry
+    if kind == 'input':
+        default = _setting_field(item, 'default')
+        default = default if isinstance(default, str) else ''
+        value = values.get(key, default)
+        entry = {
+            'type': 'input',
+            'key': key[:64],
+            'text': page,
+            'value': value if isinstance(value, str) else default,
+        }
+        if subtext:
+            entry['subtext'] = subtext
+        return entry
+    return None
+
+
+def _settings_rows(instance, plugin_id):
+    creator = getattr(instance, 'create_settings', None)
+    if not callable(creator):
+        return []
+    try:
+        items = creator()
+    except BaseException:
+        return []
+    if not isinstance(items, (list, tuple)):
+        return []
+    rows = []
+    for item in items[:128]:
+        entry = None
+        try:
+            entry = _setting_entry(item, plugin_id)
+        except Exception:
+            entry = None
+        if entry is not None:
+            rows.append(entry)
+    return rows
+
+
 def _load(message):
     seq = _CURRENT_SEQ[0]
     plugin_id = message.get('id')
@@ -474,12 +718,23 @@ def _load(message):
     existing = _PLUGINS.get(plugin_id)
     if existing is not None:
         if existing['path'] == real:
-            _send({'seq': seq, 'type': 'loaded', 'ok': True})
+            _SETTINGS[plugin_id] = _sanitize_settings(
+                message.get('settings'))
+            _send({
+                'seq': seq,
+                'type': 'loaded',
+                'ok': True,
+                'settings': _settings_snapshot(plugin_id),
+                'settings_ui': _settings_rows(
+                    existing['instance'], plugin_id),
+            })
         else:
             _send({'seq': seq, 'type': 'error',
                    'message': 'Plugin id is already loaded from another path.'})
         return
 
+    previous_settings = _SETTINGS.get(plugin_id)
+    _SETTINGS[plugin_id] = _sanitize_settings(message.get('settings'))
     module_name = 'exteraless_plugin_' + plugin_id
     before = set(sys.modules)
     _CURRENT_ID[0] = plugin_id
@@ -493,6 +748,7 @@ def _load(message):
     except BaseException as error:
         sys.modules.pop(module_name, None)
         _purge(set(sys.modules) - before)
+        _restore_settings(plugin_id, previous_settings)
         _send({'seq': seq, 'type': 'error',
                'message': 'Plugin load failed: %s' % error})
         return
@@ -502,11 +758,13 @@ def _load(message):
     instance, error = _find_plugin(module)
     if error:
         _purge({module_name})
+        _restore_settings(plugin_id, previous_settings)
         _send({'seq': seq, 'type': 'error', 'message': error})
         return
     declared = getattr(module, '__id__', None)
     if declared != plugin_id:
         _purge({module_name})
+        _restore_settings(plugin_id, previous_settings)
         _send({'seq': seq, 'type': 'error',
                'message': 'Plugin id mismatch: expected %s, got %s.' % (
                    plugin_id, declared)})
@@ -532,10 +790,17 @@ def _load(message):
         except BaseException:
             pass
         _purge(modules)
+        _restore_settings(plugin_id, previous_settings)
         _send({'seq': seq, 'type': 'error',
                'message': 'Plugin load failed: %s' % error})
         return
-    _send({'seq': seq, 'type': 'loaded', 'ok': True})
+    _send({
+        'seq': seq,
+        'type': 'loaded',
+        'ok': True,
+        'settings': _settings_snapshot(plugin_id),
+        'settings_ui': _settings_rows(instance, plugin_id),
+    })
 
 
 def _unload(message):
@@ -554,6 +819,7 @@ def _unload(message):
     except BaseException as error:
         warning = 'on_unload failed: %s' % error
     _purge(record['modules'])
+    _SETTINGS.pop(plugin_id, None)
     response = {'seq': seq, 'type': 'unloaded', 'ok': True}
     if warning:
         response['warning'] = warning
@@ -572,6 +838,7 @@ def _shutdown():
             pass
         _purge(record['modules'])
     _PLUGINS.clear()
+    _SETTINGS.clear()
     _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
 
 
@@ -662,6 +929,12 @@ def _install():
     sys.addaudithook(_audit)
     base = types.ModuleType('base_plugin')
     base.BasePlugin = BasePlugin
+    base.HeaderSetting = HeaderSetting
+    base.DividerSetting = DividerSetting
+    base.SwitchSetting = SwitchSetting
+    base.SelectorSetting = SelectorSetting
+    base.InputSetting = InputSetting
+    base.CustomSetting = CustomSetting
     sys.modules['base_plugin'] = base
 
 
@@ -798,6 +1071,35 @@ Runtime *gRuntime = nullptr;
 	};
 }
 
+[[nodiscard]] QJsonObject ParseSettings(const QString &json) {
+	const auto document = QJsonDocument::fromJson(json.toUtf8());
+	return document.isObject() ? document.object() : QJsonObject();
+}
+
+[[nodiscard]] QJsonObject StoredSettings(const QString &id) {
+	const auto settings = ParseSettings(
+		Config::Instance().pluginsSettings()).value(id);
+	return settings.isObject() ? settings.toObject() : QJsonObject();
+}
+
+void PersistSettings(const QString &id, const QJsonObject &settings) {
+	if (QJsonDocument(settings).toJson(QJsonDocument::Compact).size()
+		> kMaxSettingsBytes) {
+		qWarning("Ignored oversized plugin settings.");
+		return;
+	}
+	auto all = ParseSettings(Config::Instance().pluginsSettings());
+	if (settings.isEmpty()) {
+		all.remove(id);
+	} else {
+		all.insert(id, settings);
+	}
+	Config::Instance().setPluginsSettings(all.isEmpty()
+		? QString()
+		: QString::fromUtf8(
+			QJsonDocument(all).toJson(QJsonDocument::Compact)));
+}
+
 } // namespace
 
 Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
@@ -916,6 +1218,31 @@ const QString &Runtime::pluginsDirectory() const {
 	return _pluginsDirectory;
 }
 
+QJsonObject Runtime::settings(const QString &id) const {
+	return _settings.value(id);
+}
+
+QJsonArray Runtime::settingsUi(const QString &id) const {
+	return _settingsUi.value(id);
+}
+
+void Runtime::saveSetting(
+		const QString &id,
+		const QString &key,
+		const QJsonValue &value) {
+	if (id.isEmpty() || key.isEmpty()) {
+		return;
+	}
+	auto stored = StoredSettings(id);
+	stored.insert(key, value);
+	PersistSettings(id, stored);
+	if (_settings.contains(id)) {
+		auto snapshot = _settings.value(id);
+		snapshot.insert(key, value);
+		_settings[id] = snapshot;
+	}
+}
+
 Result Runtime::enable(const QString &id, const QString &path) {
 	const auto check = ValidatePath(_pluginsDirectory, path);
 	if (!check.ok) {
@@ -951,6 +1278,7 @@ Result Runtime::enable(const QString &id, const QString &path) {
 		{ QStringLiteral("cmd"), QStringLiteral("load") },
 		{ QStringLiteral("id"), id },
 		{ QStringLiteral("path"), QStringLiteral("/plugins/") + filename },
+		{ QStringLiteral("settings"), StoredSettings(id) },
 	};
 	auto response = QJsonObject();
 	auto error = QString();
@@ -964,6 +1292,17 @@ Result Runtime::enable(const QString &id, const QString &path) {
 			protocolViolation(&error);
 			return { false, error };
 		}
+		const auto sent = request.value(QStringLiteral("settings")).toObject();
+		const auto received = response.value(QStringLiteral("settings"));
+		if (received.isObject()) {
+			const auto snapshot = received.toObject();
+			_settings[id] = snapshot;
+			if (snapshot != sent) {
+				PersistSettings(id, snapshot);
+			}
+		}
+		_settingsUi[id] = response.value(
+			QStringLiteral("settings_ui")).toArray();
 		_loaded[id] = canonical;
 		return { true, QString() };
 	}
@@ -1045,6 +1384,8 @@ void Runtime::clearHost() {
 	}
 	_readBuffer.clear();
 	_loaded.clear();
+	_settings.clear();
+	_settingsUi.clear();
 	_seq = 0;
 }
 

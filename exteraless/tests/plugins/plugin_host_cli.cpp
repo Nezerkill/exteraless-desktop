@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QJsonValue>
 #include <QStringList>
 
 #include <iostream>
@@ -54,6 +55,65 @@ struct RuntimeGuard {
 		{ QStringLiteral("ok"), true },
 		{ QStringLiteral("enabled"),
 			Exteraless::Config::Instance().pluginEnabled(id) },
+	};
+}
+
+[[nodiscard]] QJsonObject ParsedSettings() {
+	auto parseError = QJsonParseError{0, QJsonParseError::NoError};
+	const auto document = QJsonDocument::fromJson(
+		Exteraless::Config::Instance().pluginsSettings().toUtf8(),
+		&parseError);
+	if (parseError.error != QJsonParseError::NoError
+		|| !document.isObject()) {
+		return QJsonObject();
+	}
+	return document.object();
+}
+
+[[nodiscard]] QJsonObject SettingsResult(const QString &id) {
+	return QJsonObject{
+		{ QStringLiteral("ok"), true },
+		{ QStringLiteral("settings"), ParsedSettings().value(id).toObject() },
+	};
+}
+
+[[nodiscard]] QJsonObject SetSetting(
+		const QString &id,
+		const QString &key,
+		const QJsonValue &value) {
+	auto config = &Exteraless::Config::Instance();
+	auto settings = ParsedSettings();
+	auto plugin = settings.value(id).toObject();
+	if (value.isNull()) {
+		plugin.remove(key);
+	} else {
+		plugin.insert(key, value);
+	}
+	if (plugin.isEmpty()) {
+		settings.remove(id);
+	} else {
+		settings.insert(id, plugin);
+	}
+	config->setPluginsSettings(QString::fromUtf8(
+		QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+	const auto stored = ParsedSettings().value(id).toObject();
+	if (value.isNull()) {
+		const auto removed = !stored.contains(key);
+		return QJsonObject{
+			{ QStringLiteral("ok"), removed },
+			{ QStringLiteral("settings"), stored },
+			{ QStringLiteral("error"), removed
+				? QString()
+				: QStringLiteral("The setting was not removed.") },
+		};
+	}
+	const auto accepted = (stored.value(key) == value);
+	return QJsonObject{
+		{ QStringLiteral("ok"), accepted },
+		{ QStringLiteral("settings"), stored },
+		{ QStringLiteral("error"), accepted
+			? QString()
+			: QStringLiteral("Invalid settings value.") },
 	};
 }
 
@@ -178,6 +238,31 @@ int main(int argc, char *argv[]) {
 			rest[0],
 			rest[1] == QStringLiteral("true"));
 		WriteJson(StateResult(rest[0]));
+		return 0;
+	}
+	if (command == QStringLiteral("settings-get")) {
+		if (rest.size() != 1) {
+			return Usage();
+		}
+		WriteJson(SettingsResult(rest[0]));
+		return 0;
+	}
+	if (command == QStringLiteral("settings-set")) {
+		if (rest.size() != 3) {
+			return Usage();
+		}
+		auto parseError = QJsonParseError{0, QJsonParseError::NoError};
+		const auto value = QJsonValue::fromJson(rest[2].toUtf8(), &parseError);
+		if (parseError.error != QJsonParseError::NoError) {
+			WriteJson(QJsonObject{
+				{ QStringLiteral("ok"), false },
+				{ QStringLiteral("settings"), QJsonObject() },
+				{ QStringLiteral("error"),
+					QStringLiteral("Invalid JSON value.") },
+			});
+			return 0;
+		}
+		WriteJson(SetSetting(rest[0], rest[1], value));
 		return 0;
 	}
 	if (command == QStringLiteral("import-state")) {

@@ -188,6 +188,8 @@ constexpr auto kNetworkUseIPv6Alias = "useIPv6";
 constexpr auto kNetworkDnsTypeAlias = "dnsType";
 constexpr auto kNetworkCustomDoHAlias = "customDoH";
 constexpr auto kPluginStates = "OEPluginStates";
+constexpr auto kPluginsSettings = "OEPluginSettings";
+constexpr auto kPluginsSettingsAlias = "pluginSettings";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
 constexpr auto kPillStackOrder = "OEPillStackOrder";
@@ -778,6 +780,14 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setNetworkCustomDoH(value.toString());
 		} else if (key == kPluginStates && value.isObject()) {
 			config.setPluginStates(value.toObject());
+		} else if ((key == kPluginsSettings || key == kPluginsSettingsAlias)
+			&& (value.isString() || value.isObject())) {
+			// WHY: plugin settings migrate from old backups but are never
+			// exported again.
+			config.setPluginsSettings(value.isString()
+				? value.toString()
+				: QString::fromUtf8(QJsonDocument(value.toObject())
+					.toJson(QJsonDocument::Compact)));
 		} else if (key == kChatsStripTrackingOnOpen && value.isBool()) {
 			config.setChatsStripTrackingOnOpen(value.toBool());
 		} else if (key == kChatsStripTrackingOnPaste && value.isBool()) {

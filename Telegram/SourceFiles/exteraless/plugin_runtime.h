@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 
@@ -42,6 +43,12 @@ public:
 	[[nodiscard]] bool isLoaded(const QString &id) const;
 	[[nodiscard]] qint64 hostPid() const;
 	[[nodiscard]] const QString &pluginsDirectory() const;
+	[[nodiscard]] QJsonObject settings(const QString &id) const;
+	[[nodiscard]] QJsonArray settingsUi(const QString &id) const;
+	void saveSetting(
+		const QString &id,
+		const QString &key,
+		const QJsonValue &value);
 
 	[[nodiscard]] static PathCheck ValidatePath(
 		const QString &pluginsDirectory,
@@ -70,6 +77,8 @@ private:
 	std::unique_ptr<QProcess> _process;
 	QByteArray _readBuffer;
 	QHash<QString, QString> _loaded;
+	QHash<QString, QJsonObject> _settings;
+	QHash<QString, QJsonArray> _settingsUi;
 	int _seq = 0;
 	QString _pluginsDirectory;
 	QString _auditLogPath;

@@ -2024,6 +2024,124 @@ def check_config_whitelist(ledger, cli, work):
         states)
 
 
+def check_plugin_settings(ledger, cli, work):
+    _, plugins, audit = workspace(work, "plugin-settings")
+    fixture = copy_fixture(plugins, "valid-settings.plugin")
+    data_home = work / "plugin-settings-data"
+    expected = {"enabled": True, "mode": 2, "prefix": "demo"}
+
+    data = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_settings"], data_home)
+    ledger.check("settings default: ok", data.get("ok") is True, data)
+    ledger.check(
+        "settings default: empty",
+        data.get("settings") == {},
+        data.get("settings"))
+
+    data = run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_settings", "enabled", "true"], data_home)
+    ledger.check("settings write: ok", data.get("ok") is True, data)
+    ledger.check(
+        "settings write: stored",
+        data.get("settings") == {"enabled": True},
+        data.get("settings"))
+    run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_settings", "mode", "2"], data_home)
+    run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_settings", "prefix", '"demo"'], data_home)
+
+    data = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_settings"], data_home)
+    ledger.check(
+        "settings read: own keys",
+        data.get("settings") == expected,
+        data.get("settings"))
+    ledger.check(
+        "settings read: values only",
+        "default" not in data.get("settings", {}),
+        data.get("settings"))
+
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_settings", "path": str(fixture)},
+                {"op": "disable", "id": "demo_settings"},
+                {"op": "enable", "id": "demo_settings", "path": str(fixture)},
+                {"op": "disable", "id": "demo_settings"},
+            ]),
+        ],
+        data_home)
+    ledger.check(
+        "settings reload: plugin reloaded",
+        [entry.get("ok") for entry in data] == [True, True, True, True],
+        data)
+    data = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_settings"], data_home)
+    ledger.check(
+        "settings reload: survived",
+        data.get("settings") == expected,
+        data.get("settings"))
+
+    run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_second", "prefix", '"other"'], data_home)
+    run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_second", "only_second", "true"], data_home)
+    data = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_settings"], data_home)
+    ledger.check(
+        "settings foreign: own keys untouched",
+        data.get("settings") == expected,
+        data.get("settings"))
+    second = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_second"], data_home)
+    ledger.check(
+        "settings foreign: second keys kept",
+        second.get("settings") == {"prefix": "other", "only_second": True},
+        second.get("settings"))
+
+    data = run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_settings", "mode", "{bad"], data_home)
+    ledger.check(
+        "settings invalid json: rejected",
+        data.get("ok") is False
+        and data.get("error") == "Invalid JSON value.",
+        data)
+    data = run_cli(
+        cli, plugins, audit,
+        ["settings-set", "1bad", "mode", "1"], data_home)
+    ledger.check(
+        "settings invalid id: rejected",
+        data.get("ok") is False,
+        data)
+    ledger.check(
+        "settings invalid id: nothing stored",
+        run_cli(
+            cli, plugins, audit,
+            ["settings-get", "1bad"], data_home).get("settings") == {},
+        None)
+    data = run_cli(
+        cli, plugins, audit,
+        ["settings-set", "demo_settings", "k" * 65, "1"], data_home)
+    ledger.check(
+        "settings invalid key: rejected",
+        data.get("ok") is False,
+        data)
+    data = run_cli(
+        cli, plugins, audit, ["settings-get", "demo_settings"], data_home)
+    ledger.check(
+        "settings invalid: state unchanged",
+        data.get("settings") == expected,
+        data.get("settings"))
+
+
 def check_missing_python(ledger, cli, work):
     _, plugins, audit = workspace(work, "missing-python")
     valid = copy_fixture(plugins, "valid.plugin")
@@ -2127,6 +2245,7 @@ def main():
         check_stop(ledger, cli, work)
         check_state(ledger, cli, work)
         check_config_whitelist(ledger, cli, work)
+        check_plugin_settings(ledger, cli, work)
         check_missing_python(ledger, cli, work)
         check_crash(ledger, cli, work)
         check_missing_base(ledger, cli, work)

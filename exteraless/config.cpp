@@ -7,6 +7,7 @@
 #include <array>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonValue>
@@ -110,6 +111,11 @@ constexpr auto kPillStackOrder = "OEPillStackOrder";
 constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 constexpr auto kPluginStates = "OEPluginStates";
+constexpr auto kPluginsSettings = "OEPluginSettings";
+constexpr auto kMaxPluginSettingKeyLength = 64;
+constexpr auto kMaxPluginSettingKeys = 128;
+constexpr auto kMaxPluginSettingBytes = 64 * 1024;
+constexpr auto kMaxPluginSettingDepth = 4;
 constexpr auto kChatsRemoveMessageTail = "OEChatsRemoveMessageTail";
 constexpr auto kChatsHideReactionsChannels = "OEChatsHideReactionsChannels";
 constexpr auto kChatsHideReactionsGroups = "OEChatsHideReactionsGroups";
@@ -238,6 +244,80 @@ const auto kPillStackOrderKeys = std::array<const char*, 8>{
 	static const auto expression = QRegularExpression(
 		QStringLiteral("^[A-Za-z][A-Za-z0-9_-]{1,31}$"));
 	return expression.match(id).hasMatch();
+}
+
+[[nodiscard]] bool PluginSettingNestingAccepted(
+		const QJsonValue &value,
+		int depth) {
+	const auto object = value.isObject();
+	if (!object && !value.isArray()) {
+		return true;
+	}
+	if (depth > kMaxPluginSettingDepth) {
+		return false;
+	}
+	if (object) {
+		const auto fields = value.toObject();
+		for (auto i = fields.begin(); i != fields.end(); ++i) {
+			if (!PluginSettingNestingAccepted(i.value(), depth + 1)) {
+				return false;
+			}
+		}
+	} else {
+		for (const auto &element : value.toArray()) {
+			if (!PluginSettingNestingAccepted(element, depth + 1)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] QJsonObject SanitizePluginSettings(const QJsonValue &value) {
+	auto result = QJsonObject();
+	if (!value.isObject()) {
+		return result;
+	}
+	const auto settings = value.toObject();
+	for (auto i = settings.begin(); i != settings.end(); ++i) {
+		if (!IsValidPluginId(i.key()) || !i.value().isObject()) {
+			continue;
+		}
+		const auto source = i.value().toObject();
+		auto accepted = QJsonObject();
+		for (auto j = source.begin(); j != source.end(); ++j) {
+			if (j.key().size() > kMaxPluginSettingKeyLength
+				|| !PluginSettingNestingAccepted(j.value(), 1)) {
+				continue;
+			}
+			accepted.insert(j.key(), j.value());
+			if (accepted.size() > kMaxPluginSettingKeys) {
+				break;
+			}
+		}
+		if (accepted.size() > kMaxPluginSettingKeys
+			|| QJsonDocument(accepted)
+				.toJson(QJsonDocument::Compact).size()
+				> kMaxPluginSettingBytes) {
+			continue;
+		}
+		result.insert(i.key(), accepted);
+	}
+	return result;
+}
+
+[[nodiscard]] QString SanitizePluginSettings(const QString &value) {
+	auto error = QJsonParseError{0, QJsonParseError::NoError};
+	const auto document = QJsonDocument::fromJson(value.toUtf8(), &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return QString();
+	}
+	const auto settings = SanitizePluginSettings(
+		QJsonValue(document.object()));
+	return settings.isEmpty()
+		? QString()
+		: QString::fromUtf8(
+			QJsonDocument(settings).toJson(QJsonDocument::Compact));
 }
 
 [[nodiscard]] QJsonObject SanitizePluginStates(const QJsonValue &value) {
@@ -1449,6 +1529,21 @@ void Config::setPluginStates(const QJsonObject &states) {
 			: QJsonValue(sanitized));
 }
 
+QString Config::pluginsSettings() const {
+	const auto sanitized = SanitizePluginSettings(
+		stringValue(kPluginsSettings, QString()));
+	return sanitized.isEmpty() ? QStringLiteral("{}") : sanitized;
+}
+
+void Config::setPluginsSettings(const QString &value) {
+	const auto sanitized = SanitizePluginSettings(value);
+	setValue(
+		kPluginsSettings,
+		sanitized.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(sanitized));
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -1547,6 +1642,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kMainMenuOrder
 			|| key == kDrawerAccountsExpanded
 			|| key == kPluginStates
+			|| key == kPluginsSettings
 			|| key == kChatsRemoveMessageTail
 			|| key == kChatsHideReactionsChannels
 			|| key == kChatsHideReactionsGroups

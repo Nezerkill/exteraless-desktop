@@ -331,6 +331,8 @@ public:
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;
 	void setPluginStates(const QJsonObject &states);
+	[[nodiscard]] QString pluginsSettings() const;
+	void setPluginsSettings(const QString &value);
 
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);

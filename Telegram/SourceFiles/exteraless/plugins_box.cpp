@@ -11,6 +11,8 @@
 #include "ui/boxes/confirm_box.h"
 #include "ui/layers/generic_box.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
+#include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
@@ -24,7 +26,9 @@
 #include <QTextStream>
 #include <rpl/rpl.h>
 
+#include <algorithm>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace Exteraless {
@@ -71,6 +75,7 @@ struct Row {
 	QString error;
 	Ui::FlatLabel *details = nullptr;
 	Ui::SettingsButton *button = nullptr;
+	Ui::LinkButton *settingsLink = nullptr;
 };
 
 [[nodiscard]] QString StateText(const Row &row) {
@@ -178,12 +183,196 @@ void ShowAuditLogBox(
 	}));
 }
 
+void ShowSelectorBox(
+		not_null<Window::SessionController*> controller,
+		const QString &title,
+		const QStringList &items,
+		int selected,
+		Fn<void(int)> chosen) {
+	const auto group = std::make_shared<Ui::RadioenumGroup<int>>(selected);
+	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(title);
+		const auto inner = box->addRow(
+			object_ptr<Ui::VerticalLayout>(box));
+		for (auto i = 0; i != items.size(); ++i) {
+			inner->add(
+				object_ptr<Ui::Radioenum<int>>(
+					inner,
+					group,
+					i,
+					items[i],
+					st::settingsSendType),
+				st::settingsSendTypePadding);
+		}
+		group->setChangedCallback([=](int index) {
+			chosen(index);
+			box->closeBox();
+		});
+		box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+	}));
+}
+
+void ShowPluginSettingsBox(
+		not_null<Window::SessionController*> controller,
+		const Plugins::Entry &entry) {
+	const auto runtime = Plugins::Runtime::Instance();
+	if (!runtime) {
+		return;
+	}
+	const auto rows = runtime->settingsUi(entry.id);
+	if (rows.isEmpty()) {
+		controller->showToast(u"This plugin has no settings."_q);
+		return;
+	}
+	const auto pluginId = entry.id;
+	const auto title = entry.name.isEmpty() ? entry.file : entry.name;
+	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+		box->setTitle(title);
+		const auto layout = box->verticalLayout();
+		const auto fields = box->lifetime().make_state<
+			std::vector<std::pair<QString, Ui::InputField*>>>();
+		const auto save = [=](const QString &key, const QJsonValue &value) {
+			const auto runtime = Plugins::Runtime::Instance();
+			if (runtime) {
+				runtime->saveSetting(pluginId, key, value);
+			}
+		};
+		layout->add(
+			object_ptr<Ui::FlatLabel>(
+				box,
+				rpl::single(
+					u"Changes are applied the next time the plugin is enabled."_q),
+				st::boxLabel),
+			st::boxRowPadding);
+		for (const auto &value : rows) {
+			const auto item = value.toObject();
+			const auto type = item.value(QStringLiteral("type")).toString();
+			const auto text = item.value(QStringLiteral("text")).toString();
+			const auto key = item.value(QStringLiteral("key")).toString();
+			if (type == QStringLiteral("header")) {
+				if (!text.isEmpty()) {
+					layout->add(
+						object_ptr<Ui::FlatLabel>(
+							box,
+							rpl::single(text),
+							st::boxLabel),
+						st::boxRowPadding);
+				}
+			} else if (type == QStringLiteral("divider")) {
+				if (!text.isEmpty()) {
+					layout->add(
+						object_ptr<Ui::FlatLabel>(
+							box,
+							rpl::single(text),
+							st::boxLabel),
+						st::boxRowPadding);
+				}
+			} else if (type == QStringLiteral("switch")) {
+				if (key.isEmpty()) {
+					continue;
+				}
+				const auto button = layout->add(
+					object_ptr<Ui::SettingsButton>(
+						box,
+						rpl::single(text.isEmpty() ? key : text),
+						st::settingsButtonNoIcon));
+				button->toggleOn(rpl::single(
+					item.value(QStringLiteral("value")).toBool()));
+				button->toggledChanges() | rpl::on_next([=](bool checked) {
+					save(key, checked);
+				}, box->lifetime());
+			} else if (type == QStringLiteral("selector")) {
+				const auto options = item.value(
+					QStringLiteral("items")).toArray();
+				if (key.isEmpty() || options.isEmpty()) {
+					continue;
+				}
+				auto optionsList = QStringList();
+				for (const auto &option : options) {
+					optionsList.push_back(option.toString());
+				}
+				auto selected = item.value(
+					QStringLiteral("value")).toInt(
+						item.value(QStringLiteral("default")).toInt());
+				selected = std::clamp(selected, 0, int(optionsList.size()) - 1);
+				const auto current = std::make_shared<int>(selected);
+				const auto label = std::make_shared<rpl::variable<QString>>(
+					optionsList[selected]);
+				const auto button = layout->add(
+					object_ptr<Ui::SettingsButton>(
+						box,
+						label->value() | rpl::map([=](const QString &value) {
+							return text.isEmpty()
+								? value
+								: text + u": "_q + value;
+						}),
+						st::settingsButtonNoIcon));
+				button->setClickedCallback([=] {
+					ShowSelectorBox(
+						controller,
+						text.isEmpty() ? key : text,
+						optionsList,
+						*current,
+						[=](int chosen) {
+							*current = chosen;
+							label->force_assign(optionsList[chosen]);
+							save(key, chosen);
+						});
+				});
+			} else if (type == QStringLiteral("input")) {
+				if (key.isEmpty()) {
+					continue;
+				}
+				if (!text.isEmpty()) {
+					layout->add(
+						object_ptr<Ui::FlatLabel>(
+							box,
+							rpl::single(text),
+							st::boxLabel),
+						st::boxRowPadding);
+				}
+				const auto field = layout->add(
+					object_ptr<Ui::InputField>(
+						box,
+						st::defaultInputField,
+						Ui::InputField::Mode::SingleLine,
+						rpl::single(QString()),
+						TextWithTags{ item.value(
+							QStringLiteral("value")).toString() }),
+					st::boxRowPadding);
+				fields->push_back({ key, field });
+			} else if (type == QStringLiteral("custom")) {
+				layout->add(
+					object_ptr<Ui::FlatLabel>(
+						box,
+						rpl::single(u"Custom settings are not supported."_q),
+						st::boxLabel),
+					st::boxRowPadding);
+			}
+		}
+		box->boxClosing() | rpl::on_next([=] {
+			for (const auto &field : *fields) {
+				save(
+					field.first,
+					field.second->getTextWithTags().text.trimmed());
+			}
+		}, box->lifetime());
+		box->addButton(tr::lng_close(), [=] { box->closeBox(); });
+	}));
+}
+
 void RefreshRows(
 		const std::vector<std::unique_ptr<Row>> &rows,
 		Plugins::Runtime *runtime) {
 	for (const auto &row : rows) {
 		row->loaded = runtime && runtime->isLoaded(row->entry.id);
 		row->details->setText(DetailsText(row->entry, StateText(*row)));
+		if (row->settingsLink) {
+			row->settingsLink->setVisible(
+				row->enabled.current()
+				&& runtime
+				&& !runtime->settingsUi(row->entry.id).isEmpty());
+		}
 	}
 }
 
@@ -296,6 +485,17 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 					rpl::single(DetailsText(entry, StateText(*row))),
 					st::boxLabel),
 				st::boxRowPadding);
+			row->settingsLink = layout->add(
+				object_ptr<Ui::LinkButton>(box, u"Settings"_q),
+				st::boxRowPadding);
+			row->settingsLink->setVisible(
+				row->enabled.current()
+				&& runtime
+				&& !runtime->settingsUi(entry.id).isEmpty());
+			const auto settingsEntry = entry;
+			row->settingsLink->setClickedCallback([=] {
+				ShowPluginSettingsBox(controller, settingsEntry);
+			});
 			const auto deleteLink = layout->add(
 				object_ptr<Ui::LinkButton>(box, u"Delete plugin"_q),
 				st::boxRowPadding);

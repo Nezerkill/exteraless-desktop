@@ -1,0 +1,39 @@
+from base_plugin import (
+    BasePlugin,
+    InputSetting,
+    SelectorSetting,
+    SwitchSetting,
+)
+
+__id__ = "demo_settings"
+__name__ = "Demo Settings"
+__description__ = "Declares switch, selector and input settings."
+__author__ = "Exteraless"
+__version__ = "1.0.0"
+__permissions__ = ["ui", "settings"]
+
+
+class Settings(BasePlugin):
+    def create_settings(self):
+        return [
+            SwitchSetting(
+                key="enabled",
+                text="Enabled",
+                default=True,
+            ),
+            SelectorSetting(
+                key="mode",
+                text="Mode",
+                default=1,
+                items=["Fast", "Balanced", "Safe"],
+            ),
+            InputSetting(
+                key="prefix",
+                text="Prefix",
+                default="",
+                subtext="Text added before every message",
+            ),
+        ]
+
+
+plugin = Settings()
