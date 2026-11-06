@@ -2,6 +2,29 @@
 
 ## 2026-11-06
 
+- Text / Персидский календарь (NB-58): `OEGeneralUsePersianCalendar` и
+  `OEGeneralPersianCalendarLatin` (обе bool, default `false`) переводят даты на
+  Solar Hijri. Строку собирает
+  `Exteraless::PersianDateText(date, latin, withYear)`
+  (`exteraless/format.{h,cpp}`) через `QCalendar(QCalendar::System::Jalali)`:
+  таблица 12 персидских месяцев с латинскими именами, цифры — ASCII при
+  `latin`, иначе `U+06F0..U+06F9`; невалидная дата даёт пустую строку. В
+  `lang/lang_keys.cpp` подмена стоит в `langDayOfMonth`, `langDayOfMonthFull`,
+  `langDayOfMonthShort`, `langDateTime` и `langDateTimeFull` — меняется только
+  `lt_date`, время и порядок строки остаются как в upstream. Алиасы
+  `usePersianCalendar` и `displayPersianCalendarByLatin`. В Exteraless General
+  два тумблера, второй доступен только при включённом первом; два lang-ключа
+  `lng_settings_exteraless_persian_calendar` и
+  `lng_settings_exteraless_persian_calendar_latin`. `.extera` — 118 ключей
+  (113 + 3 + 2, сверено с legacy-кортежем `run_checks`), CLI `persian-date`,
+  `persian-calendar`, `persian-calendar-set`, `check_persian` — 15 проверок;
+  раннеры 776/32/213 PASS (backup 100), `kKeysCount` 11195 (`kTagsCount` 185),
+  sha256 патча `daa23e68…`, `nix flake check` PASS. Ограничения: показывать ли
+  год, решает григорианский год, а персидский меняется на Наврузе, поэтому у
+  дат около смены персидского года метка года может отсутствовать; RTL и
+  порядок не переупорядочиваются — строка отдаётся готовой; вендорные
+  `lng_month*` персидским путём не используются; смена настройки видна после
+  переоткрытия чата; Xvfb-смоук не выполнялся.
 - Media / Качество и форматы (NB-88): `OEGeneralDefaultVideoQuality` (int
   `0..2`, default `0`) задаёт стартовое HLS-качество — `0` оставляет upstream
   480p, `1` — 720p, `2` — 1080p (`initialPlaybackVideoQuality` в

@@ -80,6 +80,8 @@ constexpr auto kCustomDeletedMark = "OEChatsCustomDeletedMark";
 constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
 constexpr auto kMaxDeletedMarkLength = 32;
 constexpr auto kHidePhone = "OEGeneralHidePhone";
+constexpr auto kGeneralUsePersianCalendar = "OEGeneralUsePersianCalendar";
+constexpr auto kGeneralPersianCalendarLatin = "OEGeneralPersianCalendarLatin";
 constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
@@ -687,6 +689,22 @@ void Config::setHidePhone(bool value) {
 	setValue(kHidePhone, value);
 }
 
+bool Config::usePersianCalendar() const {
+	return boolValue(kGeneralUsePersianCalendar, false);
+}
+
+void Config::setUsePersianCalendar(bool value) {
+	setValue(kGeneralUsePersianCalendar, value);
+}
+
+bool Config::displayPersianCalendarByLatin() const {
+	return boolValue(kGeneralPersianCalendarLatin, false);
+}
+
+void Config::setDisplayPersianCalendarByLatin(bool value) {
+	setValue(kGeneralPersianCalendarLatin, value);
+}
+
 int Config::defaultVideoQuality() const {
 	// 0 = Auto, higher values request a fixed HLS tier.
 	return std::clamp(intValue(kGeneralDefaultVideoQuality, 0), 0, 2);
@@ -1268,6 +1286,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor
 			|| key == kHidePhone
+			|| key == kGeneralUsePersianCalendar
+			|| key == kGeneralPersianCalendarLatin
 			|| key == kGeneralDefaultVideoQuality
 			|| key == kGeneralHardwareAcceleration
 			|| key == kChatsTakeGifAsVideo

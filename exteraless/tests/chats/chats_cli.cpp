@@ -19,6 +19,7 @@
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QDate>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -57,6 +58,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli id-dc-set <0|1>\n"
 		<< "  exteraless-chats-cli id-dc-format <bareId> <dc> <0|1>\n"
 		<< "  exteraless-chats-cli clock <hh> <mm> <ss> <0|1> [<locale>]\n"
+		<< "  exteraless-chats-cli persian-date <yyyy-mm-dd> <latin 0|1> "
+		<< "<year 0|1>\n"
+		<< "  exteraless-chats-cli persian-calendar\n"
+		<< "  exteraless-chats-cli persian-calendar-set <0|1> [<latin 0|1>]\n"
 		<< "  exteraless-chats-cli message-menu\n"
 		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
 		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
@@ -268,6 +273,16 @@ void PrintGeneral() {
 			Exteraless::Config::Instance().showSeconds() },
 		{ QStringLiteral("hidePhone"),
 			Exteraless::Config::Instance().hidePhone() },
+	});
+}
+
+void PrintPersianCalendar() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("usePersianCalendar"),
+			config.usePersianCalendar() },
+		{ QStringLiteral("displayPersianCalendarByLatin"),
+			config.displayPersianCalendarByLatin() },
 	});
 }
 
@@ -659,6 +674,52 @@ int main(int argc, char *argv[]) {
 				.toUtf8()
 				.constData()
 			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("persian-date")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto latin = false;
+		auto withYear = false;
+		if (!ReadFlag(arguments[3], &latin)
+			|| !ReadFlag(arguments[4], &withYear)) {
+			return PrintUsage();
+		}
+		const auto date = QDate::fromString(
+			arguments[2],
+			QStringLiteral("yyyy-MM-dd"));
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"),
+				Exteraless::PersianDateText(date, latin, withYear) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("persian-calendar")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintPersianCalendar();
+		return 0;
+	}
+	if (mode == QStringLiteral("persian-calendar-set")) {
+		if (arguments.size() != 3 && arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto enabled = false;
+		if (!ReadFlag(arguments[2], &enabled)) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setUsePersianCalendar(enabled);
+		if (arguments.size() == 4) {
+			auto latin = false;
+			if (!ReadFlag(arguments[3], &latin)) {
+				return PrintUsage();
+			}
+			config.setDisplayPersianCalendarByLatin(latin);
+		}
+		PrintPersianCalendar();
 		return 0;
 	}
 	if (mode == QStringLiteral("message-menu")) {

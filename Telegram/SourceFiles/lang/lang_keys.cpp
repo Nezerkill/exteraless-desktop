@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_keys.h"
 
 #include "base/const_string.h"
+#include "exteraless/config.h"
+#include "exteraless/format.h"
 #include "lang/lang_file_parser.h"
 #include "ui/integration.h"
 
@@ -52,6 +54,19 @@ inline QString langDateMaybeWithYear(
 	return withoutYear(month, year);
 }
 
+[[nodiscard]] bool UsePersianCalendar() {
+	return Exteraless::Config::Instance().usePersianCalendar();
+}
+
+[[nodiscard]] QString FormatPersianDate(
+		const QDate &date,
+		bool withYear) {
+	return Exteraless::PersianDateText(
+		date,
+		Exteraless::Config::Instance().displayPersianCalendarByLatin(),
+		withYear);
+}
+
 using namespace Lang;
 
 } // namespace
@@ -82,6 +97,11 @@ QString langFullName(
 }
 
 QString langDayOfMonth(const QDate &date) {
+	if (UsePersianCalendar()) {
+		return FormatPersianDate(
+			date,
+			date.year() != QDate::currentDate().year());
+	}
 	auto day = date.day();
 	return langDateMaybeWithYear(date, [&](int month, int year) {
 		return tr::lng_month_day_year(
@@ -103,6 +123,11 @@ QString langDayOfMonth(const QDate &date) {
 }
 
 QString langDayOfMonthFull(const QDate &date) {
+	if (UsePersianCalendar()) {
+		return FormatPersianDate(
+			date,
+			date.year() != QDate::currentDate().year());
+	}
 	auto day = date.day();
 	return langDateMaybeWithYear(date, [day](int month, int year) {
 		return tr::lng_month_day_year(
@@ -124,6 +149,11 @@ QString langDayOfMonthFull(const QDate &date) {
 }
 
 QString langDayOfMonthShort(const QDate &date) {
+	if (UsePersianCalendar()) {
+		return FormatPersianDate(
+			date,
+			date.year() != QDate::currentDate().year());
+	}
 	auto day = date.day();
 	return langDateMaybeWithYear(date, [&](int month, int year) {
 		return QLocale().toString(date, QLocale::ShortFormat);
@@ -188,19 +218,29 @@ QString langDayOfWeekFull(int index) {
 }
 
 QString langDateTime(const QDateTime &date) {
+	const auto dateText = UsePersianCalendar()
+		? FormatPersianDate(
+			date.date(),
+			date.date().year() != QDate::currentDate().year())
+		: langDayOfMonth(date.date());
 	return tr::lng_mediaview_date_time(
 		tr::now,
 		lt_date,
-		langDayOfMonth(date.date()),
+		dateText,
 		lt_time,
 		QLocale().toString(date.time(), QLocale::ShortFormat));
 }
 
 QString langDateTimeFull(const QDateTime &date) {
+	const auto dateText = UsePersianCalendar()
+		? FormatPersianDate(
+			date.date(),
+			date.date().year() != QDate::currentDate().year())
+		: langDayOfMonthFull(date.date());
 	return tr::lng_mediaview_date_time(
 		tr::now,
 		lt_date,
-		langDayOfMonthFull(date.date()),
+		dateText,
 		lt_time,
 		QLocale().toString(date.time(), QLocale::ShortFormat));
 }

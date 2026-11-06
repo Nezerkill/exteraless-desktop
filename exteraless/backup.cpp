@@ -133,6 +133,10 @@ constexpr auto kCustomDeletedMarkAlias = "CustomDeletedMark";
 constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 constexpr auto kHidePhone = "OEGeneralHidePhone";
+constexpr auto kGeneralUsePersianCalendar = "OEGeneralUsePersianCalendar";
+constexpr auto kGeneralPersianCalendarLatin = "OEGeneralPersianCalendarLatin";
+constexpr auto kUsePersianCalendarAlias = "usePersianCalendar";
+constexpr auto kPersianCalendarLatinAlias = "displayPersianCalendarByLatin";
 constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
@@ -387,6 +391,8 @@ QString BuildBackup() {
 	extera[kFormatTimeWithSeconds] = config.showSeconds();
 	extera[kShowIdAndDc] = config.showIdDc();
 	extera[kHidePhoneNumber] = config.hidePhone();
+	extera[kGeneralUsePersianCalendar] = config.usePersianCalendar();
+	extera[kGeneralPersianCalendarLatin] = config.displayPersianCalendarByLatin();
 	extera[kGeneralDefaultVideoQuality] = config.defaultVideoQuality();
 	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
 	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
@@ -597,6 +603,14 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 			&& value.isBool()) {
 			config.setHidePhone(value.toBool());
+		} else if ((key == kGeneralUsePersianCalendar
+			|| key == kUsePersianCalendarAlias)
+			&& value.isBool()) {
+			config.setUsePersianCalendar(value.toBool());
+		} else if ((key == kGeneralPersianCalendarLatin
+			|| key == kPersianCalendarLatinAlias)
+			&& value.isBool()) {
+			config.setDisplayPersianCalendarByLatin(value.toBool());
 		} else if ((key == kGeneralDefaultVideoQuality
 			|| key == kDefaultHlsVideoQualityAlias)
 			&& IntegralInRange(value, 0, 2)) {

@@ -189,7 +189,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–2, ❌ stage 3, ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
 | Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡 субтитры ✅ NB-32, качество/кодеки ❌ |
-| Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ❌ |
+| Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ✅ NB-58 (персидский календарь): `OEGeneralUsePersianCalendar`/`OEGeneralPersianCalendarLatin` и `Exteraless::PersianDateText` через `QCalendar` Jalali (12 месяцев, цифры ASCII или `U+06F0`), подмена в `langDayOfMonth*`/`langDateTime*` меняет только `lt_date`; остальное ❌ |
 | Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | ❌ |
 | Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 1 формат (25 ключей) |
 | WEB proxy (desktop-only) | — | ~3.1k строк | 🟡 код есть, сервер нет |
@@ -464,8 +464,16 @@ Inline-математика (`math/*`: `MathExpression`, `InlineMathController`,
 Pangu (пробелы между CJK и латиницей), Zalgo, выбор markdown-парсера, порядок
 и состав тулбара форматирования (10+ ключей `showText*`), связанные
 кастом-эмодзи, шрифт ссылок, показ спойлеров сразу, подсветка синтаксиса,
-персидский календарь. В desktop — только upstream-поведение (markdown при
-вставке, спойлеры, ссылки); остальное отсутствует.
+персидский календарь — ✅ NB-58: `OEGeneralUsePersianCalendar` и
+`OEGeneralPersianCalendarLatin` (обе default `false`) переводят даты на Solar
+Hijri через `Exteraless::PersianDateText(date, latin, withYear)`
+(`exteraless/format.{h,cpp}`, `QCalendar` Jalali, 12 персидских месяцев,
+цифры ASCII или `U+06F0..U+06F9`), подмена стоит в `langDayOfMonth*` и
+`langDateTime*` (`lang/lang_keys.cpp`) и меняет только `lt_date` — время не
+тронуто; год для `withYear` решается по григорианскому календарю (граница —
+Навруз), RTL и порядок строки не переупорядочиваются. В desktop — только
+upstream-поведение (markdown при вставке, спойлеры, ссылки); остальное
+отсутствует.
 
 ### 6.19 Речь: Vosk и транскрипция
 

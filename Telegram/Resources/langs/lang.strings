@@ -9187,6 +9187,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless" = "Exteraless";
 "lng_settings_exteraless_general" = "General";
 "lng_settings_exteraless_relative_last_seen" = "Relative last seen";
+"lng_settings_exteraless_persian_calendar" = "Show dates in the Persian calendar (Solar Hijri)";
+"lng_settings_exteraless_persian_calendar_latin" = "Persian calendar with Latin digits and month names";
 "lng_settings_exteraless_add_comma" = "Comma after mention";
 "lng_settings_exteraless_proxy" = "Proxy auto-disable";
 "lng_settings_exteraless_proxy_vpn" = "Disable proxy on VPN";

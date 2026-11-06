@@ -2,7 +2,52 @@
 
 #include "exteraless/config.h"
 
+#include <QCalendar>
+
+#include <array>
+
 namespace Exteraless {
+namespace {
+
+struct PersianMonth {
+	const char *persian;
+	const char *latin;
+};
+
+constexpr auto kPersianMonths = std::array<PersianMonth, 12>{ {
+	{ "فروردین", "Farvardin" },
+	{ "اردیبهشت", "Ordibehesht" },
+	{ "خرداد", "Khordad" },
+	{ "تیر", "Tir" },
+	{ "مرداد", "Mordad" },
+	{ "شهریور", "Shahrivar" },
+	{ "مهر", "Mehr" },
+	{ "آبان", "Aban" },
+	{ "آذر", "Azar" },
+	{ "دی", "Dey" },
+	{ "بهمن", "Bahman" },
+	{ "اسفند", "Esfand" },
+} };
+
+[[nodiscard]] QString PersianNumber(int value, bool latin) {
+	const auto text = QString::number(value);
+	if (latin) {
+		return text;
+	}
+	auto result = QString();
+	result.reserve(text.size());
+	for (const auto &ch : text) {
+		const auto digit = ch.unicode() - u'0';
+		if ((digit < 0) || (digit > 9)) {
+			result += ch;
+			continue;
+		}
+		result += QChar(char16_t(0x06F0 + digit));
+	}
+	return result;
+}
+
+} // namespace
 
 QString FormatClock(
 		QTime time,
@@ -40,6 +85,27 @@ QString FormatIdDc(quint64 bareId, int dcId, bool enabled) {
 	return QStringLiteral("id: %1 · DC %2")
 		.arg(bareId)
 		.arg(dcId);
+}
+
+QString PersianDateText(const QDate &date, bool latin, bool withYear) {
+	if (!date.isValid()) {
+		return {};
+	}
+	const auto calendar = QCalendar(QCalendar::System::Jalali);
+	const auto parts = calendar.partsFromDate(date);
+	if (!parts.isValid()
+		|| (parts.month < 1)
+		|| (parts.month > 12)) {
+		return {};
+	}
+	const auto &month = kPersianMonths[parts.month - 1];
+	auto result = PersianNumber(parts.day, latin)
+		+ QChar(u' ')
+		+ QString::fromUtf8(latin ? month.latin : month.persian);
+	if (withYear) {
+		result += QChar(u' ') + PersianNumber(parts.year, latin);
+	}
+	return result;
 }
 
 } // namespace Exteraless

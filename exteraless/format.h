@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDate>
 #include <QLocale>
 #include <QString>
 #include <QTime>
@@ -19,5 +20,10 @@ namespace Exteraless {
 	quint64 bareId,
 	int dcId,
 	bool enabled);
+
+[[nodiscard]] QString PersianDateText(
+	const QDate &date,
+	bool latin,
+	bool withYear);
 
 } // namespace Exteraless

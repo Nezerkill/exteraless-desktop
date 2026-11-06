@@ -99,8 +99,8 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 761 проверка PASS
-  (44 strip, 10 reactions, 58 CLI, 7 config, 22 general, 9 bot-privacy,
+- Chats: `exteraless/tests/chats/run_checks.py` — 776 проверок PASS
+  (44 strip, 10 reactions, 59 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
@@ -110,9 +110,32 @@
   5 disable-link-preview, 5 hide-all-chats, 13 hide-archive-sort,
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
-  5 wide-posts, 15 chat-misc, 9 autodownload-rules, 19 media-quality,
+  5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
   10 download-boost, 48 subtitles, 7 avatar-corners, 100 backup); плагины
   без изменений — 32 и 213 проверок.
+- Persian calendar (NB-58): `OEGeneralUsePersianCalendar` и
+  `OEGeneralPersianCalendarLatin` (обе bool, default `false`) переводят даты на
+  Solar Hijri. Строку собирает
+  `Exteraless::PersianDateText(date, latin, withYear)`
+  (`exteraless/format.{h,cpp}`) через `QCalendar(QCalendar::System::Jalali)`:
+  таблица 12 персидских месяцев с латинскими именами, цифры ASCII при `latin`
+  и `U+06F0..U+06F9` иначе, невалидная дата даёт пустую строку. В
+  `lang/lang_keys.cpp` подмена стоит в `langDayOfMonth`, `langDayOfMonthFull`,
+  `langDayOfMonthShort`, `langDateTime` и `langDateTimeFull` — меняется только
+  `lt_date`, время не тронуто. Алиасы `usePersianCalendar` и
+  `displayPersianCalendarByLatin`. В Exteraless General два тумблера (второй
+  доступен только при включённом первом) и два lang-ключа
+  `lng_settings_exteraless_persian_calendar`/
+  `lng_settings_exteraless_persian_calendar_latin`. `.extera` — 118 ключей
+  (113 + 3 + 2, сверено с legacy-кортежем `run_checks`), CLI `persian-date`,
+  `persian-calendar`, `persian-calendar-set`, `check_persian` — 15 проверок
+  (счётчик выше 776, плагины 32 и 213 без изменений); `kKeysCount` 11195
+  (`kTagsCount` 185), sha256 патча `daa23e68…`, `nix flake check` PASS.
+  Ограничения: показывать ли год, решает григорианский год, а персидский
+  меняется на Наврузе — около смены персидского года метка года может
+  отсутствовать; RTL и порядок не переупорядочиваются, строка отдаётся готовой;
+  вендорные `lng_month*` персидским путём не используются; смена настройки
+  видна после переоткрытия чата; Xvfb-смоук не выполнялся.
 - Media quality and formats (NB-88): `OEGeneralDefaultVideoQuality` (int
   `0..2`, default `0`) — стартовое HLS-качество: `0` оставляет upstream 480p,
   `1` — 720p, `2` — 1080p (`initialPlaybackVideoQuality` в

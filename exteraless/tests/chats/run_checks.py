@@ -618,7 +618,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 111,
+            len(section) == 113,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -639,7 +639,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 116,
+            sum(len(value) for value in exported.values()) == 118,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -659,7 +659,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 116,
+                data.get("applied") == 118,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -806,6 +806,8 @@ def check_backup(ledger, cli, work):
             "hideStoriesFromHeader": True,
             "showIdAndDc": True,
             "zalgoFilter": True,
+            "OEGeneralUsePersianCalendar": True,
+            "OEGeneralPersianCalendarLatin": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -827,7 +829,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 116,
+            data.get("applied") == 118,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1117,10 +1119,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 111",
+            "backup legacy eight completed to 113",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (111, 3, 2),
+             len(sections["mainconfig"])) == (113, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -3980,6 +3982,78 @@ def check_forward_date(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_persian(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    cases = [
+        ("2024-03-20", "1", "1", "1 Farvardin 1403"),
+        ("2024-03-20", "1", "0", "1 Farvardin"),
+        ("2024-03-20", "0", "1", "۱ فروردین ۱۴۰۳"),
+        ("2024-03-20", "0", "0", "۱ فروردین"),
+        ("2026-11-06", "1", "1", "15 Aban 1405"),
+        ("2026-11-06", "0", "1", "۱۵ آبان ۱۴۰۵"),
+    ]
+    for date, latin, year, expected in cases:
+        name = f"persian date {date} latin={latin} year={year}"
+        data = json_call(
+            ledger, cli, ["persian-date", date, latin, year], None, name)
+        if data is not None:
+            ledger.check(name, data.get("text") == expected, data)
+
+    for date in ("2024-02-30", "2024-13-01", "not-a-date", "2024-11-06x"):
+        name = f"persian invalid date {date}"
+        data = json_call(
+            ledger, cli, ["persian-date", date, "1", "1"], None, name)
+        if data is not None:
+            ledger.check(name, data.get("text") == "", data)
+
+    env = make_env(work / "persian-defaults")
+    data = json_call(
+        ledger, cli, ["persian-calendar"], env, "persian calendar defaults")
+    if data is not None:
+        ledger.check(
+            "persian calendar default off",
+            data.get("usePersianCalendar") is False
+            and data.get("displayPersianCalendarByLatin") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["persian-calendar-set", "1", "1"], env,
+        "persian calendar set")
+    if data is not None:
+        ledger.check(
+            "persian calendar set on",
+            data.get("usePersianCalendar") is True
+            and data.get("displayPersianCalendarByLatin") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["persian-calendar"], env, "persian calendar reload")
+    if reloaded is not None:
+        ledger.check(
+            "persian calendar persisted",
+            reloaded.get("usePersianCalendar") is True
+            and reloaded.get("displayPersianCalendarByLatin") is True,
+            reloaded)
+    data = json_call(
+        ledger, cli, ["persian-calendar-set", "0"], env,
+        "persian calendar off keeps latin")
+    if data is not None:
+        ledger.check(
+            "persian calendar latin kept",
+            data.get("usePersianCalendar") is False
+            and data.get("displayPersianCalendarByLatin") is True,
+            data)
+    result = run(cli, ["persian-calendar-set"], env=env)
+    ledger.check(
+        "persian calendar rejects missing flag",
+        result.returncode == 2,
+        f"exit {result.returncode}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_media_menu(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -5671,6 +5745,7 @@ def main():
         shortcuts = check_shortcuts(ledger, cli, work)
         menu_style = check_message_menu_style(ledger, cli, work)
         chat_misc = check_chat_misc(ledger, cli, work)
+        persian = check_persian(ledger, cli, work)
         media_quality = check_media_quality(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
@@ -5733,6 +5808,7 @@ def main():
     print(f"message-menu-style: "
           f"{menu_style[0] - menu_style[1]} passed")
     print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
+    print(f"persian: {persian[0] - persian[1]} passed")
     print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")

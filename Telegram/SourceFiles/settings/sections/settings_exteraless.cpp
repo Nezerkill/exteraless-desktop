@@ -152,6 +152,51 @@ const auto kMeta = Builder::BuildHelper({
 		}, relativeLastSeen->lifetime());
 	}
 
+	const auto persianCalendar = builder.addButton({
+		.id = u"exteraless/use-persian-calendar"_q,
+		.title = tr::lng_settings_exteraless_persian_calendar(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().usePersianCalendar()),
+		.keywords = { u"persian"_q, u"calendar"_q, u"jalali"_q },
+	});
+	const auto persianLatin = builder.addButton({
+		.id = u"exteraless/persian-calendar-latin"_q,
+		.title = tr::lng_settings_exteraless_persian_calendar_latin(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().displayPersianCalendarByLatin()),
+		.keywords = { u"persian"_q, u"latin"_q, u"digits"_q },
+	});
+	if (persianCalendar) {
+		persianCalendar->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().usePersianCalendar());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setUsePersianCalendar(value);
+		}, persianCalendar->lifetime());
+	}
+	if (persianLatin) {
+		persianLatin->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance()
+					.displayPersianCalendarByLatin());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance()
+				.setDisplayPersianCalendarByLatin(value);
+		}, persianLatin->lifetime());
+	}
+	if (persianCalendar && persianLatin) {
+		persianLatin->setEnabled(
+			Exteraless::Config::Instance().usePersianCalendar());
+		persianCalendar->toggledChanges(
+		) | rpl::on_next([=](bool value) {
+			persianLatin->setEnabled(value);
+		}, persianCalendar->lifetime());
+	}
+
 	const auto addComma = builder.addButton({
 		.id = u"exteraless/add-comma-after-mention"_q,
 		.title = tr::lng_settings_exteraless_add_comma(),

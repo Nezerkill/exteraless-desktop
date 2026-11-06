@@ -149,6 +149,11 @@ public:
 	[[nodiscard]] bool hidePhone() const;
 	void setHidePhone(bool value);
 
+	[[nodiscard]] bool usePersianCalendar() const;
+	void setUsePersianCalendar(bool value);
+	[[nodiscard]] bool displayPersianCalendarByLatin() const;
+	void setDisplayPersianCalendarByLatin(bool value);
+
 	[[nodiscard]] int defaultVideoQuality() const;
 	void setDefaultVideoQuality(int value);
 	[[nodiscard]] bool hardwareAcceleration() const;

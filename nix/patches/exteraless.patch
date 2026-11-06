@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..6c4d51a 100644
+index ffc8ec9..5df1554 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,13 +99,15 @@ index ffc8ec9..6c4d51a 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,195 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,197 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
 +"lng_settings_exteraless" = "Exteraless";
 +"lng_settings_exteraless_general" = "General";
 +"lng_settings_exteraless_relative_last_seen" = "Relative last seen";
++"lng_settings_exteraless_persian_calendar" = "Show dates in the Persian calendar (Solar Hijri)";
++"lng_settings_exteraless_persian_calendar_latin" = "Persian calendar with Latin digits and month names";
 +"lng_settings_exteraless_add_comma" = "Comma after mention";
 +"lng_settings_exteraless_proxy" = "Proxy auto-disable";
 +"lng_settings_exteraless_proxy_vpn" = "Disable proxy on VPN";
@@ -6646,6 +6648,107 @@ index b8a8583..bdc5bcf 100644
  
  struct LinkWithUrl {
  	QString text;
+diff --git a/Telegram/SourceFiles/lang/lang_keys.cpp b/Telegram/SourceFiles/lang/lang_keys.cpp
+index ed1ad43..5bd1c83 100644
+--- a/Telegram/SourceFiles/lang/lang_keys.cpp
++++ b/Telegram/SourceFiles/lang/lang_keys.cpp
+@@ -8,6 +8,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "lang/lang_keys.h"
+ 
+ #include "base/const_string.h"
++#include "exteraless/config.h"
++#include "exteraless/format.h"
+ #include "lang/lang_file_parser.h"
+ #include "ui/integration.h"
+ 
+@@ -52,6 +54,19 @@ inline QString langDateMaybeWithYear(
+ 	return withoutYear(month, year);
+ }
+ 
++[[nodiscard]] bool UsePersianCalendar() {
++	return Exteraless::Config::Instance().usePersianCalendar();
++}
++
++[[nodiscard]] QString FormatPersianDate(
++		const QDate &date,
++		bool withYear) {
++	return Exteraless::PersianDateText(
++		date,
++		Exteraless::Config::Instance().displayPersianCalendarByLatin(),
++		withYear);
++}
++
+ using namespace Lang;
+ 
+ } // namespace
+@@ -82,6 +97,11 @@ QString langFullName(
+ }
+ 
+ QString langDayOfMonth(const QDate &date) {
++	if (UsePersianCalendar()) {
++		return FormatPersianDate(
++			date,
++			date.year() != QDate::currentDate().year());
++	}
+ 	auto day = date.day();
+ 	return langDateMaybeWithYear(date, [&](int month, int year) {
+ 		return tr::lng_month_day_year(
+@@ -103,6 +123,11 @@ QString langDayOfMonth(const QDate &date) {
+ }
+ 
+ QString langDayOfMonthFull(const QDate &date) {
++	if (UsePersianCalendar()) {
++		return FormatPersianDate(
++			date,
++			date.year() != QDate::currentDate().year());
++	}
+ 	auto day = date.day();
+ 	return langDateMaybeWithYear(date, [day](int month, int year) {
+ 		return tr::lng_month_day_year(
+@@ -124,6 +149,11 @@ QString langDayOfMonthFull(const QDate &date) {
+ }
+ 
+ QString langDayOfMonthShort(const QDate &date) {
++	if (UsePersianCalendar()) {
++		return FormatPersianDate(
++			date,
++			date.year() != QDate::currentDate().year());
++	}
+ 	auto day = date.day();
+ 	return langDateMaybeWithYear(date, [&](int month, int year) {
+ 		return QLocale().toString(date, QLocale::ShortFormat);
+@@ -188,19 +218,29 @@ QString langDayOfWeekFull(int index) {
+ }
+ 
+ QString langDateTime(const QDateTime &date) {
++	const auto dateText = UsePersianCalendar()
++		? FormatPersianDate(
++			date.date(),
++			date.date().year() != QDate::currentDate().year())
++		: langDayOfMonth(date.date());
+ 	return tr::lng_mediaview_date_time(
+ 		tr::now,
+ 		lt_date,
+-		langDayOfMonth(date.date()),
++		dateText,
+ 		lt_time,
+ 		QLocale().toString(date.time(), QLocale::ShortFormat));
+ }
+ 
+ QString langDateTimeFull(const QDateTime &date) {
++	const auto dateText = UsePersianCalendar()
++		? FormatPersianDate(
++			date.date(),
++			date.date().year() != QDate::currentDate().year())
++		: langDayOfMonthFull(date.date());
+ 	return tr::lng_mediaview_date_time(
+ 		tr::now,
+ 		lt_date,
+-		langDayOfMonthFull(date.date()),
++		dateText,
+ 		lt_time,
+ 		QLocale().toString(date.time(), QLocale::ShortFormat));
+ }
 diff --git a/Telegram/SourceFiles/lang/lang_tag.cpp b/Telegram/SourceFiles/lang/lang_tag.cpp
 index 5537d86..8abc86c 100644
 --- a/Telegram/SourceFiles/lang/lang_tag.cpp
@@ -7552,10 +7655,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..3dc6c8d
+index 0000000..08505e7
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2299 @@
+@@ -0,0 +1,2344 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -7708,6 +7811,51 @@ index 0000000..3dc6c8d
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setRelativeLastSeen(value);
 +		}, relativeLastSeen->lifetime());
++	}
++
++	const auto persianCalendar = builder.addButton({
++		.id = u"exteraless/use-persian-calendar"_q,
++		.title = tr::lng_settings_exteraless_persian_calendar(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().usePersianCalendar()),
++		.keywords = { u"persian"_q, u"calendar"_q, u"jalali"_q },
++	});
++	const auto persianLatin = builder.addButton({
++		.id = u"exteraless/persian-calendar-latin"_q,
++		.title = tr::lng_settings_exteraless_persian_calendar_latin(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().displayPersianCalendarByLatin()),
++		.keywords = { u"persian"_q, u"latin"_q, u"digits"_q },
++	});
++	if (persianCalendar) {
++		persianCalendar->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().usePersianCalendar());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setUsePersianCalendar(value);
++		}, persianCalendar->lifetime());
++	}
++	if (persianLatin) {
++		persianLatin->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance()
++					.displayPersianCalendarByLatin());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance()
++				.setDisplayPersianCalendarByLatin(value);
++		}, persianLatin->lifetime());
++	}
++	if (persianCalendar && persianLatin) {
++		persianLatin->setEnabled(
++			Exteraless::Config::Instance().usePersianCalendar());
++		persianCalendar->toggledChanges(
++		) | rpl::on_next([=](bool value) {
++			persianLatin->setEnabled(value);
++		}, persianCalendar->lifetime());
 +	}
 +
 +	const auto addComma = builder.addButton({
@@ -11226,10 +11374,10 @@ index 0000000..5dc5319
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..e933445
+index 0000000..b90c76d
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1049 @@
+@@ -0,0 +1,1063 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -11365,6 +11513,10 @@ index 0000000..e933445
 +constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 +constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
++constexpr auto kGeneralUsePersianCalendar = "OEGeneralUsePersianCalendar";
++constexpr auto kGeneralPersianCalendarLatin = "OEGeneralPersianCalendarLatin";
++constexpr auto kUsePersianCalendarAlias = "usePersianCalendar";
++constexpr auto kPersianCalendarLatinAlias = "displayPersianCalendarByLatin";
 +constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 +constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 +constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
@@ -11619,6 +11771,8 @@ index 0000000..e933445
 +	extera[kFormatTimeWithSeconds] = config.showSeconds();
 +	extera[kShowIdAndDc] = config.showIdDc();
 +	extera[kHidePhoneNumber] = config.hidePhone();
++	extera[kGeneralUsePersianCalendar] = config.usePersianCalendar();
++	extera[kGeneralPersianCalendarLatin] = config.displayPersianCalendarByLatin();
 +	extera[kGeneralDefaultVideoQuality] = config.defaultVideoQuality();
 +	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
 +	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
@@ -11829,6 +11983,14 @@ index 0000000..e933445
 +		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 +			&& value.isBool()) {
 +			config.setHidePhone(value.toBool());
++		} else if ((key == kGeneralUsePersianCalendar
++			|| key == kUsePersianCalendarAlias)
++			&& value.isBool()) {
++			config.setUsePersianCalendar(value.toBool());
++		} else if ((key == kGeneralPersianCalendarLatin
++			|| key == kPersianCalendarLatinAlias)
++			&& value.isBool()) {
++			config.setDisplayPersianCalendarByLatin(value.toBool());
 +		} else if ((key == kGeneralDefaultVideoQuality
 +			|| key == kDefaultHlsVideoQualityAlias)
 +			&& IntegralInRange(value, 0, 2)) {
@@ -12403,10 +12565,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..e43197b
+index 0000000..7afc925
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1511 @@
+@@ -0,0 +1,1531 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -12489,6 +12651,8 @@ index 0000000..e43197b
 +constexpr auto kDeletedMarkColor = "OEChatsDeletedMarkColor";
 +constexpr auto kMaxDeletedMarkLength = 32;
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
++constexpr auto kGeneralUsePersianCalendar = "OEGeneralUsePersianCalendar";
++constexpr auto kGeneralPersianCalendarLatin = "OEGeneralPersianCalendarLatin";
 +constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 +constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 +constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
@@ -13096,6 +13260,22 @@ index 0000000..e43197b
 +	setValue(kHidePhone, value);
 +}
 +
++bool Config::usePersianCalendar() const {
++	return boolValue(kGeneralUsePersianCalendar, false);
++}
++
++void Config::setUsePersianCalendar(bool value) {
++	setValue(kGeneralUsePersianCalendar, value);
++}
++
++bool Config::displayPersianCalendarByLatin() const {
++	return boolValue(kGeneralPersianCalendarLatin, false);
++}
++
++void Config::setDisplayPersianCalendarByLatin(bool value) {
++	setValue(kGeneralPersianCalendarLatin, value);
++}
++
 +int Config::defaultVideoQuality() const {
 +	// 0 = Auto, higher values request a fixed HLS tier.
 +	return std::clamp(intValue(kGeneralDefaultVideoQuality, 0), 0, 2);
@@ -13677,6 +13857,8 @@ index 0000000..e43197b
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
 +			|| key == kHidePhone
++			|| key == kGeneralUsePersianCalendar
++			|| key == kGeneralPersianCalendarLatin
 +			|| key == kGeneralDefaultVideoQuality
 +			|| key == kGeneralHardwareAcceleration
 +			|| key == kChatsTakeGifAsVideo
@@ -13920,10 +14102,10 @@ index 0000000..e43197b
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..2a65147
+index 0000000..676c808
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,308 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -14074,6 +14256,11 @@ index 0000000..2a65147
 +
 +	[[nodiscard]] bool hidePhone() const;
 +	void setHidePhone(bool value);
++
++	[[nodiscard]] bool usePersianCalendar() const;
++	void setUsePersianCalendar(bool value);
++	[[nodiscard]] bool displayPersianCalendarByLatin() const;
++	void setDisplayPersianCalendarByLatin(bool value);
 +
 +	[[nodiscard]] int defaultVideoQuality() const;
 +	void setDefaultVideoQuality(int value);
@@ -14867,15 +15054,60 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/format.cpp b/exteraless/format.cpp
 new file mode 100644
-index 0000000..362e24f
+index 0000000..53273e8
 --- /dev/null
 +++ b/exteraless/format.cpp
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,111 @@
 +#include "exteraless/format.h"
 +
 +#include "exteraless/config.h"
 +
++#include <QCalendar>
++
++#include <array>
++
 +namespace Exteraless {
++namespace {
++
++struct PersianMonth {
++	const char *persian;
++	const char *latin;
++};
++
++constexpr auto kPersianMonths = std::array<PersianMonth, 12>{ {
++	{ "فروردین", "Farvardin" },
++	{ "اردیبهشت", "Ordibehesht" },
++	{ "خرداد", "Khordad" },
++	{ "تیر", "Tir" },
++	{ "مرداد", "Mordad" },
++	{ "شهریور", "Shahrivar" },
++	{ "مهر", "Mehr" },
++	{ "آبان", "Aban" },
++	{ "آذر", "Azar" },
++	{ "دی", "Dey" },
++	{ "بهمن", "Bahman" },
++	{ "اسفند", "Esfand" },
++} };
++
++[[nodiscard]] QString PersianNumber(int value, bool latin) {
++	const auto text = QString::number(value);
++	if (latin) {
++		return text;
++	}
++	auto result = QString();
++	result.reserve(text.size());
++	for (const auto &ch : text) {
++		const auto digit = ch.unicode() - u'0';
++		if ((digit < 0) || (digit > 9)) {
++			result += ch;
++			continue;
++		}
++		result += QChar(char16_t(0x06F0 + digit));
++	}
++	return result;
++}
++
++} // namespace
 +
 +QString FormatClock(
 +		QTime time,
@@ -14915,15 +15147,37 @@ index 0000000..362e24f
 +		.arg(dcId);
 +}
 +
++QString PersianDateText(const QDate &date, bool latin, bool withYear) {
++	if (!date.isValid()) {
++		return {};
++	}
++	const auto calendar = QCalendar(QCalendar::System::Jalali);
++	const auto parts = calendar.partsFromDate(date);
++	if (!parts.isValid()
++		|| (parts.month < 1)
++		|| (parts.month > 12)) {
++		return {};
++	}
++	const auto &month = kPersianMonths[parts.month - 1];
++	auto result = PersianNumber(parts.day, latin)
++		+ QChar(u' ')
++		+ QString::fromUtf8(latin ? month.latin : month.persian);
++	if (withYear) {
++		result += QChar(u' ') + PersianNumber(parts.year, latin);
++	}
++	return result;
++}
++
 +} // namespace Exteraless
 diff --git a/exteraless/format.h b/exteraless/format.h
 new file mode 100644
-index 0000000..55d5729
+index 0000000..8eb3d82
 --- /dev/null
 +++ b/exteraless/format.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,29 @@
 +#pragma once
 +
++#include <QDate>
 +#include <QLocale>
 +#include <QString>
 +#include <QTime>
@@ -14943,6 +15197,11 @@ index 0000000..55d5729
 +	quint64 bareId,
 +	int dcId,
 +	bool enabled);
++
++[[nodiscard]] QString PersianDateText(
++	const QDate &date,
++	bool latin,
++	bool withYear);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.cpp b/exteraless/ghost_mode.cpp
@@ -17063,10 +17322,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..f2795a6
+index 0000000..942c720
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2404 @@
+@@ -0,0 +1,2465 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -17088,6 +17347,7 @@ index 0000000..f2795a6
 +
 +#include <QByteArray>
 +#include <QCoreApplication>
++#include <QDate>
 +#include <QFile>
 +#include <QJsonArray>
 +#include <QJsonDocument>
@@ -17126,6 +17386,10 @@ index 0000000..f2795a6
 +		<< "  exteraless-chats-cli id-dc-set <0|1>\n"
 +		<< "  exteraless-chats-cli id-dc-format <bareId> <dc> <0|1>\n"
 +		<< "  exteraless-chats-cli clock <hh> <mm> <ss> <0|1> [<locale>]\n"
++		<< "  exteraless-chats-cli persian-date <yyyy-mm-dd> <latin 0|1> "
++		<< "<year 0|1>\n"
++		<< "  exteraless-chats-cli persian-calendar\n"
++		<< "  exteraless-chats-cli persian-calendar-set <0|1> [<latin 0|1>]\n"
 +		<< "  exteraless-chats-cli message-menu\n"
 +		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
 +		<< "<copyText> <copyLink> <copyImage> <forward> <select> "
@@ -17337,6 +17601,16 @@ index 0000000..f2795a6
 +			Exteraless::Config::Instance().showSeconds() },
 +		{ QStringLiteral("hidePhone"),
 +			Exteraless::Config::Instance().hidePhone() },
++	});
++}
++
++void PrintPersianCalendar() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("usePersianCalendar"),
++			config.usePersianCalendar() },
++		{ QStringLiteral("displayPersianCalendarByLatin"),
++			config.displayPersianCalendarByLatin() },
 +	});
 +}
 +
@@ -17728,6 +18002,52 @@ index 0000000..f2795a6
 +				.toUtf8()
 +				.constData()
 +			<< '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("persian-date")) {
++		if (arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto latin = false;
++		auto withYear = false;
++		if (!ReadFlag(arguments[3], &latin)
++			|| !ReadFlag(arguments[4], &withYear)) {
++			return PrintUsage();
++		}
++		const auto date = QDate::fromString(
++			arguments[2],
++			QStringLiteral("yyyy-MM-dd"));
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"),
++				Exteraless::PersianDateText(date, latin, withYear) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("persian-calendar")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintPersianCalendar();
++		return 0;
++	}
++	if (mode == QStringLiteral("persian-calendar-set")) {
++		if (arguments.size() != 3 && arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto enabled = false;
++		if (!ReadFlag(arguments[2], &enabled)) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		config.setUsePersianCalendar(enabled);
++		if (arguments.size() == 4) {
++			auto latin = false;
++			if (!ReadFlag(arguments[3], &latin)) {
++				return PrintUsage();
++			}
++			config.setDisplayPersianCalendarByLatin(latin);
++		}
++		PrintPersianCalendar();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("message-menu")) {
@@ -19632,10 +19952,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..1694076
+index 0000000..b8e0799
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,5750 @@
+@@ -0,0 +1,5826 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -20256,7 +20576,7 @@ index 0000000..1694076
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 111,
++            len(section) == 113,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -20277,7 +20597,7 @@ index 0000000..1694076
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 116,
++            sum(len(value) for value in exported.values()) == 118,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -20297,7 +20617,7 @@ index 0000000..1694076
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 116,
++                data.get("applied") == 118,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -20444,6 +20764,8 @@ index 0000000..1694076
 +            "hideStoriesFromHeader": True,
 +            "showIdAndDc": True,
 +            "zalgoFilter": True,
++            "OEGeneralUsePersianCalendar": True,
++            "OEGeneralPersianCalendarLatin": True,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -20465,7 +20787,7 @@ index 0000000..1694076
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 116,
++            data.get("applied") == 118,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -20755,10 +21077,10 @@ index 0000000..1694076
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 111",
++            "backup legacy eight completed to 113",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (111, 3, 2),
++             len(sections["mainconfig"])) == (113, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -23618,6 +23940,78 @@ index 0000000..1694076
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_persian(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    cases = [
++        ("2024-03-20", "1", "1", "1 Farvardin 1403"),
++        ("2024-03-20", "1", "0", "1 Farvardin"),
++        ("2024-03-20", "0", "1", "۱ فروردین ۱۴۰۳"),
++        ("2024-03-20", "0", "0", "۱ فروردین"),
++        ("2026-11-06", "1", "1", "15 Aban 1405"),
++        ("2026-11-06", "0", "1", "۱۵ آبان ۱۴۰۵"),
++    ]
++    for date, latin, year, expected in cases:
++        name = f"persian date {date} latin={latin} year={year}"
++        data = json_call(
++            ledger, cli, ["persian-date", date, latin, year], None, name)
++        if data is not None:
++            ledger.check(name, data.get("text") == expected, data)
++
++    for date in ("2024-02-30", "2024-13-01", "not-a-date", "2024-11-06x"):
++        name = f"persian invalid date {date}"
++        data = json_call(
++            ledger, cli, ["persian-date", date, "1", "1"], None, name)
++        if data is not None:
++            ledger.check(name, data.get("text") == "", data)
++
++    env = make_env(work / "persian-defaults")
++    data = json_call(
++        ledger, cli, ["persian-calendar"], env, "persian calendar defaults")
++    if data is not None:
++        ledger.check(
++            "persian calendar default off",
++            data.get("usePersianCalendar") is False
++            and data.get("displayPersianCalendarByLatin") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["persian-calendar-set", "1", "1"], env,
++        "persian calendar set")
++    if data is not None:
++        ledger.check(
++            "persian calendar set on",
++            data.get("usePersianCalendar") is True
++            and data.get("displayPersianCalendarByLatin") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["persian-calendar"], env, "persian calendar reload")
++    if reloaded is not None:
++        ledger.check(
++            "persian calendar persisted",
++            reloaded.get("usePersianCalendar") is True
++            and reloaded.get("displayPersianCalendarByLatin") is True,
++            reloaded)
++    data = json_call(
++        ledger, cli, ["persian-calendar-set", "0"], env,
++        "persian calendar off keeps latin")
++    if data is not None:
++        ledger.check(
++            "persian calendar latin kept",
++            data.get("usePersianCalendar") is False
++            and data.get("displayPersianCalendarByLatin") is True,
++            data)
++    result = run(cli, ["persian-calendar-set"], env=env)
++    ledger.check(
++        "persian calendar rejects missing flag",
++        result.returncode == 2,
++        f"exit {result.returncode}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_media_menu(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -25309,6 +25703,7 @@ index 0000000..1694076
 +        shortcuts = check_shortcuts(ledger, cli, work)
 +        menu_style = check_message_menu_style(ledger, cli, work)
 +        chat_misc = check_chat_misc(ledger, cli, work)
++        persian = check_persian(ledger, cli, work)
 +        media_quality = check_media_quality(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
@@ -25371,6 +25766,7 @@ index 0000000..1694076
 +    print(f"message-menu-style: "
 +          f"{menu_style[0] - menu_style[1]} passed")
 +    print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
++    print(f"persian: {persian[0] - persian[1]} passed")
 +    print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
