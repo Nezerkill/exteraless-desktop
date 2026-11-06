@@ -2,6 +2,38 @@
 
 ## 2026-11-07
 
+- Regex-фильтры сообщений (NB-22): движок `exteraless/regex_filters.{h,cpp}` —
+  `Filter` с полями `regex`, `caseInsensitive`, `reversed` и `enabled`,
+  разбор JSON-массива (`ParseFilters`), компиляция `QRegularExpression` с
+  `optimize()` (`CompileFilters`) и решение `MatchesText` = «`find()` совпал
+  не так, как `reversed`»; `Matcher` держит кэш `msgId` → решение на 4096
+  записей с поколением (`generation`) и очисткой при переполнении. Пять
+  ключей `OEChatsRegexFiltersEnabled`, `OEChatsRegexFiltersData`,
+  `OEChatsRegexFiltersEnableInChats`, `OEChatsRegexFiltersShowHidden` и
+  `OEChatsRegexFiltersExcludedDialogs`; алиасы импорта `regexFiltersEnabled`,
+  `regexFiltersData`, `enableInChats` и `excludedDialogs` (у `showHidden`
+  алиаса нет). Гейт — `pushItem` в
+  `history/view/history_view_list_widget.cpp`: сообщение с совпавшимся
+  текстом не попадает в вид, исключённые диалоги (bare id) пропускаются;
+  состояние читается при каждой отрисовке строки, поэтому смена фильтра
+  подхватывается естественным refresh — превью чатов, read-till и
+  непрочитанные бары не тронуты. Три тумблера в Chats (Filter messages by
+  regex, Apply filters inside chats, Show hidden messages), редактора списка
+  фильтров в UI нет — фильтры задаются через CLI и импорт `.extera`. Четыре
+  lang-ключа `lng_settings_exteraless_regex_filters*`; CLI 5 команд
+  (`regex-filters`, `regex-filter-set <pattern> <ci 0|1> <reversed 0|1>`,
+  `regex-filter-list`, `regex-filter-clear`, `regex-test <text>`); формат
+  данных — `FilterModel` Android (`regex`, `caseInsensitive`, `reversed`,
+  `enabled`), сверен по `AyuFilter.java` и `NaConfig.kt`. Раннеры
+  925/32/213 PASS (backup 102; `check_regex_filters` — 27 проверок, группа
+  `cli` не росла — 61); `.extera` — 135 ключей (130 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`); `kKeysCount` 11226 (`kTagsCount` 185);
+  sha256 патча `dfee564c…`, `nix flake check` PASS. Ограничения:
+  `showHidden` есть только в первой итерации — бара «N скрыто» нет; защита
+  от ReDoS прикладная (валидация паттерна, компиляция с `optimize()`, кэш),
+  RE2 не подключён; `MultilineOption` не включён, поэтому `^`/`$` матчат
+  весь текст. Follow-up: счётчик «N скрыто», UI для `excludedDialogs`,
+  фильтр превью в списке чатов, Xvfb-смоук не выполнялся.
 - Речь / Vosk-заглушка (NB-51): `OEGeneralRecognitionLanguage` (строка,
   default `ru`; пустое значение → `ru`) и алиас `recognitionLanguage` задают
   язык распознавания, санитайзер подставляет `ru` только для пустой строки.

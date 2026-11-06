@@ -220,6 +220,17 @@ constexpr auto kChatsHideArchive = "OEChatsHideArchive";
 constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
 constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
 constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsRegexFiltersEnabled = "OEChatsRegexFiltersEnabled";
+constexpr auto kChatsRegexFiltersData = "OEChatsRegexFiltersData";
+constexpr auto kChatsRegexFiltersInChats
+	= "OEChatsRegexFiltersEnableInChats";
+constexpr auto kChatsRegexFiltersShowHidden = "OEChatsRegexFiltersShowHidden";
+constexpr auto kChatsRegexFiltersExcluded
+	= "OEChatsRegexFiltersExcludedDialogs";
+constexpr auto kRegexFiltersEnabledAlias = "regexFiltersEnabled";
+constexpr auto kRegexFiltersDataAlias = "regexFiltersData";
+constexpr auto kRegexFiltersInChatsAlias = "enableInChats";
+constexpr auto kRegexFiltersExcludedAlias = "excludedDialogs";
 constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
@@ -543,6 +554,11 @@ QString BuildBackup() {
 		= chats.disableAutoDownloadingArchive;
 	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
 	extera[kZalgoFilter] = config.zalgoFilter();
+	extera[kChatsRegexFiltersEnabled] = config.regexFiltersEnabled();
+	extera[kChatsRegexFiltersData] = config.regexFiltersData();
+	extera[kChatsRegexFiltersInChats] = config.regexFiltersInChats();
+	extera[kChatsRegexFiltersShowHidden] = config.regexFiltersShowHidden();
+	extera[kChatsRegexFiltersExcluded] = config.regexFiltersExcluded();
 	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 	extera[kShowFormattingButtons] = config.showFormattingButtons();
 	extera[kTranslationProvider] = config.translationProvider();
@@ -1052,6 +1068,24 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kZalgoFilterUpper)
 			&& value.isBool()) {
 			config.setZalgoFilter(value.toBool());
+		} else if ((key == kChatsRegexFiltersEnabled
+			|| key == kRegexFiltersEnabledAlias)
+			&& value.isBool()) {
+			config.setRegexFiltersEnabled(value.toBool());
+		} else if ((key == kChatsRegexFiltersData
+			|| key == kRegexFiltersDataAlias)
+			&& value.isString()) {
+			config.setRegexFiltersData(value.toString());
+		} else if ((key == kChatsRegexFiltersInChats
+			|| key == kRegexFiltersInChatsAlias)
+			&& value.isBool()) {
+			config.setRegexFiltersInChats(value.toBool());
+		} else if (key == kChatsRegexFiltersShowHidden && value.isBool()) {
+			config.setRegexFiltersShowHidden(value.toBool());
+		} else if ((key == kChatsRegexFiltersExcluded
+			|| key == kRegexFiltersExcludedAlias)
+			&& value.isString()) {
+			config.setRegexFiltersExcluded(value.toString());
 		} else if ((key == kChatsShowSpoilersDirectly
 			|| key == kShowSpoilersDirectly)
 			&& value.isBool()) {

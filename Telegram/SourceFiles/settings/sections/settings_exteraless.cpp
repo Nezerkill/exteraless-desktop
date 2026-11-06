@@ -2108,6 +2108,36 @@ const auto kMeta = Builder::BuildHelper({
 		doubleTapOut,
 		true);
 
+	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/regex-filters"_q,
+		.title = tr::lng_settings_exteraless_regex_filters(),
+	});
+	addChatsToggle(
+		u"exteraless/chats/regex-filters/enabled"_q,
+		tr::lng_settings_exteraless_regex_filters_enabled(),
+		{ u"regex"_q, u"filter"_q, u"message"_q },
+		Exteraless::Config::Instance().regexFiltersEnabled(),
+		[](bool value) {
+			Exteraless::Config::Instance().setRegexFiltersEnabled(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/regex-filters/in-chats"_q,
+		tr::lng_settings_exteraless_regex_filters_in_chats(),
+		{ u"regex"_q, u"chat"_q, u"filter"_q },
+		Exteraless::Config::Instance().regexFiltersInChats(),
+		[](bool value) {
+			Exteraless::Config::Instance().setRegexFiltersInChats(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/regex-filters/show-hidden"_q,
+		tr::lng_settings_exteraless_regex_filters_show_hidden(),
+		{ u"regex"_q, u"hidden"_q, u"filter"_q },
+		Exteraless::Config::Instance().regexFiltersShowHidden(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setRegexFiltersShowHidden(value);
+		});
+
 	const auto stickerTimeMode = [] {
 		const auto chats = Exteraless::Config::Instance().chatsSettings();
 		return chats.hideStickerTime ? 2 : (chats.stickerTimeSide ? 1 : 0);

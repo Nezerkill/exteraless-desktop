@@ -283,7 +283,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Метка и меню удалённого | `customDeletedMark`, `deletedMarkColor`, `translucentDeletedMessages`, `useDeletedIcon`, `chatMenuItemView/ClearDeleted` | 🟡 есть бокс списка и пункт меню, метки в чате нет |
 | История правок | `enableSaveEditsHistory`, `saveEditedExceptionsMode`, `useEditedIcon` | ❌ |
 | Локальный last seen и read date | `saveLocalLastSeen`, `saveReadDate` | ❌ |
-| Regex-фильтры и фильтр реакций | `regexFilters*`, `blockedChannelsData`, `customFilteredUsersData` | ❌ (`dialogs/dialogs_inner_widget.cpp`, `data/data_histories.cpp`) |
+| Regex-фильтры и фильтр реакций | `regexFilters*`, `blockedChannelsData`, `customFilteredUsersData` | ✅ regex-фильтры (NB-22): `OEChatsRegexFilters*` (5 ключей), движок `exteraless/regex_filters.{h,cpp}`, гейт в `pushItem` (`history/view/history_view_list_widget.cpp`), три тумблера в Chats, CLI 5 команд и импорт `.extera`; UI-редактора списка и бара «N скрыто» нет. `blockedChannelsData`/`customFilteredUsersData` (фильтр реакций и каналов) — ❌ не переносились |
 | Ghost-отправка «как отложенное» | `ghostScheduledSend` | ❌ |
 | Ответ на удалённое цитатой | `replyToDeletedAsQuote` | 🟡 текст хранится, подстановки нет |
 | Импорт базы AyuGram | `OEAyuDatabaseImport`, `ClearMessageDatabase` | ❌ |

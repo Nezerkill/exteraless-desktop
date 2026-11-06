@@ -9266,6 +9266,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
 "lng_settings_exteraless_chats_hide_archive" = "Hide archive folder";
 "lng_settings_exteraless_chats_sort_by_unread" = "Sort chats by unread";
+"lng_settings_exteraless_regex_filters" = "Regex filters";
+"lng_settings_exteraless_regex_filters_enabled" = "Filter messages by regex";
+"lng_settings_exteraless_regex_filters_in_chats" = "Apply filters inside chats";
+"lng_settings_exteraless_regex_filters_show_hidden" = "Show hidden messages";
 "lng_settings_exteraless_chats_disable_archive_autodownload" = "Do not auto-download archives";
 "lng_settings_exteraless_chats_block_win32_executables" = "Treat Windows executables as dangerous";
 "lng_settings_exteraless_chats_hide_greeting_sticker" = "Hide the greeting sticker";

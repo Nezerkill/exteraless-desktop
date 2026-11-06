@@ -149,6 +149,13 @@ constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
 constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
 constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
 constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsRegexFiltersEnabled = "OEChatsRegexFiltersEnabled";
+constexpr auto kChatsRegexFiltersData = "OEChatsRegexFiltersData";
+constexpr auto kChatsRegexFiltersInChats
+	= "OEChatsRegexFiltersEnableInChats";
+constexpr auto kChatsRegexFiltersShowHidden = "OEChatsRegexFiltersShowHidden";
+constexpr auto kChatsRegexFiltersExcluded
+	= "OEChatsRegexFiltersExcludedDialogs";
 constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 constexpr auto kChatsDisableAutoDownloadingArchive
@@ -1242,6 +1249,46 @@ void Config::setZalgoFilter(bool value) {
 	setValue(kChatsZalgoFilter, value);
 }
 
+bool Config::regexFiltersEnabled() const {
+	return boolValue(kChatsRegexFiltersEnabled, false);
+}
+
+void Config::setRegexFiltersEnabled(bool value) {
+	setValue(kChatsRegexFiltersEnabled, value);
+}
+
+QString Config::regexFiltersData() const {
+	return stringValue(kChatsRegexFiltersData, QStringLiteral("[]"));
+}
+
+void Config::setRegexFiltersData(const QString &value) {
+	setValue(kChatsRegexFiltersData, value);
+}
+
+bool Config::regexFiltersInChats() const {
+	return boolValue(kChatsRegexFiltersInChats, false);
+}
+
+void Config::setRegexFiltersInChats(bool value) {
+	setValue(kChatsRegexFiltersInChats, value);
+}
+
+bool Config::regexFiltersShowHidden() const {
+	return boolValue(kChatsRegexFiltersShowHidden, false);
+}
+
+void Config::setRegexFiltersShowHidden(bool value) {
+	setValue(kChatsRegexFiltersShowHidden, value);
+}
+
+QString Config::regexFiltersExcluded() const {
+	return stringValue(kChatsRegexFiltersExcluded, QStringLiteral("[]"));
+}
+
+void Config::setRegexFiltersExcluded(const QString &value) {
+	setValue(kChatsRegexFiltersExcluded, value);
+}
+
 bool Config::showSpoilersDirectly() const {
 	return boolValue(kChatsShowSpoilersDirectly, false);
 }
@@ -1500,6 +1547,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsDisableAutoDownloadingArchive
 			|| key == kChatsBlockWin32ExecutableFiles
 			|| key == kChatsZalgoFilter
+			|| key == kChatsRegexFiltersEnabled
+			|| key == kChatsRegexFiltersData
+			|| key == kChatsRegexFiltersInChats
+			|| key == kChatsRegexFiltersShowHidden
+			|| key == kChatsRegexFiltersExcluded
 			|| key == kChatsShowSpoilersDirectly
 			|| key == kChatsShowFormattingButtons
 			|| key == kChatsAvatarRadius

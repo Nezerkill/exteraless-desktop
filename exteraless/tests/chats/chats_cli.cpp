@@ -14,6 +14,7 @@
 #include "exteraless/pangu.h"
 #include "exteraless/plugins/installer.h"
 #include "exteraless/proxy_rules.h"
+#include "exteraless/regex_filters.h"
 #include "exteraless/save_path.h"
 #include "exteraless/subtitles.h"
 #include "exteraless/update_check.h"
@@ -134,6 +135,12 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli upload-boost-set <0|1>\n"
 		<< "  exteraless-chats-cli wide-posts\n"
 		<< "  exteraless-chats-cli wide-posts-set <0|1>\n"
+		<< "  exteraless-chats-cli regex-filters\n"
+		<< "  exteraless-chats-cli regex-filter-set <pattern> <ci 0|1> "
+		<< "<reversed 0|1>\n"
+		<< "  exteraless-chats-cli regex-filter-list\n"
+		<< "  exteraless-chats-cli regex-filter-clear\n"
+		<< "  exteraless-chats-cli regex-test <text>\n"
 		<< "  exteraless-chats-cli sort-unread\n"
 		<< "  exteraless-chats-cli sort-unread-set <0|1>\n"
 		<< "  exteraless-chats-cli archive-skip <inMainMenu> <hideArchive>\n"
@@ -273,6 +280,21 @@ using Exteraless::ChatsSettings;
 		chats.stripTrackingOnPaste,
 		chats.unreadCapsule,
 	};
+}
+
+[[nodiscard]] QJsonArray FiltersArray(
+		const QList<Exteraless::Filter> &filters) {
+	auto result = QJsonArray();
+	for (const auto &filter : filters) {
+		result.append(QJsonObject{
+			{ QStringLiteral("regex"), filter.regex },
+			{ QStringLiteral("caseInsensitive"),
+				filter.caseInsensitive },
+			{ QStringLiteral("reversed"), filter.reversed },
+			{ QStringLiteral("enabled"), filter.enabled },
+		});
+	}
+	return result;
 }
 
 void PrintJson(const QJsonObject &root) {
@@ -1132,6 +1154,89 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setChatsWideChannelPosts(value);
 		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("regex-filters")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"), config.regexFiltersEnabled() },
+			{ QStringLiteral("count"),
+				int(Exteraless::ParseFilters(
+					config.regexFiltersData()).size()) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("regex-filter-set")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto caseInsensitive = false;
+		auto reversed = false;
+		if (!ReadFlag(arguments[3], &caseInsensitive)
+			|| !ReadFlag(arguments[4], &reversed)) {
+			return PrintUsage();
+		}
+		const auto pattern = arguments[2];
+		if (pattern.isEmpty()
+			|| !QRegularExpression(pattern).isValid()) {
+			return PrintUsage();
+		}
+		auto filters = Exteraless::ParseFilters(
+			Exteraless::Config::Instance().regexFiltersData());
+		auto filter = Exteraless::Filter();
+		filter.regex = pattern;
+		filter.caseInsensitive = caseInsensitive;
+		filter.reversed = reversed;
+		filters.push_back(filter);
+		Exteraless::Config::Instance().setRegexFiltersData(
+			QString::fromUtf8(QJsonDocument(
+				FiltersArray(filters)).toJson(QJsonDocument::Compact)));
+		PrintJson(QJsonObject{
+			{ QStringLiteral("count"), int(filters.size()) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("regex-filter-list")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto filters = Exteraless::ParseFilters(
+			Exteraless::Config::Instance().regexFiltersData());
+		PrintJson(QJsonObject{
+			{ QStringLiteral("filters"), FiltersArray(filters) },
+			{ QStringLiteral("count"), int(filters.size()) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("regex-filter-clear")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setRegexFiltersData(
+			QStringLiteral("[]"));
+		PrintJson(QJsonObject{
+			{ QStringLiteral("count"), 0 },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("regex-test")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		const auto hidden = config.regexFiltersEnabled()
+			&& !config.regexFiltersShowHidden()
+			&& Exteraless::MatchesText(
+				Exteraless::CompileFilters(
+					Exteraless::ParseFilters(
+						config.regexFiltersData())),
+				arguments[2]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"), hidden },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("sort-unread")) {

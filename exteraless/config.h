@@ -275,6 +275,16 @@ public:
 	void setBlockWin32Executables(bool value);
 	[[nodiscard]] bool zalgoFilter() const;
 	void setZalgoFilter(bool value);
+	[[nodiscard]] bool regexFiltersEnabled() const;
+	void setRegexFiltersEnabled(bool value);
+	[[nodiscard]] QString regexFiltersData() const;
+	void setRegexFiltersData(const QString &value);
+	[[nodiscard]] bool regexFiltersInChats() const;
+	void setRegexFiltersInChats(bool value);
+	[[nodiscard]] bool regexFiltersShowHidden() const;
+	void setRegexFiltersShowHidden(bool value);
+	[[nodiscard]] QString regexFiltersExcluded() const;
+	void setRegexFiltersExcluded(const QString &value);
 	[[nodiscard]] bool showSpoilersDirectly() const;
 	void setShowSpoilersDirectly(bool value);
 	[[nodiscard]] bool showFormattingButtons() const;

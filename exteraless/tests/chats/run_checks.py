@@ -539,6 +539,229 @@ def backup_sections(data):
     }
 
 
+def check_regex_filters(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "regex-defaults")
+    data = json_call(ledger, cli, ["regex-filters"], env, "regex defaults")
+    if data is not None:
+        ledger.check(
+            "regex default disabled",
+            data.get("enabled") is False,
+            data)
+        ledger.check(
+            "regex default count",
+            data.get("count") == 0,
+            data)
+    listed = json_call(
+        ledger, cli, ["regex-filter-list"], env, "regex default list")
+    if listed is not None:
+        ledger.check(
+            "regex default list empty",
+            listed.get("filters") == [] and listed.get("count") == 0,
+            listed)
+
+    for name, arguments in [
+            ("regex-filter-set without flags", ["regex-filter-set", "spam"]),
+            ("regex-filter-set bad flag",
+             ["regex-filter-set", "spam", "2", "0"]),
+            ("regex-test without text", ["regex-test"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    result = run(cli, ["regex-filter-set", "(", "0", "0"], env=env)
+    ledger.check(
+        "regex invalid pattern rejected",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+    data = json_call(
+        ledger, cli, ["regex-filters"], env, "regex after invalid")
+    if data is not None:
+        ledger.check(
+            "regex invalid pattern not stored",
+            data.get("count") == 0 and data.get("enabled") is False,
+            data)
+
+    env = make_env(work / "regex-enabled")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "regexFiltersEnabled": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "regex enabled import")
+    if data is not None:
+        ledger.check(
+            "regex enabled applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    data = json_call(
+        ledger, cli, ["regex-filters"], env, "regex enabled state")
+    if data is not None:
+        ledger.check(
+            "regex enabled flag",
+            data.get("enabled") is True and data.get("count") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["regex-filter-set", "spam", "1", "0"], env,
+        "regex add filter")
+    if data is not None:
+        ledger.check(
+            "regex add count",
+            data.get("count") == 1,
+            data)
+    listed = json_call(
+        ledger, cli, ["regex-filter-list"], env, "regex list after add")
+    if listed is not None:
+        filters = listed.get("filters") or []
+        ledger.check(
+            "regex filter fields",
+            listed.get("count") == 1
+            and filters == [{
+                "regex": "spam",
+                "caseInsensitive": True,
+                "reversed": False,
+                "enabled": True,
+            }],
+            listed)
+
+    for text, expected in [("SPAM now", True), ("ham", False), ("", False)]:
+        result = json_call(
+            ledger, cli, ["regex-test", text], env, f"regex test {text!r}")
+        if result is not None:
+            ledger.check(
+                f"regex test {text!r}",
+                result.get("hidden") is expected,
+                result)
+
+    data = json_call(
+        ledger, cli, ["regex-filter-set", "^ok$", "0", "1"], env,
+        "regex reversed add")
+    if data is not None:
+        ledger.check(
+            "regex reversed add count",
+            data.get("count") == 2,
+            data)
+    for text, expected in [("ok", False), ("hello", True)]:
+        result = json_call(
+            ledger, cli, ["regex-test", text], env,
+            f"regex reversed test {text!r}")
+        if result is not None:
+            ledger.check(
+                f"regex reversed test {text!r}",
+                result.get("hidden") is expected,
+                result)
+
+    data = json_call(
+        ledger, cli, ["regex-filter-clear"], env, "regex clear")
+    if data is not None:
+        ledger.check(
+            "regex clear count",
+            data.get("count") == 0,
+            data)
+    listed = json_call(
+        ledger, cli, ["regex-filter-list"], env, "regex list after clear")
+    if listed is not None:
+        ledger.check(
+            "regex clear list empty",
+            listed.get("filters") == [] and listed.get("count") == 0,
+            listed)
+    result = json_call(
+        ledger, cli, ["regex-test", "hello"], env, "regex test after clear")
+    if result is not None:
+        ledger.check(
+            "regex test after clear",
+            result.get("hidden") is False,
+            result)
+
+    env = make_env(work / "regex-alias")
+    filter_data = json.dumps([{
+        "regex": "spam",
+        "caseInsensitive": True,
+        "reversed": False,
+        "enabled": True,
+    }])
+    excluded = json.dumps([-100123])
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "regexFiltersEnabled": True,
+            "regexFiltersData": filter_data,
+            "enableInChats": True,
+            "excludedDialogs": excluded,
+            "OEChatsRegexFiltersShowHidden": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "regex alias import")
+    if data is not None:
+        ledger.check(
+            "regex alias applied",
+            data.get("applied") == 5 and data.get("unknown") == [],
+            data)
+    data = json_call(
+        ledger, cli, ["regex-filters"], env, "regex alias state")
+    if data is not None:
+        ledger.check(
+            "regex alias enabled and count",
+            data.get("enabled") is True and data.get("count") == 1,
+            data)
+    result = json_call(
+        ledger, cli, ["regex-test", "spam"], env, "regex show hidden")
+    if result is not None:
+        ledger.check(
+            "regex show hidden suppresses",
+            result.get("hidden") is False,
+            result)
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env, "regex alias export")
+    if current is not None:
+        section = backup_sections(current)["exteraconfig"]
+        ledger.check(
+            "regex backup keys",
+            section.get("OEChatsRegexFiltersEnabled") is True
+            and section.get("OEChatsRegexFiltersData") == filter_data
+            and section.get("OEChatsRegexFiltersEnableInChats") is True
+            and section.get("OEChatsRegexFiltersShowHidden") is True
+            and section.get("OEChatsRegexFiltersExcludedDialogs")
+                == excluded,
+            section)
+
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsRegexFiltersShowHidden": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "regex show hidden off")
+    if data is not None:
+        ledger.check(
+            "regex show hidden off applied",
+            data.get("applied") == 1,
+            data)
+    result = json_call(
+        ledger, cli, ["regex-test", "spam"], env, "regex hide again")
+    if result is not None:
+        ledger.check(
+            "regex hides after show hidden off",
+            result.get("hidden") is True,
+            result)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_backup(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -621,7 +844,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 125,
+            len(section) == 130,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +865,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 130,
+            sum(len(value) for value in exported.values()) == 135,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +885,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 130,
+                data.get("applied") == 135,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -793,6 +1016,11 @@ def check_backup(ledger, cli, work):
             "OEChatsWideChannelPosts": True,
             "OEChatsDisableAutoDownloadingArchive": True,
             "OEChatsBlockWin32ExecutableFiles": False,
+            "OEChatsRegexFiltersEnabled": True,
+            "OEChatsRegexFiltersData": "[\"spam\"]",
+            "OEChatsRegexFiltersEnableInChats": True,
+            "OEChatsRegexFiltersShowHidden": True,
+            "OEChatsRegexFiltersExcludedDialogs": "[-100123]",
             "OEMediaViewerMenuSubtitles": False,
             "OESubtitlesFiles": {
                 "doc_1": {"path": "/tmp/a.srt", "label": "en"},
@@ -844,7 +1072,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 130,
+            data.get("applied") == 135,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -947,6 +1175,16 @@ def check_backup(ledger, cli, work):
             "backup full sort by unread",
             section.get("OEChatsSortByUnread") is True,
             section.get("OEChatsSortByUnread"))
+        ledger.check(
+            "backup full regex filters",
+            section.get("OEChatsRegexFiltersEnabled") is True
+            and section.get("OEChatsRegexFiltersData") == "[\"spam\"]"
+            and section.get("OEChatsRegexFiltersEnableInChats") is True
+            and section.get("OEChatsRegexFiltersShowHidden") is True
+            and section.get("OEChatsRegexFiltersExcludedDialogs")
+                == "[-100123]",
+            {key: section.get(key) for key in section
+             if key.startswith("OEChatsRegexFilters")})
         ledger.check(
             "backup full always show download",
             section.get("OEChatsAlwaysShowDownloadIcon") is True,
@@ -1138,10 +1376,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 125",
+            "backup legacy eight completed to 130",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (125, 3, 2),
+             len(sections["mainconfig"])) == (130, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6804,6 +7042,7 @@ def main():
         recognition = check_recognition(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
+        regex_filters = check_regex_filters(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -6881,6 +7120,7 @@ def main():
     print(f"recognition: {recognition[0] - recognition[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
+    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

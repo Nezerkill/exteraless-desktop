@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 897 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 925 проверок PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -114,8 +114,30 @@
   19 update-channel, 32 translation, 23 ai, 6 recognition, 10 download-boost,
   48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  101 backup);
+  27 regex-filters, 102 backup);
   плагины без изменений — 32 и 213 проверок.
+- Regex-фильтры сообщений (NB-22): движок `exteraless/regex_filters.{h,cpp}`
+  (`Filter{regex, caseInsensitive, reversed, enabled}`, `CompileFilters` с
+  `optimize()`, `MatchesText` — совпадение `find()` инвертируется флагом
+  `reversed`, `Matcher` с кэшем на 4096 записей и generation-инвалидацией);
+  пять ключей `OEChatsRegexFilters*` (`Enabled`, `Data`, `EnableInChats`,
+  `ShowHidden`, `ExcludedDialogs`) и алиасы `regexFiltersEnabled`/
+  `regexFiltersData`/`enableInChats`/`excludedDialogs`; гейт в `pushItem`
+  (`history/view/history_view_list_widget.cpp`) не пускает скрытое сообщение
+  в вид, исключённые диалоги пропускаются по bare id, смена настроек
+  подхватывается естественным refresh (превью, read-till и бары не тронуты).
+  Три тумблера в Chats, редактора списка нет (CLI и импорт `.extera`), четыре
+  lang-ключа, CLI 5 команд; формат данных — Android `FilterModel` (`regex`,
+  `caseInsensitive`, `reversed`, `enabled`, сверено по `AyuFilter.java` и
+  `NaConfig.kt`); `check_regex_filters` — 27 проверок (группа `cli` не
+  росла — 61; счётчик выше 925, backup 102, плагины 32 и 213 без изменений);
+  `.extera` — 135 ключей (130 + 3 + 2, сверено с legacy-кортежем `run_checks`);
+  `kKeysCount` 11226 (`kTagsCount` 185); sha256 патча `dfee564c…`,
+  `nix flake check` PASS. Ограничения: бара «N скрыто» нет, `showHidden` —
+  первая итерация, `excludedDialogs` без UI, превью-фильтра нет,
+  ReDoS-защита прикладная (валидация, `optimize()`, кэш), RE2 не подключён,
+  `MultilineOption` не включён — `^`/`$` матчат весь текст. Xvfb-смоук не
+  выполнялся.
 - Речь / Vosk-заглушка (NB-51): `OEGeneralRecognitionLanguage` (строка,
   default `ru`; пустое значение → `ru`) и алиас `recognitionLanguage` хранят
   язык распознавания — санитайзер подставляет `ru` только для пустой строки,

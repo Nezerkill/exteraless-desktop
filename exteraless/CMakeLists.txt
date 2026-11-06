@@ -34,6 +34,8 @@ add_library(exteraless STATIC
     proxy_rules_state.cpp
     proxy_rules_state.h
     plugins/scanner.h
+    regex_filters.cpp
+    regex_filters.h
     save_path.cpp
     save_path.h
     subtitles.cpp

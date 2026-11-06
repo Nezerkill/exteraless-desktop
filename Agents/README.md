@@ -59,7 +59,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (897 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, download-boost, subtitles, avatar-corners, section-radius, backup);
+  (925 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, download-boost, subtitles, avatar-corners, section-radius, regex-filters, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
@@ -310,6 +310,16 @@ sibling-чекаутом: `../exteraless`.
   известное ограничение: upstream auto-expand и синхронизация уже открытых
   главных меню в drawer пока не отражаются. Settings Information использует
   дефолтные `AccountsOptions`.
+- Regex-фильтры сообщений (NB-22): движок `exteraless/regex_filters.{h,cpp}`
+  (`Filter{regex, caseInsensitive, reversed, enabled}`, `CompileFilters`
+  с `optimize()`, `MatchesText` = совпадение `find()` инвертируется
+  `reversed`, `Matcher` с кэшем на 4096 записей) скрывает совпавшие сообщения
+  в `pushItem` (`history/view/history_view_list_widget.cpp`); ключи
+  `OEChatsRegexFilters*` (`Enabled`, `Data`, `EnableInChats`, `ShowHidden`,
+  `ExcludedDialogs`) с алиасами `regexFiltersEnabled`/`regexFiltersData`/
+  `enableInChats`/`excludedDialogs`, три тумблера в Chats, CLI 5 команд
+  (`regex-*`), редактора списка фильтров и бара «N скрыто» нет, `^`/`$`
+  матчат весь текст (`MultilineOption` выключен).
 - `nix/` — flake-пакет, NixOS-модуль и патч upstream.
 - `STATUS.md` — что готово и что дальше.
 - `CHANGELOG.md` — история изменений.

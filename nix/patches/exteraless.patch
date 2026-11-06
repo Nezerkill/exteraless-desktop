@@ -107,7 +107,7 @@ index 811707d..bbd7372 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..36e6ae8 100644
+index ffc8ec9..702b7ca 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -119,7 +119,7 @@ index ffc8ec9..36e6ae8 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,224 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,228 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -205,6 +205,10 @@ index ffc8ec9..36e6ae8 100644
 +"lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
 +"lng_settings_exteraless_chats_hide_archive" = "Hide archive folder";
 +"lng_settings_exteraless_chats_sort_by_unread" = "Sort chats by unread";
++"lng_settings_exteraless_regex_filters" = "Regex filters";
++"lng_settings_exteraless_regex_filters_enabled" = "Filter messages by regex";
++"lng_settings_exteraless_regex_filters_in_chats" = "Apply filters inside chats";
++"lng_settings_exteraless_regex_filters_show_hidden" = "Show hidden messages";
 +"lng_settings_exteraless_chats_disable_archive_autodownload" = "Do not auto-download archives";
 +"lng_settings_exteraless_chats_block_win32_executables" = "Treat Windows executables as dangerous";
 +"lng_settings_exteraless_chats_hide_greeting_sticker" = "Hide the greeting sticker";
@@ -6130,18 +6134,20 @@ index 8b3f3d7..968d94b 100644
  	void setTextWithLinks(
  		const TextWithEntities &text,
 diff --git a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
-index fdbce14..3668339 100644
+index fdbce14..8251a8f 100644
 --- a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
-@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_list_widget.h"
  
++#include "exteraless/config.h"
 +#include "exteraless/doubletap.h"
++#include "exteraless/regex_filters.h"
  #include "history/view/history_view_about_view.h"
  #include "base/unixtime.h"
  #include "base/qt/qt_key_modifiers.h"
-@@ -86,6 +87,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -86,6 +89,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "boxes/moderate_messages_box.h"
  #include "boxes/premium_preview_box.h"
  #include "boxes/send_gif_with_caption_box.h"
@@ -6149,7 +6155,94 @@ index fdbce14..3668339 100644
  #include "core/crash_reports.h"
  #include "data/components/sponsored_messages.h"
  #include "data/data_session.h"
-@@ -3935,14 +3937,70 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
+@@ -105,6 +109,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "styles/style_window.h" // columnMaximalWidthLeft
+ 
+ #include <QtWidgets/QApplication>
++#include <QtCore/QJsonArray>
++#include <QtCore/QJsonDocument>
+ #include <QtCore/QMimeData>
+ 
+ namespace HistoryView {
+@@ -137,6 +143,62 @@ constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
+ 		|| (context == Context::WelcomeMessages);
+ }
+ 
++struct RegexFilterState {
++	bool active = false;
++	QString data;
++	QString excluded;
++	std::vector<qint64> excludedIds;
++	QList<Exteraless::Compiled> compiled;
++};
++
++[[nodiscard]] std::vector<qint64> ParseExcludedIds(const QString &json) {
++	auto result = std::vector<qint64>();
++	for (const auto &entry : QJsonDocument::fromJson(json.toUtf8()).array()) {
++		const auto id = entry.isString()
++			? entry.toString().toLongLong()
++			: qint64(entry.toDouble());
++		result.push_back(id < 0 ? -id : id);
++	}
++	return result;
++}
++
++[[nodiscard]] const RegexFilterState &CurrentRegexFilter() {
++	static auto cached = RegexFilterState();
++	const auto &config = Exteraless::Config::Instance();
++	const auto active = config.regexFiltersEnabled()
++		&& config.regexFiltersInChats()
++		&& !config.regexFiltersShowHidden();
++	const auto data = config.regexFiltersData();
++	const auto excluded = config.regexFiltersExcluded();
++	if (active != cached.active
++		|| data != cached.data
++		|| excluded != cached.excluded) {
++		cached.active = active;
++		cached.data = data;
++		cached.excluded = excluded;
++		cached.excludedIds = active
++			? ParseExcludedIds(excluded)
++			: std::vector<qint64>();
++		cached.compiled = active
++			? Exteraless::CompileFilters(Exteraless::ParseFilters(data))
++			: QList<Exteraless::Compiled>();
++	}
++	return cached;
++}
++
++[[nodiscard]] bool ShouldHideMessage(
++		const QString &text,
++		qint64 dialogBareId) {
++	const auto &filter = CurrentRegexFilter();
++	if (!filter.active || text.isEmpty()) {
++		return false;
++	}
++	if (ranges::contains(filter.excludedIds, dialogBareId)) {
++		return false;
++	}
++	return Exteraless::MatchesText(filter.compiled, text);
++}
++
+ } // namespace
+ 
+ WindowListDelegate::WindowListDelegate(
+@@ -862,6 +924,14 @@ void ListWidget::refreshRows(const Data::MessagesSlice &old) {
+ 	auto nearestIndex = -1;
+ 	const auto pushItem = [&](const FullMsgId &fullId) {
+ 		if (const auto item = session().data().message(fullId)) {
++			// WHY: skipped before a view exists, so geometry and unread bar
++			// never observe a hidden message.
++			if (ShouldHideMessage(
++					item->originalText().text,
++					qint64(item->history()->peer->id.value
++						& PeerId::kChatTypeMask))) {
++				return;
++			}
+ 			if (_slice.nearestToAround == fullId) {
+ 				nearestIndex = int(_items.size());
+ 			}
+@@ -3935,14 +4005,70 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
  		&& (_overElement->data()->isRegular()
  			|| CanReplyToEphemeral(_overElement->data()))) {
  		mouseActionCancel();
@@ -8842,10 +8935,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..807bfd2
+index 0000000..cf2aff2
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2834 @@
+@@ -0,0 +1,2864 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -10955,6 +11048,36 @@ index 0000000..807bfd2
 +		tr::lng_settings_exteraless_double_tap_out(),
 +		doubleTapOut,
 +		true);
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/chats/regex-filters"_q,
++		.title = tr::lng_settings_exteraless_regex_filters(),
++	});
++	addChatsToggle(
++		u"exteraless/chats/regex-filters/enabled"_q,
++		tr::lng_settings_exteraless_regex_filters_enabled(),
++		{ u"regex"_q, u"filter"_q, u"message"_q },
++		Exteraless::Config::Instance().regexFiltersEnabled(),
++		[](bool value) {
++			Exteraless::Config::Instance().setRegexFiltersEnabled(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/regex-filters/in-chats"_q,
++		tr::lng_settings_exteraless_regex_filters_in_chats(),
++		{ u"regex"_q, u"chat"_q, u"filter"_q },
++		Exteraless::Config::Instance().regexFiltersInChats(),
++		[](bool value) {
++			Exteraless::Config::Instance().setRegexFiltersInChats(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/regex-filters/show-hidden"_q,
++		tr::lng_settings_exteraless_regex_filters_show_hidden(),
++		{ u"regex"_q, u"hidden"_q, u"filter"_q },
++		Exteraless::Config::Instance().regexFiltersShowHidden(),
++		[](bool value) {
++			Exteraless::Config::Instance()
++				.setRegexFiltersShowHidden(value);
++		});
 +
 +	const auto stickerTimeMode = [] {
 +		const auto chats = Exteraless::Config::Instance().chatsSettings();
@@ -13227,10 +13350,10 @@ index b7b3acc..3052f11 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..b19f0bd
+index 0000000..830a198
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,60 @@
+@@ -0,0 +1,62 @@
 +add_library(exteraless STATIC
 +    ai_client.cpp
 +    ai_client.h
@@ -13267,6 +13390,8 @@ index 0000000..b19f0bd
 +    proxy_rules_state.cpp
 +    proxy_rules_state.h
 +    plugins/scanner.h
++    regex_filters.cpp
++    regex_filters.h
 +    save_path.cpp
 +    save_path.h
 +    subtitles.cpp
@@ -13441,10 +13566,10 @@ index 0000000..eb180ae
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..49d611b
+index 0000000..b29bd32
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1181 @@
+@@ -0,0 +1,1215 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -13667,6 +13792,17 @@ index 0000000..49d611b
 +constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
 +constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
++constexpr auto kChatsRegexFiltersEnabled = "OEChatsRegexFiltersEnabled";
++constexpr auto kChatsRegexFiltersData = "OEChatsRegexFiltersData";
++constexpr auto kChatsRegexFiltersInChats
++	= "OEChatsRegexFiltersEnableInChats";
++constexpr auto kChatsRegexFiltersShowHidden = "OEChatsRegexFiltersShowHidden";
++constexpr auto kChatsRegexFiltersExcluded
++	= "OEChatsRegexFiltersExcludedDialogs";
++constexpr auto kRegexFiltersEnabledAlias = "regexFiltersEnabled";
++constexpr auto kRegexFiltersDataAlias = "regexFiltersData";
++constexpr auto kRegexFiltersInChatsAlias = "enableInChats";
++constexpr auto kRegexFiltersExcludedAlias = "excludedDialogs";
 +constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 +constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 +constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
@@ -13990,6 +14126,11 @@ index 0000000..49d611b
 +		= chats.disableAutoDownloadingArchive;
 +	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
 +	extera[kZalgoFilter] = config.zalgoFilter();
++	extera[kChatsRegexFiltersEnabled] = config.regexFiltersEnabled();
++	extera[kChatsRegexFiltersData] = config.regexFiltersData();
++	extera[kChatsRegexFiltersInChats] = config.regexFiltersInChats();
++	extera[kChatsRegexFiltersShowHidden] = config.regexFiltersShowHidden();
++	extera[kChatsRegexFiltersExcluded] = config.regexFiltersExcluded();
 +	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 +	extera[kShowFormattingButtons] = config.showFormattingButtons();
 +	extera[kTranslationProvider] = config.translationProvider();
@@ -14499,6 +14640,24 @@ index 0000000..49d611b
 +			|| key == kZalgoFilterUpper)
 +			&& value.isBool()) {
 +			config.setZalgoFilter(value.toBool());
++		} else if ((key == kChatsRegexFiltersEnabled
++			|| key == kRegexFiltersEnabledAlias)
++			&& value.isBool()) {
++			config.setRegexFiltersEnabled(value.toBool());
++		} else if ((key == kChatsRegexFiltersData
++			|| key == kRegexFiltersDataAlias)
++			&& value.isString()) {
++			config.setRegexFiltersData(value.toString());
++		} else if ((key == kChatsRegexFiltersInChats
++			|| key == kRegexFiltersInChatsAlias)
++			&& value.isBool()) {
++			config.setRegexFiltersInChats(value.toBool());
++		} else if (key == kChatsRegexFiltersShowHidden && value.isBool()) {
++			config.setRegexFiltersShowHidden(value.toBool());
++		} else if ((key == kChatsRegexFiltersExcluded
++			|| key == kRegexFiltersExcludedAlias)
++			&& value.isString()) {
++			config.setRegexFiltersExcluded(value.toString());
 +		} else if ((key == kChatsShowSpoilersDirectly
 +			|| key == kShowSpoilersDirectly)
 +			&& value.isBool()) {
@@ -14750,10 +14909,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..22ace3e
+index 0000000..b6084c4
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1690 @@
+@@ -0,0 +1,1742 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -14905,6 +15064,13 @@ index 0000000..22ace3e
 +constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
 +constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
++constexpr auto kChatsRegexFiltersEnabled = "OEChatsRegexFiltersEnabled";
++constexpr auto kChatsRegexFiltersData = "OEChatsRegexFiltersData";
++constexpr auto kChatsRegexFiltersInChats
++	= "OEChatsRegexFiltersEnableInChats";
++constexpr auto kChatsRegexFiltersShowHidden = "OEChatsRegexFiltersShowHidden";
++constexpr auto kChatsRegexFiltersExcluded
++	= "OEChatsRegexFiltersExcludedDialogs";
 +constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 +constexpr auto kChatsShowFormattingButtons = "OEChatsShowFormattingButtons";
 +constexpr auto kChatsDisableAutoDownloadingArchive
@@ -15998,6 +16164,46 @@ index 0000000..22ace3e
 +	setValue(kChatsZalgoFilter, value);
 +}
 +
++bool Config::regexFiltersEnabled() const {
++	return boolValue(kChatsRegexFiltersEnabled, false);
++}
++
++void Config::setRegexFiltersEnabled(bool value) {
++	setValue(kChatsRegexFiltersEnabled, value);
++}
++
++QString Config::regexFiltersData() const {
++	return stringValue(kChatsRegexFiltersData, QStringLiteral("[]"));
++}
++
++void Config::setRegexFiltersData(const QString &value) {
++	setValue(kChatsRegexFiltersData, value);
++}
++
++bool Config::regexFiltersInChats() const {
++	return boolValue(kChatsRegexFiltersInChats, false);
++}
++
++void Config::setRegexFiltersInChats(bool value) {
++	setValue(kChatsRegexFiltersInChats, value);
++}
++
++bool Config::regexFiltersShowHidden() const {
++	return boolValue(kChatsRegexFiltersShowHidden, false);
++}
++
++void Config::setRegexFiltersShowHidden(bool value) {
++	setValue(kChatsRegexFiltersShowHidden, value);
++}
++
++QString Config::regexFiltersExcluded() const {
++	return stringValue(kChatsRegexFiltersExcluded, QStringLiteral("[]"));
++}
++
++void Config::setRegexFiltersExcluded(const QString &value) {
++	setValue(kChatsRegexFiltersExcluded, value);
++}
++
 +bool Config::showSpoilersDirectly() const {
 +	return boolValue(kChatsShowSpoilersDirectly, false);
 +}
@@ -16256,6 +16462,11 @@ index 0000000..22ace3e
 +			|| key == kChatsDisableAutoDownloadingArchive
 +			|| key == kChatsBlockWin32ExecutableFiles
 +			|| key == kChatsZalgoFilter
++			|| key == kChatsRegexFiltersEnabled
++			|| key == kChatsRegexFiltersData
++			|| key == kChatsRegexFiltersInChats
++			|| key == kChatsRegexFiltersShowHidden
++			|| key == kChatsRegexFiltersExcluded
 +			|| key == kChatsShowSpoilersDirectly
 +			|| key == kChatsShowFormattingButtons
 +			|| key == kChatsAvatarRadius
@@ -16446,10 +16657,10 @@ index 0000000..22ace3e
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..2addbaf
+index 0000000..e0d23d1
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,341 @@
+@@ -0,0 +1,351 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -16727,6 +16938,16 @@ index 0000000..2addbaf
 +	void setBlockWin32Executables(bool value);
 +	[[nodiscard]] bool zalgoFilter() const;
 +	void setZalgoFilter(bool value);
++	[[nodiscard]] bool regexFiltersEnabled() const;
++	void setRegexFiltersEnabled(bool value);
++	[[nodiscard]] QString regexFiltersData() const;
++	void setRegexFiltersData(const QString &value);
++	[[nodiscard]] bool regexFiltersInChats() const;
++	void setRegexFiltersInChats(bool value);
++	[[nodiscard]] bool regexFiltersShowHidden() const;
++	void setRegexFiltersShowHidden(bool value);
++	[[nodiscard]] QString regexFiltersExcluded() const;
++	void setRegexFiltersExcluded(const QString &value);
 +	[[nodiscard]] bool showSpoilersDirectly() const;
 +	void setShowSpoilersDirectly(bool value);
 +	[[nodiscard]] bool showFormattingButtons() const;
@@ -19297,6 +19518,189 @@ index 0000000..3bf5b81
 +	bool proxyEnabled);
 +
 +} // namespace Exteraless
+diff --git a/exteraless/regex_filters.cpp b/exteraless/regex_filters.cpp
+new file mode 100644
+index 0000000..8cf363b
+--- /dev/null
++++ b/exteraless/regex_filters.cpp
+@@ -0,0 +1,126 @@
++#include "exteraless/regex_filters.h"
++
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QJsonValue>
++
++#include <utility>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMaxCacheEntries = 4096;
++
++[[nodiscard]] QRegularExpression BuildExpression(const Filter &filter) {
++	auto options = QRegularExpression::PatternOptions(
++		QRegularExpression::NoPatternOption);
++	if (filter.caseInsensitive) {
++		options |= QRegularExpression::CaseInsensitiveOption;
++	}
++	auto result = QRegularExpression(filter.regex, options);
++	result.optimize();
++	return result;
++}
++
++[[nodiscard]] Filter ParseFilter(const QJsonObject &object) {
++	auto result = Filter();
++	result.regex = object.value(QStringLiteral("regex")).toString();
++	result.caseInsensitive = object.value(
++		QStringLiteral("caseInsensitive")).toBool(false);
++	result.reversed = object.value(
++		QStringLiteral("reversed")).toBool(false);
++	result.enabled = object.value(QStringLiteral("enabled")).toBool(true);
++	return result;
++}
++
++} // namespace
++
++QList<Filter> ParseFilters(const QString &json) {
++	auto result = QList<Filter>();
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(json.toUtf8(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isArray()) {
++		return result;
++	}
++	const auto array = document.array();
++	result.reserve(array.size());
++	for (const auto &item : array) {
++		if (!item.isObject()) {
++			continue;
++		}
++		const auto object = item.toObject();
++		if (!object.value(QStringLiteral("regex")).isString()) {
++			continue;
++		}
++		auto filter = ParseFilter(object);
++		if (!BuildExpression(filter).isValid()) {
++			continue;
++		}
++		result.push_back(std::move(filter));
++	}
++	return result;
++}
++
++QList<Compiled> CompileFilters(const QList<Filter> &filters) {
++	auto result = QList<Compiled>();
++	result.reserve(filters.size());
++	for (const auto &filter : filters) {
++		auto expression = BuildExpression(filter);
++		if (!expression.isValid()) {
++			continue;
++		}
++		auto compiled = Compiled();
++		compiled.re = std::move(expression);
++		compiled.reversed = filter.reversed;
++		compiled.enabled = filter.enabled;
++		result.push_back(std::move(compiled));
++	}
++	return result;
++}
++
++bool MatchesText(
++		const QList<Compiled> &filters,
++		const QString &text) {
++	for (const auto &filter : filters) {
++		if (!filter.enabled) {
++			continue;
++		}
++		if (filter.re.match(text).hasMatch() != filter.reversed) {
++			return true;
++		}
++	}
++	return false;
++}
++
++void Matcher::setFilters(QList<Compiled> filters) {
++	_filters = std::move(filters);
++	++_generation;
++	_cache.clear();
++}
++
++bool Matcher::match(qint64 msgId, const QString &text) const {
++	if (_filters.isEmpty()) {
++		return false;
++	}
++	if (const auto i = _cache.constFind(msgId); i != _cache.cend()) {
++		return i.value();
++	}
++	const auto result = MatchesText(_filters, text);
++	if (_cache.size() >= kMaxCacheEntries) {
++		_cache.clear();
++	}
++	_cache.insert(msgId, result);
++	return result;
++}
++
++void Matcher::invalidate() {
++	_cache.clear();
++}
++
++quint64 Matcher::generation() const {
++	return _generation;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/regex_filters.h b/exteraless/regex_filters.h
+new file mode 100644
+index 0000000..656149e
+--- /dev/null
++++ b/exteraless/regex_filters.h
+@@ -0,0 +1,45 @@
++#pragma once
++
++#include <QHash>
++#include <QList>
++#include <QRegularExpression>
++#include <QString>
++
++namespace Exteraless {
++
++struct Filter {
++	QString regex;
++	bool caseInsensitive = false;
++	bool reversed = false;
++	bool enabled = true;
++};
++
++struct Compiled {
++	QRegularExpression re;
++	bool reversed = false;
++	bool enabled = false;
++};
++
++[[nodiscard]] QList<Filter> ParseFilters(const QString &json);
++[[nodiscard]] QList<Compiled> CompileFilters(const QList<Filter> &filters);
++[[nodiscard]] bool MatchesText(
++	const QList<Compiled> &filters,
++	const QString &text);
++
++class Matcher final {
++public:
++	Matcher() = default;
++
++	void setFilters(QList<Compiled> filters);
++	[[nodiscard]] bool match(qint64 msgId, const QString &text) const;
++	void invalidate();
++	[[nodiscard]] quint64 generation() const;
++
++private:
++	QList<Compiled> _filters;
++	mutable QHash<qint64, bool> _cache;
++	mutable quint64 _generation = 0;
++
++};
++
++} // namespace Exteraless
 diff --git a/exteraless/save_path.cpp b/exteraless/save_path.cpp
 new file mode 100644
 index 0000000..1e79299
@@ -19699,10 +20103,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..791259b
+index 0000000..9389368
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2859 @@
+@@ -0,0 +1,2964 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -19719,6 +20123,7 @@ index 0000000..791259b
 +#include "exteraless/pangu.h"
 +#include "exteraless/plugins/installer.h"
 +#include "exteraless/proxy_rules.h"
++#include "exteraless/regex_filters.h"
 +#include "exteraless/save_path.h"
 +#include "exteraless/subtitles.h"
 +#include "exteraless/update_check.h"
@@ -19839,6 +20244,12 @@ index 0000000..791259b
 +		<< "  exteraless-chats-cli upload-boost-set <0|1>\n"
 +		<< "  exteraless-chats-cli wide-posts\n"
 +		<< "  exteraless-chats-cli wide-posts-set <0|1>\n"
++		<< "  exteraless-chats-cli regex-filters\n"
++		<< "  exteraless-chats-cli regex-filter-set <pattern> <ci 0|1> "
++		<< "<reversed 0|1>\n"
++		<< "  exteraless-chats-cli regex-filter-list\n"
++		<< "  exteraless-chats-cli regex-filter-clear\n"
++		<< "  exteraless-chats-cli regex-test <text>\n"
 +		<< "  exteraless-chats-cli sort-unread\n"
 +		<< "  exteraless-chats-cli sort-unread-set <0|1>\n"
 +		<< "  exteraless-chats-cli archive-skip <inMainMenu> <hideArchive>\n"
@@ -19978,6 +20389,21 @@ index 0000000..791259b
 +		chats.stripTrackingOnPaste,
 +		chats.unreadCapsule,
 +	};
++}
++
++[[nodiscard]] QJsonArray FiltersArray(
++		const QList<Exteraless::Filter> &filters) {
++	auto result = QJsonArray();
++	for (const auto &filter : filters) {
++		result.append(QJsonObject{
++			{ QStringLiteral("regex"), filter.regex },
++			{ QStringLiteral("caseInsensitive"),
++				filter.caseInsensitive },
++			{ QStringLiteral("reversed"), filter.reversed },
++			{ QStringLiteral("enabled"), filter.enabled },
++		});
++	}
++	return result;
 +}
 +
 +void PrintJson(const QJsonObject &root) {
@@ -20837,6 +21263,89 @@ index 0000000..791259b
 +		}
 +		Exteraless::Config::Instance().setChatsWideChannelPosts(value);
 +		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
++	if (mode == QStringLiteral("regex-filters")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		const auto &config = Exteraless::Config::Instance();
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"), config.regexFiltersEnabled() },
++			{ QStringLiteral("count"),
++				int(Exteraless::ParseFilters(
++					config.regexFiltersData()).size()) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("regex-filter-set")) {
++		if (arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto caseInsensitive = false;
++		auto reversed = false;
++		if (!ReadFlag(arguments[3], &caseInsensitive)
++			|| !ReadFlag(arguments[4], &reversed)) {
++			return PrintUsage();
++		}
++		const auto pattern = arguments[2];
++		if (pattern.isEmpty()
++			|| !QRegularExpression(pattern).isValid()) {
++			return PrintUsage();
++		}
++		auto filters = Exteraless::ParseFilters(
++			Exteraless::Config::Instance().regexFiltersData());
++		auto filter = Exteraless::Filter();
++		filter.regex = pattern;
++		filter.caseInsensitive = caseInsensitive;
++		filter.reversed = reversed;
++		filters.push_back(filter);
++		Exteraless::Config::Instance().setRegexFiltersData(
++			QString::fromUtf8(QJsonDocument(
++				FiltersArray(filters)).toJson(QJsonDocument::Compact)));
++		PrintJson(QJsonObject{
++			{ QStringLiteral("count"), int(filters.size()) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("regex-filter-list")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		const auto filters = Exteraless::ParseFilters(
++			Exteraless::Config::Instance().regexFiltersData());
++		PrintJson(QJsonObject{
++			{ QStringLiteral("filters"), FiltersArray(filters) },
++			{ QStringLiteral("count"), int(filters.size()) },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("regex-filter-clear")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setRegexFiltersData(
++			QStringLiteral("[]"));
++		PrintJson(QJsonObject{
++			{ QStringLiteral("count"), 0 },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("regex-test")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto &config = Exteraless::Config::Instance();
++		const auto hidden = config.regexFiltersEnabled()
++			&& !config.regexFiltersShowHidden()
++			&& Exteraless::MatchesText(
++				Exteraless::CompileFilters(
++					Exteraless::ParseFilters(
++						config.regexFiltersData())),
++				arguments[2]);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("hidden"), hidden },
++		});
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("sort-unread")) {
@@ -22723,10 +23232,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..71cec6c
+index 0000000..938d5d8
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6895 @@
+@@ -0,0 +1,7135 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -23268,6 +23777,229 @@ index 0000000..71cec6c
 +    }
 +
 +
++def check_regex_filters(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "regex-defaults")
++    data = json_call(ledger, cli, ["regex-filters"], env, "regex defaults")
++    if data is not None:
++        ledger.check(
++            "regex default disabled",
++            data.get("enabled") is False,
++            data)
++        ledger.check(
++            "regex default count",
++            data.get("count") == 0,
++            data)
++    listed = json_call(
++        ledger, cli, ["regex-filter-list"], env, "regex default list")
++    if listed is not None:
++        ledger.check(
++            "regex default list empty",
++            listed.get("filters") == [] and listed.get("count") == 0,
++            listed)
++
++    for name, arguments in [
++            ("regex-filter-set without flags", ["regex-filter-set", "spam"]),
++            ("regex-filter-set bad flag",
++             ["regex-filter-set", "spam", "2", "0"]),
++            ("regex-test without text", ["regex-test"])]:
++        result = run(cli, arguments, env=env)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    result = run(cli, ["regex-filter-set", "(", "0", "0"], env=env)
++    ledger.check(
++        "regex invalid pattern rejected",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++    data = json_call(
++        ledger, cli, ["regex-filters"], env, "regex after invalid")
++    if data is not None:
++        ledger.check(
++            "regex invalid pattern not stored",
++            data.get("count") == 0 and data.get("enabled") is False,
++            data)
++
++    env = make_env(work / "regex-enabled")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "regexFiltersEnabled": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "regex enabled import")
++    if data is not None:
++        ledger.check(
++            "regex enabled applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    data = json_call(
++        ledger, cli, ["regex-filters"], env, "regex enabled state")
++    if data is not None:
++        ledger.check(
++            "regex enabled flag",
++            data.get("enabled") is True and data.get("count") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["regex-filter-set", "spam", "1", "0"], env,
++        "regex add filter")
++    if data is not None:
++        ledger.check(
++            "regex add count",
++            data.get("count") == 1,
++            data)
++    listed = json_call(
++        ledger, cli, ["regex-filter-list"], env, "regex list after add")
++    if listed is not None:
++        filters = listed.get("filters") or []
++        ledger.check(
++            "regex filter fields",
++            listed.get("count") == 1
++            and filters == [{
++                "regex": "spam",
++                "caseInsensitive": True,
++                "reversed": False,
++                "enabled": True,
++            }],
++            listed)
++
++    for text, expected in [("SPAM now", True), ("ham", False), ("", False)]:
++        result = json_call(
++            ledger, cli, ["regex-test", text], env, f"regex test {text!r}")
++        if result is not None:
++            ledger.check(
++                f"regex test {text!r}",
++                result.get("hidden") is expected,
++                result)
++
++    data = json_call(
++        ledger, cli, ["regex-filter-set", "^ok$", "0", "1"], env,
++        "regex reversed add")
++    if data is not None:
++        ledger.check(
++            "regex reversed add count",
++            data.get("count") == 2,
++            data)
++    for text, expected in [("ok", False), ("hello", True)]:
++        result = json_call(
++            ledger, cli, ["regex-test", text], env,
++            f"regex reversed test {text!r}")
++        if result is not None:
++            ledger.check(
++                f"regex reversed test {text!r}",
++                result.get("hidden") is expected,
++                result)
++
++    data = json_call(
++        ledger, cli, ["regex-filter-clear"], env, "regex clear")
++    if data is not None:
++        ledger.check(
++            "regex clear count",
++            data.get("count") == 0,
++            data)
++    listed = json_call(
++        ledger, cli, ["regex-filter-list"], env, "regex list after clear")
++    if listed is not None:
++        ledger.check(
++            "regex clear list empty",
++            listed.get("filters") == [] and listed.get("count") == 0,
++            listed)
++    result = json_call(
++        ledger, cli, ["regex-test", "hello"], env, "regex test after clear")
++    if result is not None:
++        ledger.check(
++            "regex test after clear",
++            result.get("hidden") is False,
++            result)
++
++    env = make_env(work / "regex-alias")
++    filter_data = json.dumps([{
++        "regex": "spam",
++        "caseInsensitive": True,
++        "reversed": False,
++        "enabled": True,
++    }])
++    excluded = json.dumps([-100123])
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "regexFiltersEnabled": True,
++            "regexFiltersData": filter_data,
++            "enableInChats": True,
++            "excludedDialogs": excluded,
++            "OEChatsRegexFiltersShowHidden": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "regex alias import")
++    if data is not None:
++        ledger.check(
++            "regex alias applied",
++            data.get("applied") == 5 and data.get("unknown") == [],
++            data)
++    data = json_call(
++        ledger, cli, ["regex-filters"], env, "regex alias state")
++    if data is not None:
++        ledger.check(
++            "regex alias enabled and count",
++            data.get("enabled") is True and data.get("count") == 1,
++            data)
++    result = json_call(
++        ledger, cli, ["regex-test", "spam"], env, "regex show hidden")
++    if result is not None:
++        ledger.check(
++            "regex show hidden suppresses",
++            result.get("hidden") is False,
++            result)
++    current = json_call(
++        ledger, cli, ["backup-export-current"], env, "regex alias export")
++    if current is not None:
++        section = backup_sections(current)["exteraconfig"]
++        ledger.check(
++            "regex backup keys",
++            section.get("OEChatsRegexFiltersEnabled") is True
++            and section.get("OEChatsRegexFiltersData") == filter_data
++            and section.get("OEChatsRegexFiltersEnableInChats") is True
++            and section.get("OEChatsRegexFiltersShowHidden") is True
++            and section.get("OEChatsRegexFiltersExcludedDialogs")
++                == excluded,
++            section)
++
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEChatsRegexFiltersShowHidden": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "regex show hidden off")
++    if data is not None:
++        ledger.check(
++            "regex show hidden off applied",
++            data.get("applied") == 1,
++            data)
++    result = json_call(
++        ledger, cli, ["regex-test", "spam"], env, "regex hide again")
++    if result is not None:
++        ledger.check(
++            "regex hides after show hidden off",
++            result.get("hidden") is True,
++            result)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_backup(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -23350,7 +24082,7 @@ index 0000000..71cec6c
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 125,
++            len(section) == 130,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -23371,7 +24103,7 @@ index 0000000..71cec6c
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 130,
++            sum(len(value) for value in exported.values()) == 135,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -23391,7 +24123,7 @@ index 0000000..71cec6c
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 130,
++                data.get("applied") == 135,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -23522,6 +24254,11 @@ index 0000000..71cec6c
 +            "OEChatsWideChannelPosts": True,
 +            "OEChatsDisableAutoDownloadingArchive": True,
 +            "OEChatsBlockWin32ExecutableFiles": False,
++            "OEChatsRegexFiltersEnabled": True,
++            "OEChatsRegexFiltersData": "[\"spam\"]",
++            "OEChatsRegexFiltersEnableInChats": True,
++            "OEChatsRegexFiltersShowHidden": True,
++            "OEChatsRegexFiltersExcludedDialogs": "[-100123]",
 +            "OEMediaViewerMenuSubtitles": False,
 +            "OESubtitlesFiles": {
 +                "doc_1": {"path": "/tmp/a.srt", "label": "en"},
@@ -23573,7 +24310,7 @@ index 0000000..71cec6c
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 130,
++            data.get("applied") == 135,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -23676,6 +24413,16 @@ index 0000000..71cec6c
 +            "backup full sort by unread",
 +            section.get("OEChatsSortByUnread") is True,
 +            section.get("OEChatsSortByUnread"))
++        ledger.check(
++            "backup full regex filters",
++            section.get("OEChatsRegexFiltersEnabled") is True
++            and section.get("OEChatsRegexFiltersData") == "[\"spam\"]"
++            and section.get("OEChatsRegexFiltersEnableInChats") is True
++            and section.get("OEChatsRegexFiltersShowHidden") is True
++            and section.get("OEChatsRegexFiltersExcludedDialogs")
++                == "[-100123]",
++            {key: section.get(key) for key in section
++             if key.startswith("OEChatsRegexFilters")})
 +        ledger.check(
 +            "backup full always show download",
 +            section.get("OEChatsAlwaysShowDownloadIcon") is True,
@@ -23867,10 +24614,10 @@ index 0000000..71cec6c
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 125",
++            "backup legacy eight completed to 130",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (125, 3, 2),
++             len(sections["mainconfig"])) == (130, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -29533,6 +30280,7 @@ index 0000000..71cec6c
 +        recognition = check_recognition(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
++        regex_filters = check_regex_filters(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -29610,6 +30358,7 @@ index 0000000..71cec6c
 +    print(f"recognition: {recognition[0] - recognition[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
++    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:
 +        print(

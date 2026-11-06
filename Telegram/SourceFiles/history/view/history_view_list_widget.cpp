@@ -7,7 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_list_widget.h"
 
+#include "exteraless/config.h"
 #include "exteraless/doubletap.h"
+#include "exteraless/regex_filters.h"
 #include "history/view/history_view_about_view.h"
 #include "base/unixtime.h"
 #include "base/qt/qt_key_modifiers.h"
@@ -107,6 +109,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_window.h" // columnMaximalWidthLeft
 
 #include <QtWidgets/QApplication>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
 #include <QtCore/QMimeData>
 
 namespace HistoryView {
@@ -137,6 +141,62 @@ constexpr auto kScrollDateHideOnDayCrossingTimeout = crl::time(3000);
 [[nodiscard]] bool HidesDates(Context context) {
 	return (context == Context::ShortcutMessages)
 		|| (context == Context::WelcomeMessages);
+}
+
+struct RegexFilterState {
+	bool active = false;
+	QString data;
+	QString excluded;
+	std::vector<qint64> excludedIds;
+	QList<Exteraless::Compiled> compiled;
+};
+
+[[nodiscard]] std::vector<qint64> ParseExcludedIds(const QString &json) {
+	auto result = std::vector<qint64>();
+	for (const auto &entry : QJsonDocument::fromJson(json.toUtf8()).array()) {
+		const auto id = entry.isString()
+			? entry.toString().toLongLong()
+			: qint64(entry.toDouble());
+		result.push_back(id < 0 ? -id : id);
+	}
+	return result;
+}
+
+[[nodiscard]] const RegexFilterState &CurrentRegexFilter() {
+	static auto cached = RegexFilterState();
+	const auto &config = Exteraless::Config::Instance();
+	const auto active = config.regexFiltersEnabled()
+		&& config.regexFiltersInChats()
+		&& !config.regexFiltersShowHidden();
+	const auto data = config.regexFiltersData();
+	const auto excluded = config.regexFiltersExcluded();
+	if (active != cached.active
+		|| data != cached.data
+		|| excluded != cached.excluded) {
+		cached.active = active;
+		cached.data = data;
+		cached.excluded = excluded;
+		cached.excludedIds = active
+			? ParseExcludedIds(excluded)
+			: std::vector<qint64>();
+		cached.compiled = active
+			? Exteraless::CompileFilters(Exteraless::ParseFilters(data))
+			: QList<Exteraless::Compiled>();
+	}
+	return cached;
+}
+
+[[nodiscard]] bool ShouldHideMessage(
+		const QString &text,
+		qint64 dialogBareId) {
+	const auto &filter = CurrentRegexFilter();
+	if (!filter.active || text.isEmpty()) {
+		return false;
+	}
+	if (ranges::contains(filter.excludedIds, dialogBareId)) {
+		return false;
+	}
+	return Exteraless::MatchesText(filter.compiled, text);
 }
 
 } // namespace
@@ -864,6 +924,14 @@ void ListWidget::refreshRows(const Data::MessagesSlice &old) {
 	auto nearestIndex = -1;
 	const auto pushItem = [&](const FullMsgId &fullId) {
 		if (const auto item = session().data().message(fullId)) {
+			// WHY: skipped before a view exists, so geometry and unread bar
+			// never observe a hidden message.
+			if (ShouldHideMessage(
+					item->originalText().text,
+					qint64(item->history()->peer->id.value
+						& PeerId::kChatTypeMask))) {
+				return;
+			}
 			if (_slice.nearestToAround == fullId) {
 				nearestIndex = int(_items.size());
 			}
