@@ -2142,6 +2142,225 @@ def check_plugin_settings(ledger, cli, work):
         data.get("settings"))
 
 
+GARBAGE_MENU_PLUGIN = r'''
+from base_plugin import BasePlugin, MenuItemData
+
+__id__ = "menu_garbage"
+__name__ = "Menu Garbage"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Garbage(BasePlugin):
+    def on_load(self):
+        self.add_menu_item(MenuItemData(
+            item_id="bad_text", text="Bell\x07text"))
+        self.add_menu_item(MenuItemData(
+            item_id="long_text", text="x" * 129))
+        self.add_menu_item(MenuItemData(
+            item_id="1bad", text="Bad id"))
+        self.add_menu_item(MenuItemData(
+            item_id="bad_ctx", text="Bad context"), context="bogus")
+        self.add_menu_item(MenuItemData(
+            item_id="kept",
+            text="  Kept item  ",
+            subtext="\x07bell",
+            priority=True))
+
+
+plugin = Garbage()
+'''
+
+
+def check_plugin_menu(ledger, cli, work):
+    _, plugins, audit = workspace(work, "plugin-menu")
+    fixture = copy_fixture(plugins, "valid-menu.plugin")
+    data_home = work / "plugin-menu-data"
+    expected = [
+        {
+            "plugin": "demo_menu",
+            "item": "second",
+            "text": "Second item",
+            "subtext": "Added later",
+            "priority": 10,
+            "context": "main",
+        },
+        {
+            "plugin": "demo_menu",
+            "item": "first",
+            "text": "First item",
+            "priority": 5,
+            "context": "main",
+        },
+    ]
+
+    data = run_cli(
+        cli, plugins, audit, ["menu-list", "demo_menu"], data_home)
+    ledger.check(
+        "menu list: empty before enable",
+        data.get("items") == [],
+        data.get("items"))
+    data = run_cli(
+        cli, plugins, audit,
+        ["menu-click", "demo_menu", "first"], data_home)
+    ledger.check(
+        "menu click: not loaded rejected",
+        data.get("ok") is False
+        and data.get("error") == "Plugin is not loaded.",
+        data)
+
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_menu", "path": str(fixture)},
+                {"op": "menu-list", "id": "demo_menu"},
+                {"op": "menu-click", "id": "demo_menu", "item": "second"},
+                {"op": "menu-click", "id": "demo_menu", "item": "first"},
+                {
+                    "op": "menu-click",
+                    "id": "demo_menu",
+                    "item": "first",
+                    "context": "message",
+                },
+                {
+                    "op": "menu-click",
+                    "id": "demo_menu",
+                    "item": "missing",
+                },
+                {"op": "disable", "id": "demo_menu"},
+                {"op": "menu-click", "id": "demo_menu", "item": "first"},
+                {"op": "menu-list", "id": "demo_menu"},
+            ]),
+        ],
+        data_home)
+    ledger.check("menu: nine results", len(data) == 9, data)
+    if len(data) != 9:
+        return
+    ledger.check(
+        "menu: plugin loaded",
+        data[0].get("ok") is True and data[0].get("loaded") is True,
+        data[0])
+    ledger.check(
+        "menu list: priority order after enable",
+        data[1].get("items") == expected,
+        data[1].get("items"))
+    ledger.check(
+        "menu click: top item ok",
+        data[2].get("ok") is True and data[2].get("error") == "",
+        data[2])
+    ledger.check(
+        "menu click: bottom item ok",
+        data[3].get("ok") is True and data[3].get("error") == "",
+        data[3])
+    ledger.check(
+        "menu click: foreign context rejected",
+        data[4].get("ok") is False
+        and data[4].get("error") == "Unknown menu item.",
+        data[4])
+    ledger.check(
+        "menu click: unknown item rejected",
+        data[5].get("ok") is False
+        and data[5].get("error") == "Unknown menu item.",
+        data[5])
+    ledger.check(
+        "menu: plugin disabled",
+        data[6].get("ok") is True and data[6].get("loaded") is False,
+        data[6])
+    ledger.check(
+        "menu click: after unload rejected",
+        data[7].get("ok") is False
+        and data[7].get("error") == "Plugin is not loaded.",
+        data[7])
+    ledger.check(
+        "menu list: empty after unload",
+        data[8].get("items") == [],
+        data[8].get("items"))
+    records = audit_records(audit)
+    ledger.check(
+        "menu click: audit second",
+        has_log(records, "demo_menu", "menu clicked second:main"),
+        records)
+    ledger.check(
+        "menu click: audit first",
+        has_log(records, "demo_menu", "menu clicked first:main"),
+        records)
+
+    garbage = write_plugin(plugins, "menu-garbage.plugin", GARBAGE_MENU_PLUGIN)
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "menu_garbage", "path": str(garbage)},
+                {"op": "menu-list", "id": "menu_garbage"},
+                {"op": "menu-click", "id": "menu_garbage", "item": "bad_text"},
+                {"op": "menu-click", "id": "menu_garbage", "item": "kept"},
+            ]),
+        ],
+        data_home)
+    ledger.check("menu garbage: four results", len(data) == 4, data)
+    if len(data) == 4:
+        ledger.check(
+            "menu garbage: loaded",
+            data[0].get("ok") is True,
+            data[0])
+        ledger.check(
+            "menu garbage: only clean item kept",
+            data[1].get("items") == [
+                {
+                    "plugin": "menu_garbage",
+                    "item": "kept",
+                    "text": "Kept item",
+                    "priority": 0,
+                    "context": "main",
+                },
+            ],
+            data[1].get("items"))
+        ledger.check(
+            "menu garbage: dropped item not clickable",
+            data[2].get("ok") is False
+            and data[2].get("error") == "Unknown menu item.",
+            data[2])
+        ledger.check(
+            "menu garbage: clean item clickable",
+            data[3].get("ok") is True,
+            data[3])
+
+    crash = copy_fixture(plugins, "crash.plugin")
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_menu", "path": str(fixture)},
+                {"op": "enable", "id": "crash_plugin", "path": str(crash)},
+                {"op": "menu-list", "id": "demo_menu"},
+                {"op": "menu-click", "id": "demo_menu", "item": "first"},
+            ]),
+        ],
+        work / "plugin-menu-crash-data")
+    ledger.check("menu crash: four results", len(data) == 4, data)
+    if len(data) == 4:
+        ledger.check(
+            "menu crash: host died on load",
+            data[1].get("ok") is False and data[1].get("pid") == 0,
+            data[1])
+        ledger.check(
+            "menu crash: list empty after crash",
+            data[2].get("items") == [],
+            data[2].get("items"))
+        ledger.check(
+            "menu crash: click rejected after crash",
+            data[3].get("ok") is False,
+            data[3])
+    ledger.check(
+        "menu crash: no host left",
+        host_pids(plugins) == [],
+        host_pids(plugins))
+
+
 def check_missing_python(ledger, cli, work):
     _, plugins, audit = workspace(work, "missing-python")
     valid = copy_fixture(plugins, "valid.plugin")
@@ -2246,6 +2465,7 @@ def main():
         check_state(ledger, cli, work)
         check_config_whitelist(ledger, cli, work)
         check_plugin_settings(ledger, cli, work)
+        check_plugin_menu(ledger, cli, work)
         check_missing_python(ledger, cli, work)
         check_crash(ledger, cli, work)
         check_missing_base(ledger, cli, work)

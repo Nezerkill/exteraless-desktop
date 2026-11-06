@@ -2764,10 +2764,10 @@ index 0000000..37cdfee
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.cpp b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
 new file mode 100644
-index 0000000..954cc96
+index 0000000..24ec57d
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
-@@ -0,0 +1,1612 @@
+@@ -0,0 +1,1903 @@
 +#include "exteraless/plugin_runtime.h"
 +
 +#include "exteraless/config.h"
@@ -2783,6 +2783,7 @@ index 0000000..954cc96
 +#include <QJsonParseError>
 +#include <QProcess>
 +#include <QProcessEnvironment>
++#include <QRegularExpression>
 +#include <QStandardPaths>
 +#include <QStringList>
 +
@@ -2793,11 +2794,16 @@ index 0000000..954cc96
 +
 +constexpr auto kStartTimeout = 5000;
 +constexpr auto kCommandTimeout = 10000;
++constexpr auto kClickTimeout = 2000;
 +constexpr auto kWriteTimeout = 2000;
 +constexpr auto kStopTimeout = 3000;
 +constexpr auto kKillTimeout = 1000;
 +constexpr auto kMaxReadBuffer = 1024 * 1024;
 +constexpr auto kMaxSettingsBytes = 64 * 1024;
++constexpr auto kMaxMenuItems = 64;
++constexpr auto kMaxMenuItemsTotal = 256;
++constexpr auto kMaxMenuTextLength = 128;
++constexpr auto kMaxMenuPriority = 1000;
 +
 +constexpr auto kSandboxUnavailable =
 +	"Plugin sandbox is unavailable.";
@@ -2825,6 +2831,7 @@ index 0000000..954cc96
 +os.closerange(3, _FD_LIMIT)
 +
 +ID_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
++MENU_ITEM_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
 +MAX_BYTES = 2 * 1024 * 1024
 +SUPPORTED = ('.plugin', '.py')
 +
@@ -2856,8 +2863,14 @@ index 0000000..954cc96
 +_IN_AUDIT = [False]
 +_PLUGINS = {}
 +_SETTINGS = {}
++_MENUS = {}
 +MAX_SETTING_KEYS = 256
 +MAX_SETTINGS_BYTES = 64 * 1024
++MENU_CONTEXTS = ('main', 'message', 'chat')
++MAX_MENU_ITEMS = 64
++MAX_MENU_ITEMS_TOTAL = 256
++MAX_MENU_TEXT = 128
++MAX_MENU_PRIORITY = 1000
 +
 +
 +class _InvalidJson:
@@ -2924,6 +2937,22 @@ index 0000000..954cc96
 +        pass
 +
 +
++class MenuItemData:
++    def __init__(self, item_id, text, subtext=None, priority=0):
++        self.item_id = str(item_id)
++        self.text = str(text)
++        self.subtext = None if subtext is None else str(subtext)
++        self.priority = (priority
++                         if isinstance(priority, int)
++                         and not isinstance(priority, bool) else 0)
++
++
++class MenuItemType:
++    MAIN_MENU = 'main'
++    MESSAGE_CONTEXT_MENU = 'message'
++    CHAT_ACTION_MENU = 'chat'
++
++
 +class _NullSink:
 +    encoding = 'utf-8'
 +    errors = 'replace'
@@ -2957,6 +2986,40 @@ index 0000000..954cc96
 +
 +    def on_unload(self):
 +        pass
++
++    def on_menu_item(self, item_id, context):
++        pass
++
++    def add_menu_item(self, item, context='main'):
++        entry = _menu_entry(item, context)
++        if entry is None:
++            return False
++        plugin_id = _CURRENT_ID[0]
++        entries = _MENUS.get(plugin_id)
++        if not isinstance(entries, list):
++            entries = []
++            _MENUS[plugin_id] = entries
++        for index, existing in enumerate(entries):
++            if (existing['item_id'] == entry['item_id']
++                    and existing['context'] == entry['context']):
++                entries[index] = entry
++                return True
++        total = sum(len(items) for items in _MENUS.values())
++        if len(entries) >= MAX_MENU_ITEMS or total >= MAX_MENU_ITEMS_TOTAL:
++            return False
++        entries.append(entry)
++        return True
++
++    def remove_menu_item(self, item_id):
++        plugin_id = _CURRENT_ID[0]
++        entries = _MENUS.get(plugin_id)
++        if not isinstance(entries, list) or not isinstance(item_id, str):
++            return False
++        kept = [item for item in entries if item['item_id'] != item_id]
++        if len(kept) == len(entries):
++            return False
++        _MENUS[plugin_id] = kept
++        return True
 +
 +    def log(self, message):
 +        _host_log(_CURRENT_ID[0], str(message)[:500])
@@ -3310,6 +3373,60 @@ index 0000000..954cc96
 +        _SETTINGS[plugin_id] = previous
 +
 +
++def _menu_text(value):
++    if not isinstance(value, str):
++        return ''
++    text = value.strip()
++    if not text or len(text) > MAX_MENU_TEXT:
++        return ''
++    if any(ord(char) < 32 or ord(char) == 127 for char in text):
++        return ''
++    return text
++
++
++def _menu_entry(item, context):
++    if not isinstance(context, str) or context not in MENU_CONTEXTS:
++        return None
++    item_id = getattr(item, 'item_id', None)
++    if not isinstance(item_id, str) or not MENU_ITEM_RE.match(item_id):
++        return None
++    text = _menu_text(getattr(item, 'text', None))
++    if not text:
++        return None
++    priority = getattr(item, 'priority', 0)
++    priority = (priority if isinstance(priority, int)
++                and not isinstance(priority, bool) else 0)
++    entry = {
++        'item_id': item_id,
++        'text': text,
++        'priority': max(-MAX_MENU_PRIORITY,
++                        min(MAX_MENU_PRIORITY, priority)),
++        'context': context,
++    }
++    subtext = _menu_text(getattr(item, 'subtext', None))
++    if subtext:
++        entry['subtext'] = subtext
++    return entry
++
++
++def _menu_snapshot(plugin_id):
++    entries = _MENUS.get(plugin_id)
++    if not isinstance(entries, list):
++        return []
++    result = []
++    for entry in entries[:MAX_MENU_ITEMS]:
++        clean = {
++            'item_id': entry['item_id'],
++            'text': entry['text'],
++            'priority': entry['priority'],
++            'context': entry['context'],
++        }
++        if entry.get('subtext'):
++            clean['subtext'] = entry['subtext']
++        result.append(clean)
++    return result
++
++
 +def _setting_field(item, name, fallback=None):
 +    if isinstance(item, dict):
 +        return item.get(name, fallback)
@@ -3497,6 +3614,7 @@ index 0000000..954cc96
 +                'settings': _settings_snapshot(plugin_id),
 +                'settings_ui': _settings_rows(
 +                    existing['instance'], plugin_id),
++                'menu': _menu_snapshot(plugin_id),
 +            })
 +        else:
 +            _send({'seq': seq, 'type': 'error',
@@ -3505,6 +3623,7 @@ index 0000000..954cc96
 +
 +    previous_settings = _SETTINGS.get(plugin_id)
 +    _SETTINGS[plugin_id] = _sanitize_settings(message.get('settings'))
++    _MENUS.pop(plugin_id, None)
 +    module_name = 'exteraless_plugin_' + plugin_id
 +    before = set(sys.modules)
 +    _CURRENT_ID[0] = plugin_id
@@ -3570,6 +3689,7 @@ index 0000000..954cc96
 +        'ok': True,
 +        'settings': _settings_snapshot(plugin_id),
 +        'settings_ui': _settings_rows(instance, plugin_id),
++        'menu': _menu_snapshot(plugin_id),
 +    })
 +
 +
@@ -3590,6 +3710,7 @@ index 0000000..954cc96
 +        warning = 'on_unload failed: %s' % error
 +    _purge(record['modules'])
 +    _SETTINGS.pop(plugin_id, None)
++    _MENUS.pop(plugin_id, None)
 +    response = {'seq': seq, 'type': 'unloaded', 'ok': True}
 +    if warning:
 +        response['warning'] = warning
@@ -3609,7 +3730,38 @@ index 0000000..954cc96
 +        _purge(record['modules'])
 +    _PLUGINS.clear()
 +    _SETTINGS.clear()
++    _MENUS.clear()
 +    _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
++
++
++def _menu_click(message):
++    seq = _CURRENT_SEQ[0]
++    plugin_id = message.get('id')
++    record = _PLUGINS.get(plugin_id) if isinstance(plugin_id, str) else None
++    item_id = message.get('item')
++    context = message.get('context')
++    if record is None:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin is not loaded.'})
++        return
++    entries = _MENUS.get(plugin_id)
++    entries = entries if isinstance(entries, list) else []
++    if not isinstance(item_id, str) or not isinstance(context, str) or not any(
++            entry['item_id'] == item_id and entry['context'] == context
++            for entry in entries):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Unknown menu item.'})
++        return
++    handler = getattr(record['instance'], 'on_menu_item', None)
++    _CURRENT_ID[0] = plugin_id
++    try:
++        if callable(handler):
++            handler(item_id, context)
++    except BaseException as error:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Menu action failed: %s' % error})
++        return
++    _send({'seq': seq, 'type': 'clicked', 'ok': True})
 +
 +
 +def _handle(line):
@@ -3631,6 +3783,8 @@ index 0000000..954cc96
 +        _load(message)
 +    elif command == 'unload':
 +        _unload(message)
++    elif command == 'menu':
++        _menu_click(message)
 +    else:
 +        _send({'seq': _CURRENT_SEQ[0], 'type': 'error',
 +               'message': 'Unknown command.'})
@@ -3705,6 +3859,8 @@ index 0000000..954cc96
 +    base.SelectorSetting = SelectorSetting
 +    base.InputSetting = InputSetting
 +    base.CustomSetting = CustomSetting
++    base.MenuItemData = MenuItemData
++    base.MenuItemType = MenuItemType
 +    sys.modules['base_plugin'] = base
 +
 +
@@ -3870,6 +4026,31 @@ index 0000000..954cc96
 +			QJsonDocument(all).toJson(QJsonDocument::Compact)));
 +}
 +
++[[nodiscard]] bool IsMenuContext(const QString &context) {
++	return context == QStringLiteral("main")
++		|| context == QStringLiteral("message")
++		|| context == QStringLiteral("chat");
++}
++
++[[nodiscard]] bool IsMenuText(const QString &text) {
++	if (text.isEmpty() || text.size() > kMaxMenuTextLength) {
++		return false;
++	}
++	for (const auto &ch : text) {
++		const auto code = int(ch.unicode());
++		if (code < 0x20 || code == 0x7F) {
++			return false;
++		}
++	}
++	return true;
++}
++
++[[nodiscard]] bool IsMenuItemId(const QString &itemId) {
++	static const auto expression = QRegularExpression(
++		QStringLiteral("^[A-Za-z][A-Za-z0-9_-]{1,31}$"));
++	return expression.match(itemId).hasMatch();
++}
++
 +} // namespace
 +
 +Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
@@ -3996,6 +4177,10 @@ index 0000000..954cc96
 +	return _settingsUi.value(id);
 +}
 +
++std::vector<MenuRecord> Runtime::menus(const QString &id) const {
++	return _menus.value(id);
++}
++
 +void Runtime::saveSetting(
 +		const QString &id,
 +		const QString &key,
@@ -4052,7 +4237,7 @@ index 0000000..954cc96
 +	};
 +	auto response = QJsonObject();
 +	auto error = QString();
-+	if (!sendRequest(request, &response, &error)) {
++	if (!sendRequest(request, &response, &error, kCommandTimeout)) {
 +		return { false, error };
 +	}
 +	const auto type = response.value(QStringLiteral("type")).toString();
@@ -4073,6 +4258,7 @@ index 0000000..954cc96
 +		}
 +		_settingsUi[id] = response.value(
 +			QStringLiteral("settings_ui")).toArray();
++		parseMenuSnapshot(id, response.value(QStringLiteral("menu")));
 +		_loaded[id] = canonical;
 +		return { true, QString() };
 +	}
@@ -4098,7 +4284,7 @@ index 0000000..954cc96
 +	};
 +	auto response = QJsonObject();
 +	auto error = QString();
-+	if (!sendRequest(request, &response, &error)) {
++	if (!sendRequest(request, &response, &error, kCommandTimeout)) {
 +		return { false, error };
 +	}
 +	const auto type = response.value(QStringLiteral("type")).toString();
@@ -4109,6 +4295,7 @@ index 0000000..954cc96
 +			return { false, error };
 +		}
 +		_loaded.remove(id);
++		_menus.remove(id);
 +		const auto warning = response.value(QStringLiteral("warning")).toString();
 +		if (!warning.isEmpty()) {
 +			writeAuditRecord(
@@ -4125,6 +4312,107 @@ index 0000000..954cc96
 +	}
 +	protocolViolation(&error);
 +	return { false, error };
++}
++
++Result Runtime::click(
++		const QString &id,
++		const QString &item,
++		const QString &context) {
++	if (_clicking) {
++		return { false, QStringLiteral("A menu action is already running.") };
++	}
++	if (!isLoaded(id)) {
++		return { false, QStringLiteral("Plugin is not loaded.") };
++	}
++	const auto found = _menus.constFind(id);
++	if (found == _menus.cend()
++		|| !std::any_of(found->begin(), found->end(), [&](
++				const MenuRecord &record) {
++			return record.itemId == item && record.type == context;
++		})) {
++		return { false, QStringLiteral("Unknown menu item.") };
++	}
++	_clicking = true;
++	auto result = clickMenu(id, item, context);
++	_clicking = false;
++	return result;
++}
++
++Result Runtime::clickMenu(
++		const QString &id,
++		const QString &item,
++		const QString &context) {
++	auto request = QJsonObject{
++		{ QStringLiteral("seq"), ++_seq },
++		{ QStringLiteral("cmd"), QStringLiteral("menu") },
++		{ QStringLiteral("id"), id },
++		{ QStringLiteral("item"), item },
++		{ QStringLiteral("context"), context },
++	};
++	auto response = QJsonObject();
++	auto error = QString();
++	if (!sendRequest(request, &response, &error, kClickTimeout)) {
++		return { false, error };
++	}
++	const auto type = response.value(QStringLiteral("type")).toString();
++	if (type == QStringLiteral("clicked")) {
++		const auto ok = response.value(QStringLiteral("ok"));
++		if (!ok.isBool() || !ok.toBool()) {
++			protocolViolation(&error);
++			return { false, error };
++		}
++		return { true, QString() };
++	}
++	if (type == QStringLiteral("error")) {
++		return { false, response.value(QStringLiteral("message")).toString() };
++	}
++	protocolViolation(&error);
++	return { false, error };
++}
++
++void Runtime::parseMenuSnapshot(
++		const QString &id,
++		const QJsonValue &snapshot) {
++	auto records = std::vector<MenuRecord>();
++	auto total = 0;
++	for (const auto &list : _menus) {
++		total += int(list.size());
++	}
++	const auto array = snapshot.toArray();
++	for (const auto &value : array) {
++		if (records.size() >= kMaxMenuItems
++			|| total >= kMaxMenuItemsTotal) {
++			break;
++		}
++		const auto item = value.toObject();
++		const auto itemId = item.value(QStringLiteral("item_id")).toString();
++		const auto text = item.value(QStringLiteral("text")).toString();
++		const auto context = item.value(QStringLiteral("context")).toString();
++		if (!IsMenuItemId(itemId)
++			|| !IsMenuText(text)
++			|| !IsMenuContext(context)) {
++			continue;
++		}
++		auto record = MenuRecord();
++		record.pluginId = id;
++		record.itemId = itemId;
++		record.text = text;
++		record.type = context;
++		const auto subtext = item.value(QStringLiteral("subtext"));
++		if (subtext.isString() && IsMenuText(subtext.toString())) {
++			record.subtext = subtext.toString();
++		}
++		const auto priority = item.value(QStringLiteral("priority"));
++		if (priority.isDouble()) {
++			record.priority = std::clamp(
++				priority.toInt(),
++				-kMaxMenuPriority,
++				kMaxMenuPriority);
++		}
++		records.push_back(std::move(record));
++		++total;
++	}
++	_menus[id] = std::move(records);
 +}
 +
 +void Runtime::stop() {
@@ -4156,6 +4444,7 @@ index 0000000..954cc96
 +	_loaded.clear();
 +	_settings.clear();
 +	_settingsUi.clear();
++	_menus.clear();
 +	_seq = 0;
 +}
 +
@@ -4226,7 +4515,8 @@ index 0000000..954cc96
 +bool Runtime::sendRequest(
 +		const QJsonObject &request,
 +		QJsonObject *response,
-+		QString *error) {
++		QString *error,
++		int timeout) {
 +	if (!isRunning()) {
 +		*error = QStringLiteral("Plugin host is not running.");
 +		return false;
@@ -4240,7 +4530,7 @@ index 0000000..954cc96
 +	}
 +	_process->waitForBytesWritten(kWriteTimeout);
 +	return readMessage(
-+		kCommandTimeout,
++		timeout,
 +		request.value(QStringLiteral("seq")).toInt(),
 +		false,
 +		response,
@@ -4322,6 +4612,7 @@ index 0000000..954cc96
 +			if (!knownSeq
 +				|| (type != QStringLiteral("loaded")
 +					&& type != QStringLiteral("unloaded")
++					&& type != QStringLiteral("clicked")
 +					&& type != QStringLiteral("error"))) {
 +				protocolViolation(error);
 +				return false;
@@ -4382,10 +4673,10 @@ index 0000000..954cc96
 +} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.h b/Telegram/SourceFiles/exteraless/plugin_runtime.h
 new file mode 100644
-index 0000000..d3ef651
+index 0000000..2137883
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugin_runtime.h
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,112 @@
 +#pragma once
 +
 +#include <QByteArray>
@@ -4395,6 +4686,7 @@ index 0000000..d3ef651
 +#include <QString>
 +
 +#include <memory>
++#include <vector>
 +
 +class QProcess;
 +
@@ -4409,6 +4701,15 @@ index 0000000..d3ef651
 +	bool ok = false;
 +	QString canonicalPath;
 +	QString error;
++};
++
++struct MenuRecord {
++	QString pluginId;
++	QString itemId;
++	QString text;
++	QString subtext;
++	int priority = 0;
++	QString type;
 +};
 +
 +class Runtime final {
@@ -4438,6 +4739,12 @@ index 0000000..d3ef651
 +		const QString &key,
 +		const QJsonValue &value);
 +
++	[[nodiscard]] std::vector<MenuRecord> menus(const QString &id) const;
++	[[nodiscard]] Result click(
++		const QString &id,
++		const QString &item,
++		const QString &context);
++
 +	[[nodiscard]] static PathCheck ValidatePath(
 +		const QString &pluginsDirectory,
 +		const QString &path);
@@ -4446,10 +4753,16 @@ index 0000000..d3ef651
 +	void clearHost();
 +	[[nodiscard]] bool startHost(QString *error);
 +	void protocolViolation(QString *error);
++	void parseMenuSnapshot(const QString &id, const QJsonValue &snapshot);
++	[[nodiscard]] Result clickMenu(
++		const QString &id,
++		const QString &item,
++		const QString &context);
 +	[[nodiscard]] bool sendRequest(
 +		const QJsonObject &request,
 +		QJsonObject *response,
-+		QString *error);
++		QString *error,
++		int timeout);
 +	[[nodiscard]] bool readMessage(
 +		int timeout,
 +		int expectedSeq,
@@ -4467,6 +4780,8 @@ index 0000000..d3ef651
 +	QHash<QString, QString> _loaded;
 +	QHash<QString, QJsonObject> _settings;
 +	QHash<QString, QJsonArray> _settingsUi;
++	QHash<QString, std::vector<MenuRecord>> _menus;
++	bool _clicking = false;
 +	int _seq = 0;
 +	QString _pluginsDirectory;
 +	QString _auditLogPath;
@@ -4476,10 +4791,10 @@ index 0000000..d3ef651
 +} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugins_box.cpp b/Telegram/SourceFiles/exteraless/plugins_box.cpp
 new file mode 100644
-index 0000000..2b5dda8
+index 0000000..7f0e10d
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugins_box.cpp
-@@ -0,0 +1,602 @@
+@@ -0,0 +1,618 @@
 +#include "exteraless/plugins_box.h"
 +
 +#include "exteraless/config.h"
@@ -4575,7 +4890,8 @@ index 0000000..2b5dda8
 +
 +[[nodiscard]] QString DetailsText(
 +		const Plugins::Entry &entry,
-+		const QString &status) {
++		const QString &status,
++		int menuCount) {
 +	auto text = QString();
 +	if (!entry.author.isEmpty()) {
 +		text += entry.author + u"\n"_q;
@@ -4584,6 +4900,7 @@ index 0000000..2b5dda8
 +		+ (entry.permissions.isEmpty()
 +			? u"none"_q
 +			: entry.permissions.join(u", "_q));
++	text += u"\nmenu items: "_q + QString::number(menuCount);
 +	text += u"\nfile: "_q + entry.file;
 +	text += u"\n"_q + status;
 +	return text;
@@ -4593,6 +4910,12 @@ index 0000000..2b5dda8
 +	return runtime.isRunning()
 +		? u"Plugin host: running"_q
 +		: u"Plugin host: stopped"_q;
++}
++
++[[nodiscard]] int MenuItemsCount(
++		const Plugins::Runtime *runtime,
++		const QString &id) {
++	return runtime ? int(runtime->menus(id).size()) : 0;
 +}
 +
 +[[nodiscard]] QString ReadAuditTail(const QString &path, int maxLines) {
@@ -4848,7 +5171,10 @@ index 0000000..2b5dda8
 +		Plugins::Runtime *runtime) {
 +	for (const auto &row : rows) {
 +		row->loaded = runtime && runtime->isLoaded(row->entry.id);
-+		row->details->setText(DetailsText(row->entry, StateText(*row)));
++		row->details->setText(DetailsText(
++			row->entry,
++			StateText(*row),
++			MenuItemsCount(runtime, row->entry.id)));
 +		if (row->settingsLink) {
 +			row->settingsLink->setVisible(
 +				row->enabled.current()
@@ -4964,7 +5290,10 @@ index 0000000..2b5dda8
 +			row->details = layout->add(
 +				object_ptr<Ui::FlatLabel>(
 +					box,
-+					rpl::single(DetailsText(entry, StateText(*row))),
++					rpl::single(DetailsText(
++						entry,
++						StateText(*row),
++						MenuItemsCount(runtime, entry.id))),
 +					st::boxLabel),
 +				st::boxRowPadding);
 +			row->settingsLink = layout->add(
@@ -5021,7 +5350,8 @@ index 0000000..2b5dda8
 +				if (enable) {
 +					rowPtr->details->setText(DetailsText(
 +						rowPtr->entry,
-+						u"Loading..."_q));
++						u"Loading..."_q,
++						MenuItemsCount(runtime, rowPtr->entry.id)));
 +					const auto result = runtime->enable(
 +						rowPtr->entry.id,
 +						path);
@@ -5069,7 +5399,8 @@ index 0000000..2b5dda8
 +				}
 +				row->details->setText(DetailsText(
 +					row->entry,
-+					u"Enabled (not running)"_q));
++					u"Enabled (not running)"_q,
++					MenuItemsCount(runtime, row->entry.id)));
 +				const auto result = runtime->enable(
 +					row->entry.id,
 +					directory + u"/"_q + row->entry.file);
@@ -6261,19 +6592,20 @@ index 28e423b..bf0736c 100644
  	updateInnerVisibleArea();
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-index 3e25a13..8451997 100644
+index 3e25a13..6392fb0 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_context_menu.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/plugin_runtime.h"
 +
  #include "api/api_attached_stickers.h"
  #include "api/api_editing.h"
  #include "api/api_global_privacy.h"
-@@ -70,6 +72,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -70,6 +73,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "ui/boxes/show_or_premium_box.h"
  #include "ui/widgets/fields/input_field.h"
  #include "ui/power_saving.h"
@@ -6281,7 +6613,16 @@ index 3e25a13..8451997 100644
  #include "boxes/delete_messages_box.h"
  #include "boxes/moderate_messages_box.h"
  #include "boxes/report_messages_box.h"
-@@ -376,12 +379,14 @@ void AddPhotoActions(
+@@ -121,6 +125,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include <QtGui/QGuiApplication>
+ #include <QtGui/QClipboard>
+ 
++#include <algorithm>
++
+ namespace HistoryView {
+ namespace {
+ 
+@@ -376,12 +382,14 @@ void AddPhotoActions(
  				&photo->session(),
  				[=] { SavePhotoToFile(photo); }),
  			&st::menuIconSaveImage);
@@ -6302,7 +6643,7 @@ index 3e25a13..8451997 100644
  	}
  	if (photo->hasAttachedStickers()) {
  		const auto controller = list->controller();
-@@ -520,6 +525,11 @@ void AddDocumentActions(
+@@ -520,6 +528,11 @@ void AddDocumentActions(
  				Menu::RateTranscribeCallbackFactory(item)));
  		}
  	}
@@ -6314,7 +6655,7 @@ index 3e25a13..8451997 100644
  	AddSaveDocumentAction(menu, item, document, list);
  	AddCopyFilename(
  		menu,
-@@ -530,6 +540,9 @@ void AddDocumentActions(
+@@ -530,6 +543,9 @@ void AddDocumentActions(
  void AddPostLinkAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request) {
@@ -6324,7 +6665,7 @@ index 3e25a13..8451997 100644
  	const auto item = request.item;
  	if (!item
  		|| !item->hasDirectLink()
-@@ -625,6 +638,9 @@ void AddForwardAction(
+@@ -625,6 +641,9 @@ void AddForwardAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6334,7 +6675,7 @@ index 3e25a13..8451997 100644
  	AddForwardSelectedAction(menu, request, list);
  	AddForwardMessageAction(menu, request, list);
  }
-@@ -827,6 +843,9 @@ bool AddReplyToMessageAction(
+@@ -827,6 +846,9 @@ bool AddReplyToMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6344,7 +6685,7 @@ index 3e25a13..8451997 100644
  	const auto context = list->elementContext();
  	const auto item = request.quote.item
  		? request.quote.item
-@@ -945,6 +964,9 @@ bool AddEditMessageAction(
+@@ -945,6 +967,9 @@ bool AddEditMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6354,7 +6695,7 @@ index 3e25a13..8451997 100644
  	if (!HasEditMessageAction(request, list)) {
  		return false;
  	}
-@@ -1010,6 +1032,9 @@ bool AddPinMessageAction(
+@@ -1010,6 +1035,9 @@ bool AddPinMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6364,7 +6705,7 @@ index 3e25a13..8451997 100644
  	const auto context = list->elementContext();
  	const auto item = request.item;
  	if (!item || !item->isRegular()) {
-@@ -1206,6 +1231,9 @@ void AddDeleteAction(
+@@ -1206,6 +1234,9 @@ void AddDeleteAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6374,7 +6715,7 @@ index 3e25a13..8451997 100644
  	if (!AddDeleteSelectedAction(menu, request, list)) {
  		AddDeleteMessageAction(menu, request, list);
  	}
-@@ -1245,6 +1273,9 @@ void AddReportAction(
+@@ -1245,6 +1276,9 @@ void AddReportAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6384,7 +6725,7 @@ index 3e25a13..8451997 100644
  	const auto item = request.item;
  	if (!request.selectedItems.empty()) {
  		return;
-@@ -1314,6 +1345,9 @@ bool AddSelectMessageAction(
+@@ -1314,6 +1348,9 @@ bool AddSelectMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6394,7 +6735,7 @@ index 3e25a13..8451997 100644
  	const auto item = request.item;
  	if (request.overSelection && !request.selectedItems.empty()) {
  		return false;
-@@ -1402,11 +1436,14 @@ void AddMessageActions(
+@@ -1402,11 +1439,14 @@ void AddMessageActions(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6410,7 +6751,7 @@ index 3e25a13..8451997 100644
  	AddDownloadFilesAction(menu, request, list);
  	AddSaveRichHtmlAction(menu, request, list);
  	AddReportAction(menu, request, list);
-@@ -1422,6 +1459,10 @@ void AddMessageActions(
+@@ -1422,6 +1462,65 @@ void AddMessageActions(
  		AddEphemeralAboutAction(menu, request.item);
  	}
  	AddRescheduleAction(menu, request, list);
@@ -6418,10 +6759,65 @@ index 3e25a13..8451997 100644
 +		menu->addSeparator();
 +		AddDeleteAction(menu, request, list);
 +	}
++}
++
++void AddPluginMenuActions(
++		not_null<Ui::PopupMenu*> menu,
++		not_null<ListWidget*> list) {
++	const auto runtime = Exteraless::Plugins::Runtime::Instance();
++	if (!runtime || !runtime->isRunning()) {
++		return;
++	}
++	auto items = std::vector<Exteraless::Plugins::MenuRecord>();
++	const auto states = Exteraless::Config::Instance().pluginStates();
++	for (const auto &id : states.keys()) {
++		if (!runtime->isLoaded(id)) {
++			continue;
++		}
++		for (auto &record : runtime->menus(id)) {
++			if (record.type == u"message"_q) {
++				items.push_back(std::move(record));
++			}
++		}
++	}
++	if (items.empty()) {
++		return;
++	}
++	std::stable_sort(
++		items.begin(),
++		items.end(),
++		[](const auto &a, const auto &b) {
++			return a.priority > b.priority;
++		});
++	const auto weak = base::make_weak(list.get());
++	for (const auto &record : items) {
++		const auto pluginId = record.pluginId;
++		const auto itemId = record.itemId;
++		menu->addAction(record.text, [=] {
++			const auto strong = weak.get();
++			if (!strong) {
++				return;
++			}
++			const auto hostRuntime
++				= Exteraless::Plugins::Runtime::Instance();
++			if (!hostRuntime || !hostRuntime->isRunning()) {
++				strong->controller()->showToast(
++					u"Plugin host is not running."_q);
++				return;
++			}
++			const auto result = hostRuntime->click(
++				pluginId,
++				itemId,
++				u"message"_q);
++			if (!result.ok) {
++				strong->controller()->showToast(result.error);
++			}
++		}, &st::menuIconInfo);
++	}
  }
  
  void AddCopyLinkAction(
-@@ -1812,7 +1853,8 @@ void FillContextMenuItems(
+@@ -1812,7 +1911,8 @@ void FillContextMenuItems(
  
  	if (request.overSelection
  		&& !list->hasCopyRestrictionForSelected()
@@ -6431,7 +6827,7 @@ index 3e25a13..8451997 100644
  		const auto text = request.selectedItems.empty()
  			? tr::lng_context_copy_selected(tr::now)
  			: tr::lng_context_copy_selected_items(tr::now);
-@@ -1822,7 +1864,8 @@ void FillContextMenuItems(
+@@ -1822,7 +1922,8 @@ void FillContextMenuItems(
  	}
  	if (request.overSelection
  		&& view
@@ -6441,7 +6837,7 @@ index 3e25a13..8451997 100644
  		const auto owner = &view->history()->owner();
  		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
  			if (const auto item = owner->message(itemId)) {
-@@ -1878,7 +1921,8 @@ void FillContextMenuItems(
+@@ -1878,7 +1979,8 @@ void FillContextMenuItems(
  			AddDocumentActions(result, document, view->data(), list);
  		}
  		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
@@ -6451,7 +6847,7 @@ index 3e25a13..8451997 100644
  				const auto asGroup = (request.pointState != PointState::GroupPart);
  				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
-@@ -1905,7 +1949,8 @@ void FillContextMenuItems(
+@@ -1905,7 +2007,8 @@ void FillContextMenuItems(
  				: item->originalText();
  			if ((!item->translation() || !item->history()->translatedTo())
  				&& !translate.text.isEmpty()
@@ -6461,7 +6857,7 @@ index 3e25a13..8451997 100644
  				result->addAction(tr::lng_context_translate(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
  						list->controller()->show(Box(
-@@ -1919,6 +1964,14 @@ void FillContextMenuItems(
+@@ -1919,6 +2022,14 @@ void FillContextMenuItems(
  					}
  				}, &st::menuIconTranslate);
  			}
@@ -6476,7 +6872,15 @@ index 3e25a13..8451997 100644
  		}
  	}
  
-@@ -2367,7 +2420,8 @@ void AddPollActions(
+@@ -1947,6 +2058,7 @@ void FillContextMenuItems(
+ 				list->controller());
+ 		}
+ 	}
++	AddPluginMenuActions(result, list);
+ }
+ 
+ base::unique_qptr<Ui::PopupMenu> FillContextMenu(
+@@ -2367,7 +2479,8 @@ void AddPollActions(
  		for (const auto &answer : poll->answers) {
  			text.append('\n').append(radio).append(answer.text);
  		}
@@ -13558,19 +13962,20 @@ index c49a9d3..f95e1e4 100644
  	// Re-establish the list's Tab-stop on the folder that was focused (if it
  	// survived the rebuild), else on the active one, so a refresh - rename,
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
-index db8dcec..e96f1ac 100644
+index db8dcec..ec672d5 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_main_menu.cpp
-@@ -26,6 +26,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -26,6 +26,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "data/data_session.h"
  #include "data/data_stories.h"
  #include "data/data_user.h"
 +#include "exteraless/config.h"
 +#include "exteraless/ghost_mode.h"
++#include "exteraless/plugin_runtime.h"
  #include "info/info_memento.h"
  #include "info/profile/info_profile_badge.h"
  #include "settings/settings_common.h"
-@@ -41,7 +43,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -41,7 +44,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "mtproto/mtproto_config.h"
  #include "settings/sections/settings_advanced.h"
  #include "settings/sections/settings_calls.h"
@@ -13580,7 +13985,7 @@ index db8dcec..e96f1ac 100644
  #include "storage/localstorage.h"
  #include "storage/storage_account.h"
  #include "support/support_templates.h"
-@@ -65,6 +69,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -65,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "ui/widgets/scroll_area.h"
  #include "ui/widgets/shadow.h"
  #include "ui/wrap/slide_wrap.h"
@@ -13588,16 +13993,17 @@ index db8dcec..e96f1ac 100644
  #include "wallet/wallet_panel.h"
  #include "window/themes/window_theme.h"
  #include "window/window_controller.h"
-@@ -84,6 +89,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -84,6 +90,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include <QtGui/QGuiApplication>
  #include <QtGui/QClipboard>
  
 +#include <array>
++#include <algorithm>
 +
  namespace Window {
  namespace {
  
-@@ -121,11 +128,49 @@ constexpr auto kPlayStatusLimit = 2;
+@@ -121,11 +130,49 @@ constexpr auto kPlayStatusLimit = 2;
  	}) | rpl::flatten_latest();
  }
  
@@ -13648,7 +14054,7 @@ index db8dcec..e96f1ac 100644
  
  	[[nodiscard]] int rightSkip() const {
  		return _rightSkip.current();
-@@ -164,7 +209,8 @@ protected:
+@@ -164,7 +211,8 @@ protected:
  
  MainMenu::ToggleAccountsButton::ToggleAccountsButton(
  	QWidget *parent,
@@ -13658,7 +14064,7 @@ index db8dcec..e96f1ac 100644
  : AbstractButton(parent)
  , _current(current) {
  	rpl::single(rpl::empty) | rpl::then(
-@@ -177,13 +223,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
+@@ -177,13 +225,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
  		}
  	}, lifetime());
  
@@ -13673,7 +14079,7 @@ index db8dcec..e96f1ac 100644
  		return (_toggled != value);
  	}) | rpl::on_next([=](bool value) {
  		_toggled = value;
-@@ -316,7 +356,12 @@ MainMenu::MainMenu(
+@@ -316,7 +358,12 @@ MainMenu::MainMenu(
  	this,
  	_controller->session().user(),
  	st::mainMenuUserpic)
@@ -13687,7 +14093,7 @@ index db8dcec..e96f1ac 100644
  , _setEmojiStatus(this, SetStatusLabel(&controller->session()))
  , _emojiStatusPanel(std::make_unique<Info::Profile::EmojiStatusPanel>())
  , _badge(std::make_unique<Info::Profile::Badge>(
-@@ -597,9 +642,10 @@ void MainMenu::setupUserpicButton() {
+@@ -597,9 +644,10 @@ void MainMenu::setupUserpicButton() {
  }
  
  void MainMenu::toggleAccounts() {
@@ -13701,7 +14107,7 @@ index db8dcec..e96f1ac 100644
  	Core::App().saveSettingsDelayed();
  }
  
-@@ -607,7 +653,10 @@ void MainMenu::setupAccounts() {
+@@ -607,7 +655,10 @@ void MainMenu::setupAccounts() {
  	const auto inner = _accounts->entity();
  
  	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
@@ -13713,7 +14119,7 @@ index db8dcec..e96f1ac 100644
  	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
  
  	std::move(
-@@ -616,7 +665,7 @@ void MainMenu::setupAccounts() {
+@@ -616,7 +667,7 @@ void MainMenu::setupAccounts() {
  		closeLayer();
  	}, inner->lifetime());
  
@@ -13722,7 +14128,7 @@ index db8dcec..e96f1ac 100644
  	_accounts->finishAnimating();
  
  	_shadow->setDuration(0)->toggleOn(_accounts->shownValue());
-@@ -774,6 +823,140 @@ void MainMenu::setupMenu() {
+@@ -774,6 +825,196 @@ void MainMenu::setupMenu() {
  		controller->showSettings();
  	});
  
@@ -13859,6 +14265,62 @@ index db8dcec..e96f1ac 100644
 +		Exteraless::Config::Instance().setMainMenuOrder(
 +			order.join(','));
 +	}, exteralessMenu->lifetime());
++
++	auto pluginItems = std::vector<Exteraless::Plugins::MenuRecord>();
++	if (const auto runtime = Exteraless::Plugins::Runtime::Instance()) {
++		if (runtime->isRunning()) {
++			const auto states = Exteraless::Config::Instance().pluginStates();
++			for (const auto &id : states.keys()) {
++				if (!runtime->isLoaded(id)) {
++					continue;
++				}
++				for (auto &record : runtime->menus(id)) {
++					if (record.type == u"main"_q) {
++						pluginItems.push_back(std::move(record));
++					}
++				}
++			}
++		}
++	}
++	std::stable_sort(
++		pluginItems.begin(),
++		pluginItems.end(),
++		[](const auto &a, const auto &b) {
++			return a.priority > b.priority;
++		});
++	if (!pluginItems.empty()) {
++		const auto pluginMenu = _menu->add(
++			object_ptr<Ui::VerticalLayout>(_menu));
++		const auto weakMenu = base::make_weak(pluginMenu);
++		for (const auto &record : pluginItems) {
++			const auto button = AddButtonWithIcon(
++				pluginMenu,
++				rpl::single(record.text),
++				st::mainMenuButton,
++				{ &st::menuIconInfo });
++			const auto pluginId = record.pluginId;
++			const auto itemId = record.itemId;
++			button->setClickedCallback([=] {
++				if (!weakMenu) {
++					return;
++				}
++				const auto runtime
++					= Exteraless::Plugins::Runtime::Instance();
++				if (!runtime || !runtime->isRunning()) {
++					controller->showToast(
++						u"Plugin host is not running."_q);
++					return;
++				}
++				const auto result = runtime->click(
++					pluginId,
++					itemId,
++					u"main"_q);
++				if (!result.ok) {
++					controller->showToast(result.error);
++				}
++			});
++		}
++	}
 +
  	_nightThemeToggle = addAction(
  		tr::lng_menu_night_mode(),
@@ -32161,6 +32623,45 @@ index 0000000..bb6846f
 +
 +
 +plugin = Observe()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/valid-menu.plugin b/exteraless/tests/plugins/fixtures/runtime/valid-menu.plugin
+new file mode 100644
+index 0000000..788265d
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/valid-menu.plugin
+@@ -0,0 +1,33 @@
++from base_plugin import (
++    BasePlugin,
++    MenuItemData,
++)
++
++__id__ = "demo_menu"
++__name__ = "Demo Menu"
++__description__ = "Publishes two main menu items and logs clicks."
++__author__ = "Exteraless"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Menu(BasePlugin):
++    def on_load(self):
++        self.add_menu_item(MenuItemData(
++            item_id="first",
++            text="First item",
++            priority=5,
++        ))
++        self.add_menu_item(MenuItemData(
++            item_id="second",
++            text="Second item",
++            subtext="Added later",
++            priority=10,
++        ))
++        self.log("menu plugin loaded")
++
++    def on_menu_item(self, item_id, context):
++        self.log("menu clicked %s:%s" % (item_id, context))
++
++
++plugin = Menu()
 diff --git a/exteraless/tests/plugins/fixtures/runtime/valid-second.plugin b/exteraless/tests/plugins/fixtures/runtime/valid-second.plugin
 new file mode 100644
 index 0000000..6c7e5cf
@@ -32278,10 +32779,10 @@ index 0000000..7bdb96b
 +    return "hello"
 diff --git a/exteraless/tests/plugins/plugin_host_cli.cpp b/exteraless/tests/plugins/plugin_host_cli.cpp
 new file mode 100644
-index 0000000..3e3447f
+index 0000000..5bde1a5
 --- /dev/null
 +++ b/exteraless/tests/plugins/plugin_host_cli.cpp
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,435 @@
 +#include "exteraless/config.h"
 +#include "exteraless/exteraless.h"
 +#include "exteraless/plugin_runtime.h"
@@ -32295,10 +32796,12 @@ index 0000000..3e3447f
 +#include <QJsonValue>
 +#include <QStringList>
 +
++#include <algorithm>
 +#include <iostream>
 +
 +namespace {
 +
++using Exteraless::Plugins::MenuRecord;
 +using Exteraless::Plugins::Runtime;
 +
 +void WriteJson(const QJsonObject &result) {
@@ -32434,6 +32937,38 @@ index 0000000..3e3447f
 +	};
 +}
 +
++[[nodiscard]] QJsonObject MenuItemJson(const MenuRecord &record) {
++	auto item = QJsonObject{
++		{ QStringLiteral("plugin"), record.pluginId },
++		{ QStringLiteral("item"), record.itemId },
++		{ QStringLiteral("text"), record.text },
++		{ QStringLiteral("priority"), record.priority },
++		{ QStringLiteral("context"), record.type },
++	};
++	if (!record.subtext.isEmpty()) {
++		item.insert(QStringLiteral("subtext"), record.subtext);
++	}
++	return item;
++}
++
++[[nodiscard]] QJsonArray MenuItems(Runtime *runtime, const QString &id) {
++	if (id.isEmpty()) {
++		return QJsonArray();
++	}
++	auto records = runtime->menus(id);
++	std::stable_sort(
++		records.begin(),
++		records.end(),
++		[](const MenuRecord &a, const MenuRecord &b) {
++			return a.priority > b.priority;
++		});
++	auto items = QJsonArray();
++	for (const auto &record : records) {
++		items.append(MenuItemJson(record));
++	}
++	return items;
++}
++
 +[[nodiscard]] QJsonObject MultiOperation(
 +		Runtime *runtime,
 +		const QJsonObject &operation) {
@@ -32464,6 +32999,27 @@ index 0000000..3e3447f
 +			const auto disabled = runtime->disable(id);
 +			result[QStringLiteral("ok")] = disabled.ok;
 +			result[QStringLiteral("error")] = disabled.error;
++		}
++	} else if (op == QStringLiteral("menu-list")) {
++		if (id.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing plugin id.");
++		} else {
++			result[QStringLiteral("items")] = MenuItems(runtime, id);
++			result[QStringLiteral("ok")] = true;
++			result[QStringLiteral("error")] = QString();
++		}
++	} else if (op == QStringLiteral("menu-click")) {
++		const auto item = operation.value(QStringLiteral("item")).toString();
++		const auto context = operation.value(
++			QStringLiteral("context")).toString(QStringLiteral("main"));
++		if (id.isEmpty() || item.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing plugin id or menu item.");
++		} else {
++			const auto clicked = runtime->click(id, item, context);
++			result[QStringLiteral("ok")] = clicked.ok;
++			result[QStringLiteral("error")] = clicked.error;
 +		}
 +	} else if (op == QStringLiteral("stop")) {
 +		runtime->stop();
@@ -32581,6 +33137,35 @@ index 0000000..3e3447f
 +		WriteJson(QJsonObject{
 +			{ QStringLiteral("ok"), disabled.ok },
 +			{ QStringLiteral("error"), disabled.error },
++			{ QStringLiteral("pid"), double(runtime->hostPid()) },
++			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("menu-list")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		const auto guard = RuntimeGuard();
++		WriteJson(QJsonObject{
++			{ QStringLiteral("items"), MenuItems(runtime, rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("menu-click")) {
++		if (rest.size() != 2 && rest.size() != 3) {
++			return Usage();
++		}
++		const auto context = (rest.size() == 3)
++			? rest[2]
++			: QStringLiteral("main");
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		const auto guard = RuntimeGuard();
++		const auto clicked = runtime->click(rest[0], rest[1], context);
++		WriteJson(QJsonObject{
++			{ QStringLiteral("ok"), clicked.ok },
++			{ QStringLiteral("error"), clicked.error },
 +			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 +			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
 +		});
@@ -32955,10 +33540,10 @@ index 0000000..159435e
 +    sys.exit(main())
 diff --git a/exteraless/tests/plugins/run_host_checks.py b/exteraless/tests/plugins/run_host_checks.py
 new file mode 100644
-index 0000000..33ab4b7
+index 0000000..1e613ea
 --- /dev/null
 +++ b/exteraless/tests/plugins/run_host_checks.py
-@@ -0,0 +1,2269 @@
+@@ -0,0 +1,2489 @@
 +#!/usr/bin/env python3
 +"""Backend regression checks for the Exteraless Python plugin host."""
 +
@@ -35103,6 +35688,225 @@ index 0000000..33ab4b7
 +        data.get("settings"))
 +
 +
++GARBAGE_MENU_PLUGIN = r'''
++from base_plugin import BasePlugin, MenuItemData
++
++__id__ = "menu_garbage"
++__name__ = "Menu Garbage"
++__version__ = "1.0.0"
++__permissions__ = ["ui"]
++
++
++class Garbage(BasePlugin):
++    def on_load(self):
++        self.add_menu_item(MenuItemData(
++            item_id="bad_text", text="Bell\x07text"))
++        self.add_menu_item(MenuItemData(
++            item_id="long_text", text="x" * 129))
++        self.add_menu_item(MenuItemData(
++            item_id="1bad", text="Bad id"))
++        self.add_menu_item(MenuItemData(
++            item_id="bad_ctx", text="Bad context"), context="bogus")
++        self.add_menu_item(MenuItemData(
++            item_id="kept",
++            text="  Kept item  ",
++            subtext="\x07bell",
++            priority=True))
++
++
++plugin = Garbage()
++'''
++
++
++def check_plugin_menu(ledger, cli, work):
++    _, plugins, audit = workspace(work, "plugin-menu")
++    fixture = copy_fixture(plugins, "valid-menu.plugin")
++    data_home = work / "plugin-menu-data"
++    expected = [
++        {
++            "plugin": "demo_menu",
++            "item": "second",
++            "text": "Second item",
++            "subtext": "Added later",
++            "priority": 10,
++            "context": "main",
++        },
++        {
++            "plugin": "demo_menu",
++            "item": "first",
++            "text": "First item",
++            "priority": 5,
++            "context": "main",
++        },
++    ]
++
++    data = run_cli(
++        cli, plugins, audit, ["menu-list", "demo_menu"], data_home)
++    ledger.check(
++        "menu list: empty before enable",
++        data.get("items") == [],
++        data.get("items"))
++    data = run_cli(
++        cli, plugins, audit,
++        ["menu-click", "demo_menu", "first"], data_home)
++    ledger.check(
++        "menu click: not loaded rejected",
++        data.get("ok") is False
++        and data.get("error") == "Plugin is not loaded.",
++        data)
++
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_menu", "path": str(fixture)},
++                {"op": "menu-list", "id": "demo_menu"},
++                {"op": "menu-click", "id": "demo_menu", "item": "second"},
++                {"op": "menu-click", "id": "demo_menu", "item": "first"},
++                {
++                    "op": "menu-click",
++                    "id": "demo_menu",
++                    "item": "first",
++                    "context": "message",
++                },
++                {
++                    "op": "menu-click",
++                    "id": "demo_menu",
++                    "item": "missing",
++                },
++                {"op": "disable", "id": "demo_menu"},
++                {"op": "menu-click", "id": "demo_menu", "item": "first"},
++                {"op": "menu-list", "id": "demo_menu"},
++            ]),
++        ],
++        data_home)
++    ledger.check("menu: nine results", len(data) == 9, data)
++    if len(data) != 9:
++        return
++    ledger.check(
++        "menu: plugin loaded",
++        data[0].get("ok") is True and data[0].get("loaded") is True,
++        data[0])
++    ledger.check(
++        "menu list: priority order after enable",
++        data[1].get("items") == expected,
++        data[1].get("items"))
++    ledger.check(
++        "menu click: top item ok",
++        data[2].get("ok") is True and data[2].get("error") == "",
++        data[2])
++    ledger.check(
++        "menu click: bottom item ok",
++        data[3].get("ok") is True and data[3].get("error") == "",
++        data[3])
++    ledger.check(
++        "menu click: foreign context rejected",
++        data[4].get("ok") is False
++        and data[4].get("error") == "Unknown menu item.",
++        data[4])
++    ledger.check(
++        "menu click: unknown item rejected",
++        data[5].get("ok") is False
++        and data[5].get("error") == "Unknown menu item.",
++        data[5])
++    ledger.check(
++        "menu: plugin disabled",
++        data[6].get("ok") is True and data[6].get("loaded") is False,
++        data[6])
++    ledger.check(
++        "menu click: after unload rejected",
++        data[7].get("ok") is False
++        and data[7].get("error") == "Plugin is not loaded.",
++        data[7])
++    ledger.check(
++        "menu list: empty after unload",
++        data[8].get("items") == [],
++        data[8].get("items"))
++    records = audit_records(audit)
++    ledger.check(
++        "menu click: audit second",
++        has_log(records, "demo_menu", "menu clicked second:main"),
++        records)
++    ledger.check(
++        "menu click: audit first",
++        has_log(records, "demo_menu", "menu clicked first:main"),
++        records)
++
++    garbage = write_plugin(plugins, "menu-garbage.plugin", GARBAGE_MENU_PLUGIN)
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "menu_garbage", "path": str(garbage)},
++                {"op": "menu-list", "id": "menu_garbage"},
++                {"op": "menu-click", "id": "menu_garbage", "item": "bad_text"},
++                {"op": "menu-click", "id": "menu_garbage", "item": "kept"},
++            ]),
++        ],
++        data_home)
++    ledger.check("menu garbage: four results", len(data) == 4, data)
++    if len(data) == 4:
++        ledger.check(
++            "menu garbage: loaded",
++            data[0].get("ok") is True,
++            data[0])
++        ledger.check(
++            "menu garbage: only clean item kept",
++            data[1].get("items") == [
++                {
++                    "plugin": "menu_garbage",
++                    "item": "kept",
++                    "text": "Kept item",
++                    "priority": 0,
++                    "context": "main",
++                },
++            ],
++            data[1].get("items"))
++        ledger.check(
++            "menu garbage: dropped item not clickable",
++            data[2].get("ok") is False
++            and data[2].get("error") == "Unknown menu item.",
++            data[2])
++        ledger.check(
++            "menu garbage: clean item clickable",
++            data[3].get("ok") is True,
++            data[3])
++
++    crash = copy_fixture(plugins, "crash.plugin")
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_menu", "path": str(fixture)},
++                {"op": "enable", "id": "crash_plugin", "path": str(crash)},
++                {"op": "menu-list", "id": "demo_menu"},
++                {"op": "menu-click", "id": "demo_menu", "item": "first"},
++            ]),
++        ],
++        work / "plugin-menu-crash-data")
++    ledger.check("menu crash: four results", len(data) == 4, data)
++    if len(data) == 4:
++        ledger.check(
++            "menu crash: host died on load",
++            data[1].get("ok") is False and data[1].get("pid") == 0,
++            data[1])
++        ledger.check(
++            "menu crash: list empty after crash",
++            data[2].get("items") == [],
++            data[2].get("items"))
++        ledger.check(
++            "menu crash: click rejected after crash",
++            data[3].get("ok") is False,
++            data[3])
++    ledger.check(
++        "menu crash: no host left",
++        host_pids(plugins) == [],
++        host_pids(plugins))
++
++
 +def check_missing_python(ledger, cli, work):
 +    _, plugins, audit = workspace(work, "missing-python")
 +    valid = copy_fixture(plugins, "valid.plugin")
@@ -35207,6 +36011,7 @@ index 0000000..33ab4b7
 +        check_state(ledger, cli, work)
 +        check_config_whitelist(ledger, cli, work)
 +        check_plugin_settings(ledger, cli, work)
++        check_plugin_menu(ledger, cli, work)
 +        check_missing_python(ledger, cli, work)
 +        check_crash(ledger, cli, work)
 +        check_missing_base(ledger, cli, work)

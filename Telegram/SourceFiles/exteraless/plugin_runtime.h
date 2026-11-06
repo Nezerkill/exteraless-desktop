@@ -7,6 +7,7 @@
 #include <QString>
 
 #include <memory>
+#include <vector>
 
 class QProcess;
 
@@ -21,6 +22,15 @@ struct PathCheck {
 	bool ok = false;
 	QString canonicalPath;
 	QString error;
+};
+
+struct MenuRecord {
+	QString pluginId;
+	QString itemId;
+	QString text;
+	QString subtext;
+	int priority = 0;
+	QString type;
 };
 
 class Runtime final {
@@ -50,6 +60,12 @@ public:
 		const QString &key,
 		const QJsonValue &value);
 
+	[[nodiscard]] std::vector<MenuRecord> menus(const QString &id) const;
+	[[nodiscard]] Result click(
+		const QString &id,
+		const QString &item,
+		const QString &context);
+
 	[[nodiscard]] static PathCheck ValidatePath(
 		const QString &pluginsDirectory,
 		const QString &path);
@@ -58,10 +74,16 @@ private:
 	void clearHost();
 	[[nodiscard]] bool startHost(QString *error);
 	void protocolViolation(QString *error);
+	void parseMenuSnapshot(const QString &id, const QJsonValue &snapshot);
+	[[nodiscard]] Result clickMenu(
+		const QString &id,
+		const QString &item,
+		const QString &context);
 	[[nodiscard]] bool sendRequest(
 		const QJsonObject &request,
 		QJsonObject *response,
-		QString *error);
+		QString *error,
+		int timeout);
 	[[nodiscard]] bool readMessage(
 		int timeout,
 		int expectedSeq,
@@ -79,6 +101,8 @@ private:
 	QHash<QString, QString> _loaded;
 	QHash<QString, QJsonObject> _settings;
 	QHash<QString, QJsonArray> _settingsUi;
+	QHash<QString, std::vector<MenuRecord>> _menus;
+	bool _clicking = false;
 	int _seq = 0;
 	QString _pluginsDirectory;
 	QString _auditLogPath;

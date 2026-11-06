@@ -116,6 +116,20 @@
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 103 backup);
   плагины без изменений — 32 и 213 проверок.
+- Плагины, этап 3b — меню плагина (NB-30): `MenuItemType` `main`/`message`/
+  `chat` (PROFILE не перенесён), `add_menu_item`/`remove_menu_item`, снимок
+  `menu` в ответе `loaded`, `cmd: menu` → `clicked`/`error`; валидация — id
+  по `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, текст 1..128 без управляющих, subtext
+  ≤ 128, priority ±1000, ≤ 64 на плагин и ≤ 256 всего; клик — таймаут 2 с,
+  re-entrancy-гард, host сам не стартует. UI: отдельный `VerticalLayout` в
+  главном меню вне reorder, пункты в конце контекстного меню сообщения,
+  счётчик `menu items: N` в боксе; CLI `menu-list`/`menu-click`, фикстура
+  `valid-menu.plugin`; `check_plugin_menu` — 24 проверки, host-раннер 252
+  (228 → 252), chats 943 и плагины-сканер 32 без изменений; `.extera` —
+  138 ключей (не тронут); `kKeysCount` не менялся; sha256 патча `e32d103e…`,
+  `nix flake check` PASS. Ограничения: синхронный клик на UI-потоке (~2 с),
+  снимок только при `load`, контекст `chat` без UI, Xvfb-смоук меню не
+  выполнялся (только CLI + IPC).
 - Плагины, этап 3a — настройки плагинов (NB-79.3a): `OEPluginSettings` —
   JSON `id → {key: value}` с алиасом `pluginSettings`; лимиты: id по
   `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, ключ ≤ 64, ≤ 128 ключей, ≤ 64 KiB,
@@ -128,8 +142,8 @@
   host-раннер 228 (213 → 228), chats 943 и плагины-сканер 32 без
   изменений; `.extera` — 138 ключей (не тронут); `kKeysCount` 11232
   (`kTagsCount` 185) — lang не менялся; sha256 патча `ab0d18e9…`,
-  `nix flake check` PASS. Не сделано: меню (этап 3b = NB-30), intents и
-  trust-уровни (этап 3c), пикер alwaysAsk (= NB-55). Ограничения: правки
+  `nix flake check` PASS. Не сделано: intents и trust-уровни (этап 3c),
+  пикер alwaysAsk (= NB-55). Ограничения: правки
   бокса видны при следующем enable плагина; Xvfb-смоук не выполнялся.
 - IPv6 и DNS over HTTPS (NB-77): `OENetworkUseIPv6` (bool, default `true` вне
   Windows), `OENetworkDnsType` (int `0..1`, default `0`: `0` — built-in DoH,

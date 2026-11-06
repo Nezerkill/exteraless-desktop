@@ -2,6 +2,25 @@
 
 ## 2026-11-07
 
+- Плагины, этап 3b — меню плагина (NB-30): плагин публикует пункты через
+  `add_menu_item(MenuItemData(...), context)` и `MenuItemType` —
+  `main`/`message`/`chat` (PROFILE не перенесён), удаляет через
+  `remove_menu_item`; host отдаёт снимок `menu` в ответе `loaded`, а
+  `cmd: menu` отвечает `clicked` или `error`. C++ перепроверяет снимок: id по
+  `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, текст 1..128 символов без управляющих,
+  subtext ≤ 128, priority клампится в ±1000, ≤ 64 пунктов на плагин и
+  ≤ 256 всего. Клик идёт с таймаутом 2 с и re-entrancy-гардом, host сам не
+  поднимает — без него тост «Plugin host is not running.». В главном меню
+  пункты живут в отдельном `VerticalLayout` вне reorder, в контекстном меню
+  сообщения стоят в конце, в боксе плагинов — строка `menu items: N`.
+  CLI `menu-list`/`menu-click`, фикстура `valid-menu.plugin`,
+  `check_plugin_menu` — 24 проверки, host-раннер 252 (= 228 + 24), chats 943
+  и плагины-сканер 32 — без изменений; `.extera` — 138 ключей (не тронут);
+  `kKeysCount` не менялся — новых lang-ключей нет; sha256 патча
+  `e32d103e…`, `nix flake check` PASS. Ограничения: клик синхронный на
+  UI-потоке (~2 с), снимок только при `load` (пункт, добавленный позже, не
+  виден), контекст `chat` принимается host'ом, но UI его пока не показывает;
+  Xvfb-смоук меню не выполнялся — только CLI и IPC.
 - Плагины, этап 3a — настройки плагинов (NB-79.3a): `OEPluginSettings` —
   JSON-объект `id → {key: value}` в `tdata/exteraless.json`, алиас
   `pluginSettings`. Санитайзер принимает id по
@@ -21,8 +40,7 @@
   `check_plugin_settings` — 15 проверок, host-раннер 228 (= 213 + 15),
   chats 943 и плагины-сканер 32 — без изменений; `.extera` — 138 ключей
   (не тронут); `kKeysCount` 11232 (`kTagsCount` 185) — lang не менялся;
-  sha256 патча `ab0d18e9…`, `nix flake check` PASS. Не сделано: меню
-  плагина (этап 3b = NB-30), intents и trust-уровни (этап 3c), пикер
+  sha256 патча `ab0d18e9…`, `nix flake check` PASS. Не сделано: intents и trust-уровни (этап 3c), пикер
   alwaysAsk (= NB-55). Ограничения: бокс пишет значения, но плагин видит их
   только при следующем enable; Xvfb-смоук не выполнялся; предсуществующее
   `-Wunused-result` в `plugins_box.cpp` — не из этой задачи.

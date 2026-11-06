@@ -13,6 +13,7 @@
 #include <QJsonParseError>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStringList>
 
@@ -23,11 +24,16 @@ namespace {
 
 constexpr auto kStartTimeout = 5000;
 constexpr auto kCommandTimeout = 10000;
+constexpr auto kClickTimeout = 2000;
 constexpr auto kWriteTimeout = 2000;
 constexpr auto kStopTimeout = 3000;
 constexpr auto kKillTimeout = 1000;
 constexpr auto kMaxReadBuffer = 1024 * 1024;
 constexpr auto kMaxSettingsBytes = 64 * 1024;
+constexpr auto kMaxMenuItems = 64;
+constexpr auto kMaxMenuItemsTotal = 256;
+constexpr auto kMaxMenuTextLength = 128;
+constexpr auto kMaxMenuPriority = 1000;
 
 constexpr auto kSandboxUnavailable =
 	"Plugin sandbox is unavailable.";
@@ -55,6 +61,7 @@ except (OSError, ValueError):
 os.closerange(3, _FD_LIMIT)
 
 ID_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
+MENU_ITEM_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_-]{1,31}$')
 MAX_BYTES = 2 * 1024 * 1024
 SUPPORTED = ('.plugin', '.py')
 
@@ -86,8 +93,14 @@ _LOAD_CODE = [None]
 _IN_AUDIT = [False]
 _PLUGINS = {}
 _SETTINGS = {}
+_MENUS = {}
 MAX_SETTING_KEYS = 256
 MAX_SETTINGS_BYTES = 64 * 1024
+MENU_CONTEXTS = ('main', 'message', 'chat')
+MAX_MENU_ITEMS = 64
+MAX_MENU_ITEMS_TOTAL = 256
+MAX_MENU_TEXT = 128
+MAX_MENU_PRIORITY = 1000
 
 
 class _InvalidJson:
@@ -154,6 +167,22 @@ class CustomSetting:
         pass
 
 
+class MenuItemData:
+    def __init__(self, item_id, text, subtext=None, priority=0):
+        self.item_id = str(item_id)
+        self.text = str(text)
+        self.subtext = None if subtext is None else str(subtext)
+        self.priority = (priority
+                         if isinstance(priority, int)
+                         and not isinstance(priority, bool) else 0)
+
+
+class MenuItemType:
+    MAIN_MENU = 'main'
+    MESSAGE_CONTEXT_MENU = 'message'
+    CHAT_ACTION_MENU = 'chat'
+
+
 class _NullSink:
     encoding = 'utf-8'
     errors = 'replace'
@@ -187,6 +216,40 @@ class BasePlugin:
 
     def on_unload(self):
         pass
+
+    def on_menu_item(self, item_id, context):
+        pass
+
+    def add_menu_item(self, item, context='main'):
+        entry = _menu_entry(item, context)
+        if entry is None:
+            return False
+        plugin_id = _CURRENT_ID[0]
+        entries = _MENUS.get(plugin_id)
+        if not isinstance(entries, list):
+            entries = []
+            _MENUS[plugin_id] = entries
+        for index, existing in enumerate(entries):
+            if (existing['item_id'] == entry['item_id']
+                    and existing['context'] == entry['context']):
+                entries[index] = entry
+                return True
+        total = sum(len(items) for items in _MENUS.values())
+        if len(entries) >= MAX_MENU_ITEMS or total >= MAX_MENU_ITEMS_TOTAL:
+            return False
+        entries.append(entry)
+        return True
+
+    def remove_menu_item(self, item_id):
+        plugin_id = _CURRENT_ID[0]
+        entries = _MENUS.get(plugin_id)
+        if not isinstance(entries, list) or not isinstance(item_id, str):
+            return False
+        kept = [item for item in entries if item['item_id'] != item_id]
+        if len(kept) == len(entries):
+            return False
+        _MENUS[plugin_id] = kept
+        return True
 
     def log(self, message):
         _host_log(_CURRENT_ID[0], str(message)[:500])
@@ -540,6 +603,60 @@ def _restore_settings(plugin_id, previous):
         _SETTINGS[plugin_id] = previous
 
 
+def _menu_text(value):
+    if not isinstance(value, str):
+        return ''
+    text = value.strip()
+    if not text or len(text) > MAX_MENU_TEXT:
+        return ''
+    if any(ord(char) < 32 or ord(char) == 127 for char in text):
+        return ''
+    return text
+
+
+def _menu_entry(item, context):
+    if not isinstance(context, str) or context not in MENU_CONTEXTS:
+        return None
+    item_id = getattr(item, 'item_id', None)
+    if not isinstance(item_id, str) or not MENU_ITEM_RE.match(item_id):
+        return None
+    text = _menu_text(getattr(item, 'text', None))
+    if not text:
+        return None
+    priority = getattr(item, 'priority', 0)
+    priority = (priority if isinstance(priority, int)
+                and not isinstance(priority, bool) else 0)
+    entry = {
+        'item_id': item_id,
+        'text': text,
+        'priority': max(-MAX_MENU_PRIORITY,
+                        min(MAX_MENU_PRIORITY, priority)),
+        'context': context,
+    }
+    subtext = _menu_text(getattr(item, 'subtext', None))
+    if subtext:
+        entry['subtext'] = subtext
+    return entry
+
+
+def _menu_snapshot(plugin_id):
+    entries = _MENUS.get(plugin_id)
+    if not isinstance(entries, list):
+        return []
+    result = []
+    for entry in entries[:MAX_MENU_ITEMS]:
+        clean = {
+            'item_id': entry['item_id'],
+            'text': entry['text'],
+            'priority': entry['priority'],
+            'context': entry['context'],
+        }
+        if entry.get('subtext'):
+            clean['subtext'] = entry['subtext']
+        result.append(clean)
+    return result
+
+
 def _setting_field(item, name, fallback=None):
     if isinstance(item, dict):
         return item.get(name, fallback)
@@ -727,6 +844,7 @@ def _load(message):
                 'settings': _settings_snapshot(plugin_id),
                 'settings_ui': _settings_rows(
                     existing['instance'], plugin_id),
+                'menu': _menu_snapshot(plugin_id),
             })
         else:
             _send({'seq': seq, 'type': 'error',
@@ -735,6 +853,7 @@ def _load(message):
 
     previous_settings = _SETTINGS.get(plugin_id)
     _SETTINGS[plugin_id] = _sanitize_settings(message.get('settings'))
+    _MENUS.pop(plugin_id, None)
     module_name = 'exteraless_plugin_' + plugin_id
     before = set(sys.modules)
     _CURRENT_ID[0] = plugin_id
@@ -800,6 +919,7 @@ def _load(message):
         'ok': True,
         'settings': _settings_snapshot(plugin_id),
         'settings_ui': _settings_rows(instance, plugin_id),
+        'menu': _menu_snapshot(plugin_id),
     })
 
 
@@ -820,6 +940,7 @@ def _unload(message):
         warning = 'on_unload failed: %s' % error
     _purge(record['modules'])
     _SETTINGS.pop(plugin_id, None)
+    _MENUS.pop(plugin_id, None)
     response = {'seq': seq, 'type': 'unloaded', 'ok': True}
     if warning:
         response['warning'] = warning
@@ -839,7 +960,38 @@ def _shutdown():
         _purge(record['modules'])
     _PLUGINS.clear()
     _SETTINGS.clear()
+    _MENUS.clear()
     _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
+
+
+def _menu_click(message):
+    seq = _CURRENT_SEQ[0]
+    plugin_id = message.get('id')
+    record = _PLUGINS.get(plugin_id) if isinstance(plugin_id, str) else None
+    item_id = message.get('item')
+    context = message.get('context')
+    if record is None:
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Plugin is not loaded.'})
+        return
+    entries = _MENUS.get(plugin_id)
+    entries = entries if isinstance(entries, list) else []
+    if not isinstance(item_id, str) or not isinstance(context, str) or not any(
+            entry['item_id'] == item_id and entry['context'] == context
+            for entry in entries):
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Unknown menu item.'})
+        return
+    handler = getattr(record['instance'], 'on_menu_item', None)
+    _CURRENT_ID[0] = plugin_id
+    try:
+        if callable(handler):
+            handler(item_id, context)
+    except BaseException as error:
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Menu action failed: %s' % error})
+        return
+    _send({'seq': seq, 'type': 'clicked', 'ok': True})
 
 
 def _handle(line):
@@ -861,6 +1013,8 @@ def _handle(line):
         _load(message)
     elif command == 'unload':
         _unload(message)
+    elif command == 'menu':
+        _menu_click(message)
     else:
         _send({'seq': _CURRENT_SEQ[0], 'type': 'error',
                'message': 'Unknown command.'})
@@ -935,6 +1089,8 @@ def _install():
     base.SelectorSetting = SelectorSetting
     base.InputSetting = InputSetting
     base.CustomSetting = CustomSetting
+    base.MenuItemData = MenuItemData
+    base.MenuItemType = MenuItemType
     sys.modules['base_plugin'] = base
 
 
@@ -1100,6 +1256,31 @@ void PersistSettings(const QString &id, const QJsonObject &settings) {
 			QJsonDocument(all).toJson(QJsonDocument::Compact)));
 }
 
+[[nodiscard]] bool IsMenuContext(const QString &context) {
+	return context == QStringLiteral("main")
+		|| context == QStringLiteral("message")
+		|| context == QStringLiteral("chat");
+}
+
+[[nodiscard]] bool IsMenuText(const QString &text) {
+	if (text.isEmpty() || text.size() > kMaxMenuTextLength) {
+		return false;
+	}
+	for (const auto &ch : text) {
+		const auto code = int(ch.unicode());
+		if (code < 0x20 || code == 0x7F) {
+			return false;
+		}
+	}
+	return true;
+}
+
+[[nodiscard]] bool IsMenuItemId(const QString &itemId) {
+	static const auto expression = QRegularExpression(
+		QStringLiteral("^[A-Za-z][A-Za-z0-9_-]{1,31}$"));
+	return expression.match(itemId).hasMatch();
+}
+
 } // namespace
 
 Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
@@ -1226,6 +1407,10 @@ QJsonArray Runtime::settingsUi(const QString &id) const {
 	return _settingsUi.value(id);
 }
 
+std::vector<MenuRecord> Runtime::menus(const QString &id) const {
+	return _menus.value(id);
+}
+
 void Runtime::saveSetting(
 		const QString &id,
 		const QString &key,
@@ -1282,7 +1467,7 @@ Result Runtime::enable(const QString &id, const QString &path) {
 	};
 	auto response = QJsonObject();
 	auto error = QString();
-	if (!sendRequest(request, &response, &error)) {
+	if (!sendRequest(request, &response, &error, kCommandTimeout)) {
 		return { false, error };
 	}
 	const auto type = response.value(QStringLiteral("type")).toString();
@@ -1303,6 +1488,7 @@ Result Runtime::enable(const QString &id, const QString &path) {
 		}
 		_settingsUi[id] = response.value(
 			QStringLiteral("settings_ui")).toArray();
+		parseMenuSnapshot(id, response.value(QStringLiteral("menu")));
 		_loaded[id] = canonical;
 		return { true, QString() };
 	}
@@ -1328,7 +1514,7 @@ Result Runtime::disable(const QString &id) {
 	};
 	auto response = QJsonObject();
 	auto error = QString();
-	if (!sendRequest(request, &response, &error)) {
+	if (!sendRequest(request, &response, &error, kCommandTimeout)) {
 		return { false, error };
 	}
 	const auto type = response.value(QStringLiteral("type")).toString();
@@ -1339,6 +1525,7 @@ Result Runtime::disable(const QString &id) {
 			return { false, error };
 		}
 		_loaded.remove(id);
+		_menus.remove(id);
 		const auto warning = response.value(QStringLiteral("warning")).toString();
 		if (!warning.isEmpty()) {
 			writeAuditRecord(
@@ -1355,6 +1542,107 @@ Result Runtime::disable(const QString &id) {
 	}
 	protocolViolation(&error);
 	return { false, error };
+}
+
+Result Runtime::click(
+		const QString &id,
+		const QString &item,
+		const QString &context) {
+	if (_clicking) {
+		return { false, QStringLiteral("A menu action is already running.") };
+	}
+	if (!isLoaded(id)) {
+		return { false, QStringLiteral("Plugin is not loaded.") };
+	}
+	const auto found = _menus.constFind(id);
+	if (found == _menus.cend()
+		|| !std::any_of(found->begin(), found->end(), [&](
+				const MenuRecord &record) {
+			return record.itemId == item && record.type == context;
+		})) {
+		return { false, QStringLiteral("Unknown menu item.") };
+	}
+	_clicking = true;
+	auto result = clickMenu(id, item, context);
+	_clicking = false;
+	return result;
+}
+
+Result Runtime::clickMenu(
+		const QString &id,
+		const QString &item,
+		const QString &context) {
+	auto request = QJsonObject{
+		{ QStringLiteral("seq"), ++_seq },
+		{ QStringLiteral("cmd"), QStringLiteral("menu") },
+		{ QStringLiteral("id"), id },
+		{ QStringLiteral("item"), item },
+		{ QStringLiteral("context"), context },
+	};
+	auto response = QJsonObject();
+	auto error = QString();
+	if (!sendRequest(request, &response, &error, kClickTimeout)) {
+		return { false, error };
+	}
+	const auto type = response.value(QStringLiteral("type")).toString();
+	if (type == QStringLiteral("clicked")) {
+		const auto ok = response.value(QStringLiteral("ok"));
+		if (!ok.isBool() || !ok.toBool()) {
+			protocolViolation(&error);
+			return { false, error };
+		}
+		return { true, QString() };
+	}
+	if (type == QStringLiteral("error")) {
+		return { false, response.value(QStringLiteral("message")).toString() };
+	}
+	protocolViolation(&error);
+	return { false, error };
+}
+
+void Runtime::parseMenuSnapshot(
+		const QString &id,
+		const QJsonValue &snapshot) {
+	auto records = std::vector<MenuRecord>();
+	auto total = 0;
+	for (const auto &list : _menus) {
+		total += int(list.size());
+	}
+	const auto array = snapshot.toArray();
+	for (const auto &value : array) {
+		if (records.size() >= kMaxMenuItems
+			|| total >= kMaxMenuItemsTotal) {
+			break;
+		}
+		const auto item = value.toObject();
+		const auto itemId = item.value(QStringLiteral("item_id")).toString();
+		const auto text = item.value(QStringLiteral("text")).toString();
+		const auto context = item.value(QStringLiteral("context")).toString();
+		if (!IsMenuItemId(itemId)
+			|| !IsMenuText(text)
+			|| !IsMenuContext(context)) {
+			continue;
+		}
+		auto record = MenuRecord();
+		record.pluginId = id;
+		record.itemId = itemId;
+		record.text = text;
+		record.type = context;
+		const auto subtext = item.value(QStringLiteral("subtext"));
+		if (subtext.isString() && IsMenuText(subtext.toString())) {
+			record.subtext = subtext.toString();
+		}
+		const auto priority = item.value(QStringLiteral("priority"));
+		if (priority.isDouble()) {
+			record.priority = std::clamp(
+				priority.toInt(),
+				-kMaxMenuPriority,
+				kMaxMenuPriority);
+		}
+		records.push_back(std::move(record));
+		++total;
+	}
+	_menus[id] = std::move(records);
 }
 
 void Runtime::stop() {
@@ -1386,6 +1674,7 @@ void Runtime::clearHost() {
 	_loaded.clear();
 	_settings.clear();
 	_settingsUi.clear();
+	_menus.clear();
 	_seq = 0;
 }
 
@@ -1456,7 +1745,8 @@ void Runtime::protocolViolation(QString *error) {
 bool Runtime::sendRequest(
 		const QJsonObject &request,
 		QJsonObject *response,
-		QString *error) {
+		QString *error,
+		int timeout) {
 	if (!isRunning()) {
 		*error = QStringLiteral("Plugin host is not running.");
 		return false;
@@ -1470,7 +1760,7 @@ bool Runtime::sendRequest(
 	}
 	_process->waitForBytesWritten(kWriteTimeout);
 	return readMessage(
-		kCommandTimeout,
+		timeout,
 		request.value(QStringLiteral("seq")).toInt(),
 		false,
 		response,
@@ -1552,6 +1842,7 @@ bool Runtime::readMessage(
 			if (!knownSeq
 				|| (type != QStringLiteral("loaded")
 					&& type != QStringLiteral("unloaded")
+					&& type != QStringLiteral("clicked")
 					&& type != QStringLiteral("error"))) {
 				protocolViolation(error);
 				return false;

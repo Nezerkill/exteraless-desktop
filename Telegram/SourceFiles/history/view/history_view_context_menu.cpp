@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_context_menu.h"
 
 #include "exteraless/config.h"
+#include "exteraless/plugin_runtime.h"
 
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
@@ -123,6 +124,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
+
+#include <algorithm>
 
 namespace HistoryView {
 namespace {
@@ -1465,6 +1468,61 @@ void AddMessageActions(
 	}
 }
 
+void AddPluginMenuActions(
+		not_null<Ui::PopupMenu*> menu,
+		not_null<ListWidget*> list) {
+	const auto runtime = Exteraless::Plugins::Runtime::Instance();
+	if (!runtime || !runtime->isRunning()) {
+		return;
+	}
+	auto items = std::vector<Exteraless::Plugins::MenuRecord>();
+	const auto states = Exteraless::Config::Instance().pluginStates();
+	for (const auto &id : states.keys()) {
+		if (!runtime->isLoaded(id)) {
+			continue;
+		}
+		for (auto &record : runtime->menus(id)) {
+			if (record.type == u"message"_q) {
+				items.push_back(std::move(record));
+			}
+		}
+	}
+	if (items.empty()) {
+		return;
+	}
+	std::stable_sort(
+		items.begin(),
+		items.end(),
+		[](const auto &a, const auto &b) {
+			return a.priority > b.priority;
+		});
+	const auto weak = base::make_weak(list.get());
+	for (const auto &record : items) {
+		const auto pluginId = record.pluginId;
+		const auto itemId = record.itemId;
+		menu->addAction(record.text, [=] {
+			const auto strong = weak.get();
+			if (!strong) {
+				return;
+			}
+			const auto hostRuntime
+				= Exteraless::Plugins::Runtime::Instance();
+			if (!hostRuntime || !hostRuntime->isRunning()) {
+				strong->controller()->showToast(
+					u"Plugin host is not running."_q);
+				return;
+			}
+			const auto result = hostRuntime->click(
+				pluginId,
+				itemId,
+				u"message"_q);
+			if (!result.ok) {
+				strong->controller()->showToast(result.error);
+			}
+		}, &st::menuIconInfo);
+	}
+}
+
 void AddCopyLinkAction(
 		not_null<Ui::PopupMenu*> menu,
 		const ClickHandlerPtr &link) {
@@ -2000,6 +2058,7 @@ void FillContextMenuItems(
 				list->controller());
 		}
 	}
+	AddPluginMenuActions(result, list);
 }
 
 base::unique_qptr<Ui::PopupMenu> FillContextMenu(

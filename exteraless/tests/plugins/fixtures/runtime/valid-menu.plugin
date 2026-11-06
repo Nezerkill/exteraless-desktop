@@ -1,0 +1,33 @@
+from base_plugin import (
+    BasePlugin,
+    MenuItemData,
+)
+
+__id__ = "demo_menu"
+__name__ = "Demo Menu"
+__description__ = "Publishes two main menu items and logs clicks."
+__author__ = "Exteraless"
+__version__ = "1.0.0"
+__permissions__ = ["ui"]
+
+
+class Menu(BasePlugin):
+    def on_load(self):
+        self.add_menu_item(MenuItemData(
+            item_id="first",
+            text="First item",
+            priority=5,
+        ))
+        self.add_menu_item(MenuItemData(
+            item_id="second",
+            text="Second item",
+            subtext="Added later",
+            priority=10,
+        ))
+        self.log("menu plugin loaded")
+
+    def on_menu_item(self, item_id, context):
+        self.log("menu clicked %s:%s" % (item_id, context))
+
+
+plugin = Menu()

@@ -170,7 +170,7 @@ Desktop behavior of the Chats keys:
   `hideReactionsInPrivate` name is reported as unknown on import.
 - `OEChatsWideChannelPosts` is not ported yet, so no such key exists.
 - Verification: the chats runner has 549 checks, the plugin manifest runner 32,
-  and the plugin host runner 213; Xvfb smoke covered the Chats subsection,
+  and the plugin host runner 252; Xvfb smoke covered the Chats subsection,
   tail on/off, reactions hidden in a channel and in a group, and the unread
   capsule toggle. The smoke profile did not expose an unread divider, so the
   capsule paint itself was not captured; it is covered by build/code review.
@@ -368,6 +368,39 @@ Stage 2 (MVP3): controlled host for enabled plugins.
 - Manifest permissions (`network`, `native`, `files`, ...) are informational
   in stage 2 and grant no capabilities; one audit policy applies to every
   plugin.
+
+Stage 3b (MVP3): plugin menus.
+
+- `MenuItemType` exposes `main`, `message` and `chat`; Android's `PROFILE`
+  context is not ported. A plugin publishes an entry with
+  `add_menu_item(MenuItemData(item_id, text, subtext, priority), context)` and
+  drops it with `remove_menu_item(item_id)`. The host keeps the entries per
+  plugin and returns the current list as the `menu` array of the `loaded`
+  response, and the click command is `menu`.
+- The C++ side re-validates that snapshot instead of trusting the host:
+  `item_id` matches `^[A-Za-z][A-Za-z0-9_-]{1,31}$`, `text` is 1 to 128
+  printable characters, `subtext` is at most 128, `priority` is clamped to
+  +/-1000, and one plugin keeps at most 64 entries with 256 across plugins.
+  Entries that fail validation are dropped silently.
+- A click validates the item and its context against the snapshot, sends
+  `menu` and expects `clicked` or `error`. The call uses a 2 s timeout and a
+  re-entrancy guard (`A menu action is already running.`), and it never starts
+  the host: without a running host it returns `Plugin host is not running.`,
+  which the UI shows as a toast.
+- UI: `main` entries go into their own `VerticalLayout` in the main menu,
+  outside the Exteraless reorder; `message` entries are appended at the end of
+  the message context menu; the Plugins box shows `menu items: N` for each
+  plugin. `chat` entries are stored and clickable over IPC, but no chat menu
+  displays them yet.
+- CLI `menu-list <id>` and `menu-click <id> <item> [context]` (context
+  defaults to `main`, output sorted by priority), fixture
+  `valid-menu.plugin`, and `check_plugin_menu` with 24 checks, so the host
+  runner totals 252. The chats runner (943) and the manifest runner (32) do
+  not change, and the menu adds no language keys.
+- Limitations: the click runs synchronously on the UI thread (up to 2 s), the
+  snapshot is taken only at `load`, so an entry registered later stays
+  invisible until the next enable, and the menu was verified through the CLI
+  and IPC only - the Xvfb menu smoke was not performed.
 
 ### Plugin security boundaries
 

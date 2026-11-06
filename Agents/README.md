@@ -55,7 +55,7 @@ sibling-чекаутом: `../exteraless`.
   и удаление плагина.
 - `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan` (stage 1),
   CLI `exteraless-plugin-host-cli` (stage 2), фикстуры, `run_checks.py`
-  (32 проверки) и `run_host_checks.py` (228 проверок) с фикстурами
+  (32 проверки) и `run_host_checks.py` (252 проверки) с фикстурами
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
@@ -150,6 +150,13 @@ sibling-чекаутом: `../exteraless`.
   `load`, а бокс `ShowPluginSettingsBox` рисует Switch/Selector/Input/
   Header/Divider (`Custom` — заглушка), изменения видны при следующем enable;
   CLI — `settings-get`/`settings-set`.
+- Плагины этапа 3b — меню: `MenuItemType` (`main`/`message`/`chat`, PROFILE не
+  перенесён) и `add_menu_item`/`remove_menu_item`, снимок `menu` в ответе
+  `load`, `cmd: menu` → `clicked`/`error`, клик с таймаутом 2 с и
+  re-entrancy-гардом без автостарта host'а; пункты `main` — отдельным
+  `VerticalLayout` в главном меню, `message` — в конце контекстного меню
+  сообщения, счётчик — в боксе, CLI `menu-list`/`menu-click`, а
+  `check_plugin_menu` — 24 проверки.
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
   настройках Exteraless или в главном меню. Состав пилюль — `OEPillStackPills`
   (битовая маска, по умолчанию все).

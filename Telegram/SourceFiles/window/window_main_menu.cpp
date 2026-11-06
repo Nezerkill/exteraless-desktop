@@ -28,6 +28,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "exteraless/config.h"
 #include "exteraless/ghost_mode.h"
+#include "exteraless/plugin_runtime.h"
 #include "info/info_memento.h"
 #include "info/profile/info_profile_badge.h"
 #include "settings/settings_common.h"
@@ -90,6 +91,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 #include <array>
+#include <algorithm>
 
 namespace Window {
 namespace {
@@ -956,6 +958,62 @@ void MainMenu::setupMenu() {
 		Exteraless::Config::Instance().setMainMenuOrder(
 			order.join(','));
 	}, exteralessMenu->lifetime());
+
+	auto pluginItems = std::vector<Exteraless::Plugins::MenuRecord>();
+	if (const auto runtime = Exteraless::Plugins::Runtime::Instance()) {
+		if (runtime->isRunning()) {
+			const auto states = Exteraless::Config::Instance().pluginStates();
+			for (const auto &id : states.keys()) {
+				if (!runtime->isLoaded(id)) {
+					continue;
+				}
+				for (auto &record : runtime->menus(id)) {
+					if (record.type == u"main"_q) {
+						pluginItems.push_back(std::move(record));
+					}
+				}
+			}
+		}
+	}
+	std::stable_sort(
+		pluginItems.begin(),
+		pluginItems.end(),
+		[](const auto &a, const auto &b) {
+			return a.priority > b.priority;
+		});
+	if (!pluginItems.empty()) {
+		const auto pluginMenu = _menu->add(
+			object_ptr<Ui::VerticalLayout>(_menu));
+		const auto weakMenu = base::make_weak(pluginMenu);
+		for (const auto &record : pluginItems) {
+			const auto button = AddButtonWithIcon(
+				pluginMenu,
+				rpl::single(record.text),
+				st::mainMenuButton,
+				{ &st::menuIconInfo });
+			const auto pluginId = record.pluginId;
+			const auto itemId = record.itemId;
+			button->setClickedCallback([=] {
+				if (!weakMenu) {
+					return;
+				}
+				const auto runtime
+					= Exteraless::Plugins::Runtime::Instance();
+				if (!runtime || !runtime->isRunning()) {
+					controller->showToast(
+						u"Plugin host is not running."_q);
+					return;
+				}
+				const auto result = runtime->click(
+					pluginId,
+					itemId,
+					u"main"_q);
+				if (!result.ok) {
+					controller->showToast(result.error);
+				}
+			});
+		}
+	}
 
 	_nightThemeToggle = addAction(
 		tr::lng_menu_night_mode(),

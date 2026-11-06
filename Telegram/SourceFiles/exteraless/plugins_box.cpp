@@ -93,7 +93,8 @@ struct Row {
 
 [[nodiscard]] QString DetailsText(
 		const Plugins::Entry &entry,
-		const QString &status) {
+		const QString &status,
+		int menuCount) {
 	auto text = QString();
 	if (!entry.author.isEmpty()) {
 		text += entry.author + u"\n"_q;
@@ -102,6 +103,7 @@ struct Row {
 		+ (entry.permissions.isEmpty()
 			? u"none"_q
 			: entry.permissions.join(u", "_q));
+	text += u"\nmenu items: "_q + QString::number(menuCount);
 	text += u"\nfile: "_q + entry.file;
 	text += u"\n"_q + status;
 	return text;
@@ -111,6 +113,12 @@ struct Row {
 	return runtime.isRunning()
 		? u"Plugin host: running"_q
 		: u"Plugin host: stopped"_q;
+}
+
+[[nodiscard]] int MenuItemsCount(
+		const Plugins::Runtime *runtime,
+		const QString &id) {
+	return runtime ? int(runtime->menus(id).size()) : 0;
 }
 
 [[nodiscard]] QString ReadAuditTail(const QString &path, int maxLines) {
@@ -366,7 +374,10 @@ void RefreshRows(
 		Plugins::Runtime *runtime) {
 	for (const auto &row : rows) {
 		row->loaded = runtime && runtime->isLoaded(row->entry.id);
-		row->details->setText(DetailsText(row->entry, StateText(*row)));
+		row->details->setText(DetailsText(
+			row->entry,
+			StateText(*row),
+			MenuItemsCount(runtime, row->entry.id)));
 		if (row->settingsLink) {
 			row->settingsLink->setVisible(
 				row->enabled.current()
@@ -482,7 +493,10 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 			row->details = layout->add(
 				object_ptr<Ui::FlatLabel>(
 					box,
-					rpl::single(DetailsText(entry, StateText(*row))),
+					rpl::single(DetailsText(
+						entry,
+						StateText(*row),
+						MenuItemsCount(runtime, entry.id))),
 					st::boxLabel),
 				st::boxRowPadding);
 			row->settingsLink = layout->add(
@@ -539,7 +553,8 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 				if (enable) {
 					rowPtr->details->setText(DetailsText(
 						rowPtr->entry,
-						u"Loading..."_q));
+						u"Loading..."_q,
+						MenuItemsCount(runtime, rowPtr->entry.id)));
 					const auto result = runtime->enable(
 						rowPtr->entry.id,
 						path);
@@ -587,7 +602,8 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 				}
 				row->details->setText(DetailsText(
 					row->entry,
-					u"Enabled (not running)"_q));
+					u"Enabled (not running)"_q,
+					MenuItemsCount(runtime, row->entry.id)));
 				const auto result = runtime->enable(
 					row->entry.id,
 					directory + u"/"_q + row->entry.file);

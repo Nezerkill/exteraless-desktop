@@ -11,10 +11,12 @@
 #include <QJsonValue>
 #include <QStringList>
 
+#include <algorithm>
 #include <iostream>
 
 namespace {
 
+using Exteraless::Plugins::MenuRecord;
 using Exteraless::Plugins::Runtime;
 
 void WriteJson(const QJsonObject &result) {
@@ -150,6 +152,38 @@ struct RuntimeGuard {
 	};
 }
 
+[[nodiscard]] QJsonObject MenuItemJson(const MenuRecord &record) {
+	auto item = QJsonObject{
+		{ QStringLiteral("plugin"), record.pluginId },
+		{ QStringLiteral("item"), record.itemId },
+		{ QStringLiteral("text"), record.text },
+		{ QStringLiteral("priority"), record.priority },
+		{ QStringLiteral("context"), record.type },
+	};
+	if (!record.subtext.isEmpty()) {
+		item.insert(QStringLiteral("subtext"), record.subtext);
+	}
+	return item;
+}
+
+[[nodiscard]] QJsonArray MenuItems(Runtime *runtime, const QString &id) {
+	if (id.isEmpty()) {
+		return QJsonArray();
+	}
+	auto records = runtime->menus(id);
+	std::stable_sort(
+		records.begin(),
+		records.end(),
+		[](const MenuRecord &a, const MenuRecord &b) {
+			return a.priority > b.priority;
+		});
+	auto items = QJsonArray();
+	for (const auto &record : records) {
+		items.append(MenuItemJson(record));
+	}
+	return items;
+}
+
 [[nodiscard]] QJsonObject MultiOperation(
 		Runtime *runtime,
 		const QJsonObject &operation) {
@@ -180,6 +214,27 @@ struct RuntimeGuard {
 			const auto disabled = runtime->disable(id);
 			result[QStringLiteral("ok")] = disabled.ok;
 			result[QStringLiteral("error")] = disabled.error;
+		}
+	} else if (op == QStringLiteral("menu-list")) {
+		if (id.isEmpty()) {
+			result[QStringLiteral("error")] =
+				QStringLiteral("Missing plugin id.");
+		} else {
+			result[QStringLiteral("items")] = MenuItems(runtime, id);
+			result[QStringLiteral("ok")] = true;
+			result[QStringLiteral("error")] = QString();
+		}
+	} else if (op == QStringLiteral("menu-click")) {
+		const auto item = operation.value(QStringLiteral("item")).toString();
+		const auto context = operation.value(
+			QStringLiteral("context")).toString(QStringLiteral("main"));
+		if (id.isEmpty() || item.isEmpty()) {
+			result[QStringLiteral("error")] =
+				QStringLiteral("Missing plugin id or menu item.");
+		} else {
+			const auto clicked = runtime->click(id, item, context);
+			result[QStringLiteral("ok")] = clicked.ok;
+			result[QStringLiteral("error")] = clicked.error;
 		}
 	} else if (op == QStringLiteral("stop")) {
 		runtime->stop();
@@ -297,6 +352,35 @@ int main(int argc, char *argv[]) {
 		WriteJson(QJsonObject{
 			{ QStringLiteral("ok"), disabled.ok },
 			{ QStringLiteral("error"), disabled.error },
+			{ QStringLiteral("pid"), double(runtime->hostPid()) },
+			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
+		});
+		return 0;
+	}
+	if (command == QStringLiteral("menu-list")) {
+		if (rest.size() != 1) {
+			return Usage();
+		}
+		const auto runtime = StartRuntime(pluginsRoot, auditLog);
+		const auto guard = RuntimeGuard();
+		WriteJson(QJsonObject{
+			{ QStringLiteral("items"), MenuItems(runtime, rest[0]) },
+		});
+		return 0;
+	}
+	if (command == QStringLiteral("menu-click")) {
+		if (rest.size() != 2 && rest.size() != 3) {
+			return Usage();
+		}
+		const auto context = (rest.size() == 3)
+			? rest[2]
+			: QStringLiteral("main");
+		const auto runtime = StartRuntime(pluginsRoot, auditLog);
+		const auto guard = RuntimeGuard();
+		const auto clicked = runtime->click(rest[0], rest[1], context);
+		WriteJson(QJsonObject{
+			{ QStringLiteral("ok"), clicked.ok },
+			{ QStringLiteral("error"), clicked.error },
 			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
 		});
