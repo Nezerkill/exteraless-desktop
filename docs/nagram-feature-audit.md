@@ -179,7 +179,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Chats и меню | `ChatsConfig` (50) + `NekoConfig`/`NaConfig` | ~120 | 🟡 6 реализовано |
 | Ghost / deleted / edits (Ayu) | `NekoConfig`, `NaConfig`, `com/radolyn/ayugram/*` | ~50 | 🟡 6 частично |
 | Прокси и сеть | `OEProxy*`, `NekoConfig` (DNS/IPv6) | ~10 | ✅ базово, ❌ DoH/IPv6 |
-| Перевод и LLM | `NekoConfig`, `tw/nekomimi/nekogram/{translate,llm}` | ~55 | ➖ серверный перевод, ❌ провайдеры/LLM |
+| Перевод и LLM | `NekoConfig`, `tw/nekomimi/nekogram/{translate,llm}` | ~55 | ➖ серверный перевод, 🟡 провайдеры Google/DeepL ✅ NB-49, LLM ❌ (NB-48); ключи plaintext без consent'а |
 | AI-ассистент | `AiConfig`, `app/exteraless/ai/*` | 13 ключей + UI | ❌ (upstream AI — другой продукт) |
 | Feed (лента каналов) | `app/exteraless/feed/*` (14 файлов), `FeedConfig` | 4 ключа на аккаунт | ❌ не начато |
 | Cloud settings | `OpenExteraCloudActivity`, `CloudSettingsHelper` | 4 ключа | ❌ |
@@ -313,9 +313,9 @@ JSON-sidecar `tdata/exteraless/deleted_messages.json` версии 2 с 17 по�
 | Функция | Android-ключ | Desktop |
 |---|---|---|
 | Кнопка «Перевести» | `NekoConfig.showTranslate` | ➖ upstream (`lang/translate_provider.cpp`, `boxes/translate_box.cpp`) |
-| Провайдер перевода | `translationProvider` | ➖ только серверный Telegram; 11 Android-провайдеров (Google, Yandex, DeepL, Microsoft, LLM и др.) отсутствуют |
+| Провайдер перевода | `translationProvider` | ✅ NB-49, с оговорками: `OETranslationProvider` (int `0..3`, default `0` — Auto/upstream, `1` — Google, `2` — DeepL, `3` — резерв под LLM/NB-48) и алиас `translationProvider`; диспетчер `CreateTranslateProvider` (`lang/translate_provider.cpp`) ставит выбранного провайдера перед upstream-цепочкой (URL-шаблон → MTProto), остальные Android-провайдеры (Yandex, Microsoft и др.) не переносились, ошибки дают generic-тост — `TranslateProviderError` не расширялся, DeepL Pro-эндпоинт не поддерживается |
 | Целевой язык | `translateToLang`, `translateInputLang` | 🟡 переводит на язык интерфейса |
-| Ключи Google Cloud / DeepL и формальность | `googleCloudTranslateKey`, `deepLTranslateKey`, `deepLFormality` | ❌ |
+| Ключи Google Cloud / DeepL и формальность | `googleCloudTranslateKey`, `deepLTranslateKey`, `deepLFormality` | ✅ NB-49, с оговорками: `OETranslationGoogleCloudKey`/`OETranslationDeepLKey` (алиасы `googleCloudTranslateKey`/`deepLTranslateKey`) — секреты, в `.extera`/бэкап не экспортируются, а импорт старых бэкапов их принимает; в UI два маскированных поля (`CloudPassword::AddPasswordField`); `OETranslationDeepLFormality` (int `0..2`, default `0`, алиас `deepLFormality`) — Default/More formal/Less formal, уходит в DeepL как `formality` = `more`/`less`; ключи лежат plaintext в `tdata/exteraless.json` (OS-keychain нет), текст уходит на серверы Google/DeepL без consent'а в UI |
 | Режимы и автоперевод | `translatorMode`, `telegramUIAutoTranslate`, `enableSeparateArticleTranslator` | ❌/➖ |
 | LLM-переводчик | `llmApiUrl`, `llmApiKey`, `llmModelName`, `llmSystemPrompt`, `llmUserPrompt`, `llmTemperature`, `llmUseContext`, 10 пресетов провайдеров | ❌ |
 | Markdown при переводе | `translatorKeepMarkdown` | ❌ |

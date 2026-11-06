@@ -13,7 +13,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_msg_id.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
+#include "exteraless/config.h"
 #include "history/history_item.h"
+#include "lang/translate_deepl_provider.h"
+#include "lang/translate_google_provider.h"
 #include "lang/translate_mtproto_provider.h"
 #include "lang/translate_url_provider.h"
 #include "platform/platform_translate_provider.h"
@@ -33,6 +36,15 @@ namespace Ui {
 
 std::unique_ptr<TranslateProvider> CreateTranslateProvider(
 		not_null<Main::Session*> session) {
+	const auto chosen = Exteraless::Config::Instance().translationProvider();
+	if (chosen == 1) {
+		return CreateGoogleTranslateProvider(
+			Exteraless::Config::Instance().translationGoogleCloudKey());
+	} else if (chosen == 2) {
+		return CreateDeepLTranslateProvider(
+			Exteraless::Config::Instance().translationDeepLKey(),
+			Exteraless::Config::Instance().translationDeepLFormality());
+	}
 	const auto urlTemplate = OptionTranslateUrlTemplate.value();
 	if (!urlTemplate.isEmpty()
 		&& urlTemplate.contains(u"%q"_q)) {

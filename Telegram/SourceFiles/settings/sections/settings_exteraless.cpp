@@ -559,6 +559,160 @@ const auto kMeta = Builder::BuildHelper({
 		}, botPrivacyAlwaysAsk->lifetime());
 	}
 
+	const auto translationProviderLabel = [](int value) {
+		switch (value) {
+		case 1: return u"Google"_q;
+		case 2: return u"DeepL"_q;
+		}
+		return tr::lng_settings_exteraless_translation_auto(tr::now);
+	};
+	const auto translationProvider = std::make_shared<rpl::variable<QString>>(
+		translationProviderLabel(
+			Exteraless::Config::Instance().translationProvider()));
+	builder.addButton({
+		.id = u"exteraless/translation-provider"_q,
+		.title = tr::lng_settings_exteraless_translation_provider(),
+		.st = &st::settingsButtonNoIcon,
+		.label = translationProvider->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto current
+				= Exteraless::Config::Instance().translationProvider();
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				(current <= 2) ? current : 0);
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_translation_provider());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							translationProviderLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance().setTranslationProvider(
+						value);
+					translationProvider->force_assign(
+						translationProviderLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = {
+			u"translation"_q,
+			u"provider"_q,
+			u"google"_q,
+			u"deepl"_q,
+		},
+	});
+
+	const auto translationFormalityLabel = [](int value) {
+		switch (value) {
+		case 1:
+			return tr::lng_settings_exteraless_translation_formality_more(
+				tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_translation_formality_less(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_default(tr::now);
+	};
+	const auto translationFormality = std::make_shared<rpl::variable<QString>>(
+		translationFormalityLabel(
+			Exteraless::Config::Instance().translationDeepLFormality()));
+	builder.addButton({
+		.id = u"exteraless/translation-formality"_q,
+		.title = tr::lng_settings_exteraless_translation_formality(),
+		.st = &st::settingsButtonNoIcon,
+		.label = translationFormality->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().translationDeepLFormality());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_translation_formality());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							translationFormalityLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setTranslationDeepLFormality(value);
+					translationFormality->force_assign(
+						translationFormalityLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = {
+			u"translation"_q,
+			u"deepl"_q,
+			u"formality"_q,
+		},
+	});
+
+	builder.addButton({
+		.id = u"exteraless/translation-keys"_q,
+		.title = tr::lng_settings_exteraless_translation_keys(),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_translation_keys());
+				box->setWidth(st::boxWideWidth);
+				const auto google = CloudPassword::AddPasswordField(
+					box->verticalLayout(),
+					rpl::single(u"Google API key"_q),
+					Exteraless::Config::Instance().translationGoogleCloudKey());
+				const auto deepl = CloudPassword::AddPasswordField(
+					box->verticalLayout(),
+					rpl::single(u"DeepL API key"_q),
+					Exteraless::Config::Instance().translationDeepLKey());
+				box->addButton(tr::lng_box_ok(), [=] {
+					Exteraless::Config::Instance()
+						.setTranslationGoogleCloudKey(google->text());
+					Exteraless::Config::Instance()
+						.setTranslationDeepLKey(deepl->text());
+					box->closeBox();
+				});
+				box->setFocusCallback([=] { google->setFocusFast(); });
+			}));
+		},
+		.keywords = {
+			u"translation"_q,
+			u"key"_q,
+			u"google"_q,
+			u"deepl"_q,
+		},
+	});
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/media"_q,
 		.title = tr::lng_settings_exteraless_media(),

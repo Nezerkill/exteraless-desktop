@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 120,
+            len(section) == 122,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 125,
+            sum(len(value) for value in exported.values()) == 127,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 125,
+                data.get("applied") == 127,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -818,6 +818,8 @@ def check_backup(ledger, cli, work):
             "showFormattingButtons": True,
             "OEGeneralUsePersianCalendar": True,
             "OEGeneralPersianCalendarLatin": True,
+            "OETranslationProvider": 2,
+            "OETranslationDeepLFormality": 1,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -839,7 +841,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 125,
+            data.get("applied") == 127,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1133,10 +1135,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 120",
+            "backup legacy eight completed to 122",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (120, 3, 2),
+             len(sections["mainconfig"])) == (122, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6264,6 +6266,256 @@ def check_update_channel(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_translation(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "translation-defaults")
+    data = json_call(
+        ledger, cli, ["translation-provider"], env,
+        "translation provider defaults")
+    if data is not None:
+        ledger.check(
+            "translation provider default auto",
+            data.get("provider") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["translation-formality"], env,
+        "translation formality defaults")
+    if data is not None:
+        ledger.check(
+            "translation formality default",
+            data.get("formality") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["translation-keys"], env,
+        "translation keys defaults")
+    if data is not None:
+        ledger.check(
+            "translation keys default empty",
+            data.get("google") == "" and data.get("deepl") == "",
+            data)
+
+    data = json_call(
+        ledger, cli, ["translation-provider-set", "2"], env,
+        "translation provider set deepl")
+    if data is not None:
+        ledger.check(
+            "translation provider set deepl",
+            data.get("provider") == 2,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["translation-provider"], env,
+        "translation provider reload")
+    if reloaded is not None:
+        ledger.check(
+            "translation provider persisted",
+            reloaded.get("provider") == 2,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["translation-provider-set", "9"], env,
+        "translation provider clamp high")
+    if data is not None:
+        ledger.check(
+            "translation provider clamped high",
+            data.get("provider") == 3,
+            data)
+    data = json_call(
+        ledger, cli, ["translation-provider-set", "-3"], env,
+        "translation provider clamp low")
+    if data is not None:
+        ledger.check(
+            "translation provider clamped low",
+            data.get("provider") == 0,
+            data)
+    data = json_call(
+        ledger, cli, ["translation-provider-set", "3"], env,
+        "translation provider set llm")
+    if data is not None:
+        ledger.check(
+            "translation provider accepts 3",
+            data.get("provider") == 3,
+            data)
+
+    data = json_call(
+        ledger, cli, ["translation-formality-set", "2"], env,
+        "translation formality set less")
+    if data is not None:
+        ledger.check(
+            "translation formality set less",
+            data.get("formality") == 2,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["translation-formality"], env,
+        "translation formality reload")
+    if reloaded is not None:
+        ledger.check(
+            "translation formality persisted",
+            reloaded.get("formality") == 2,
+            reloaded)
+    data = json_call(
+        ledger, cli, ["translation-formality-set", "5"], env,
+        "translation formality clamp high")
+    if data is not None:
+        ledger.check(
+            "translation formality clamped high",
+            data.get("formality") == 2,
+            data)
+    data = json_call(
+        ledger, cli, ["translation-formality-set", "-1"], env,
+        "translation formality clamp low")
+    if data is not None:
+        ledger.check(
+            "translation formality clamped low",
+            data.get("formality") == 0,
+            data)
+
+    google_key = "AIzaSyA-bcdefghijklmnopqrstuvwxyz0123456"
+    deepl_key = "abcd-1234-efgh-5678:fx"
+    data = json_call(
+        ledger, cli, ["translation-keys-set", "google", google_key], env,
+        "translation keys set google")
+    if data is not None:
+        ledger.check(
+            "translation google key masked",
+            data.get("google") == "AIza****",
+            data)
+        ledger.check(
+            "translation google key not leaked",
+            google_key not in json.dumps(data),
+            data)
+    data = json_call(
+        ledger, cli, ["translation-keys-set", "deepl", deepl_key], env,
+        "translation keys set deepl")
+    if data is not None:
+        ledger.check(
+            "translation deepl key masked",
+            data.get("deepl") == "abcd****",
+            data)
+        ledger.check(
+            "translation deepl key not leaked",
+            deepl_key not in json.dumps(data),
+            data)
+    reloaded = json_call(
+        ledger, cli, ["translation-keys"], env,
+        "translation keys reload")
+    if reloaded is not None:
+        ledger.check(
+            "translation keys persisted masked",
+            reloaded.get("google") == "AIza****"
+            and reloaded.get("deepl") == "abcd****",
+            reloaded)
+        ledger.check(
+            "translation keys reload not leaked",
+            google_key not in json.dumps(reloaded)
+            and deepl_key not in json.dumps(reloaded),
+            reloaded)
+    data = json_call(
+        ledger, cli, ["translation-keys-set", "google", "abc"], env,
+        "translation keys short")
+    if data is not None:
+        ledger.check(
+            "translation short key fully masked",
+            data.get("google") == "****",
+            data)
+    json_call(
+        ledger, cli, ["translation-keys-set", "google", google_key], env,
+        "translation keys restore google")
+
+    env = make_env(work / "translation-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "translationProvider": 2,
+            "deepLFormality": 1,
+            "googleCloudTranslateKey": google_key,
+            "deepLTranslateKey": deepl_key,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "translation alias import")
+    if data is not None:
+        ledger.check(
+            "translation alias applied",
+            data.get("applied") == 4 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["translation-provider"], env,
+        "translation alias provider")
+    if reloaded is not None:
+        ledger.check(
+            "translation alias provider value",
+            reloaded.get("provider") == 2,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["translation-formality"], env,
+        "translation alias formality")
+    if reloaded is not None:
+        ledger.check(
+            "translation alias formality value",
+            reloaded.get("formality") == 1,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["translation-keys"], env,
+        "translation alias keys")
+    if reloaded is not None:
+        ledger.check(
+            "translation alias keys masked",
+            reloaded.get("google") == "AIza****"
+            and reloaded.get("deepl") == "abcd****",
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"],
+        env, "translation export")
+    if data is not None:
+        section = backup_sections(data)["exteraconfig"]
+        ledger.check(
+            "translation export provider",
+            section.get("OETranslationProvider") == 2
+            and section.get("OETranslationDeepLFormality") == 1,
+            (section.get("OETranslationProvider"),
+             section.get("OETranslationDeepLFormality")))
+        ledger.check(
+            "translation export has no google key",
+            "OETranslationGoogleCloudKey" not in section,
+            sorted(section))
+        ledger.check(
+            "translation export has no deepl key",
+            "OETranslationDeepLKey" not in section,
+            sorted(section))
+        dump = json.dumps(data)
+        ledger.check(
+            "translation export leaks no key material",
+            google_key not in dump and deepl_key not in dump,
+            "secret found in backup export")
+
+    for name, arguments in [
+            ("translation provider set without value",
+             ["translation-provider-set"]),
+            ("translation provider set non numeric",
+             ["translation-provider-set", "google"]),
+            ("translation formality set non numeric",
+             ["translation-formality-set", "more"]),
+            ("translation keys set unknown target",
+             ["translation-keys-set", "bing", "key"]),
+            ("translation keys set without key",
+             ["translation-keys-set", "google"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -6332,6 +6584,7 @@ def main():
         persian = check_persian(ledger, cli, work)
         media_quality = check_media_quality(ledger, cli, work)
         update_channel = check_update_channel(ledger, cli, work)
+        translation = check_translation(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
@@ -6406,6 +6659,7 @@ def main():
     print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
     print(f"update-channel: "
           f"{update_channel[0] - update_channel[1]} passed")
+    print(f"translation: {translation[0] - translation[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")

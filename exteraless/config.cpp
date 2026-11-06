@@ -160,6 +160,10 @@ constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
 constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
+constexpr auto kTranslationProvider = "OETranslationProvider";
+constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
+constexpr auto kTranslationDeepLKey = "OETranslationDeepLKey";
+constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
 
 [[nodiscard]] int SanitizeAudioBitrate(int value) {
 	switch (value) {
@@ -1246,6 +1250,38 @@ void Config::setShowFormattingButtons(bool value) {
 	setValue(kChatsShowFormattingButtons, value);
 }
 
+int Config::translationProvider() const {
+	return std::clamp(intValue(kTranslationProvider, 0), 0, 3);
+}
+
+void Config::setTranslationProvider(int value) {
+	setValue(kTranslationProvider, std::clamp(value, 0, 3));
+}
+
+QString Config::translationGoogleCloudKey() const {
+	return stringValue(kTranslationGoogleCloudKey, QString());
+}
+
+void Config::setTranslationGoogleCloudKey(const QString &value) {
+	setValue(kTranslationGoogleCloudKey, value);
+}
+
+QString Config::translationDeepLKey() const {
+	return stringValue(kTranslationDeepLKey, QString());
+}
+
+void Config::setTranslationDeepLKey(const QString &value) {
+	setValue(kTranslationDeepLKey, value);
+}
+
+int Config::translationDeepLFormality() const {
+	return std::clamp(intValue(kTranslationDeepLFormality, 0), 0, 2);
+}
+
+void Config::setTranslationDeepLFormality(int value) {
+	setValue(kTranslationDeepLFormality, std::clamp(value, 0, 2));
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -1426,7 +1462,11 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsAvatarRadius
 			|| key == kChatsSectionRadius
 			|| key == kChatsSectionSeparateHeaders
-			|| key == kChatsChatHeaderStyle) {
+			|| key == kChatsChatHeaderStyle
+			|| key == kTranslationProvider
+			|| key == kTranslationGoogleCloudKey
+			|| key == kTranslationDeepLKey
+			|| key == kTranslationDeepLFormality) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

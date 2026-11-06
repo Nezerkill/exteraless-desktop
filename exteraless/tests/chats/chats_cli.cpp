@@ -171,6 +171,13 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli update-channel-set <0..2>\n"
 		<< "  exteraless-chats-cli update-check <json> <current> "
 		<< "<prerelease 0|1>\n"
+		<< "  exteraless-chats-cli translation-provider\n"
+		<< "  exteraless-chats-cli translation-provider-set <0..3>\n"
+		<< "  exteraless-chats-cli translation-keys\n"
+		<< "  exteraless-chats-cli translation-keys-set <google|deepl> "
+		<< "<key>\n"
+		<< "  exteraless-chats-cli translation-formality\n"
+		<< "  exteraless-chats-cli translation-formality-set <0..2>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli sender-mini-avatars\n"
@@ -290,6 +297,38 @@ void PrintGeneral() {
 			Exteraless::Config::Instance().showSeconds() },
 		{ QStringLiteral("hidePhone"),
 			Exteraless::Config::Instance().hidePhone() },
+	});
+}
+
+[[nodiscard]] QString MaskTranslationKey(const QString &key) {
+	if (key.isEmpty()) {
+		return QString();
+	}
+	return (key.size() > 4 ? key.left(4) : QString())
+		+ QStringLiteral("****");
+}
+
+void PrintTranslationProvider() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("provider"),
+			Exteraless::Config::Instance().translationProvider() },
+	});
+}
+
+void PrintTranslationKeys() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("google"),
+			MaskTranslationKey(config.translationGoogleCloudKey()) },
+		{ QStringLiteral("deepl"),
+			MaskTranslationKey(config.translationDeepLKey()) },
+	});
+}
+
+void PrintTranslationFormality() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("formality"),
+			Exteraless::Config::Instance().translationDeepLFormality() },
 	});
 }
 
@@ -1535,6 +1574,70 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("version"), info.version },
 			{ QStringLiteral("url"), info.url },
 		});
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-provider")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintTranslationProvider();
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-provider-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setTranslationProvider(value);
+		PrintTranslationProvider();
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-keys")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintTranslationKeys();
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-keys-set")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		const auto target = arguments[2];
+		if (target == QStringLiteral("google")) {
+			Exteraless::Config::Instance().setTranslationGoogleCloudKey(
+				arguments[3]);
+		} else if (target == QStringLiteral("deepl")) {
+			Exteraless::Config::Instance().setTranslationDeepLKey(
+				arguments[3]);
+		} else {
+			return PrintUsage();
+		}
+		PrintTranslationKeys();
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-formality")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintTranslationFormality();
+		return 0;
+	}
+	if (mode == QStringLiteral("translation-formality-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setTranslationDeepLFormality(value);
+		PrintTranslationFormality();
 		return 0;
 	}
 	if (mode == QStringLiteral("forward-date")) {

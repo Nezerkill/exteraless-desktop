@@ -9,7 +9,7 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..9218496 100644
+index 811707d..3fd8342 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
 @@ -70,6 +70,37 @@ endif()
@@ -58,7 +58,18 @@ index 811707d..9218496 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -1680,6 +1712,7 @@ PRIVATE
+@@ -1492,6 +1524,10 @@ PRIVATE
+     lang/lang_numbers_animation.h
+     lang/lang_translator.cpp
+     lang/lang_translator.h
++    lang/translate_deepl_provider.cpp
++    lang/translate_deepl_provider.h
++    lang/translate_google_provider.cpp
++    lang/translate_google_provider.h
+     lang/translate_mtproto_provider.cpp
+     lang/translate_mtproto_provider.h
+     lang/translate_provider.cpp
+@@ -1680,6 +1716,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -66,7 +77,7 @@ index 811707d..9218496 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1930,8 @@ PRIVATE
+@@ -1897,6 +1934,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -75,7 +86,7 @@ index 811707d..9218496 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2565,10 @@ else()
+@@ -2530,6 +2569,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -87,7 +98,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..f5dcaac 100644
+index ffc8ec9..63194c6 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +110,7 @@ index ffc8ec9..f5dcaac 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,212 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,218 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -310,6 +321,12 @@ index ffc8ec9..f5dcaac 100644
 +"lng_settings_exteraless_chats_section_radius_square" = "Square";
 +"lng_settings_exteraless_chats_section_radius_rounded" = "Rounded {radius}";
 +"lng_settings_exteraless_chats_separate_headers" = "Separate headers";
++"lng_settings_exteraless_translation_provider" = "Translation provider";
++"lng_settings_exteraless_translation_auto" = "Auto";
++"lng_settings_exteraless_translation_keys" = "Translation API keys";
++"lng_settings_exteraless_translation_formality" = "DeepL formality";
++"lng_settings_exteraless_translation_formality_more" = "More formal";
++"lng_settings_exteraless_translation_formality_less" = "Less formal";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -7390,6 +7407,346 @@ index 5537d86..8abc86c 100644
  	auto result = ShortenedCount{ number };
  	const auto abs = std::abs(number);
  	const auto shorten = [&](int64 divider, char multiplier) {
+diff --git a/Telegram/SourceFiles/lang/translate_deepl_provider.cpp b/Telegram/SourceFiles/lang/translate_deepl_provider.cpp
+new file mode 100644
+index 0000000..1d5bdd7
+--- /dev/null
++++ b/Telegram/SourceFiles/lang/translate_deepl_provider.cpp
+@@ -0,0 +1,126 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#include "lang/translate_deepl_provider.h"
++
++#include <QtCore/QJsonArray>
++#include <QtCore/QJsonDocument>
++#include <QtCore/QJsonObject>
++#include <QtCore/QJsonParseError>
++#include <QtCore/QJsonValue>
++#include <QtCore/QUrl>
++#include <QtNetwork/QNetworkAccessManager>
++#include <QtNetwork/QNetworkReply>
++#include <QtNetwork/QNetworkRequest>
++
++namespace Ui {
++namespace {
++
++[[nodiscard]] QString FormalityValue(int formality) {
++	switch (formality) {
++	case 1: return u"more"_q;
++	case 2: return u"less"_q;
++	}
++	return QString();
++}
++
++[[nodiscard]] std::optional<QString> ParseTranslatedText(
++		const QByteArray &body) {
++	auto error = QJsonParseError();
++	const auto parsed = QJsonDocument::fromJson(body, &error);
++	if (error.error != QJsonParseError::NoError || !parsed.isObject()) {
++		return std::nullopt;
++	}
++	const auto translations = parsed.object()
++		.value(u"translations"_q)
++		.toArray();
++	if (translations.isEmpty()) {
++		return std::nullopt;
++	}
++	auto result = QString();
++	for (const auto &value : translations) {
++		const auto translated = value.toObject().value(u"text"_q).toString();
++		if (translated.isEmpty()) {
++			return std::nullopt;
++		}
++		result += translated;
++	}
++	return result;
++}
++
++class DeepLTranslateProvider final : public TranslateProvider {
++public:
++	DeepLTranslateProvider(QString key, int formality)
++	: _key(std::move(key))
++	, _formality(FormalityValue(formality)) {
++	}
++
++	[[nodiscard]] bool supportsMessageId() const override {
++		return false;
++	}
++
++	void request(
++			TranslateProviderRequest request,
++			LanguageId to,
++			Fn<void(TranslateProviderResult)> done) override {
++		const auto target = to.twoLetterCode().toUpper();
++		if (_key.isEmpty()
++			|| request.text.text.isEmpty()
++			|| target.isEmpty()) {
++			done(TranslateProviderResult{
++				.error = TranslateProviderError::Unknown,
++			});
++			return;
++		}
++		auto body = QByteArray("text=");
++		body += QUrl::toPercentEncoding(request.text.text);
++		body += "&target_lang=" + QUrl::toPercentEncoding(target);
++		if (!_formality.isEmpty()) {
++			body += "&formality=" + QUrl::toPercentEncoding(_formality);
++		}
++		auto networkRequest = QNetworkRequest(
++			QUrl(u"https://api-free.deepl.com/v2/translate"_q));
++		networkRequest.setHeader(
++			QNetworkRequest::ContentTypeHeader,
++			u"application/x-www-form-urlencoded"_q);
++		networkRequest.setRawHeader(
++			"Authorization",
++			QByteArray("DeepL-Auth-Key ") + _key.toUtf8());
++		const auto reply = _network.post(networkRequest, body);
++		QObject::connect(reply, &QNetworkReply::finished, [=] {
++			auto result = TranslateProviderResult();
++			if (reply->error() != QNetworkReply::NoError) {
++				result.error = TranslateProviderError::Unknown;
++			} else if (const auto translated
++					= ParseTranslatedText(reply->readAll())) {
++				result.text = TextWithEntities{ *translated };
++			} else {
++				result.error = TranslateProviderError::Unknown;
++			}
++			done(std::move(result));
++			reply->deleteLater();
++		});
++	}
++
++private:
++	const QString _key;
++	const QString _formality;
++	QNetworkAccessManager _network;
++
++};
++
++} // namespace
++
++std::unique_ptr<TranslateProvider> CreateDeepLTranslateProvider(
++		QString key,
++		int formality) {
++	return std::make_unique<DeepLTranslateProvider>(
++		std::move(key),
++		formality);
++}
++
++} // namespace Ui
+diff --git a/Telegram/SourceFiles/lang/translate_deepl_provider.h b/Telegram/SourceFiles/lang/translate_deepl_provider.h
+new file mode 100644
+index 0000000..e63d5e2
+--- /dev/null
++++ b/Telegram/SourceFiles/lang/translate_deepl_provider.h
+@@ -0,0 +1,18 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#pragma once
++
++#include "translate_provider.h"
++
++namespace Ui {
++
++[[nodiscard]] std::unique_ptr<TranslateProvider> CreateDeepLTranslateProvider(
++	QString key,
++	int formality);
++
++} // namespace Ui
+diff --git a/Telegram/SourceFiles/lang/translate_google_provider.cpp b/Telegram/SourceFiles/lang/translate_google_provider.cpp
+new file mode 100644
+index 0000000..82bedd1
+--- /dev/null
++++ b/Telegram/SourceFiles/lang/translate_google_provider.cpp
+@@ -0,0 +1,124 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#include "lang/translate_google_provider.h"
++
++#include <QtCore/QJsonArray>
++#include <QtCore/QJsonDocument>
++#include <QtCore/QJsonObject>
++#include <QtCore/QJsonParseError>
++#include <QtCore/QJsonValue>
++#include <QtCore/QUrl>
++#include <QtNetwork/QNetworkAccessManager>
++#include <QtNetwork/QNetworkReply>
++#include <QtNetwork/QNetworkRequest>
++
++namespace Ui {
++namespace {
++
++[[nodiscard]] QString UnescapeHtmlEntities(QString text) {
++	text.replace(u"&quot;"_q, u"\""_q);
++	text.replace(u"&#39;"_q, u"'"_q);
++	text.replace(u"&lt;"_q, u"<"_q);
++	text.replace(u"&gt;"_q, u">"_q);
++	text.replace(u"&amp;"_q, u"&"_q);
++	return text;
++}
++
++// WHY: the v2 API escapes entities in translatedText even with format=text,
++// so the text is unescaped here and not where it would be re-escaped again.
++[[nodiscard]] std::optional<QString> ParseTranslatedText(
++		const QByteArray &body) {
++	auto error = QJsonParseError();
++	const auto parsed = QJsonDocument::fromJson(body, &error);
++	if (error.error != QJsonParseError::NoError || !parsed.isObject()) {
++		return std::nullopt;
++	}
++	const auto data = parsed.object().value(u"data"_q).toObject();
++	const auto translations = data.value(u"translations"_q).toArray();
++	if (translations.isEmpty()) {
++		return std::nullopt;
++	}
++	auto result = QString();
++	for (const auto &value : translations) {
++		const auto translated = value.toObject()
++			.value(u"translatedText"_q)
++			.toString();
++		if (translated.isEmpty()) {
++			return std::nullopt;
++		}
++		result += UnescapeHtmlEntities(translated);
++	}
++	return result;
++}
++
++class GoogleTranslateProvider final : public TranslateProvider {
++public:
++	explicit GoogleTranslateProvider(QString key)
++	: _key(std::move(key)) {
++	}
++
++	[[nodiscard]] bool supportsMessageId() const override {
++		return false;
++	}
++
++	void request(
++			TranslateProviderRequest request,
++			LanguageId to,
++			Fn<void(TranslateProviderResult)> done) override {
++		const auto target = to.twoLetterCode();
++		if (_key.isEmpty()
++			|| request.text.text.isEmpty()
++			|| target.isEmpty()) {
++			done(TranslateProviderResult{
++				.error = TranslateProviderError::Unknown,
++			});
++			return;
++		}
++		auto query = QByteArray("q=");
++		query += QUrl::toPercentEncoding(request.text.text);
++		query += "&target=" + QUrl::toPercentEncoding(target);
++		query += "&format=text&key=" + QUrl::toPercentEncoding(_key);
++		auto url = QUrl(
++			u"https://translation.googleapis.com/language/translate/v2"_q);
++		url.setQuery(QString::fromLatin1(query), QUrl::StrictMode);
++		if (!url.isValid()) {
++			done(TranslateProviderResult{
++				.error = TranslateProviderError::Unknown,
++			});
++			return;
++		}
++		const auto reply = _network.get(QNetworkRequest(url));
++		QObject::connect(reply, &QNetworkReply::finished, [=] {
++			auto result = TranslateProviderResult();
++			if (reply->error() != QNetworkReply::NoError) {
++				result.error = TranslateProviderError::Unknown;
++			} else if (const auto translated
++					= ParseTranslatedText(reply->readAll())) {
++				result.text = TextWithEntities{ *translated };
++			} else {
++				result.error = TranslateProviderError::Unknown;
++			}
++			done(std::move(result));
++			reply->deleteLater();
++		});
++	}
++
++private:
++	const QString _key;
++	QNetworkAccessManager _network;
++
++};
++
++} // namespace
++
++std::unique_ptr<TranslateProvider> CreateGoogleTranslateProvider(
++		QString key) {
++	return std::make_unique<GoogleTranslateProvider>(std::move(key));
++}
++
++} // namespace Ui
+diff --git a/Telegram/SourceFiles/lang/translate_google_provider.h b/Telegram/SourceFiles/lang/translate_google_provider.h
+new file mode 100644
+index 0000000..9bcab78
+--- /dev/null
++++ b/Telegram/SourceFiles/lang/translate_google_provider.h
+@@ -0,0 +1,17 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#pragma once
++
++#include "translate_provider.h"
++
++namespace Ui {
++
++[[nodiscard]] std::unique_ptr<TranslateProvider> CreateGoogleTranslateProvider(
++	QString key);
++
++} // namespace Ui
+diff --git a/Telegram/SourceFiles/lang/translate_provider.cpp b/Telegram/SourceFiles/lang/translate_provider.cpp
+index ff6e43e..a4cb617 100644
+--- a/Telegram/SourceFiles/lang/translate_provider.cpp
++++ b/Telegram/SourceFiles/lang/translate_provider.cpp
+@@ -13,7 +13,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_msg_id.h"
+ #include "data/data_peer.h"
+ #include "data/data_session.h"
++#include "exteraless/config.h"
+ #include "history/history_item.h"
++#include "lang/translate_deepl_provider.h"
++#include "lang/translate_google_provider.h"
+ #include "lang/translate_mtproto_provider.h"
+ #include "lang/translate_url_provider.h"
+ #include "platform/platform_translate_provider.h"
+@@ -33,6 +36,15 @@ namespace Ui {
+ 
+ std::unique_ptr<TranslateProvider> CreateTranslateProvider(
+ 		not_null<Main::Session*> session) {
++	const auto chosen = Exteraless::Config::Instance().translationProvider();
++	if (chosen == 1) {
++		return CreateGoogleTranslateProvider(
++			Exteraless::Config::Instance().translationGoogleCloudKey());
++	} else if (chosen == 2) {
++		return CreateDeepLTranslateProvider(
++			Exteraless::Config::Instance().translationDeepLKey(),
++			Exteraless::Config::Instance().translationDeepLFormality());
++	}
+ 	const auto urlTemplate = OptionTranslateUrlTemplate.value();
+ 	if (!urlTemplate.isEmpty()
+ 		&& urlTemplate.contains(u"%q"_q)) {
 diff --git a/Telegram/SourceFiles/main/main_account.cpp b/Telegram/SourceFiles/main/main_account.cpp
 index 2721c7a..6bfa900 100644
 --- a/Telegram/SourceFiles/main/main_account.cpp
@@ -8274,10 +8631,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..9961455
+index 0000000..9d7fada
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2538 @@
+@@ -0,0 +1,2692 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -8838,6 +9195,160 @@ index 0000000..9961455
 +			Exteraless::Config::Instance().setBotPrivacyAlwaysAsk(value);
 +		}, botPrivacyAlwaysAsk->lifetime());
 +	}
++
++	const auto translationProviderLabel = [](int value) {
++		switch (value) {
++		case 1: return u"Google"_q;
++		case 2: return u"DeepL"_q;
++		}
++		return tr::lng_settings_exteraless_translation_auto(tr::now);
++	};
++	const auto translationProvider = std::make_shared<rpl::variable<QString>>(
++		translationProviderLabel(
++			Exteraless::Config::Instance().translationProvider()));
++	builder.addButton({
++		.id = u"exteraless/translation-provider"_q,
++		.title = tr::lng_settings_exteraless_translation_provider(),
++		.st = &st::settingsButtonNoIcon,
++		.label = translationProvider->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto current
++				= Exteraless::Config::Instance().translationProvider();
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				(current <= 2) ? current : 0);
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_translation_provider());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto value = 0; value != 3; ++value) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							translationProviderLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance().setTranslationProvider(
++						value);
++					translationProvider->force_assign(
++						translationProviderLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = {
++			u"translation"_q,
++			u"provider"_q,
++			u"google"_q,
++			u"deepl"_q,
++		},
++	});
++
++	const auto translationFormalityLabel = [](int value) {
++		switch (value) {
++		case 1:
++			return tr::lng_settings_exteraless_translation_formality_more(
++				tr::now);
++		case 2:
++			return tr::lng_settings_exteraless_translation_formality_less(
++				tr::now);
++		}
++		return tr::lng_settings_exteraless_default(tr::now);
++	};
++	const auto translationFormality = std::make_shared<rpl::variable<QString>>(
++		translationFormalityLabel(
++			Exteraless::Config::Instance().translationDeepLFormality()));
++	builder.addButton({
++		.id = u"exteraless/translation-formality"_q,
++		.title = tr::lng_settings_exteraless_translation_formality(),
++		.st = &st::settingsButtonNoIcon,
++		.label = translationFormality->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().translationDeepLFormality());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_translation_formality());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto value = 0; value != 3; ++value) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							translationFormalityLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance()
++						.setTranslationDeepLFormality(value);
++					translationFormality->force_assign(
++						translationFormalityLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = {
++			u"translation"_q,
++			u"deepl"_q,
++			u"formality"_q,
++		},
++	});
++
++	builder.addButton({
++		.id = u"exteraless/translation-keys"_q,
++		.title = tr::lng_settings_exteraless_translation_keys(),
++		.st = &st::settingsButtonNoIcon,
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_translation_keys());
++				box->setWidth(st::boxWideWidth);
++				const auto google = CloudPassword::AddPasswordField(
++					box->verticalLayout(),
++					rpl::single(u"Google API key"_q),
++					Exteraless::Config::Instance().translationGoogleCloudKey());
++				const auto deepl = CloudPassword::AddPasswordField(
++					box->verticalLayout(),
++					rpl::single(u"DeepL API key"_q),
++					Exteraless::Config::Instance().translationDeepLKey());
++				box->addButton(tr::lng_box_ok(), [=] {
++					Exteraless::Config::Instance()
++						.setTranslationGoogleCloudKey(google->text());
++					Exteraless::Config::Instance()
++						.setTranslationDeepLKey(deepl->text());
++					box->closeBox();
++				});
++				box->setFocusCallback([=] { google->setFocusFast(); });
++			}));
++		},
++		.keywords = {
++			u"translation"_q,
++			u"key"_q,
++			u"google"_q,
++			u"deepl"_q,
++		},
++	});
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/media"_q,
@@ -12427,10 +12938,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..4e282ed
+index 0000000..3880f6e
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1127 @@
+@@ -0,0 +1,1155 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -12703,6 +13214,15 @@ index 0000000..4e282ed
 +constexpr auto kDoubleTapAction = "doubleTapAction";
 +constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 +
++constexpr auto kTranslationProvider = "OETranslationProvider";
++constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
++constexpr auto kTranslationDeepLKey = "OETranslationDeepLKey";
++constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
++constexpr auto kTranslationProviderAlias = "translationProvider";
++constexpr auto kTranslationGoogleCloudKeyAlias = "googleCloudTranslateKey";
++constexpr auto kTranslationDeepLKeyAlias = "deepLTranslateKey";
++constexpr auto kTranslationDeepLFormalityAlias = "deepLFormality";
++
 +constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 +constexpr auto kShowReportButton = "showReportButton";
 +
@@ -12961,6 +13481,8 @@ index 0000000..4e282ed
 +	extera[kZalgoFilter] = config.zalgoFilter();
 +	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 +	extera[kShowFormattingButtons] = config.showFormattingButtons();
++	extera[kTranslationProvider] = config.translationProvider();
++	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -13532,6 +14054,23 @@ index 0000000..4e282ed
 +			const auto mode = value.toInt();
 +			config.setChatsHideStickerTime(mode == 2);
 +			config.setChatsStickerTimeSide(mode == 1);
++		} else if ((key == kTranslationProvider
++			|| key == kTranslationProviderAlias)
++			&& IntegralInRange(value, 0, 3)) {
++			config.setTranslationProvider(value.toInt());
++		} else if ((key == kTranslationDeepLFormality
++			|| key == kTranslationDeepLFormalityAlias)
++			&& IntegralInRange(value, 0, 2)) {
++			config.setTranslationDeepLFormality(value.toInt());
++		} else if ((key == kTranslationGoogleCloudKey
++			|| key == kTranslationGoogleCloudKeyAlias)
++			&& value.isString()) {
++			// WHY: old backups carry the secret; import accepts, export omits.
++			config.setTranslationGoogleCloudKey(value.toString());
++		} else if ((key == kTranslationDeepLKey
++			|| key == kTranslationDeepLKeyAlias)
++			&& value.isString()) {
++			config.setTranslationDeepLKey(value.toString());
 +		} else {
 +			return false;
 +		}
@@ -13682,10 +14221,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..226bd8c
+index 0000000..25d0d89
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1603 @@
+@@ -0,0 +1,1643 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -13848,6 +14387,10 @@ index 0000000..226bd8c
 +constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 +constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
 +constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
++constexpr auto kTranslationProvider = "OETranslationProvider";
++constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
++constexpr auto kTranslationDeepLKey = "OETranslationDeepLKey";
++constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
 +
 +[[nodiscard]] int SanitizeAudioBitrate(int value) {
 +	switch (value) {
@@ -14934,6 +15477,38 @@ index 0000000..226bd8c
 +	setValue(kChatsShowFormattingButtons, value);
 +}
 +
++int Config::translationProvider() const {
++	return std::clamp(intValue(kTranslationProvider, 0), 0, 3);
++}
++
++void Config::setTranslationProvider(int value) {
++	setValue(kTranslationProvider, std::clamp(value, 0, 3));
++}
++
++QString Config::translationGoogleCloudKey() const {
++	return stringValue(kTranslationGoogleCloudKey, QString());
++}
++
++void Config::setTranslationGoogleCloudKey(const QString &value) {
++	setValue(kTranslationGoogleCloudKey, value);
++}
++
++QString Config::translationDeepLKey() const {
++	return stringValue(kTranslationDeepLKey, QString());
++}
++
++void Config::setTranslationDeepLKey(const QString &value) {
++	setValue(kTranslationDeepLKey, value);
++}
++
++int Config::translationDeepLFormality() const {
++	return std::clamp(intValue(kTranslationDeepLFormality, 0), 0, 2);
++}
++
++void Config::setTranslationDeepLFormality(int value) {
++	setValue(kTranslationDeepLFormality, std::clamp(value, 0, 2));
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -15114,7 +15689,11 @@ index 0000000..226bd8c
 +			|| key == kChatsAvatarRadius
 +			|| key == kChatsSectionRadius
 +			|| key == kChatsSectionSeparateHeaders
-+			|| key == kChatsChatHeaderStyle) {
++			|| key == kChatsChatHeaderStyle
++			|| key == kTranslationProvider
++			|| key == kTranslationGoogleCloudKey
++			|| key == kTranslationDeepLKey
++			|| key == kTranslationDeepLFormality) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -15291,10 +15870,10 @@ index 0000000..226bd8c
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..9171c52
+index 0000000..6eb55b1
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,331 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -15587,6 +16166,15 @@ index 0000000..9171c52
 +	void setChatsMenuTranslate(bool value);
 +	void setChatsMenuReport(bool value);
 +	void setChatsMenuDelete(bool value);
++
++	[[nodiscard]] int translationProvider() const;
++	void setTranslationProvider(int value);
++	[[nodiscard]] QString translationGoogleCloudKey() const;
++	void setTranslationGoogleCloudKey(const QString &value);
++	[[nodiscard]] QString translationDeepLKey() const;
++	void setTranslationDeepLKey(const QString &value);
++	[[nodiscard]] int translationDeepLFormality() const;
++	void setTranslationDeepLFormality(int value);
 +
 +	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 +	void setPluginEnabled(const QString &id, bool enabled);
@@ -18525,10 +19113,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..2995274
+index 0000000..5bf201f
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2670 @@
+@@ -0,0 +1,2773 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -18702,6 +19290,13 @@ index 0000000..2995274
 +		<< "  exteraless-chats-cli update-channel-set <0..2>\n"
 +		<< "  exteraless-chats-cli update-check <json> <current> "
 +		<< "<prerelease 0|1>\n"
++		<< "  exteraless-chats-cli translation-provider\n"
++		<< "  exteraless-chats-cli translation-provider-set <0..3>\n"
++		<< "  exteraless-chats-cli translation-keys\n"
++		<< "  exteraless-chats-cli translation-keys-set <google|deepl> "
++		<< "<key>\n"
++		<< "  exteraless-chats-cli translation-formality\n"
++		<< "  exteraless-chats-cli translation-formality-set <0..2>\n"
 +		<< "  exteraless-chats-cli forward-date\n"
 +		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 +		<< "  exteraless-chats-cli sender-mini-avatars\n"
@@ -18821,6 +19416,38 @@ index 0000000..2995274
 +			Exteraless::Config::Instance().showSeconds() },
 +		{ QStringLiteral("hidePhone"),
 +			Exteraless::Config::Instance().hidePhone() },
++	});
++}
++
++[[nodiscard]] QString MaskTranslationKey(const QString &key) {
++	if (key.isEmpty()) {
++		return QString();
++	}
++	return (key.size() > 4 ? key.left(4) : QString())
++		+ QStringLiteral("****");
++}
++
++void PrintTranslationProvider() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("provider"),
++			Exteraless::Config::Instance().translationProvider() },
++	});
++}
++
++void PrintTranslationKeys() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("google"),
++			MaskTranslationKey(config.translationGoogleCloudKey()) },
++		{ QStringLiteral("deepl"),
++			MaskTranslationKey(config.translationDeepLKey()) },
++	});
++}
++
++void PrintTranslationFormality() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("formality"),
++			Exteraless::Config::Instance().translationDeepLFormality() },
 +	});
 +}
 +
@@ -20066,6 +20693,70 @@ index 0000000..2995274
 +			{ QStringLiteral("version"), info.version },
 +			{ QStringLiteral("url"), info.url },
 +		});
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-provider")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintTranslationProvider();
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-provider-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setTranslationProvider(value);
++		PrintTranslationProvider();
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-keys")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintTranslationKeys();
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-keys-set")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		const auto target = arguments[2];
++		if (target == QStringLiteral("google")) {
++			Exteraless::Config::Instance().setTranslationGoogleCloudKey(
++				arguments[3]);
++		} else if (target == QStringLiteral("deepl")) {
++			Exteraless::Config::Instance().setTranslationDeepLKey(
++				arguments[3]);
++		} else {
++			return PrintUsage();
++		}
++		PrintTranslationKeys();
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-formality")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintTranslationFormality();
++		return 0;
++	}
++	if (mode == QStringLiteral("translation-formality-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setTranslationDeepLFormality(value);
++		PrintTranslationFormality();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("forward-date")) {
@@ -21360,10 +22051,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..dbc200e
+index 0000000..c763f32
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6422 @@
+@@ -0,0 +1,6676 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -21987,7 +22678,7 @@ index 0000000..dbc200e
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 120,
++            len(section) == 122,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -22008,7 +22699,7 @@ index 0000000..dbc200e
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 125,
++            sum(len(value) for value in exported.values()) == 127,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -22028,7 +22719,7 @@ index 0000000..dbc200e
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 125,
++                data.get("applied") == 127,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -22184,6 +22875,8 @@ index 0000000..dbc200e
 +            "showFormattingButtons": True,
 +            "OEGeneralUsePersianCalendar": True,
 +            "OEGeneralPersianCalendarLatin": True,
++            "OETranslationProvider": 2,
++            "OETranslationDeepLFormality": 1,
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -22205,7 +22898,7 @@ index 0000000..dbc200e
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 125,
++            data.get("applied") == 127,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -22499,10 +23192,10 @@ index 0000000..dbc200e
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 120",
++            "backup legacy eight completed to 122",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (120, 3, 2),
++             len(sections["mainconfig"])) == (122, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -27630,6 +28323,256 @@ index 0000000..dbc200e
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_translation(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "translation-defaults")
++    data = json_call(
++        ledger, cli, ["translation-provider"], env,
++        "translation provider defaults")
++    if data is not None:
++        ledger.check(
++            "translation provider default auto",
++            data.get("provider") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["translation-formality"], env,
++        "translation formality defaults")
++    if data is not None:
++        ledger.check(
++            "translation formality default",
++            data.get("formality") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["translation-keys"], env,
++        "translation keys defaults")
++    if data is not None:
++        ledger.check(
++            "translation keys default empty",
++            data.get("google") == "" and data.get("deepl") == "",
++            data)
++
++    data = json_call(
++        ledger, cli, ["translation-provider-set", "2"], env,
++        "translation provider set deepl")
++    if data is not None:
++        ledger.check(
++            "translation provider set deepl",
++            data.get("provider") == 2,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["translation-provider"], env,
++        "translation provider reload")
++    if reloaded is not None:
++        ledger.check(
++            "translation provider persisted",
++            reloaded.get("provider") == 2,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["translation-provider-set", "9"], env,
++        "translation provider clamp high")
++    if data is not None:
++        ledger.check(
++            "translation provider clamped high",
++            data.get("provider") == 3,
++            data)
++    data = json_call(
++        ledger, cli, ["translation-provider-set", "-3"], env,
++        "translation provider clamp low")
++    if data is not None:
++        ledger.check(
++            "translation provider clamped low",
++            data.get("provider") == 0,
++            data)
++    data = json_call(
++        ledger, cli, ["translation-provider-set", "3"], env,
++        "translation provider set llm")
++    if data is not None:
++        ledger.check(
++            "translation provider accepts 3",
++            data.get("provider") == 3,
++            data)
++
++    data = json_call(
++        ledger, cli, ["translation-formality-set", "2"], env,
++        "translation formality set less")
++    if data is not None:
++        ledger.check(
++            "translation formality set less",
++            data.get("formality") == 2,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["translation-formality"], env,
++        "translation formality reload")
++    if reloaded is not None:
++        ledger.check(
++            "translation formality persisted",
++            reloaded.get("formality") == 2,
++            reloaded)
++    data = json_call(
++        ledger, cli, ["translation-formality-set", "5"], env,
++        "translation formality clamp high")
++    if data is not None:
++        ledger.check(
++            "translation formality clamped high",
++            data.get("formality") == 2,
++            data)
++    data = json_call(
++        ledger, cli, ["translation-formality-set", "-1"], env,
++        "translation formality clamp low")
++    if data is not None:
++        ledger.check(
++            "translation formality clamped low",
++            data.get("formality") == 0,
++            data)
++
++    google_key = "AIzaSyA-bcdefghijklmnopqrstuvwxyz0123456"
++    deepl_key = "abcd-1234-efgh-5678:fx"
++    data = json_call(
++        ledger, cli, ["translation-keys-set", "google", google_key], env,
++        "translation keys set google")
++    if data is not None:
++        ledger.check(
++            "translation google key masked",
++            data.get("google") == "AIza****",
++            data)
++        ledger.check(
++            "translation google key not leaked",
++            google_key not in json.dumps(data),
++            data)
++    data = json_call(
++        ledger, cli, ["translation-keys-set", "deepl", deepl_key], env,
++        "translation keys set deepl")
++    if data is not None:
++        ledger.check(
++            "translation deepl key masked",
++            data.get("deepl") == "abcd****",
++            data)
++        ledger.check(
++            "translation deepl key not leaked",
++            deepl_key not in json.dumps(data),
++            data)
++    reloaded = json_call(
++        ledger, cli, ["translation-keys"], env,
++        "translation keys reload")
++    if reloaded is not None:
++        ledger.check(
++            "translation keys persisted masked",
++            reloaded.get("google") == "AIza****"
++            and reloaded.get("deepl") == "abcd****",
++            reloaded)
++        ledger.check(
++            "translation keys reload not leaked",
++            google_key not in json.dumps(reloaded)
++            and deepl_key not in json.dumps(reloaded),
++            reloaded)
++    data = json_call(
++        ledger, cli, ["translation-keys-set", "google", "abc"], env,
++        "translation keys short")
++    if data is not None:
++        ledger.check(
++            "translation short key fully masked",
++            data.get("google") == "****",
++            data)
++    json_call(
++        ledger, cli, ["translation-keys-set", "google", google_key], env,
++        "translation keys restore google")
++
++    env = make_env(work / "translation-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "translationProvider": 2,
++            "deepLFormality": 1,
++            "googleCloudTranslateKey": google_key,
++            "deepLTranslateKey": deepl_key,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "translation alias import")
++    if data is not None:
++        ledger.check(
++            "translation alias applied",
++            data.get("applied") == 4 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["translation-provider"], env,
++        "translation alias provider")
++    if reloaded is not None:
++        ledger.check(
++            "translation alias provider value",
++            reloaded.get("provider") == 2,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["translation-formality"], env,
++        "translation alias formality")
++    if reloaded is not None:
++        ledger.check(
++            "translation alias formality value",
++            reloaded.get("formality") == 1,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["translation-keys"], env,
++        "translation alias keys")
++    if reloaded is not None:
++        ledger.check(
++            "translation alias keys masked",
++            reloaded.get("google") == "AIza****"
++            and reloaded.get("deepl") == "abcd****",
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"],
++        env, "translation export")
++    if data is not None:
++        section = backup_sections(data)["exteraconfig"]
++        ledger.check(
++            "translation export provider",
++            section.get("OETranslationProvider") == 2
++            and section.get("OETranslationDeepLFormality") == 1,
++            (section.get("OETranslationProvider"),
++             section.get("OETranslationDeepLFormality")))
++        ledger.check(
++            "translation export has no google key",
++            "OETranslationGoogleCloudKey" not in section,
++            sorted(section))
++        ledger.check(
++            "translation export has no deepl key",
++            "OETranslationDeepLKey" not in section,
++            sorted(section))
++        dump = json.dumps(data)
++        ledger.check(
++            "translation export leaks no key material",
++            google_key not in dump and deepl_key not in dump,
++            "secret found in backup export")
++
++    for name, arguments in [
++            ("translation provider set without value",
++             ["translation-provider-set"]),
++            ("translation provider set non numeric",
++             ["translation-provider-set", "google"]),
++            ("translation formality set non numeric",
++             ["translation-formality-set", "more"]),
++            ("translation keys set unknown target",
++             ["translation-keys-set", "bing", "key"]),
++            ("translation keys set without key",
++             ["translation-keys-set", "google"])]:
++        result = run(cli, arguments, env=env)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -27698,6 +28641,7 @@ index 0000000..dbc200e
 +        persian = check_persian(ledger, cli, work)
 +        media_quality = check_media_quality(ledger, cli, work)
 +        update_channel = check_update_channel(ledger, cli, work)
++        translation = check_translation(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
@@ -27772,6 +28716,7 @@ index 0000000..dbc200e
 +    print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
 +    print(f"update-channel: "
 +          f"{update_channel[0] - update_channel[1]} passed")
++    print(f"translation: {translation[0] - translation[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")

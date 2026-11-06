@@ -291,6 +291,15 @@ public:
 	void setChatsMenuReport(bool value);
 	void setChatsMenuDelete(bool value);
 
+	[[nodiscard]] int translationProvider() const;
+	void setTranslationProvider(int value);
+	[[nodiscard]] QString translationGoogleCloudKey() const;
+	void setTranslationGoogleCloudKey(const QString &value);
+	[[nodiscard]] QString translationDeepLKey() const;
+	void setTranslationDeepLKey(const QString &value);
+	[[nodiscard]] int translationDeepLFormality() const;
+	void setTranslationDeepLFormality(int value);
+
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;

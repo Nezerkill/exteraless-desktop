@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 836 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 868 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,10 +111,44 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
+  19 update-channel, 32 translation, 10 download-boost,
+  48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   101 backup);
   плагины без изменений — 32 и 213 проверок.
+- Провайдеры перевода (NB-49): `OETranslationProvider` (int `0..3`, default
+  `0`: `0` — auto/upstream, `1` — Google, `2` — DeepL, `3` зарезервирован под
+  LLM из NB-48) выбирает провайдера, `OETranslationGoogleCloudKey` и
+  `OETranslationDeepLKey` (строки, секреты — в `.extera`/бэкап не
+  экспортируются, импорт старых бэкапов принимает) хранят ключи, а
+  `OETranslationDeepLFormality` (int `0..2`, default `0`; `1` — more, `2` —
+  less) — формальность DeepL; алиасы `translationProvider`/
+  `googleCloudTranslateKey`/`deepLTranslateKey`/`deepLFormality`. Диспетчер
+  `CreateTranslateProvider` (`lang/translate_provider.cpp`) возвращает
+  выбранного провайдера до существующей цепочки (URL-шаблон → MTProto), а
+  `0` оставляет upstream как есть. Google — `GET` на
+  `translation.googleapis.com/language/translate/v2` с `format=text`, разбор
+  `data.translations[].translatedText` и unescape HTML-entities (`&quot;`,
+  `&#39;`, `&lt;`, `&gt;`, `&amp;`); DeepL — `POST` на
+  `api-free.deepl.com/v2/translate` с `Authorization: DeepL-Auth-Key`,
+  `formality=more|less` (при `0` параметра нет), Pro-эндпоинт вне scope.
+  В Exteraless Chats пункт «Translation provider» (Auto/Google/DeepL),
+  «DeepL formality» и «Translation API keys» с двумя маскированными полями
+  (`CloudPassword::AddPasswordField`), шесть lang-ключей
+  `lng_settings_exteraless_translation_*`; CLI 6 режимов
+  (`translation-provider`/`-set`, `translation-keys`/`-set`,
+  `translation-formality`/`-set`), ключи в выводе — первые 4 символа и
+  `****`; `check_translation` — 32 проверки (27 + 5 на неверный вызов CLI,
+  группа `cli` не росла — 61; счётчик выше 868, backup 101, плагины 32 и 213
+  без изменений); `.extera` — 127 ключей (122 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`); `kKeysCount` 11216 (`kTagsCount` 185);
+  sha256 патча `897e8192…`, `nix flake check` PASS. Ограничения: секреты
+  лежат plaintext в `tdata/exteraless.json` — только маскировка в CLI и
+  исключение из экспорта, OS-keychain нет; текст уходит на сторонние серверы
+  Google и DeepL, согласия в UI не спрашивают; ошибки дают общий тост
+  (`TranslateProviderError` не расширялся); LLM-провайдер (`3`) — NB-48;
+  DeepL Pro-эндпоинт не поддерживается; `boxes/translate_box.cpp` не
+  менялся; Xvfb-смоук не выполнялся.
 - Радиус секций и отдельные заголовки (NB-64): `OEChatsSectionRadius`
   (int `-1..16`, default `-1`) задаёт радиус подложки секции настроек, а
   `OEChatsSectionSeparateHeaders` (bool, default `false`) выносит заголовки

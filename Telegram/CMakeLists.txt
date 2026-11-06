@@ -1524,6 +1524,10 @@ PRIVATE
     lang/lang_numbers_animation.h
     lang/lang_translator.cpp
     lang/lang_translator.h
+    lang/translate_deepl_provider.cpp
+    lang/translate_deepl_provider.h
+    lang/translate_google_provider.cpp
+    lang/translate_google_provider.h
     lang/translate_mtproto_provider.cpp
     lang/translate_mtproto_provider.h
     lang/translate_provider.cpp

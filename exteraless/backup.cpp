@@ -270,6 +270,15 @@ constexpr auto kDisableChannelMuteButton = "DisableChannelMuteButton";
 constexpr auto kDoubleTapAction = "doubleTapAction";
 constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 
+constexpr auto kTranslationProvider = "OETranslationProvider";
+constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
+constexpr auto kTranslationDeepLKey = "OETranslationDeepLKey";
+constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
+constexpr auto kTranslationProviderAlias = "translationProvider";
+constexpr auto kTranslationGoogleCloudKeyAlias = "googleCloudTranslateKey";
+constexpr auto kTranslationDeepLKeyAlias = "deepLTranslateKey";
+constexpr auto kTranslationDeepLFormalityAlias = "deepLFormality";
+
 constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 constexpr auto kShowReportButton = "showReportButton";
 
@@ -528,6 +537,8 @@ QString BuildBackup() {
 	extera[kZalgoFilter] = config.zalgoFilter();
 	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 	extera[kShowFormattingButtons] = config.showFormattingButtons();
+	extera[kTranslationProvider] = config.translationProvider();
+	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -1099,6 +1110,23 @@ BackupImportResult ApplyBackup(const QString &text) {
 			const auto mode = value.toInt();
 			config.setChatsHideStickerTime(mode == 2);
 			config.setChatsStickerTimeSide(mode == 1);
+		} else if ((key == kTranslationProvider
+			|| key == kTranslationProviderAlias)
+			&& IntegralInRange(value, 0, 3)) {
+			config.setTranslationProvider(value.toInt());
+		} else if ((key == kTranslationDeepLFormality
+			|| key == kTranslationDeepLFormalityAlias)
+			&& IntegralInRange(value, 0, 2)) {
+			config.setTranslationDeepLFormality(value.toInt());
+		} else if ((key == kTranslationGoogleCloudKey
+			|| key == kTranslationGoogleCloudKeyAlias)
+			&& value.isString()) {
+			// WHY: old backups carry the secret; import accepts, export omits.
+			config.setTranslationGoogleCloudKey(value.toString());
+		} else if ((key == kTranslationDeepLKey
+			|| key == kTranslationDeepLKeyAlias)
+			&& value.isString()) {
+			config.setTranslationDeepLKey(value.toString());
 		} else {
 			return false;
 		}

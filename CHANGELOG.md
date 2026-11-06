@@ -2,6 +2,39 @@
 
 ## 2026-11-06
 
+- Перевод / Провайдеры Google и DeepL (NB-49): `OETranslationProvider`
+  (int `0..3`, default `0`: `0` — auto/upstream, `1` — Google, `2` — DeepL,
+  `3` зарезервирован под LLM из NB-48) выбирает провайдера перевода,
+  `OETranslationGoogleCloudKey` и `OETranslationDeepLKey` (строки, секреты —
+  в `.extera`/бэкап не экспортируются, импорт старых бэкапов принимает)
+  хранят ключи, `OETranslationDeepLFormality` (int `0..2`, default `0`; `1`
+  — more, `2` — less) — формальность DeepL. Алиасы `translationProvider`/
+  `googleCloudTranslateKey`/`deepLTranslateKey`/`deepLFormality`. Диспетчер
+  `CreateTranslateProvider` (`lang/translate_provider.cpp`) возвращает
+  выбранного провайдера до существующей цепочки (URL-шаблон → MTProto), а
+  `0` оставляет upstream как есть. Google — `GET` на
+  `translation.googleapis.com/language/translate/v2` с `format=text`, разбор
+  `data.translations[].translatedText` и unescape HTML-entities (`&quot;`,
+  `&#39;`, `&lt;`, `&gt;`, `&amp;`); DeepL — `POST` на
+  `api-free.deepl.com/v2/translate` с `Authorization: DeepL-Auth-Key`,
+  `formality=more|less` (при `0` параметра нет), Pro-эндпоинт вне scope.
+  В Exteraless Chats пункт «Translation provider» (Auto/Google/DeepL),
+  «DeepL formality» и «Translation API keys» с двумя маскированными полями
+  (`CloudPassword::AddPasswordField`), шесть lang-ключей
+  `lng_settings_exteraless_translation_*`; CLI 6 режимов
+  (`translation-provider`/`-set`, `translation-keys`/`-set`,
+  `translation-formality`/`-set`), ключи в выводе — первые 4 символа и
+  `****`; `check_translation` — 32 проверки (27 + 5 на неверный вызов CLI,
+  группа `cli` не росла — 61); раннеры 868/32/213 PASS (backup 101);
+  `.extera` — 127 ключей (122 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`); `kKeysCount` 11216 (`kTagsCount` 185); sha256 патча
+  `897e8192…`, `nix flake check` PASS. Ограничения: секреты лежат plaintext
+  в `tdata/exteraless.json` — только маскировка в CLI и исключение из
+  экспорта, OS-keychain нет; текст уходит на сторонние серверы Google и
+  DeepL, согласия в UI не спрашивают; ошибки дают общий тост
+  (`TranslateProviderError` не расширялся); LLM-провайдер (`3`) — NB-48;
+  DeepL Pro-эндпоинт не поддерживается; `boxes/translate_box.cpp` не
+  менялся; Xvfb-смоук не выполнялся.
 - Chats / Радиус секций и отдельные заголовки (NB-64): `OEChatsSectionRadius`
   (int `-1..16`, default `-1`) задаёт радиус подложки секции настроек, а
   `OEChatsSectionSeparateHeaders` (bool, default `false`) выносит заголовки
