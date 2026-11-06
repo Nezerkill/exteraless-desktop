@@ -52,7 +52,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (825 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, download-boost, subtitles, avatar-corners, backup);
+  (836 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, download-boost, subtitles, avatar-corners, section-radius, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
@@ -77,7 +77,11 @@ sibling-чекаутом: `../exteraless`.
   `1` — iOS-центровка, `2` — M3) центрирует имя и статус шапки в
   `history/view/history_view_top_bar_widget.cpp`, а для M3 подставляет
   static-копию стиля `M3TitleStyle()` со шрифтом `st::topBarM3TitleFont`
-  (`font(17px semibold)` в `info/info.style`).
+  (`font(17px semibold)` в `info/info.style`); пункт «Section radius»
+  (`OEChatsSectionRadius`, int `-1..16`, default `-1`) и тумблер «Separate
+  headers» (`OEChatsSectionSeparateHeaders`, bool, default `false`) правят
+  подложку секций — `SectionCard` в
+  `Telegram/SourceFiles/settings/settings_builder.cpp`.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
   сообщений, показывает реакции и метки reply/forward/edited, а также
   значок/кастомную метку, прозрачность и цвет (NB-20); inline-показ в чате —

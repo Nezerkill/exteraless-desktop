@@ -8,18 +8,22 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "settings/settings_builder.h"
 
 #include "apiwrap.h"
+#include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "api/api_user_privacy.h"
 #include "boxes/edit_privacy_box.h"
 #include "main/main_session.h"
 #include "settings/settings_common.h"
 #include "settings/sections/settings_privacy_security.h"
+#include "ui/painter.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
+#include "ui/wrap/wrap.h"
 #include "window/window_session_controller.h"
+#include "styles/palette.h"
 #include "styles/style_settings.h"
 
 namespace Settings::Builder {
@@ -35,6 +39,32 @@ namespace {
 		lifetime);
 	return result;
 }
+
+class SectionCard final : public Ui::OverrideMargins {
+public:
+	SectionCard(QWidget *parent, int radius)
+	: Ui::OverrideMargins(
+		parent,
+		object_ptr<Ui::VerticalLayout>(parent),
+		QMargins(radius, 0, radius, 0))
+	, _radius(radius) {
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override {
+		auto p = QPainter(this);
+		p.setPen(Qt::NoPen);
+		p.setBrush(st::windowBgOver);
+		{
+			PainterHighQualityEnabler hq(p);
+			p.drawRoundedRect(rect(), _radius, _radius);
+		}
+	}
+
+private:
+	const int _radius;
+
+};
 
 } // namespace
 
@@ -154,6 +184,30 @@ std::vector<SearchEntry> BuildHelper::index(
 
 SectionBuilder::SectionBuilder(BuildContext context)
 : _context(std::move(context)) {
+	if (const auto wctx = std::get_if<WidgetContext>(&_context)) {
+		const auto &config = Exteraless::Config::Instance();
+		_outer = wctx->container;
+		_cardRadius = config.sectionRadius();
+		_separateHeaders = config.sectionSeparateHeaders();
+	}
+}
+
+Ui::VerticalLayout *SectionBuilder::body() const {
+	if (!_body) {
+		if (_outer && _cardRadius >= 0) {
+			startCard();
+		} else {
+			_body = _outer;
+		}
+	}
+	return _body;
+}
+
+void SectionBuilder::startCard() const {
+	auto card = object_ptr<SectionCard>(_outer, _cardRadius);
+	_cardBody = static_cast<Ui::VerticalLayout*>(card->entity());
+	_body = _cardBody;
+	_outer->add(std::move(card));
 }
 
 void SectionBuilder::add(FnMut<void(const BuildContext &ctx)> method) {
@@ -167,8 +221,8 @@ Ui::VerticalLayout *SectionBuilder::scope(
 		rpl::producer<bool> shown,
 		FnMut<void(ToggledScopePtr)> hook) {
 	auto result = (Ui::VerticalLayout*)nullptr;
-	v::match(_context, [&](WidgetContext &wctx) {
-		const auto outer = wctx.container;
+	v::match(_context, [&](WidgetContext &) {
+		const auto outer = body();
 		const auto toggled = (shown || hook);
 		const auto wrap = toggled
 			? outer->add(
@@ -179,7 +233,8 @@ Ui::VerticalLayout *SectionBuilder::scope(
 		const auto inner = wrap
 			? wrap->entity()
 			: outer->add(object_ptr<Ui::VerticalLayout>(outer));
-		wctx.container = inner;
+		const auto previous = _body;
+		_body = inner;
 		method();
 		if (shown) {
 			wrap->toggleOn(std::move(shown));
@@ -188,7 +243,7 @@ Ui::VerticalLayout *SectionBuilder::scope(
 		if (hook) {
 			hook(wrap);
 		}
-		wctx.container = outer;
+		_body = previous;
 		result = inner;
 	}, [&](const SearchContext &sctx) {
 		method();
@@ -204,7 +259,7 @@ Ui::RpWidget *SectionBuilder::add(
 		v::match(ctx, [&](const WidgetContext &wctx) {
 			if (auto w = widget ? widget(wctx) : WidgetToAdd()) {
 				result = w.widget.data();
-				wctx.container->add(std::move(w.widget), w.margin, w.align);
+				body()->add(std::move(w.widget), w.margin, w.align);
 
 				if (auto entry = search ? search() : SearchEntry()) {
 					if (wctx.highlights) {
@@ -233,9 +288,9 @@ Ui::RpWidget *SectionBuilder::addControl(ControlArgs &&args) {
 		}, std::move(shown));
 		return result;
 	}
-	return add([&](const WidgetContext &ctx) {
+	return add([&](const WidgetContext &) {
 		return WidgetToAdd{
-			.widget = args.factory ? args.factory(ctx.container) : nullptr,
+			.widget = args.factory ? args.factory(body()) : nullptr,
 			.margin = args.margin,
 			.align = args.align,
 			.highlight = std::move(args.highlight),
@@ -300,29 +355,29 @@ Ui::SettingsButton *SectionBuilder::addSectionButton(SectionArgs &&args) {
 }
 
 void SectionBuilder::addDivider() {
-	v::match(_context, [&](const WidgetContext &ctx) {
-		Ui::AddDivider(ctx.container);
+	v::match(_context, [&](const WidgetContext &) {
+		Ui::AddDivider(body());
 	}, [](const SearchContext &) {
 	});
 }
 
 void SectionBuilder::addSkip() {
-	v::match(_context, [&](const WidgetContext &ctx) {
-		Ui::AddSkip(ctx.container);
+	v::match(_context, [&](const WidgetContext &) {
+		Ui::AddSkip(body());
 	}, [](const SearchContext &) {
 	});
 }
 
 void SectionBuilder::addSkip(int height) {
-	v::match(_context, [&](const WidgetContext &ctx) {
-		Ui::AddSkip(ctx.container, height);
+	v::match(_context, [&](const WidgetContext &) {
+		Ui::AddSkip(body(), height);
 	}, [](const SearchContext &) {
 	});
 }
 
 void SectionBuilder::addDividerText(rpl::producer<QString> text) {
-	v::match(_context, [&](const WidgetContext &ctx) {
-		Ui::AddDividerText(ctx.container, std::move(text));
+	v::match(_context, [&](const WidgetContext &) {
+		Ui::AddDividerText(body(), std::move(text));
 	}, [](const SearchContext &) {
 	});
 }
@@ -408,9 +463,16 @@ Ui::Checkbox *SectionBuilder::addCheckbox(CheckboxArgs &&args) {
 
 void SectionBuilder::addSubsectionTitle(SubsectionTitleArgs &&args) {
 	v::match(_context, [&](const WidgetContext &ctx) {
+		const auto separate = (_cardRadius >= 0)
+			&& _separateHeaders
+			&& (!_body || _body == _cardBody);
 		const auto title = AddSubsectionTitle(
-			ctx.container,
+			separate ? _outer : body(),
 			rpl::duplicate(args.title));
+		if (separate) {
+			_body = nullptr;
+			_cardBody = nullptr;
+		}
 		if (!args.id.isEmpty() && ctx.highlights) {
 			ctx.highlights->push_back({
 				args.id,
@@ -430,15 +492,15 @@ void SectionBuilder::addSubsectionTitle(SubsectionTitleArgs &&args) {
 }
 
 void SectionBuilder::addSubsectionTitle(rpl::producer<QString> text) {
-	v::match(_context, [&](const WidgetContext &ctx) {
-		AddSubsectionTitle(ctx.container, std::move(text));
+	v::match(_context, [&](const WidgetContext &) {
+		AddSubsectionTitle(body(), std::move(text));
 	}, [](const SearchContext &) {
 	});
 }
 
 Ui::VerticalLayout *SectionBuilder::container() const {
-	return v::match(_context, [](const WidgetContext &ctx) {
-		return ctx.container.get();
+	return v::match(_context, [&](const WidgetContext &) {
+		return body();
 	}, [](const SearchContext &) -> Ui::VerticalLayout* {
 		return nullptr;
 	});

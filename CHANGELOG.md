@@ -2,6 +2,30 @@
 
 ## 2026-11-06
 
+- Chats / Радиус секций и отдельные заголовки (NB-64): `OEChatsSectionRadius`
+  (int `-1..16`, default `-1`) задаёт радиус подложки секции настроек, а
+  `OEChatsSectionSeparateHeaders` (bool, default `false`) выносит заголовки
+  наружу. `SectionBuilder` строит `SectionCard` — `Ui::OverrideMargins` с
+  отступами `QMargins(radius, 0, radius, 0)` и заливкой `st::windowBgOver` в
+  `paintEvent`, поэтому содержимое секции лежит на скруглённой подложке;
+  карточка создаётся лениво в `body()` при первом контроле, а при
+  `separateHeaders` `addSubsectionTitle` кладёт заголовок в `_outer` (вне
+  карточки) и сбрасывает `_body`, поэтому следующая секция получает свою
+  карточку. Путь поиска (`SearchContext`) карточек не создаёт. Алиасы
+  `sectionRadius`/`SectionRadius` (double, `lround` и кламп `-1..16`) и
+  `separateHeaders`/`SeparateHeaders` (bool); в Chats пункт «Section radius» с
+  `Ui::Radioenum` Upstream/Square/Rounded 4/8/12 и тумблер «Separate headers»,
+  четыре lang-ключа `lng_settings_exteraless_chats_section_radius*` и
+  `lng_settings_exteraless_chats_separate_headers`; CLI `section-radius`,
+  `section-radius-set`, `separate-headers`, `separate-headers-set`;
+  `check_section_radius` — 11 проверок, группа `cli` не росла (61); раннеры
+  836/32/213 PASS (backup 101); `.extera` — 125 ключей (120 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`); `kKeysCount` 11210 (`kTagsCount` 185); sha256
+  патча `90c40747…`, `nix flake check` PASS. Ограничения: вертикальные отступы
+  карточки нулевые, поэтому hover-подсветка строк касается её краёв; радиус
+  боксов (`lib_ui`) не затронут — это вне Nix-патча; 51 прямой вызов
+  `AddSubsectionTitle` вне билдера остаётся внутри карточки; режим применяется
+  после перестройки страницы; Xvfb-смоук не выполнялся.
 - Chats / Тулбар форматирования (NB-89, вторая половина):
   `OEChatsShowFormattingButtons` (bool, default `false`, алиас
   `showFormattingButtons`) показывает над полем ввода ряд из восьми

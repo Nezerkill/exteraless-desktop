@@ -207,6 +207,9 @@ constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
+constexpr auto kChatsSectionRadius = "OEChatsSectionRadius";
+constexpr auto kChatsSectionSeparateHeaders
+	= "OEChatsSectionSeparateHeaders";
 constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
@@ -244,6 +247,10 @@ constexpr auto kStickerShapeAlias = "stickerShape";
 constexpr auto kAvatarCornersAlias = "avatarCorners";
 constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
 constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
+constexpr auto kSectionRadiusAlias = "sectionRadius";
+constexpr auto kSectionRadiusAliasUpper = "SectionRadius";
+constexpr auto kSectionSeparateHeadersAlias = "separateHeaders";
+constexpr auto kSectionSeparateHeadersAliasUpper = "SeparateHeaders";
 constexpr auto kIosChatHeaderAlias = "iosChatHeader";
 constexpr auto kNewChatHeaderStyleAlias = "newChatHeaderStyle";
 constexpr auto kReplyColorsAlias = "replyColors";
@@ -499,6 +506,8 @@ QString BuildBackup() {
 	extera[kChatsStickerSize] = chats.stickerSize;
 	extera[kChatsStickerShape] = chats.stickerShape;
 	extera[kChatsAvatarRadius] = chats.avatarRadius;
+	extera[kChatsSectionRadius] = config.sectionRadius();
+	extera[kChatsSectionSeparateHeaders] = config.sectionSeparateHeaders();
 	extera[kChatsChatHeaderStyle] = config.chatHeaderStyle();
 	extera[kChatsReplyColors] = chats.replyColors;
 	extera[kChatsReplyEmoji] = chats.replyEmoji;
@@ -961,6 +970,19 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setStickerShape(std::clamp(rounded, 0, 2));
 		} else if (key == kChatsAvatarRadius && IntegralInRange(value, -1, 32)) {
 			config.setAvatarRadius(value.toInt());
+		} else if (key == kChatsSectionRadius
+			&& IntegralInRange(value, -1, 16)) {
+			config.setSectionRadius(value.toInt());
+		} else if ((key == kSectionRadiusAlias
+			|| key == kSectionRadiusAliasUpper)
+			&& value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setSectionRadius(std::clamp(rounded, -1, 16));
+		} else if ((key == kChatsSectionSeparateHeaders
+			|| key == kSectionSeparateHeadersAlias
+			|| key == kSectionSeparateHeadersAliasUpper)
+			&& value.isBool()) {
+			config.setSectionSeparateHeaders(value.toBool());
 		} else if ((key == kAvatarCornersAlias
 			|| key == kSingleCornerRadiusAlias)
 			&& value.isDouble()) {

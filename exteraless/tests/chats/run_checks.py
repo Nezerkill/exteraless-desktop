@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 118,
+            len(section) == 120,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 123,
+            sum(len(value) for value in exported.values()) == 125,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 123,
+                data.get("applied") == 125,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -736,6 +736,8 @@ def check_backup(ledger, cli, work):
             "OEChatsStickerSize": 14,
             "OEChatsStickerShape": 1,
             "OEChatsAvatarRadius": 10,
+            "OEChatsSectionRadius": 8,
+            "OEChatsSectionSeparateHeaders": True,
             "OEChatsChatHeaderStyle": 2,
             "OEChatsReplyColors": False,
             "OEChatsReplyEmoji": True,
@@ -837,7 +839,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 123,
+            data.get("applied") == 125,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1131,10 +1133,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 118",
+            "backup legacy eight completed to 120",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (118, 3, 2),
+             len(sections["mainconfig"])) == (120, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -4076,6 +4078,116 @@ def check_header_style(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_section_radius(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "section-radius-defaults")
+    data = json_call(
+        ledger, cli, ["section-radius"], env, "section radius defaults")
+    if data is not None:
+        ledger.check(
+            "section radius default upstream",
+            data.get("radius") == -1,
+            data)
+
+    data = json_call(
+        ledger, cli, ["separate-headers"], env,
+        "separate headers defaults")
+    if data is not None:
+        ledger.check(
+            "separate headers default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["section-radius-set", "8"], env,
+        "section radius set")
+    if data is not None:
+        ledger.check(
+            "section radius set rounded",
+            data.get("radius") == 8,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["section-radius"], env, "section radius reload")
+    if reloaded is not None:
+        ledger.check(
+            "section radius persisted",
+            reloaded.get("radius") == 8,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["separate-headers-set", "1"], env,
+        "separate headers set")
+    if data is not None:
+        ledger.check(
+            "separate headers set on",
+            data.get("enabled") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["separate-headers"], env,
+        "separate headers reload")
+    if reloaded is not None:
+        ledger.check(
+            "separate headers persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["section-radius-set", "99"], env,
+        "section radius clamp")
+    if data is not None:
+        ledger.check(
+            "section radius clamped to 16",
+            data.get("radius") == 16,
+            data)
+
+    data = json_call(
+        ledger, cli, ["section-radius-set", "-9"], env,
+        "section radius low clamp")
+    if data is not None:
+        ledger.check(
+            "section radius clamped to -1",
+            data.get("radius") == -1,
+            data)
+
+    env = make_env(work / "section-radius-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "sectionRadius": 12,
+            "separateHeaders": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "section radius alias")
+    if data is not None:
+        ledger.check(
+            "section radius alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["section-radius"], env, "section radius alias read")
+    if reloaded is not None:
+        ledger.check(
+            "section radius alias value",
+            reloaded.get("radius") == 12,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["separate-headers"], env,
+        "separate headers alias read")
+    if reloaded is not None:
+        ledger.check(
+            "separate headers alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_edited_mark(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -6196,6 +6308,7 @@ def main():
         sticker_size = check_sticker_size(ledger, cli, work)
         avatar_corners = check_avatar_corners(ledger, cli, work)
         header_style = check_header_style(ledger, cli, work)
+        section_radius = check_section_radius(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
         sender_mini_avatars = check_sender_mini_avatars(
@@ -6260,6 +6373,8 @@ def main():
     print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
     print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
     print(f"header-style: {header_style[0] - header_style[1]} passed")
+    print(f"section-radius: "
+          f"{section_radius[0] - section_radius[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"sender-mini-avatars: "

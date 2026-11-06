@@ -1009,6 +1009,71 @@ const auto kMeta = Builder::BuildHelper({
 		.keywords = { u"chat"_q, u"header"_q, u"ios"_q, u"m3"_q },
 	});
 
+	const auto sectionRadiusLabel = [](int radius) {
+		if (radius < 0) {
+			return tr::lng_settings_exteraless_chats_header_style_upstream(
+				tr::now);
+		} else if (radius == 0) {
+			return tr::lng_settings_exteraless_chats_section_radius_square(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_section_radius_rounded(
+			tr::now,
+			lt_radius,
+			QString::number(radius));
+	};
+	const auto sectionRadius = std::make_shared<rpl::variable<QString>>(
+		sectionRadiusLabel(Exteraless::Config::Instance().sectionRadius()));
+	builder.addButton({
+		.id = u"exteraless/chats/section-radius"_q,
+		.title = tr::lng_settings_exteraless_chats_section_radius(),
+		.st = &st::settingsButtonNoIcon,
+		.label = sectionRadius->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto current = Exteraless::Config::Instance()
+				.sectionRadius();
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				current);
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_section_radius());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (const auto radius : { -1, 0, 4, 8, 12 }) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							radius,
+							sectionRadiusLabel(radius),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int radius) {
+					Exteraless::Config::Instance().setSectionRadius(radius);
+					sectionRadius->force_assign(
+						sectionRadiusLabel(radius));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"section"_q, u"radius"_q, u"square"_q, u"rounded"_q },
+	});
+
+	addChatsToggle(
+		u"exteraless/chats/separate-headers"_q,
+		tr::lng_settings_exteraless_chats_separate_headers(),
+		{ u"section"_q, u"header"_q, u"separate"_q },
+		Exteraless::Config::Instance().sectionSeparateHeaders(),
+		[](bool value) {
+			Exteraless::Config::Instance().setSectionSeparateHeaders(value);
+		});
+
 	addChatsToggle(
 		u"exteraless/chats/remove-tail"_q,
 		tr::lng_settings_exteraless_chats_remove_tail(),

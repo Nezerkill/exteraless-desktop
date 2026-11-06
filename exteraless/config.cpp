@@ -131,6 +131,9 @@ constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
+constexpr auto kChatsSectionRadius = "OEChatsSectionRadius";
+constexpr auto kChatsSectionSeparateHeaders
+	= "OEChatsSectionSeparateHeaders";
 constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
@@ -1111,6 +1114,22 @@ void Config::setAvatarRadius(int value) {
 	setValue(kChatsAvatarRadius, std::clamp(value, -1, 32));
 }
 
+int Config::sectionRadius() const {
+	return std::clamp(intValue(kChatsSectionRadius, -1), -1, 16);
+}
+
+void Config::setSectionRadius(int value) {
+	setValue(kChatsSectionRadius, std::clamp(value, -1, 16));
+}
+
+bool Config::sectionSeparateHeaders() const {
+	return boolValue(kChatsSectionSeparateHeaders, false);
+}
+
+void Config::setSectionSeparateHeaders(bool value) {
+	setValue(kChatsSectionSeparateHeaders, value);
+}
+
 int Config::chatHeaderStyle() const {
 	return std::clamp(intValue(kChatsChatHeaderStyle, 0), 0, 2);
 }
@@ -1405,6 +1424,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsShowSpoilersDirectly
 			|| key == kChatsShowFormattingButtons
 			|| key == kChatsAvatarRadius
+			|| key == kChatsSectionRadius
+			|| key == kChatsSectionSeparateHeaders
 			|| key == kChatsChatHeaderStyle) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {

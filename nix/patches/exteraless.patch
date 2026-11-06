@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..a9d2f1f 100644
+index ffc8ec9..f5dcaac 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..a9d2f1f 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,208 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,212 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -306,6 +306,10 @@ index ffc8ec9..a9d2f1f 100644
 +"lng_settings_exteraless_chats_header_style_upstream" = "Upstream";
 +"lng_settings_exteraless_chats_header_style_ios" = "iOS";
 +"lng_settings_exteraless_chats_header_style_m3" = "M3";
++"lng_settings_exteraless_chats_section_radius" = "Section radius";
++"lng_settings_exteraless_chats_section_radius_square" = "Square";
++"lng_settings_exteraless_chats_section_radius_rounded" = "Rounded {radius}";
++"lng_settings_exteraless_chats_separate_headers" = "Separate headers";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -8270,10 +8274,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..fa2b1e1
+index 0000000..9961455
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2473 @@
+@@ -0,0 +1,2538 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -9284,6 +9288,71 @@ index 0000000..fa2b1e1
 +		},
 +		.keywords = { u"chat"_q, u"header"_q, u"ios"_q, u"m3"_q },
 +	});
++
++	const auto sectionRadiusLabel = [](int radius) {
++		if (radius < 0) {
++			return tr::lng_settings_exteraless_chats_header_style_upstream(
++				tr::now);
++		} else if (radius == 0) {
++			return tr::lng_settings_exteraless_chats_section_radius_square(
++				tr::now);
++		}
++		return tr::lng_settings_exteraless_chats_section_radius_rounded(
++			tr::now,
++			lt_radius,
++			QString::number(radius));
++	};
++	const auto sectionRadius = std::make_shared<rpl::variable<QString>>(
++		sectionRadiusLabel(Exteraless::Config::Instance().sectionRadius()));
++	builder.addButton({
++		.id = u"exteraless/chats/section-radius"_q,
++		.title = tr::lng_settings_exteraless_chats_section_radius(),
++		.st = &st::settingsButtonNoIcon,
++		.label = sectionRadius->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto current = Exteraless::Config::Instance()
++				.sectionRadius();
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				current);
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_chats_section_radius());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (const auto radius : { -1, 0, 4, 8, 12 }) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							radius,
++							sectionRadiusLabel(radius),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int radius) {
++					Exteraless::Config::Instance().setSectionRadius(radius);
++					sectionRadius->force_assign(
++						sectionRadiusLabel(radius));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"section"_q, u"radius"_q, u"square"_q, u"rounded"_q },
++	});
++
++	addChatsToggle(
++		u"exteraless/chats/separate-headers"_q,
++		tr::lng_settings_exteraless_chats_separate_headers(),
++		{ u"section"_q, u"header"_q, u"separate"_q },
++		Exteraless::Config::Instance().sectionSeparateHeaders(),
++		[](bool value) {
++			Exteraless::Config::Instance().setSectionSeparateHeaders(value);
++		});
 +
 +	addChatsToggle(
 +		u"exteraless/chats/remove-tail"_q,
@@ -10967,6 +11036,244 @@ index 62e91ea..76f44bb 100644
  	builder.addDivider();
  	builder.addSkip();
  
+diff --git a/Telegram/SourceFiles/settings/settings_builder.cpp b/Telegram/SourceFiles/settings/settings_builder.cpp
+index 20b6e6d..742efc9 100644
+--- a/Telegram/SourceFiles/settings/settings_builder.cpp
++++ b/Telegram/SourceFiles/settings/settings_builder.cpp
+@@ -8,18 +8,22 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "settings/settings_builder.h"
+ 
+ #include "apiwrap.h"
++#include "exteraless/config.h"
+ #include "lang/lang_keys.h"
+ #include "api/api_user_privacy.h"
+ #include "boxes/edit_privacy_box.h"
+ #include "main/main_session.h"
+ #include "settings/settings_common.h"
+ #include "settings/sections/settings_privacy_security.h"
++#include "ui/painter.h"
+ #include "ui/vertical_list.h"
+ #include "ui/widgets/buttons.h"
+ #include "ui/widgets/checkbox.h"
+ #include "ui/wrap/slide_wrap.h"
+ #include "ui/wrap/vertical_layout.h"
++#include "ui/wrap/wrap.h"
+ #include "window/window_session_controller.h"
++#include "styles/palette.h"
+ #include "styles/style_settings.h"
+ 
+ namespace Settings::Builder {
+@@ -36,6 +40,32 @@ namespace {
+ 	return result;
+ }
+ 
++class SectionCard final : public Ui::OverrideMargins {
++public:
++	SectionCard(QWidget *parent, int radius)
++	: Ui::OverrideMargins(
++		parent,
++		object_ptr<Ui::VerticalLayout>(parent),
++		QMargins(radius, 0, radius, 0))
++	, _radius(radius) {
++	}
++
++protected:
++	void paintEvent(QPaintEvent *) override {
++		auto p = QPainter(this);
++		p.setPen(Qt::NoPen);
++		p.setBrush(st::windowBgOver);
++		{
++			PainterHighQualityEnabler hq(p);
++			p.drawRoundedRect(rect(), _radius, _radius);
++		}
++	}
++
++private:
++	const int _radius;
++
++};
++
+ } // namespace
+ 
+ BuildHelper::BuildHelper(
+@@ -154,6 +184,30 @@ std::vector<SearchEntry> BuildHelper::index(
+ 
+ SectionBuilder::SectionBuilder(BuildContext context)
+ : _context(std::move(context)) {
++	if (const auto wctx = std::get_if<WidgetContext>(&_context)) {
++		const auto &config = Exteraless::Config::Instance();
++		_outer = wctx->container;
++		_cardRadius = config.sectionRadius();
++		_separateHeaders = config.sectionSeparateHeaders();
++	}
++}
++
++Ui::VerticalLayout *SectionBuilder::body() const {
++	if (!_body) {
++		if (_outer && _cardRadius >= 0) {
++			startCard();
++		} else {
++			_body = _outer;
++		}
++	}
++	return _body;
++}
++
++void SectionBuilder::startCard() const {
++	auto card = object_ptr<SectionCard>(_outer, _cardRadius);
++	_cardBody = static_cast<Ui::VerticalLayout*>(card->entity());
++	_body = _cardBody;
++	_outer->add(std::move(card));
+ }
+ 
+ void SectionBuilder::add(FnMut<void(const BuildContext &ctx)> method) {
+@@ -167,8 +221,8 @@ Ui::VerticalLayout *SectionBuilder::scope(
+ 		rpl::producer<bool> shown,
+ 		FnMut<void(ToggledScopePtr)> hook) {
+ 	auto result = (Ui::VerticalLayout*)nullptr;
+-	v::match(_context, [&](WidgetContext &wctx) {
+-		const auto outer = wctx.container;
++	v::match(_context, [&](WidgetContext &) {
++		const auto outer = body();
+ 		const auto toggled = (shown || hook);
+ 		const auto wrap = toggled
+ 			? outer->add(
+@@ -179,7 +233,8 @@ Ui::VerticalLayout *SectionBuilder::scope(
+ 		const auto inner = wrap
+ 			? wrap->entity()
+ 			: outer->add(object_ptr<Ui::VerticalLayout>(outer));
+-		wctx.container = inner;
++		const auto previous = _body;
++		_body = inner;
+ 		method();
+ 		if (shown) {
+ 			wrap->toggleOn(std::move(shown));
+@@ -188,7 +243,7 @@ Ui::VerticalLayout *SectionBuilder::scope(
+ 		if (hook) {
+ 			hook(wrap);
+ 		}
+-		wctx.container = outer;
++		_body = previous;
+ 		result = inner;
+ 	}, [&](const SearchContext &sctx) {
+ 		method();
+@@ -204,7 +259,7 @@ Ui::RpWidget *SectionBuilder::add(
+ 		v::match(ctx, [&](const WidgetContext &wctx) {
+ 			if (auto w = widget ? widget(wctx) : WidgetToAdd()) {
+ 				result = w.widget.data();
+-				wctx.container->add(std::move(w.widget), w.margin, w.align);
++				body()->add(std::move(w.widget), w.margin, w.align);
+ 
+ 				if (auto entry = search ? search() : SearchEntry()) {
+ 					if (wctx.highlights) {
+@@ -233,9 +288,9 @@ Ui::RpWidget *SectionBuilder::addControl(ControlArgs &&args) {
+ 		}, std::move(shown));
+ 		return result;
+ 	}
+-	return add([&](const WidgetContext &ctx) {
++	return add([&](const WidgetContext &) {
+ 		return WidgetToAdd{
+-			.widget = args.factory ? args.factory(ctx.container) : nullptr,
++			.widget = args.factory ? args.factory(body()) : nullptr,
+ 			.margin = args.margin,
+ 			.align = args.align,
+ 			.highlight = std::move(args.highlight),
+@@ -300,29 +355,29 @@ Ui::SettingsButton *SectionBuilder::addSectionButton(SectionArgs &&args) {
+ }
+ 
+ void SectionBuilder::addDivider() {
+-	v::match(_context, [&](const WidgetContext &ctx) {
+-		Ui::AddDivider(ctx.container);
++	v::match(_context, [&](const WidgetContext &) {
++		Ui::AddDivider(body());
+ 	}, [](const SearchContext &) {
+ 	});
+ }
+ 
+ void SectionBuilder::addSkip() {
+-	v::match(_context, [&](const WidgetContext &ctx) {
+-		Ui::AddSkip(ctx.container);
++	v::match(_context, [&](const WidgetContext &) {
++		Ui::AddSkip(body());
+ 	}, [](const SearchContext &) {
+ 	});
+ }
+ 
+ void SectionBuilder::addSkip(int height) {
+-	v::match(_context, [&](const WidgetContext &ctx) {
+-		Ui::AddSkip(ctx.container, height);
++	v::match(_context, [&](const WidgetContext &) {
++		Ui::AddSkip(body(), height);
+ 	}, [](const SearchContext &) {
+ 	});
+ }
+ 
+ void SectionBuilder::addDividerText(rpl::producer<QString> text) {
+-	v::match(_context, [&](const WidgetContext &ctx) {
+-		Ui::AddDividerText(ctx.container, std::move(text));
++	v::match(_context, [&](const WidgetContext &) {
++		Ui::AddDividerText(body(), std::move(text));
+ 	}, [](const SearchContext &) {
+ 	});
+ }
+@@ -408,9 +463,16 @@ Ui::Checkbox *SectionBuilder::addCheckbox(CheckboxArgs &&args) {
+ 
+ void SectionBuilder::addSubsectionTitle(SubsectionTitleArgs &&args) {
+ 	v::match(_context, [&](const WidgetContext &ctx) {
++		const auto separate = (_cardRadius >= 0)
++			&& _separateHeaders
++			&& (!_body || _body == _cardBody);
+ 		const auto title = AddSubsectionTitle(
+-			ctx.container,
++			separate ? _outer : body(),
+ 			rpl::duplicate(args.title));
++		if (separate) {
++			_body = nullptr;
++			_cardBody = nullptr;
++		}
+ 		if (!args.id.isEmpty() && ctx.highlights) {
+ 			ctx.highlights->push_back({
+ 				args.id,
+@@ -430,15 +492,15 @@ void SectionBuilder::addSubsectionTitle(SubsectionTitleArgs &&args) {
+ }
+ 
+ void SectionBuilder::addSubsectionTitle(rpl::producer<QString> text) {
+-	v::match(_context, [&](const WidgetContext &ctx) {
+-		AddSubsectionTitle(ctx.container, std::move(text));
++	v::match(_context, [&](const WidgetContext &) {
++		AddSubsectionTitle(body(), std::move(text));
+ 	}, [](const SearchContext &) {
+ 	});
+ }
+ 
+ Ui::VerticalLayout *SectionBuilder::container() const {
+-	return v::match(_context, [](const WidgetContext &ctx) {
+-		return ctx.container.get();
++	return v::match(_context, [&](const WidgetContext &) {
++		return body();
+ 	}, [](const SearchContext &) -> Ui::VerticalLayout* {
+ 		return nullptr;
+ 	});
+diff --git a/Telegram/SourceFiles/settings/settings_builder.h b/Telegram/SourceFiles/settings/settings_builder.h
+index 3ac0a93..7e45681 100644
+--- a/Telegram/SourceFiles/settings/settings_builder.h
++++ b/Telegram/SourceFiles/settings/settings_builder.h
+@@ -261,7 +261,15 @@ private:
+ 		QWidget *widget,
+ 		HighlightArgs &&args);
+ 
++	[[nodiscard]] Ui::VerticalLayout *body() const;
++	void startCard() const;
++
+ 	BuildContext _context;
++	Ui::VerticalLayout *_outer = nullptr;
++	mutable Ui::VerticalLayout *_body = nullptr;
++	mutable Ui::VerticalLayout *_cardBody = nullptr;
++	int _cardRadius = -1;
++	bool _separateHeaders = false;
+ 
+ };
+ 
 diff --git a/Telegram/SourceFiles/storage/download_manager_mtproto.cpp b/Telegram/SourceFiles/storage/download_manager_mtproto.cpp
 index d0007eb..b53ac3d 100644
 --- a/Telegram/SourceFiles/storage/download_manager_mtproto.cpp
@@ -12120,10 +12427,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..a77bbd1
+index 0000000..4e282ed
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1105 @@
+@@ -0,0 +1,1127 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -12333,6 +12640,9 @@ index 0000000..a77bbd1
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 +constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
++constexpr auto kChatsSectionRadius = "OEChatsSectionRadius";
++constexpr auto kChatsSectionSeparateHeaders
++	= "OEChatsSectionSeparateHeaders";
 +constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
@@ -12370,6 +12680,10 @@ index 0000000..a77bbd1
 +constexpr auto kAvatarCornersAlias = "avatarCorners";
 +constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
 +constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
++constexpr auto kSectionRadiusAlias = "sectionRadius";
++constexpr auto kSectionRadiusAliasUpper = "SectionRadius";
++constexpr auto kSectionSeparateHeadersAlias = "separateHeaders";
++constexpr auto kSectionSeparateHeadersAliasUpper = "SeparateHeaders";
 +constexpr auto kIosChatHeaderAlias = "iosChatHeader";
 +constexpr auto kNewChatHeaderStyleAlias = "newChatHeaderStyle";
 +constexpr auto kReplyColorsAlias = "replyColors";
@@ -12625,6 +12939,8 @@ index 0000000..a77bbd1
 +	extera[kChatsStickerSize] = chats.stickerSize;
 +	extera[kChatsStickerShape] = chats.stickerShape;
 +	extera[kChatsAvatarRadius] = chats.avatarRadius;
++	extera[kChatsSectionRadius] = config.sectionRadius();
++	extera[kChatsSectionSeparateHeaders] = config.sectionSeparateHeaders();
 +	extera[kChatsChatHeaderStyle] = config.chatHeaderStyle();
 +	extera[kChatsReplyColors] = chats.replyColors;
 +	extera[kChatsReplyEmoji] = chats.replyEmoji;
@@ -13087,6 +13403,19 @@ index 0000000..a77bbd1
 +			config.setStickerShape(std::clamp(rounded, 0, 2));
 +		} else if (key == kChatsAvatarRadius && IntegralInRange(value, -1, 32)) {
 +			config.setAvatarRadius(value.toInt());
++		} else if (key == kChatsSectionRadius
++			&& IntegralInRange(value, -1, 16)) {
++			config.setSectionRadius(value.toInt());
++		} else if ((key == kSectionRadiusAlias
++			|| key == kSectionRadiusAliasUpper)
++			&& value.isDouble()) {
++			const auto rounded = int(std::lround(value.toDouble()));
++			config.setSectionRadius(std::clamp(rounded, -1, 16));
++		} else if ((key == kChatsSectionSeparateHeaders
++			|| key == kSectionSeparateHeadersAlias
++			|| key == kSectionSeparateHeadersAliasUpper)
++			&& value.isBool()) {
++			config.setSectionSeparateHeaders(value.toBool());
 +		} else if ((key == kAvatarCornersAlias
 +			|| key == kSingleCornerRadiusAlias)
 +			&& value.isDouble()) {
@@ -13353,10 +13682,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..a9b2e51
+index 0000000..226bd8c
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1582 @@
+@@ -0,0 +1,1603 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -13490,6 +13819,9 @@ index 0000000..a9b2e51
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 +constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
++constexpr auto kChatsSectionRadius = "OEChatsSectionRadius";
++constexpr auto kChatsSectionSeparateHeaders
++	= "OEChatsSectionSeparateHeaders";
 +constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
@@ -14470,6 +14802,22 @@ index 0000000..a9b2e51
 +	setValue(kChatsAvatarRadius, std::clamp(value, -1, 32));
 +}
 +
++int Config::sectionRadius() const {
++	return std::clamp(intValue(kChatsSectionRadius, -1), -1, 16);
++}
++
++void Config::setSectionRadius(int value) {
++	setValue(kChatsSectionRadius, std::clamp(value, -1, 16));
++}
++
++bool Config::sectionSeparateHeaders() const {
++	return boolValue(kChatsSectionSeparateHeaders, false);
++}
++
++void Config::setSectionSeparateHeaders(bool value) {
++	setValue(kChatsSectionSeparateHeaders, value);
++}
++
 +int Config::chatHeaderStyle() const {
 +	return std::clamp(intValue(kChatsChatHeaderStyle, 0), 0, 2);
 +}
@@ -14764,6 +15112,8 @@ index 0000000..a9b2e51
 +			|| key == kChatsShowSpoilersDirectly
 +			|| key == kChatsShowFormattingButtons
 +			|| key == kChatsAvatarRadius
++			|| key == kChatsSectionRadius
++			|| key == kChatsSectionSeparateHeaders
 +			|| key == kChatsChatHeaderStyle) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
@@ -14941,10 +15291,10 @@ index 0000000..a9b2e51
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..a800606
+index 0000000..9171c52
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,318 @@
+@@ -0,0 +1,322 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -15193,6 +15543,10 @@ index 0000000..a800606
 +	void setStickerShape(int value);
 +	[[nodiscard]] int avatarRadius() const;
 +	void setAvatarRadius(int value);
++	[[nodiscard]] int sectionRadius() const;
++	void setSectionRadius(int value);
++	[[nodiscard]] bool sectionSeparateHeaders() const;
++	void setSectionSeparateHeaders(bool value);
 +	[[nodiscard]] int chatHeaderStyle() const;
 +	void setChatHeaderStyle(int value);
 +	[[nodiscard]] bool replyColors() const;
@@ -18171,10 +18525,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..1d7083b
+index 0000000..2995274
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2615 @@
+@@ -0,0 +1,2670 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -18364,6 +18718,10 @@ index 0000000..1d7083b
 +		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
 +		<< "  exteraless-chats-cli header-style\n"
 +		<< "  exteraless-chats-cli header-style-set <0..2>\n"
++		<< "  exteraless-chats-cli section-radius\n"
++		<< "  exteraless-chats-cli section-radius-set <-1..16>\n"
++		<< "  exteraless-chats-cli separate-headers\n"
++		<< "  exteraless-chats-cli separate-headers-set <0|1>\n"
 +		<< "  exteraless-chats-cli save-subfolder\n"
 +		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -19914,6 +20272,57 @@ index 0000000..1d7083b
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("section-radius")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("radius"),
++				Exteraless::Config::Instance().sectionRadius() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("section-radius-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSectionRadius(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("radius"),
++				Exteraless::Config::Instance().sectionRadius() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("separate-headers")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().sectionSeparateHeaders() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("separate-headers-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSectionSeparateHeaders(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().sectionSeparateHeaders() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("save-subfolder")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -20951,10 +21360,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..9d2f3d5
+index 0000000..dbc200e
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6307 @@
+@@ -0,0 +1,6422 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -21578,7 +21987,7 @@ index 0000000..9d2f3d5
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 118,
++            len(section) == 120,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -21599,7 +22008,7 @@ index 0000000..9d2f3d5
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 123,
++            sum(len(value) for value in exported.values()) == 125,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -21619,7 +22028,7 @@ index 0000000..9d2f3d5
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 123,
++                data.get("applied") == 125,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -21693,6 +22102,8 @@ index 0000000..9d2f3d5
 +            "OEChatsStickerSize": 14,
 +            "OEChatsStickerShape": 1,
 +            "OEChatsAvatarRadius": 10,
++            "OEChatsSectionRadius": 8,
++            "OEChatsSectionSeparateHeaders": True,
 +            "OEChatsChatHeaderStyle": 2,
 +            "OEChatsReplyColors": False,
 +            "OEChatsReplyEmoji": True,
@@ -21794,7 +22205,7 @@ index 0000000..9d2f3d5
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 123,
++            data.get("applied") == 125,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -22088,10 +22499,10 @@ index 0000000..9d2f3d5
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 118",
++            "backup legacy eight completed to 120",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (118, 3, 2),
++             len(sections["mainconfig"])) == (120, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -25033,6 +25444,116 @@ index 0000000..9d2f3d5
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_section_radius(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "section-radius-defaults")
++    data = json_call(
++        ledger, cli, ["section-radius"], env, "section radius defaults")
++    if data is not None:
++        ledger.check(
++            "section radius default upstream",
++            data.get("radius") == -1,
++            data)
++
++    data = json_call(
++        ledger, cli, ["separate-headers"], env,
++        "separate headers defaults")
++    if data is not None:
++        ledger.check(
++            "separate headers default off",
++            data.get("enabled") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["section-radius-set", "8"], env,
++        "section radius set")
++    if data is not None:
++        ledger.check(
++            "section radius set rounded",
++            data.get("radius") == 8,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["section-radius"], env, "section radius reload")
++    if reloaded is not None:
++        ledger.check(
++            "section radius persisted",
++            reloaded.get("radius") == 8,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["separate-headers-set", "1"], env,
++        "separate headers set")
++    if data is not None:
++        ledger.check(
++            "separate headers set on",
++            data.get("enabled") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["separate-headers"], env,
++        "separate headers reload")
++    if reloaded is not None:
++        ledger.check(
++            "separate headers persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["section-radius-set", "99"], env,
++        "section radius clamp")
++    if data is not None:
++        ledger.check(
++            "section radius clamped to 16",
++            data.get("radius") == 16,
++            data)
++
++    data = json_call(
++        ledger, cli, ["section-radius-set", "-9"], env,
++        "section radius low clamp")
++    if data is not None:
++        ledger.check(
++            "section radius clamped to -1",
++            data.get("radius") == -1,
++            data)
++
++    env = make_env(work / "section-radius-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "sectionRadius": 12,
++            "separateHeaders": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "section radius alias")
++    if data is not None:
++        ledger.check(
++            "section radius alias applied",
++            data.get("applied") == 2 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["section-radius"], env, "section radius alias read")
++    if reloaded is not None:
++        ledger.check(
++            "section radius alias value",
++            reloaded.get("radius") == 12,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["separate-headers"], env,
++        "separate headers alias read")
++    if reloaded is not None:
++        ledger.check(
++            "separate headers alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_edited_mark(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -27153,6 +27674,7 @@ index 0000000..9d2f3d5
 +        sticker_size = check_sticker_size(ledger, cli, work)
 +        avatar_corners = check_avatar_corners(ledger, cli, work)
 +        header_style = check_header_style(ledger, cli, work)
++        section_radius = check_section_radius(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
 +        sender_mini_avatars = check_sender_mini_avatars(
@@ -27217,6 +27739,8 @@ index 0000000..9d2f3d5
 +    print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
 +    print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
 +    print(f"header-style: {header_style[0] - header_style[1]} passed")
++    print(f"section-radius: "
++          f"{section_radius[0] - section_radius[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"sender-mini-avatars: "

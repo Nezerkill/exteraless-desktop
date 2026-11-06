@@ -261,7 +261,15 @@ private:
 		QWidget *widget,
 		HighlightArgs &&args);
 
+	[[nodiscard]] Ui::VerticalLayout *body() const;
+	void startCard() const;
+
 	BuildContext _context;
+	Ui::VerticalLayout *_outer = nullptr;
+	mutable Ui::VerticalLayout *_body = nullptr;
+	mutable Ui::VerticalLayout *_cardBody = nullptr;
+	int _cardRadius = -1;
+	bool _separateHeaders = false;
 
 };
 

@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 825 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 836 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -112,8 +112,32 @@
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
   19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
-  8 header-style, 7 spoilers-direct, 7 formatting-buttons, 101 backup);
+  8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
+  101 backup);
   плагины без изменений — 32 и 213 проверок.
+- Радиус секций и отдельные заголовки (NB-64): `OEChatsSectionRadius`
+  (int `-1..16`, default `-1`) задаёт радиус подложки секции настроек, а
+  `OEChatsSectionSeparateHeaders` (bool, default `false`) выносит заголовки
+  наружу. `SectionBuilder` строит `SectionCard` (`Ui::OverrideMargins`,
+  `QMargins(radius, 0, radius, 0)`, заливка `st::windowBgOver` в
+  `paintEvent`), поэтому содержимое секции лежит на скруглённой подложке;
+  карточка создаётся лениво в `body()` при первом контроле, а при
+  `separateHeaders` `addSubsectionTitle` кладёт заголовок в `_outer` вне
+  карточки и сбрасывает `_body`, так что следующая секция получает свою
+  подложку. Путь поиска (`SearchContext`) карточек не создаёт. Алиасы
+  `sectionRadius`/`SectionRadius` (double, `lround` и кламп `-1..16`) и
+  `separateHeaders`/`SeparateHeaders` (bool); в Chats пункт «Section radius» с
+  `Ui::Radioenum` Upstream/Square/Rounded 4/8/12 и тумблер «Separate headers»,
+  четыре lang-ключа; CLI `section-radius`, `section-radius-set`,
+  `separate-headers`, `separate-headers-set`, `check_section_radius` —
+  11 проверок (счётчик выше 836, CLI 61, backup 101, плагины 32 и 213 без
+  изменений); `.extera` — 125 ключей (120 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`); `kKeysCount` 11210 (`kTagsCount` 185); sha256 патча
+  `90c40747…`, `nix flake check` PASS. Ограничения: вертикальные отступы
+  карточки нулевые, поэтому hover-подсветка строк касается её краёв; радиус
+  боксов (`lib_ui`) не затронут — это вне Nix-патча; 51 прямой вызов
+  `AddSubsectionTitle` вне билдера остаётся внутри карточки; режим применяется
+  после перестройки страницы; Xvfb-смоук не выполнялся.
 - Тулбар форматирования (NB-89, вторая половина):
   `OEChatsShowFormattingButtons` (bool, default `false`, алиас
   `showFormattingButtons`) показывает над полем ввода ряд из восьми

@@ -9387,5 +9387,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_header_style_upstream" = "Upstream";
 "lng_settings_exteraless_chats_header_style_ios" = "iOS";
 "lng_settings_exteraless_chats_header_style_m3" = "M3";
+"lng_settings_exteraless_chats_section_radius" = "Section radius";
+"lng_settings_exteraless_chats_section_radius_square" = "Square";
+"lng_settings_exteraless_chats_section_radius_rounded" = "Rounded {radius}";
+"lng_settings_exteraless_chats_separate_headers" = "Separate headers";
 
 // Keys finished

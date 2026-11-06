@@ -187,6 +187,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
 		<< "  exteraless-chats-cli header-style\n"
 		<< "  exteraless-chats-cli header-style-set <0..2>\n"
+		<< "  exteraless-chats-cli section-radius\n"
+		<< "  exteraless-chats-cli section-radius-set <-1..16>\n"
+		<< "  exteraless-chats-cli separate-headers\n"
+		<< "  exteraless-chats-cli separate-headers-set <0|1>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
 		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -1734,6 +1738,57 @@ int main(int argc, char *argv[]) {
 		PrintJson(QJsonObject{
 			{ QStringLiteral("style"),
 				Exteraless::Config::Instance().chatHeaderStyle() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("section-radius")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("radius"),
+				Exteraless::Config::Instance().sectionRadius() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("section-radius-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSectionRadius(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("radius"),
+				Exteraless::Config::Instance().sectionRadius() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("separate-headers")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().sectionSeparateHeaders() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("separate-headers-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSectionSeparateHeaders(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().sectionSeparateHeaders() },
 		});
 		return 0;
 	}
