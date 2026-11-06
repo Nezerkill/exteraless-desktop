@@ -219,6 +219,7 @@ def check_cli_args(ledger, cli):
         ("subtitles-parse without file", ["subtitles-parse"]),
         ("subtitles-active without position", ["subtitles-active", "a.srt"]),
         ("subtitles-key without id", ["subtitles-key"]),
+        ("header-style-set with wrong count", ["header-style-set"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -620,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 115,
+            len(section) == 116,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -641,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 120,
+            sum(len(value) for value in exported.values()) == 121,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -661,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 120,
+                data.get("applied") == 121,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -735,6 +736,7 @@ def check_backup(ledger, cli, work):
             "OEChatsStickerSize": 14,
             "OEChatsStickerShape": 1,
             "OEChatsAvatarRadius": 10,
+            "OEChatsChatHeaderStyle": 2,
             "OEChatsReplyColors": False,
             "OEChatsReplyEmoji": True,
             "OEChatsReplyBackground": False,
@@ -833,7 +835,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 120,
+            data.get("applied") == 121,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1127,10 +1129,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 115",
+            "backup legacy eight completed to 116",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (115, 3, 2),
+             len(sections["mainconfig"])) == (116, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -3871,6 +3873,78 @@ def check_avatar_corners(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_header_style(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "header-style-defaults")
+    data = json_call(
+        ledger, cli, ["header-style"], env, "header style defaults")
+    if data is not None:
+        ledger.check(
+            "header style default upstream",
+            data.get("style") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["header-style-set", "1"], env, "header style ios")
+    if data is not None:
+        ledger.check("header style set ios", data.get("style") == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["header-style"], env, "header style reload ios")
+    if reloaded is not None:
+        ledger.check(
+            "header style ios persisted",
+            reloaded.get("style") == 1,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["header-style-set", "2"], env, "header style m3")
+    if data is not None:
+        ledger.check("header style set m3", data.get("style") == 2, data)
+    reloaded = json_call(
+        ledger, cli, ["header-style"], env, "header style reload m3")
+    if reloaded is not None:
+        ledger.check(
+            "header style m3 persisted",
+            reloaded.get("style") == 2,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["header-style-set", "9"], env,
+        "header style clamp")
+    if data is not None:
+        ledger.check(
+            "header style clamped to 2",
+            data.get("style") == 2,
+            data)
+
+    env = make_env(work / "header-style-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"iosChatHeader": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "header style alias")
+    if data is not None:
+        ledger.check(
+            "header style alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["header-style"], env, "header style alias read")
+    if reloaded is not None:
+        ledger.check(
+            "header style alias value",
+            reloaded.get("style") == 1,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_edited_mark(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -5988,6 +6062,7 @@ def main():
         seek_duration = check_seek_duration(ledger, cli, work)
         sticker_size = check_sticker_size(ledger, cli, work)
         avatar_corners = check_avatar_corners(ledger, cli, work)
+        header_style = check_header_style(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
         sender_mini_avatars = check_sender_mini_avatars(
@@ -6047,6 +6122,7 @@ def main():
     print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
     print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
     print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
+    print(f"header-style: {header_style[0] - header_style[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"sender-mini-avatars: "

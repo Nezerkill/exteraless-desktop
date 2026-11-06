@@ -131,6 +131,7 @@ constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
+constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -1108,6 +1109,14 @@ void Config::setAvatarRadius(int value) {
 	setValue(kChatsAvatarRadius, std::clamp(value, -1, 32));
 }
 
+int Config::chatHeaderStyle() const {
+	return std::clamp(intValue(kChatsChatHeaderStyle, 0), 0, 2);
+}
+
+void Config::setChatHeaderStyle(int value) {
+	setValue(kChatsChatHeaderStyle, std::clamp(value, 0, 2));
+}
+
 bool Config::replyColors() const {
 	return boolValue(kChatsReplyColors, true);
 }
@@ -1375,7 +1384,8 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsDisableAutoDownloadingArchive
 			|| key == kChatsBlockWin32ExecutableFiles
 			|| key == kChatsZalgoFilter
-			|| key == kChatsAvatarRadius) {
+			|| key == kChatsAvatarRadius
+			|| key == kChatsChatHeaderStyle) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

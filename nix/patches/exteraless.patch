@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..b87fbe4 100644
+index ffc8ec9..433f062 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..b87fbe4 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,202 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,206 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -300,6 +300,10 @@ index ffc8ec9..b87fbe4 100644
 +"lng_settings_exteraless_chats_menu_translate" = "Translate";
 +"lng_settings_exteraless_chats_menu_report" = "Report";
 +"lng_settings_exteraless_chats_menu_delete" = "Delete";
++"lng_settings_exteraless_chats_header_style" = "Chat header style";
++"lng_settings_exteraless_chats_header_style_upstream" = "Upstream";
++"lng_settings_exteraless_chats_header_style_ios" = "iOS";
++"lng_settings_exteraless_chats_header_style_m3" = "M3";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -5979,7 +5983,7 @@ index b0396f3..a7e139f 100644
  	mutable PeerData *_colorPeer = nullptr;
  	mutable struct {
 diff --git a/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp b/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp
-index ecccfe3..464aa9c 100644
+index ecccfe3..eb20b33 100644
 --- a/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp
 @@ -58,6 +58,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -5994,10 +5998,19 @@ index ecccfe3..464aa9c 100644
  #include "dialogs/dialogs_main_list.h"
  #include "chat_helpers/emoji_interactions.h"
  #include "base/call_delayed.h"
-@@ -98,6 +103,118 @@ QString TopBarNameText(
+@@ -98,6 +103,127 @@ QString TopBarNameText(
  	return peer->topBarNameText();
  }
  
++[[nodiscard]] const style::TextStyle &M3TitleStyle() {
++	static const auto result = [] {
++		auto style = st::msgNameStyle;
++		style.font = st::topBarM3TitleFont;
++		return style;
++	}();
++	return result;
++}
++
 +enum class DecorationMode {
 +	None,
 +	Snow,
@@ -6113,7 +6126,7 @@ index ecccfe3..464aa9c 100644
  } // namespace
  
  struct TopBarWidget::EmojiInteractionSeenAnimation {
-@@ -265,6 +382,10 @@ TopBarWidget::TopBarWidget(
+@@ -265,6 +391,10 @@ TopBarWidget::TopBarWidget(
  	_menuToggle->setAccessibleName(tr::lng_chat_menu(tr::now));
  	_back->setAccessibleName(tr::lng_go_back(tr::now));
  	_cancelChoose->setAccessibleName(tr::lng_cancel(tr::now));
@@ -6124,7 +6137,188 @@ index ecccfe3..464aa9c 100644
  }
  
  TopBarWidget::~TopBarWidget() = default;
-@@ -1108,16 +1229,21 @@ int TopBarWidget::countSelectedButtonsTop(float64 selectedShown) {
+@@ -545,6 +675,8 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 	if (!_activeChat.key || _narrowRatio == 1.) {
+ 		return;
+ 	}
++	const auto headerStyle = Exteraless::Config::Instance().chatHeaderStyle();
++	const auto headerAvail = width() - _rightTaken - _leftTaken;
+ 	auto nameleft = _leftTaken;
+ 	auto statusleft = nameleft;
+ 	auto nametop = st::topBarArrowPadding.top();
+@@ -554,9 +686,24 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 		- nameleft
+ 		- st::topBarNameRightPadding;
+ 	auto statuswidth = namewidth;
++	const auto centerStatus = [&](int textWidth) {
++		if (headerStyle != 0) {
++			statusleft = _leftTaken
++				+ std::max(0, (headerAvail - textWidth) / 2);
++			statuswidth = std::min(
++				statuswidth,
++				width() - _rightTaken - statusleft);
++		}
++	};
+ 
+ 	if (_chooseForReportReason) {
+ 		const auto text = _chooseForReportReason->optionText;
++		const auto status = tr::lng_report_select_messages(tr::now);
++		if (headerStyle != 0) {
++			nameleft = _leftTaken
++				+ std::max(0, (headerAvail - st::semiboldFont->width(text)) / 2);
++		}
++		centerStatus(st::dialogsTextFont->width(status));
+ 		p.setPen(st::dialogsNameFg);
+ 		p.setFont(st::semiboldFont);
+ 		p.drawTextLeft(nameleft, nametop, width(), text);
+@@ -564,10 +711,10 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 		p.setFont(st::dialogsTextFont);
+ 		p.setPen(st::historyStatusFg);
+ 		p.drawTextLeft(
+-			nameleft,
++			statusleft,
+ 			statustop,
+ 			width(),
+-			tr::lng_report_select_messages(tr::now));
++			status);
+ 		return;
+ 	}
+ 
+@@ -579,6 +726,11 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 	const auto topic = _activeChat.key.topic();
+ 	const auto namePeer = titleNamePeer();
+ 	if (topic && _activeChat.section == Section::Replies) {
++		if (headerStyle != 0) {
++			nameleft = _leftTaken
++				+ std::max(0, (headerAvail
++					- topic->chatListNameText().maxWidth()) / 2);
++		}
+ 		p.setPen(st::dialogsNameFg);
+ 		topic->chatListNameText().drawElided(
+ 			p,
+@@ -586,18 +738,19 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 			nametop,
+ 			namewidth);
+ 
++		centerStatus(st::dialogsTextFont->width(_customTitleText));
+ 		p.setFont(st::dialogsTextFont);
+-		if (!paintConnectingState(p, nameleft, statustop, width())
++		if (!paintConnectingState(p, statusleft, statustop, width())
+ 			&& !paintSendAction(
+ 				p,
+-				nameleft,
++				statusleft,
+ 				statustop,
+-				namewidth,
++				statuswidth,
+ 				width(),
+ 				st::historyStatusFgTyping,
+ 				now)) {
+ 			p.setPen(st::historyStatusFg);
+-			p.drawTextLeft(nameleft, statustop, width(), _customTitleText);
++			p.drawTextLeft(statusleft, statustop, width(), _customTitleText);
+ 		}
+ 	} else if (folder
+ 		|| (peer
+@@ -626,29 +779,45 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 			: peer->name();
+ 		const auto opacity = folder ? _titleShownRatio : 1.;
+ 		if (opacity > 0.) {
+-			const auto textWidth = st::historySavedFont->width(text);
++			const auto &titleFont = (headerStyle == 2)
++				? st::topBarM3TitleFont
++				: st::historySavedFont;
++			const auto textWidth = titleFont->width(text);
++			if (headerStyle != 0) {
++				nameleft = _leftTaken
++					+ std::max(0, (headerAvail - textWidth) / 2);
++			}
+ 			if (namewidth < textWidth) {
+-				text = st::historySavedFont->elided(text, namewidth);
++				text = titleFont->elided(text, namewidth);
+ 			}
+ 			p.setOpacity(opacity);
+ 			p.setPen(st::dialogsNameFg);
+-			p.setFont(st::historySavedFont);
++			p.setFont(titleFont);
+ 			p.drawTextLeft(
+ 				nameleft,
+-				(height() - st::historySavedFont->height) / 2,
++				(height() - titleFont->height) / 2,
+ 				width(),
+ 				text);
+ 			p.setOpacity(1.);
+ 		}
+ 	} else if (_activeChat.section == Section::Replies) {
++		const auto text = tr::lng_manage_discussion_group(tr::now);
++		const auto &titleFont = (headerStyle == 2)
++			? st::topBarM3TitleFont
++			: st::semiboldFont;
++		if (headerStyle != 0) {
++			nameleft = _leftTaken
++				+ std::max(0, (headerAvail - titleFont->width(text)) / 2);
++		}
+ 		p.setPen(st::dialogsNameFg);
+-		p.setFont(st::semiboldFont);
++		p.setFont(titleFont);
+ 		p.drawTextLeft(
+ 			nameleft,
+ 			nametop,
+ 			width(),
+-			tr::lng_manage_discussion_group(tr::now));
++			text);
+ 
++		centerStatus(st::dialogsTextFont->width(_customTitleText));
+ 		p.setFont(st::dialogsTextFont);
+ 		if (!paintConnectingState(p, statusleft, statustop, width())
+ 			&& !paintSendAction(
+@@ -662,13 +831,22 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 			paintStatus(p, statusleft, statustop, statuswidth, width());
+ 		}
+ 	} else if (namePeer) {
+-		if (_titleNameVersion < namePeer->nameVersion()) {
++		const auto &titleStyle = (headerStyle == 2)
++			? M3TitleStyle()
++			: st::msgNameStyle;
++		if (_titleNameVersion < namePeer->nameVersion()
++			|| _title.style() != &titleStyle) {
+ 			_titleNameVersion = namePeer->nameVersion();
+ 			_title.setText(
+-				st::msgNameStyle,
++				titleStyle,
+ 				TopBarNameText(namePeer, _activeChat),
+ 				Ui::NameTextOptions());
+ 		}
++		if (headerStyle != 0) {
++			nameleft = _leftTaken
++				+ std::max(0, (headerAvail - _title.maxWidth()) / 2);
++		}
++		centerStatus(_titlePeerText.maxWidth());
+ 		if (const auto info = namePeer->botVerifyDetails()) {
+ 			if (!_titleBadge.ready(info)) {
+ 				_titleBadge.set(
+@@ -688,7 +866,7 @@ void TopBarWidget::paintTopBar(Painter &p) {
+ 				nameleft,
+ 				nametop,
+ 				namewidth,
+-				st::msgNameStyle.font->height),
++				titleStyle.font->height),
+ 			.nameWidth = _title.maxWidth(),
+ 			.outerWidth = width(),
+ 			.verified = &st::dialogsVerifiedIcon,
+@@ -822,6 +1000,11 @@ void TopBarWidget::paintStatus(
+ 
+ QRect TopBarWidget::getMembersShowAreaGeometry() const {
+ 	int membersTextLeft = _leftTaken;
++	if (Exteraless::Config::Instance().chatHeaderStyle() != 0) {
++		const auto avail = width() - _rightTaken - _leftTaken;
++		membersTextLeft = _leftTaken
++			+ std::max(0, (avail - _titlePeerText.maxWidth()) / 2);
++	}
+ 	int membersTextTop = st::topBarHeight - st::topBarArrowPadding.bottom() - st::dialogsTextFont->height;
+ 	int membersTextWidth = _titlePeerText.maxWidth();
+ 	int membersTextHeight = st::topBarHeight - membersTextTop;
+@@ -1108,16 +1291,21 @@ int TopBarWidget::countSelectedButtonsTop(float64 selectedShown) {
  }
  
  void TopBarWidget::updateSearchVisibility() {
@@ -6149,7 +6343,7 @@ index ecccfe3..464aa9c 100644
  }
  
  void TopBarWidget::updateInfoButtonVisibility() {
-@@ -1425,7 +1551,8 @@ void TopBarWidget::updateControlsVisibility() {
+@@ -1425,7 +1613,8 @@ void TopBarWidget::updateControlsVisibility() {
  	}();
  	_call->setVisible(historyMode
  		&& callsEnabled
@@ -6630,6 +6824,18 @@ index 536e12d..691ccc2 100644
  	[[nodiscard]] bool webpagePart() const;
  	void paintAnimationFrame(
  		Painter &p,
+diff --git a/Telegram/SourceFiles/info/info.style b/Telegram/SourceFiles/info/info.style
+index b58295b..b2e6753 100644
+--- a/Telegram/SourceFiles/info/info.style
++++ b/Telegram/SourceFiles/info/info.style
+@@ -917,6 +917,7 @@ topBarMenuGroupCallSkip: 20px;
+ topBarBack: icon {{ "title_back", lightButtonFg }};
+ topBarArrowPadding: margins(39px, 8px, 17px, 8px);
+ topBarNameRightPadding: 3px;
++topBarM3TitleFont: font(17px semibold);
+ topBarClearButton: RoundButton(defaultLightButton) {
+ 	width: -18px;
+ }
 diff --git a/Telegram/SourceFiles/info/info_wrap_widget.cpp b/Telegram/SourceFiles/info/info_wrap_widget.cpp
 index 8895f2c..a555d1a 100644
 --- a/Telegram/SourceFiles/info/info_wrap_widget.cpp
@@ -7774,10 +7980,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..58e0ab1
+index 0000000..fbbe24a
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2402 @@
+@@ -0,0 +1,2456 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -8735,6 +8941,60 @@ index 0000000..58e0ab1
 +			}, toggle->lifetime());
 +		}
 +	};
++	const auto headerStyleLabel = [](int value) {
++		switch (value) {
++		case 1:
++			return tr::lng_settings_exteraless_chats_header_style_ios(
++				tr::now);
++		case 2:
++			return tr::lng_settings_exteraless_chats_header_style_m3(
++				tr::now);
++		}
++		return tr::lng_settings_exteraless_chats_header_style_upstream(
++			tr::now);
++	};
++	const auto headerStyle = std::make_shared<rpl::variable<QString>>(
++		headerStyleLabel(
++			Exteraless::Config::Instance().chatHeaderStyle()));
++	builder.addButton({
++		.id = u"exteraless/chats/header-style"_q,
++		.title = tr::lng_settings_exteraless_chats_header_style(),
++		.st = &st::settingsButtonNoIcon,
++		.label = headerStyle->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().chatHeaderStyle());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_chats_header_style());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto value = 0; value != 3; ++value) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							headerStyleLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance()
++						.setChatHeaderStyle(value);
++					headerStyle->force_assign(headerStyleLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"chat"_q, u"header"_q, u"ios"_q, u"m3"_q },
++	});
++
 +	addChatsToggle(
 +		u"exteraless/chats/remove-tail"_q,
 +		tr::lng_settings_exteraless_chats_remove_tail(),
@@ -11553,10 +11813,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..69c482f
+index 0000000..9499b33
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1077 @@
+@@ -0,0 +1,1091 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -11766,6 +12026,7 @@ index 0000000..69c482f
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 +constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
++constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 +constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -11798,6 +12059,8 @@ index 0000000..69c482f
 +constexpr auto kAvatarCornersAlias = "avatarCorners";
 +constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
 +constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
++constexpr auto kIosChatHeaderAlias = "iosChatHeader";
++constexpr auto kNewChatHeaderStyleAlias = "newChatHeaderStyle";
 +constexpr auto kReplyColorsAlias = "replyColors";
 +constexpr auto kReplyEmojiAlias = "replyEmoji";
 +constexpr auto kReplyBackgroundAlias = "replyBackground";
@@ -12051,6 +12314,7 @@ index 0000000..69c482f
 +	extera[kChatsStickerSize] = chats.stickerSize;
 +	extera[kChatsStickerShape] = chats.stickerShape;
 +	extera[kChatsAvatarRadius] = chats.avatarRadius;
++	extera[kChatsChatHeaderStyle] = config.chatHeaderStyle();
 +	extera[kChatsReplyColors] = chats.replyColors;
 +	extera[kChatsReplyEmoji] = chats.replyEmoji;
 +	extera[kChatsReplyBackground] = chats.replyBackground;
@@ -12519,6 +12783,16 @@ index 0000000..69c482f
 +			const auto squareness = std::clamp(value.toDouble(), 0., 1.);
 +			const auto rounded = int(std::lround(32. * (1. - squareness)));
 +			config.setAvatarRadius(std::clamp(rounded, 0, 32));
++		} else if (key == kChatsChatHeaderStyle
++			&& IntegralInRange(value, 0, 2)) {
++			config.setChatHeaderStyle(value.toInt());
++		} else if (key == kIosChatHeaderAlias && value.isBool()) {
++			config.setChatHeaderStyle(value.toBool() ? 1 : 0);
++		} else if (key == kNewChatHeaderStyleAlias
++			&& IntegralInRange(value, 0, 2)) {
++			config.setChatHeaderStyle(value.toInt());
++		} else if (key == kNewChatHeaderStyleAlias && value.isBool()) {
++			config.setChatHeaderStyle(value.toBool() ? 2 : 0);
 +		} else if ((key == kChatsReplyColors || key == kReplyColorsAlias)
 +			&& value.isBool()) {
 +			config.setChatsReplyColors(value.toBool());
@@ -12758,10 +13032,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..ee3be42
+index 0000000..6aead00
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1552 @@
+@@ -0,0 +1,1562 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -12895,6 +13169,7 @@ index 0000000..ee3be42
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 +constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
++constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 +constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -13872,6 +14147,14 @@ index 0000000..ee3be42
 +	setValue(kChatsAvatarRadius, std::clamp(value, -1, 32));
 +}
 +
++int Config::chatHeaderStyle() const {
++	return std::clamp(intValue(kChatsChatHeaderStyle, 0), 0, 2);
++}
++
++void Config::setChatHeaderStyle(int value) {
++	setValue(kChatsChatHeaderStyle, std::clamp(value, 0, 2));
++}
++
 +bool Config::replyColors() const {
 +	return boolValue(kChatsReplyColors, true);
 +}
@@ -14139,7 +14422,8 @@ index 0000000..ee3be42
 +			|| key == kChatsDisableAutoDownloadingArchive
 +			|| key == kChatsBlockWin32ExecutableFiles
 +			|| key == kChatsZalgoFilter
-+			|| key == kChatsAvatarRadius) {
++			|| key == kChatsAvatarRadius
++			|| key == kChatsChatHeaderStyle) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -14316,10 +14600,10 @@ index 0000000..ee3be42
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..d5e8e4a
+index 0000000..8347347
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,312 @@
+@@ -0,0 +1,314 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -14568,6 +14852,8 @@ index 0000000..d5e8e4a
 +	void setStickerShape(int value);
 +	[[nodiscard]] int avatarRadius() const;
 +	void setAvatarRadius(int value);
++	[[nodiscard]] int chatHeaderStyle() const;
++	void setChatHeaderStyle(int value);
 +	[[nodiscard]] bool replyColors() const;
 +	void setChatsReplyColors(bool value);
 +	[[nodiscard]] bool replyEmoji() const;
@@ -17540,10 +17826,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..e18fe2e
+index 0000000..ad8602c
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2539 @@
+@@ -0,0 +1,2567 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -17727,6 +18013,8 @@ index 0000000..e18fe2e
 +		<< "  exteraless-chats-cli sticker-shape-set <0..2>\n"
 +		<< "  exteraless-chats-cli avatar-corners\n"
 +		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
++		<< "  exteraless-chats-cli header-style\n"
++		<< "  exteraless-chats-cli header-style-set <0..2>\n"
 +		<< "  exteraless-chats-cli save-subfolder\n"
 +		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -19251,6 +19539,32 @@ index 0000000..e18fe2e
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("header-style")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("style"),
++				Exteraless::Config::Instance().chatHeaderStyle() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("header-style-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setChatHeaderStyle(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("style"),
++				Exteraless::Config::Instance().chatHeaderStyle() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("save-subfolder")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -20244,10 +20558,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..6b3b82d
+index 0000000..83f65ed
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6094 @@
+@@ -0,0 +1,6170 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -20469,6 +20783,7 @@ index 0000000..6b3b82d
 +        ("subtitles-parse without file", ["subtitles-parse"]),
 +        ("subtitles-active without position", ["subtitles-active", "a.srt"]),
 +        ("subtitles-key without id", ["subtitles-key"]),
++        ("header-style-set with wrong count", ["header-style-set"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -20870,7 +21185,7 @@ index 0000000..6b3b82d
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 115,
++            len(section) == 116,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -20891,7 +21206,7 @@ index 0000000..6b3b82d
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 120,
++            sum(len(value) for value in exported.values()) == 121,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -20911,7 +21226,7 @@ index 0000000..6b3b82d
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 120,
++                data.get("applied") == 121,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -20985,6 +21300,7 @@ index 0000000..6b3b82d
 +            "OEChatsStickerSize": 14,
 +            "OEChatsStickerShape": 1,
 +            "OEChatsAvatarRadius": 10,
++            "OEChatsChatHeaderStyle": 2,
 +            "OEChatsReplyColors": False,
 +            "OEChatsReplyEmoji": True,
 +            "OEChatsReplyBackground": False,
@@ -21083,7 +21399,7 @@ index 0000000..6b3b82d
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 120,
++            data.get("applied") == 121,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -21377,10 +21693,10 @@ index 0000000..6b3b82d
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 115",
++            "backup legacy eight completed to 116",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (115, 3, 2),
++             len(sections["mainconfig"])) == (116, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -24121,6 +24437,78 @@ index 0000000..6b3b82d
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_header_style(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "header-style-defaults")
++    data = json_call(
++        ledger, cli, ["header-style"], env, "header style defaults")
++    if data is not None:
++        ledger.check(
++            "header style default upstream",
++            data.get("style") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["header-style-set", "1"], env, "header style ios")
++    if data is not None:
++        ledger.check("header style set ios", data.get("style") == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["header-style"], env, "header style reload ios")
++    if reloaded is not None:
++        ledger.check(
++            "header style ios persisted",
++            reloaded.get("style") == 1,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["header-style-set", "2"], env, "header style m3")
++    if data is not None:
++        ledger.check("header style set m3", data.get("style") == 2, data)
++    reloaded = json_call(
++        ledger, cli, ["header-style"], env, "header style reload m3")
++    if reloaded is not None:
++        ledger.check(
++            "header style m3 persisted",
++            reloaded.get("style") == 2,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["header-style-set", "9"], env,
++        "header style clamp")
++    if data is not None:
++        ledger.check(
++            "header style clamped to 2",
++            data.get("style") == 2,
++            data)
++
++    env = make_env(work / "header-style-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"iosChatHeader": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "header style alias")
++    if data is not None:
++        ledger.check(
++            "header style alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["header-style"], env, "header style alias read")
++    if reloaded is not None:
++        ledger.check(
++            "header style alias value",
++            reloaded.get("style") == 1,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_edited_mark(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -26238,6 +26626,7 @@ index 0000000..6b3b82d
 +        seek_duration = check_seek_duration(ledger, cli, work)
 +        sticker_size = check_sticker_size(ledger, cli, work)
 +        avatar_corners = check_avatar_corners(ledger, cli, work)
++        header_style = check_header_style(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
 +        sender_mini_avatars = check_sender_mini_avatars(
@@ -26297,6 +26686,7 @@ index 0000000..6b3b82d
 +    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
 +    print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
 +    print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
++    print(f"header-style: {header_style[0] - header_style[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"sender-mini-avatars: "

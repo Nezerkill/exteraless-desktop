@@ -103,6 +103,15 @@ QString TopBarNameText(
 	return peer->topBarNameText();
 }
 
+[[nodiscard]] const style::TextStyle &M3TitleStyle() {
+	static const auto result = [] {
+		auto style = st::msgNameStyle;
+		style.font = st::topBarM3TitleFont;
+		return style;
+	}();
+	return result;
+}
+
 enum class DecorationMode {
 	None,
 	Snow,
@@ -666,6 +675,8 @@ void TopBarWidget::paintTopBar(Painter &p) {
 	if (!_activeChat.key || _narrowRatio == 1.) {
 		return;
 	}
+	const auto headerStyle = Exteraless::Config::Instance().chatHeaderStyle();
+	const auto headerAvail = width() - _rightTaken - _leftTaken;
 	auto nameleft = _leftTaken;
 	auto statusleft = nameleft;
 	auto nametop = st::topBarArrowPadding.top();
@@ -675,9 +686,24 @@ void TopBarWidget::paintTopBar(Painter &p) {
 		- nameleft
 		- st::topBarNameRightPadding;
 	auto statuswidth = namewidth;
+	const auto centerStatus = [&](int textWidth) {
+		if (headerStyle != 0) {
+			statusleft = _leftTaken
+				+ std::max(0, (headerAvail - textWidth) / 2);
+			statuswidth = std::min(
+				statuswidth,
+				width() - _rightTaken - statusleft);
+		}
+	};
 
 	if (_chooseForReportReason) {
 		const auto text = _chooseForReportReason->optionText;
+		const auto status = tr::lng_report_select_messages(tr::now);
+		if (headerStyle != 0) {
+			nameleft = _leftTaken
+				+ std::max(0, (headerAvail - st::semiboldFont->width(text)) / 2);
+		}
+		centerStatus(st::dialogsTextFont->width(status));
 		p.setPen(st::dialogsNameFg);
 		p.setFont(st::semiboldFont);
 		p.drawTextLeft(nameleft, nametop, width(), text);
@@ -685,10 +711,10 @@ void TopBarWidget::paintTopBar(Painter &p) {
 		p.setFont(st::dialogsTextFont);
 		p.setPen(st::historyStatusFg);
 		p.drawTextLeft(
-			nameleft,
+			statusleft,
 			statustop,
 			width(),
-			tr::lng_report_select_messages(tr::now));
+			status);
 		return;
 	}
 
@@ -700,6 +726,11 @@ void TopBarWidget::paintTopBar(Painter &p) {
 	const auto topic = _activeChat.key.topic();
 	const auto namePeer = titleNamePeer();
 	if (topic && _activeChat.section == Section::Replies) {
+		if (headerStyle != 0) {
+			nameleft = _leftTaken
+				+ std::max(0, (headerAvail
+					- topic->chatListNameText().maxWidth()) / 2);
+		}
 		p.setPen(st::dialogsNameFg);
 		topic->chatListNameText().drawElided(
 			p,
@@ -707,18 +738,19 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			nametop,
 			namewidth);
 
+		centerStatus(st::dialogsTextFont->width(_customTitleText));
 		p.setFont(st::dialogsTextFont);
-		if (!paintConnectingState(p, nameleft, statustop, width())
+		if (!paintConnectingState(p, statusleft, statustop, width())
 			&& !paintSendAction(
 				p,
-				nameleft,
+				statusleft,
 				statustop,
-				namewidth,
+				statuswidth,
 				width(),
 				st::historyStatusFgTyping,
 				now)) {
 			p.setPen(st::historyStatusFg);
-			p.drawTextLeft(nameleft, statustop, width(), _customTitleText);
+			p.drawTextLeft(statusleft, statustop, width(), _customTitleText);
 		}
 	} else if (folder
 		|| (peer
@@ -747,29 +779,45 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			: peer->name();
 		const auto opacity = folder ? _titleShownRatio : 1.;
 		if (opacity > 0.) {
-			const auto textWidth = st::historySavedFont->width(text);
+			const auto &titleFont = (headerStyle == 2)
+				? st::topBarM3TitleFont
+				: st::historySavedFont;
+			const auto textWidth = titleFont->width(text);
+			if (headerStyle != 0) {
+				nameleft = _leftTaken
+					+ std::max(0, (headerAvail - textWidth) / 2);
+			}
 			if (namewidth < textWidth) {
-				text = st::historySavedFont->elided(text, namewidth);
+				text = titleFont->elided(text, namewidth);
 			}
 			p.setOpacity(opacity);
 			p.setPen(st::dialogsNameFg);
-			p.setFont(st::historySavedFont);
+			p.setFont(titleFont);
 			p.drawTextLeft(
 				nameleft,
-				(height() - st::historySavedFont->height) / 2,
+				(height() - titleFont->height) / 2,
 				width(),
 				text);
 			p.setOpacity(1.);
 		}
 	} else if (_activeChat.section == Section::Replies) {
+		const auto text = tr::lng_manage_discussion_group(tr::now);
+		const auto &titleFont = (headerStyle == 2)
+			? st::topBarM3TitleFont
+			: st::semiboldFont;
+		if (headerStyle != 0) {
+			nameleft = _leftTaken
+				+ std::max(0, (headerAvail - titleFont->width(text)) / 2);
+		}
 		p.setPen(st::dialogsNameFg);
-		p.setFont(st::semiboldFont);
+		p.setFont(titleFont);
 		p.drawTextLeft(
 			nameleft,
 			nametop,
 			width(),
-			tr::lng_manage_discussion_group(tr::now));
+			text);
 
+		centerStatus(st::dialogsTextFont->width(_customTitleText));
 		p.setFont(st::dialogsTextFont);
 		if (!paintConnectingState(p, statusleft, statustop, width())
 			&& !paintSendAction(
@@ -783,13 +831,22 @@ void TopBarWidget::paintTopBar(Painter &p) {
 			paintStatus(p, statusleft, statustop, statuswidth, width());
 		}
 	} else if (namePeer) {
-		if (_titleNameVersion < namePeer->nameVersion()) {
+		const auto &titleStyle = (headerStyle == 2)
+			? M3TitleStyle()
+			: st::msgNameStyle;
+		if (_titleNameVersion < namePeer->nameVersion()
+			|| _title.style() != &titleStyle) {
 			_titleNameVersion = namePeer->nameVersion();
 			_title.setText(
-				st::msgNameStyle,
+				titleStyle,
 				TopBarNameText(namePeer, _activeChat),
 				Ui::NameTextOptions());
 		}
+		if (headerStyle != 0) {
+			nameleft = _leftTaken
+				+ std::max(0, (headerAvail - _title.maxWidth()) / 2);
+		}
+		centerStatus(_titlePeerText.maxWidth());
 		if (const auto info = namePeer->botVerifyDetails()) {
 			if (!_titleBadge.ready(info)) {
 				_titleBadge.set(
@@ -809,7 +866,7 @@ void TopBarWidget::paintTopBar(Painter &p) {
 				nameleft,
 				nametop,
 				namewidth,
-				st::msgNameStyle.font->height),
+				titleStyle.font->height),
 			.nameWidth = _title.maxWidth(),
 			.outerWidth = width(),
 			.verified = &st::dialogsVerifiedIcon,
@@ -943,6 +1000,11 @@ void TopBarWidget::paintStatus(
 
 QRect TopBarWidget::getMembersShowAreaGeometry() const {
 	int membersTextLeft = _leftTaken;
+	if (Exteraless::Config::Instance().chatHeaderStyle() != 0) {
+		const auto avail = width() - _rightTaken - _leftTaken;
+		membersTextLeft = _leftTaken
+			+ std::max(0, (avail - _titlePeerText.maxWidth()) / 2);
+	}
 	int membersTextTop = st::topBarHeight - st::topBarArrowPadding.bottom() - st::dialogsTextFont->height;
 	int membersTextWidth = _titlePeerText.maxWidth();
 	int membersTextHeight = st::topBarHeight - membersTextTop;

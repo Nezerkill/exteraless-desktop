@@ -2,6 +2,33 @@
 
 ## 2026-11-06
 
+- Chats / Стили шапки чата (NB-63): `OEChatsChatHeaderStyle` (int `0..2`,
+  default `0`; `0` — upstream, `1` — iOS-центровка, `2` — M3) перестраивает
+  шапку чата. При `1` и `2` имя и статус центрируются внутри доступной ширины
+  (`headerAvail` — `width()` минус `_leftTaken` и `_rightTaken`): `nameleft`
+  считается от `headerAvail`, а `statusleft`/`statuswidth` выставляет
+  `centerStatus`, ограничивая ширину статуса оставшимся местом, поэтому
+  `paintConnectingState`, `paintSendAction` и `paintStatus` получают уже
+  сдвинутые координаты. Ветки report-reason, topic в `Section::Replies`,
+  заголовок папки/replies и `namePeer` центрируются тем же способом, а
+  `getMembersShowAreaGeometry` повторяет расчёт для клика по статусу. Режим
+  `2` берёт `M3TitleStyle()` — static-копию `st::msgNameStyle` с подменённым
+  шрифтом `st::topBarM3TitleFont` (`font(17px semibold)` в `info/info.style`,
+  не в `chat.style`), тот же шрифт напрямую получает заголовок папки/replies,
+  а смена стиля перестраивает `_title` по сравнению `_title.style()`.
+  Узкий режим (narrow, `_narrowRatio`) и высота шапки не тронуты. Алиасы
+  `iosChatHeader` (bool → `1`/`0`) и `newChatHeaderStyle` (int `0..2`,
+  bool → `2`/`0`); в Chats пункт «Chat header style» с `Ui::Radioenum`
+  Upstream/iOS/M3 и четыре lang-ключа
+  `lng_settings_exteraless_chats_header_style*`; CLI `header-style` и
+  `header-style-set`, `check_header_style` — 8 проверок плюс одна на неверный
+  вызов CLI; раннеры 811/32/213 PASS (backup 101, CLI 61); `.extera` — 121
+  ключ (116 + 3 + 2, сверено с legacy-кортежем `run_checks`); `kKeysCount`
+  11204 (`kTagsCount` 185) — в счётчике остаётся retired-слот, чистая
+  генерация дала бы 11203; sha256 патча `0dd9f6f7…`, `nix flake check` PASS.
+  Ограничения: статус typing/connecting может слегка съезжать при центровке;
+  в replies-чате бара нет, поэтому режим там не проявляется; Xvfb-смоук не
+  выполнялся.
 - Chats / Мини-аватарки отправителей (NB-62): `OEChatsSenderMiniAvatars` (bool,
   default `false`, алиас `senderMiniAvatars`) рисует мини-аватарку отправителя
   в превью диалога. Пейнт стоит в `PaintRow`

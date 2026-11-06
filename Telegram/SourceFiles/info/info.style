@@ -917,6 +917,7 @@ topBarMenuGroupCallSkip: 20px;
 topBarBack: icon {{ "title_back", lightButtonFg }};
 topBarArrowPadding: margins(39px, 8px, 17px, 8px);
 topBarNameRightPadding: 3px;
+topBarM3TitleFont: font(17px semibold);
 topBarClearButton: RoundButton(defaultLightButton) {
 	width: -18px;
 }

@@ -246,6 +246,8 @@ public:
 	void setStickerShape(int value);
 	[[nodiscard]] int avatarRadius() const;
 	void setAvatarRadius(int value);
+	[[nodiscard]] int chatHeaderStyle() const;
+	void setChatHeaderStyle(int value);
 	[[nodiscard]] bool replyColors() const;
 	void setChatsReplyColors(bool value);
 	[[nodiscard]] bool replyEmoji() const;

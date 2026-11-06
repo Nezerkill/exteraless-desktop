@@ -9381,5 +9381,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_menu_translate" = "Translate";
 "lng_settings_exteraless_chats_menu_report" = "Report";
 "lng_settings_exteraless_chats_menu_delete" = "Delete";
+"lng_settings_exteraless_chats_header_style" = "Chat header style";
+"lng_settings_exteraless_chats_header_style_upstream" = "Upstream";
+"lng_settings_exteraless_chats_header_style_ios" = "iOS";
+"lng_settings_exteraless_chats_header_style_m3" = "M3";
 
 // Keys finished

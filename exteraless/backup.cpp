@@ -207,6 +207,7 @@ constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 constexpr auto kChatsStickerShape = "OEChatsStickerShape";
 constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
+constexpr auto kChatsChatHeaderStyle = "OEChatsChatHeaderStyle";
 constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -239,6 +240,8 @@ constexpr auto kStickerShapeAlias = "stickerShape";
 constexpr auto kAvatarCornersAlias = "avatarCorners";
 constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
 constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
+constexpr auto kIosChatHeaderAlias = "iosChatHeader";
+constexpr auto kNewChatHeaderStyleAlias = "newChatHeaderStyle";
 constexpr auto kReplyColorsAlias = "replyColors";
 constexpr auto kReplyEmojiAlias = "replyEmoji";
 constexpr auto kReplyBackgroundAlias = "replyBackground";
@@ -492,6 +495,7 @@ QString BuildBackup() {
 	extera[kChatsStickerSize] = chats.stickerSize;
 	extera[kChatsStickerShape] = chats.stickerShape;
 	extera[kChatsAvatarRadius] = chats.avatarRadius;
+	extera[kChatsChatHeaderStyle] = config.chatHeaderStyle();
 	extera[kChatsReplyColors] = chats.replyColors;
 	extera[kChatsReplyEmoji] = chats.replyEmoji;
 	extera[kChatsReplyBackground] = chats.replyBackground;
@@ -960,6 +964,16 @@ BackupImportResult ApplyBackup(const QString &text) {
 			const auto squareness = std::clamp(value.toDouble(), 0., 1.);
 			const auto rounded = int(std::lround(32. * (1. - squareness)));
 			config.setAvatarRadius(std::clamp(rounded, 0, 32));
+		} else if (key == kChatsChatHeaderStyle
+			&& IntegralInRange(value, 0, 2)) {
+			config.setChatHeaderStyle(value.toInt());
+		} else if (key == kIosChatHeaderAlias && value.isBool()) {
+			config.setChatHeaderStyle(value.toBool() ? 1 : 0);
+		} else if (key == kNewChatHeaderStyleAlias
+			&& IntegralInRange(value, 0, 2)) {
+			config.setChatHeaderStyle(value.toInt());
+		} else if (key == kNewChatHeaderStyleAlias && value.isBool()) {
+			config.setChatHeaderStyle(value.toBool() ? 2 : 0);
 		} else if ((key == kChatsReplyColors || key == kReplyColorsAlias)
 			&& value.isBool()) {
 			config.setChatsReplyColors(value.toBool());

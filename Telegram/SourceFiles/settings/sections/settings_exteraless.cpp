@@ -955,6 +955,60 @@ const auto kMeta = Builder::BuildHelper({
 			}, toggle->lifetime());
 		}
 	};
+	const auto headerStyleLabel = [](int value) {
+		switch (value) {
+		case 1:
+			return tr::lng_settings_exteraless_chats_header_style_ios(
+				tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_chats_header_style_m3(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_header_style_upstream(
+			tr::now);
+	};
+	const auto headerStyle = std::make_shared<rpl::variable<QString>>(
+		headerStyleLabel(
+			Exteraless::Config::Instance().chatHeaderStyle()));
+	builder.addButton({
+		.id = u"exteraless/chats/header-style"_q,
+		.title = tr::lng_settings_exteraless_chats_header_style(),
+		.st = &st::settingsButtonNoIcon,
+		.label = headerStyle->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().chatHeaderStyle());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_header_style());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							headerStyleLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setChatHeaderStyle(value);
+					headerStyle->force_assign(headerStyleLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"chat"_q, u"header"_q, u"ios"_q, u"m3"_q },
+	});
+
 	addChatsToggle(
 		u"exteraless/chats/remove-tail"_q,
 		tr::lng_settings_exteraless_chats_remove_tail(),

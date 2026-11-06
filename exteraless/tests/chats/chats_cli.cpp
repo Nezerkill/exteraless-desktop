@@ -181,6 +181,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli sticker-shape-set <0..2>\n"
 		<< "  exteraless-chats-cli avatar-corners\n"
 		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
+		<< "  exteraless-chats-cli header-style\n"
+		<< "  exteraless-chats-cli header-style-set <0..2>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
 		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -1702,6 +1704,32 @@ int main(int argc, char *argv[]) {
 		PrintJson(QJsonObject{
 			{ QStringLiteral("radius"),
 				Exteraless::Config::Instance().avatarRadius() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("header-style")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("style"),
+				Exteraless::Config::Instance().chatHeaderStyle() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("header-style-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatHeaderStyle(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("style"),
+				Exteraless::Config::Instance().chatHeaderStyle() },
 		});
 		return 0;
 	}
