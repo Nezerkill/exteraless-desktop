@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..433f062 100644
+index ffc8ec9..d0ac679 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..433f062 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,206 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,207 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -169,6 +169,7 @@ index ffc8ec9..433f062 100644
 +"lng_settings_exteraless_chats_use_deleted_icon" = "Use icon for deleted messages";
 +"lng_settings_exteraless_chats_pangu" = "Add spaces between CJK and Latin on send";
 +"lng_settings_exteraless_chats_zalgo_filter" = "Filter Zalgo text";
++"lng_settings_exteraless_chats_show_spoilers_directly" = "Show spoilers without tapping";
 +"lng_settings_exteraless_chats_silent_by_default" = "Send messages silently by default";
 +"lng_settings_exteraless_chats_hide_send_as" = "Hide the Send as... button in channels";
 +"lng_settings_exteraless_chats_hide_gift" = "Hide the Gift button in profiles";
@@ -1197,6 +1198,85 @@ index b1288f2..26e08ce 100644
  }
  
  bool VideoPreload::readyToRequest() const {
+diff --git a/Telegram/SourceFiles/data/data_media_types.cpp b/Telegram/SourceFiles/data/data_media_types.cpp
+index 3f64b41..1608413 100644
+--- a/Telegram/SourceFiles/data/data_media_types.cpp
++++ b/Telegram/SourceFiles/data/data_media_types.cpp
+@@ -78,6 +78,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "calls/calls_instance.h"
+ #include "core/application.h"
+ #include "core/click_handler_types.h" // ClickHandlerContext
++#include "exteraless/config.h"
+ #include "lang/lang_keys.h"
+ #include "storage/file_upload.h"
+ #include "window/window_session_controller.h" // SessionController::uiShow.
+@@ -438,6 +439,21 @@ TextForMimeData WithCaptionClipboardText(
+ 		: tr::lng_in_dlg_album(tr::now);
+ }
+ 
++[[nodiscard]] bool EffectiveSpoiler(
++		not_null<HistoryItem*> item,
++		bool spoiler,
++		crl::time ttlSeconds) {
++	if (!spoiler
++		|| ttlSeconds
++		|| item->isMediaSensitive()
++		|| !Exteraless::Config::Instance().showSpoilersDirectly()) {
++		return spoiler;
++	}
++	const auto media = item->media();
++	const auto invoice = media ? media->invoice() : nullptr;
++	return (invoice && invoice->isPaidMedia);
++}
++
+ } // namespace
+ 
+ Invoice ComputeInvoiceData(
+@@ -771,7 +787,9 @@ bool Media::hasSpoiler() const {
+ }
+ 
+ bool Media::hasSpoilerForPreview() const {
+-	return hasSpoiler() || ttlSeconds();
++	return ttlSeconds()
++		|| (hasSpoiler()
++			&& !Exteraless::Config::Instance().showSpoilersDirectly());
+ }
+ 
+ crl::time Media::ttlSeconds() const {
+@@ -1078,7 +1096,7 @@ std::unique_ptr<HistoryView::Media> MediaPhoto::createView(
+ 		message,
+ 		realParent,
+ 		_photo,
+-		_spoiler);
++		EffectiveSpoiler(parent(), _spoiler, ttlSeconds()));
+ }
+ 
+ MediaFile::MediaFile(
+@@ -1478,6 +1496,7 @@ std::unique_ptr<HistoryView::Media> MediaFile::createView(
+ 		not_null<HistoryView::Element*> message,
+ 		not_null<HistoryItem*> realParent,
+ 		HistoryView::Element *replacing) {
++	const auto spoiler = EffectiveSpoiler(parent(), _spoiler, ttlSeconds());
+ 	if (_document->sticker()) {
+ 		return std::make_unique<HistoryView::UnwrappedMedia>(
+ 			message,
+@@ -1502,14 +1521,14 @@ std::unique_ptr<HistoryView::Media> MediaFile::createView(
+ 				message,
+ 				realParent,
+ 				_document,
+-				_spoiler);
++				spoiler);
+ 		}
+ 	} else if (_document->isAnimation() || _document->isVideoFile()) {
+ 		return std::make_unique<HistoryView::Gif>(
+ 			message,
+ 			realParent,
+ 			_document,
+-			_spoiler);
++			spoiler);
+ 	} else if (_document->isTheme() && _document->hasThumbnail()) {
+ 		return std::make_unique<HistoryView::ThemeDocument>(
+ 			message,
 diff --git a/Telegram/SourceFiles/data/data_peer_values.cpp b/Telegram/SourceFiles/data/data_peer_values.cpp
 index edd65ef..51a1d56 100644
 --- a/Telegram/SourceFiles/data/data_peer_values.cpp
@@ -1545,6 +1625,37 @@ index dd2fd64..07f14c9 100644
  		paintItemCallback);
  }
  
+diff --git a/Telegram/SourceFiles/dialogs/ui/dialogs_message_view.cpp b/Telegram/SourceFiles/dialogs/ui/dialogs_message_view.cpp
+index 9693314..1510476 100644
+--- a/Telegram/SourceFiles/dialogs/ui/dialogs_message_view.cpp
++++ b/Telegram/SourceFiles/dialogs/ui/dialogs_message_view.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "dialogs/ui/dialogs_message_view.h"
+ 
++#include "exteraless/config.h"
++
+ #include "history/history.h"
+ #include "history/history_item.h"
+ #include "history/view/history_view_element.h"
+@@ -15,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "dialogs/dialogs_three_state_icon.h"
+ #include "dialogs/ui/dialogs_layout.h"
+ #include "dialogs/ui/dialogs_topics_view.h"
++#include "ui/effects/animation_value.h"
+ #include "ui/effects/spoiler_mess.h"
+ #include "ui/text/custom_emoji_helper.h"
+ #include "ui/text/text_options.h"
+@@ -311,6 +314,9 @@ void MessageView::prepare(
+ 		std::move(textToCache),
+ 		DialogTextOptions(),
+ 		std::move(context));
++	if (Exteraless::Config::Instance().showSpoilersDirectly()) {
++		_textCache.setSpoilerRevealed(true, anim::type::instant);
++	}
+ 	_textCachedFor = item;
+ 	_unreadMedia = item->isUnreadMedia();
+ 	_imagesCache = std::move(preview.images);
 diff --git a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp b/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
 index 2bdf47a..e66bf76 100644
 --- a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
@@ -5982,6 +6093,34 @@ index b0396f3..a7e139f 100644
  	mutable PeerData *_externalSender = nullptr;
  	mutable PeerData *_colorPeer = nullptr;
  	mutable struct {
+diff --git a/Telegram/SourceFiles/history/view/history_view_text_helper.cpp b/Telegram/SourceFiles/history/view/history_view_text_helper.cpp
+index 64e565d..df014ec 100644
+--- a/Telegram/SourceFiles/history/view/history_view_text_helper.cpp
++++ b/Telegram/SourceFiles/history/view/history_view_text_helper.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "history/view/history_view_text_helper.h"
+ 
++#include "exteraless/config.h"
++
+ #include "core/click_handler_types.h"
+ #include "data/data_document.h"
+ #include "data/data_session.h"
+@@ -21,10 +23,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ namespace HistoryView {
+ 
+ void InitElementTextPart(not_null<Element*> view, Ui::Text::String &text) {
+-	if (view->context() == Context::MediaEditor) {
++	const auto revealedDirectly = Exteraless::Config::Instance()
++		.showSpoilersDirectly();
++	if (view->context() == Context::MediaEditor || revealedDirectly) {
+ 		text.setSpoilerRevealed(true, anim::type::instant);
+ 	}
+-	if (text.hasSpoilers()) {
++	if (!revealedDirectly && text.hasSpoilers()) {
+ 		text.setSpoilerLinkFilter([weak = base::make_weak(view)](
+ 				const ClickContext &context) {
+ 			const auto button = context.button;
 diff --git a/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp b/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp
 index ecccfe3..eb20b33 100644
 --- a/Telegram/SourceFiles/history/view/history_view_top_bar_widget.cpp
@@ -7980,10 +8119,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..fbbe24a
+index 0000000..05c708e
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2456 @@
+@@ -0,0 +1,2464 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -9114,6 +9253,14 @@ index 0000000..fbbe24a
 +		Exteraless::Config::Instance().zalgoFilter(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setZalgoFilter(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/show-spoilers-directly"_q,
++		tr::lng_settings_exteraless_chats_show_spoilers_directly(),
++		{ u"chat"_q, u"spoiler"_q, u"hidden"_q },
++		Exteraless::Config::Instance().showSpoilersDirectly(),
++		[](bool value) {
++			Exteraless::Config::Instance().setShowSpoilersDirectly(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/silent-by-default"_q,
@@ -11813,10 +11960,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..9499b33
+index 0000000..3070335
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1091 @@
+@@ -0,0 +1,1098 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -12036,6 +12183,7 @@ index 0000000..9499b33
 +constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
 +constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
++constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 +constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
 +constexpr auto kChatsHidePanelsOnScroll = "OEChatsHidePanelsOnScroll";
 +constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
@@ -12053,6 +12201,7 @@ index 0000000..9499b33
 +constexpr auto kHideStoriesFromHeaderUpper = "HideStoriesFromHeader";
 +constexpr auto kZalgoFilter = "zalgoFilter";
 +constexpr auto kZalgoFilterUpper = "ZalgoFilter";
++constexpr auto kShowSpoilersDirectly = "showSpoilersDirectly";
 +constexpr auto kStickerTimeMode = "stickerTimeMode";
 +constexpr auto kStickerSizeAlias = "stickerSize";
 +constexpr auto kStickerShapeAlias = "stickerShape";
@@ -12332,6 +12481,7 @@ index 0000000..9499b33
 +		= chats.disableAutoDownloadingArchive;
 +	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
 +	extera[kZalgoFilter] = config.zalgoFilter();
++	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 +
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -12821,6 +12971,10 @@ index 0000000..9499b33
 +			|| key == kZalgoFilterUpper)
 +			&& value.isBool()) {
 +			config.setZalgoFilter(value.toBool());
++		} else if ((key == kChatsShowSpoilersDirectly
++			|| key == kShowSpoilersDirectly)
++			&& value.isBool()) {
++			config.setShowSpoilersDirectly(value.toBool());
 +		} else if ((key == kChatsHideArchive
 +			|| key == kHideArchiveAlias
 +			|| key == kHideArchiveAliasUpper
@@ -13032,10 +13186,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..6aead00
+index 0000000..bb5ac11
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1562 @@
+@@ -0,0 +1,1572 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -13184,6 +13338,7 @@ index 0000000..6aead00
 +constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
 +constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
 +constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
++constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 +constexpr auto kChatsDisableAutoDownloadingArchive
 +	= "OEChatsDisableAutoDownloadingArchive";
 +constexpr auto kChatsBlockWin32ExecutableFiles
@@ -14247,6 +14402,14 @@ index 0000000..6aead00
 +	setValue(kChatsZalgoFilter, value);
 +}
 +
++bool Config::showSpoilersDirectly() const {
++	return boolValue(kChatsShowSpoilersDirectly, false);
++}
++
++void Config::setShowSpoilersDirectly(bool value) {
++	setValue(kChatsShowSpoilersDirectly, value);
++}
++
 +bool Config::pluginEnabled(const QString &id) const {
 +	if (!IsValidPluginId(id)) {
 +		return false;
@@ -14422,6 +14585,7 @@ index 0000000..6aead00
 +			|| key == kChatsDisableAutoDownloadingArchive
 +			|| key == kChatsBlockWin32ExecutableFiles
 +			|| key == kChatsZalgoFilter
++			|| key == kChatsShowSpoilersDirectly
 +			|| key == kChatsAvatarRadius
 +			|| key == kChatsChatHeaderStyle) {
 +			accepted.insert(key, i.value());
@@ -14600,10 +14764,10 @@ index 0000000..6aead00
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..8347347
+index 0000000..32cae40
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,314 @@
+@@ -0,0 +1,316 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -14877,6 +15041,8 @@ index 0000000..8347347
 +	void setBlockWin32Executables(bool value);
 +	[[nodiscard]] bool zalgoFilter() const;
 +	void setZalgoFilter(bool value);
++	[[nodiscard]] bool showSpoilersDirectly() const;
++	void setShowSpoilersDirectly(bool value);
 +	void setChatsMenuReply(bool value);
 +	void setChatsMenuEdit(bool value);
 +	void setChatsMenuPin(bool value);
@@ -17826,10 +17992,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..ad8602c
+index 0000000..e05108b
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2567 @@
+@@ -0,0 +1,2591 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -17932,6 +18098,8 @@ index 0000000..ad8602c
 +		<< "  exteraless-chats-cli zalgo-set <0|1>\n"
 +		<< "  exteraless-chats-cli zalgo-apply <text>\n"
 +		<< "  exteraless-chats-cli zalgo-tags <text> <offset> <length>\n"
++		<< "  exteraless-chats-cli spoilers-direct\n"
++		<< "  exteraless-chats-cli spoilers-direct-set <0|1>\n"
 +		<< "  exteraless-chats-cli silent\n"
 +		<< "  exteraless-chats-cli silent-set <0|1>\n"
 +		<< "  exteraless-chats-cli settings-sections\n"
@@ -19942,6 +20110,28 @@ index 0000000..ad8602c
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("spoilers-direct")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("direct"),
++				Exteraless::Config::Instance().showSpoilersDirectly() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("spoilers-direct-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setShowSpoilersDirectly(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
 +	if (mode == QStringLiteral("proxy-rule")) {
 +		if (arguments.size() != 6) {
 +			return PrintUsage();
@@ -20558,10 +20748,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..83f65ed
+index 0000000..e10f7ef
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6170 @@
+@@ -0,0 +1,6237 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -21185,7 +21375,7 @@ index 0000000..83f65ed
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 116,
++            len(section) == 117,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -21206,7 +21396,7 @@ index 0000000..83f65ed
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 121,
++            sum(len(value) for value in exported.values()) == 122,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -21226,7 +21416,7 @@ index 0000000..83f65ed
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 121,
++                data.get("applied") == 122,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -21376,6 +21566,7 @@ index 0000000..83f65ed
 +            "hideStoriesFromHeader": True,
 +            "showIdAndDc": True,
 +            "zalgoFilter": True,
++            "showSpoilersDirectly": True,
 +            "OEGeneralUsePersianCalendar": True,
 +            "OEGeneralPersianCalendarLatin": True,
 +        },
@@ -21399,7 +21590,7 @@ index 0000000..83f65ed
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 121,
++            data.get("applied") == 122,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -21693,10 +21884,10 @@ index 0000000..83f65ed
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 116",
++            "backup legacy eight completed to 117",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (116, 3, 2),
++             len(sections["mainconfig"])) == (117, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -23449,6 +23640,69 @@ index 0000000..83f65ed
 +            ("zalgo-set with wrong count", ["zalgo-set"]),
 +            ("zalgo-apply without text", ["zalgo-apply"]),
 +            ("zalgo-tags with wrong count", ["zalgo-tags", "a", "0"])):
++        result = run(cli, arguments)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++def check_spoilers_direct(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "spoilers-direct-defaults")
++    data = json_call(
++        ledger, cli, ["spoilers-direct"], env, "spoilers-direct defaults")
++    if data is not None:
++        ledger.check(
++            "spoilers direct default off",
++            data.get("direct") is False,
++            data)
++
++    data = json_call(
++        ledger, cli, ["spoilers-direct-set", "1"], env,
++        "spoilers-direct set")
++    if data is not None:
++        ledger.check("spoilers direct set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["spoilers-direct"], env, "spoilers-direct reload")
++    if reloaded is not None:
++        ledger.check(
++            "spoilers direct persisted",
++            reloaded.get("direct") is True,
++            reloaded)
++
++    env = make_env(work / "spoilers-direct-fromjson")
++    root = {
++        "version": 1,
++        "exteraconfig": {"showSpoilersDirectly": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "spoilers-direct alias")
++    if data is not None:
++        ledger.check(
++            "spoilers direct alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["spoilers-direct"], env, "spoilers-direct alias read")
++    if reloaded is not None:
++        ledger.check(
++            "spoilers direct alias value",
++            reloaded.get("direct") is True,
++            reloaded)
++
++    for name, arguments in (
++            ("spoilers-direct-set with wrong count",
++             ["spoilers-direct-set"]),
++            ("spoilers-direct-set invalid value",
++             ["spoilers-direct-set", "2"])):
 +        result = run(cli, arguments)
 +        ledger.check(
 +            f"cli {name}",
@@ -26614,6 +26868,7 @@ index 0000000..83f65ed
 +        proxy_rules = check_proxy_rules(ledger, cli)
 +        pangu = check_pangu(ledger, cli, work)
 +        zalgo = check_zalgo(ledger, cli, work)
++        spoilers_direct = check_spoilers_direct(ledger, cli, work)
 +        silent = check_silent(ledger, cli, work)
 +        sections = check_settings_sections(ledger, cli, work)
 +        ai_editor = check_ai_editor(ledger, cli, work)
@@ -26673,6 +26928,8 @@ index 0000000..83f65ed
 +    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
 +    print(f"pangu: {pangu[0] - pangu[1]} passed")
 +    print(f"zalgo: {zalgo[0] - zalgo[1]} passed")
++    print(f"spoilers-direct: "
++          f"{spoilers_direct[0] - spoilers_direct[1]} passed")
 +    print(f"silent: {silent[0] - silent[1]} passed")
 +    print(f"sections: {sections[0] - sections[1]} passed")
 +    print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")

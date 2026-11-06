@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_text_helper.h"
 
+#include "exteraless/config.h"
+
 #include "core/click_handler_types.h"
 #include "data/data_document.h"
 #include "data/data_session.h"
@@ -21,10 +23,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 namespace HistoryView {
 
 void InitElementTextPart(not_null<Element*> view, Ui::Text::String &text) {
-	if (view->context() == Context::MediaEditor) {
+	const auto revealedDirectly = Exteraless::Config::Instance()
+		.showSpoilersDirectly();
+	if (view->context() == Context::MediaEditor || revealedDirectly) {
 		text.setSpoilerRevealed(true, anim::type::instant);
 	}
-	if (text.hasSpoilers()) {
+	if (!revealedDirectly && text.hasSpoilers()) {
 		text.setSpoilerLinkFilter([weak = base::make_weak(view)](
 				const ClickContext &context) {
 			const auto button = context.button;

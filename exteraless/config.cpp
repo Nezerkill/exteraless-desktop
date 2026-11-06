@@ -146,6 +146,7 @@ constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
 constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
 constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
 constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 constexpr auto kChatsDisableAutoDownloadingArchive
 	= "OEChatsDisableAutoDownloadingArchive";
 constexpr auto kChatsBlockWin32ExecutableFiles
@@ -1209,6 +1210,14 @@ void Config::setZalgoFilter(bool value) {
 	setValue(kChatsZalgoFilter, value);
 }
 
+bool Config::showSpoilersDirectly() const {
+	return boolValue(kChatsShowSpoilersDirectly, false);
+}
+
+void Config::setShowSpoilersDirectly(bool value) {
+	setValue(kChatsShowSpoilersDirectly, value);
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -1384,6 +1393,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsDisableAutoDownloadingArchive
 			|| key == kChatsBlockWin32ExecutableFiles
 			|| key == kChatsZalgoFilter
+			|| key == kChatsShowSpoilersDirectly
 			|| key == kChatsAvatarRadius
 			|| key == kChatsChatHeaderStyle) {
 			accepted.insert(key, i.value());

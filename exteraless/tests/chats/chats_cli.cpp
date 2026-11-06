@@ -100,6 +100,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli zalgo-set <0|1>\n"
 		<< "  exteraless-chats-cli zalgo-apply <text>\n"
 		<< "  exteraless-chats-cli zalgo-tags <text> <offset> <length>\n"
+		<< "  exteraless-chats-cli spoilers-direct\n"
+		<< "  exteraless-chats-cli spoilers-direct-set <0|1>\n"
 		<< "  exteraless-chats-cli silent\n"
 		<< "  exteraless-chats-cli silent-set <0|1>\n"
 		<< "  exteraless-chats-cli settings-sections\n"
@@ -2108,6 +2110,28 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("length"),
 				zalgo.map[to] - zalgo.map[from] },
 		});
+		return 0;
+	}
+	if (mode == QStringLiteral("spoilers-direct")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("direct"),
+				Exteraless::Config::Instance().showSpoilersDirectly() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("spoilers-direct-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setShowSpoilersDirectly(value);
+		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
 	if (mode == QStringLiteral("proxy-rule")) {

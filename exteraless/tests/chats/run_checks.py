@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 116,
+            len(section) == 117,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 121,
+            sum(len(value) for value in exported.values()) == 122,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 121,
+                data.get("applied") == 122,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -812,6 +812,7 @@ def check_backup(ledger, cli, work):
             "hideStoriesFromHeader": True,
             "showIdAndDc": True,
             "zalgoFilter": True,
+            "showSpoilersDirectly": True,
             "OEGeneralUsePersianCalendar": True,
             "OEGeneralPersianCalendarLatin": True,
         },
@@ -835,7 +836,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 121,
+            data.get("applied") == 122,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1129,10 +1130,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 116",
+            "backup legacy eight completed to 117",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (116, 3, 2),
+             len(sections["mainconfig"])) == (117, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -2885,6 +2886,69 @@ def check_zalgo(ledger, cli, work):
             ("zalgo-set with wrong count", ["zalgo-set"]),
             ("zalgo-apply without text", ["zalgo-apply"]),
             ("zalgo-tags with wrong count", ["zalgo-tags", "a", "0"])):
+        result = run(cli, arguments)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_spoilers_direct(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "spoilers-direct-defaults")
+    data = json_call(
+        ledger, cli, ["spoilers-direct"], env, "spoilers-direct defaults")
+    if data is not None:
+        ledger.check(
+            "spoilers direct default off",
+            data.get("direct") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["spoilers-direct-set", "1"], env,
+        "spoilers-direct set")
+    if data is not None:
+        ledger.check("spoilers direct set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["spoilers-direct"], env, "spoilers-direct reload")
+    if reloaded is not None:
+        ledger.check(
+            "spoilers direct persisted",
+            reloaded.get("direct") is True,
+            reloaded)
+
+    env = make_env(work / "spoilers-direct-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {"showSpoilersDirectly": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "spoilers-direct alias")
+    if data is not None:
+        ledger.check(
+            "spoilers direct alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["spoilers-direct"], env, "spoilers-direct alias read")
+    if reloaded is not None:
+        ledger.check(
+            "spoilers direct alias value",
+            reloaded.get("direct") is True,
+            reloaded)
+
+    for name, arguments in (
+            ("spoilers-direct-set with wrong count",
+             ["spoilers-direct-set"]),
+            ("spoilers-direct-set invalid value",
+             ["spoilers-direct-set", "2"])):
         result = run(cli, arguments)
         ledger.check(
             f"cli {name}",
@@ -6050,6 +6114,7 @@ def main():
         proxy_rules = check_proxy_rules(ledger, cli)
         pangu = check_pangu(ledger, cli, work)
         zalgo = check_zalgo(ledger, cli, work)
+        spoilers_direct = check_spoilers_direct(ledger, cli, work)
         silent = check_silent(ledger, cli, work)
         sections = check_settings_sections(ledger, cli, work)
         ai_editor = check_ai_editor(ledger, cli, work)
@@ -6109,6 +6174,8 @@ def main():
     print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
     print(f"pangu: {pangu[0] - pangu[1]} passed")
     print(f"zalgo: {zalgo[0] - zalgo[1]} passed")
+    print(f"spoilers-direct: "
+          f"{spoilers_direct[0] - spoilers_direct[1]} passed")
     print(f"silent: {silent[0] - silent[1]} passed")
     print(f"sections: {sections[0] - sections[1]} passed")
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")

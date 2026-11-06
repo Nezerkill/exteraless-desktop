@@ -1130,6 +1130,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setZalgoFilter(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/show-spoilers-directly"_q,
+		tr::lng_settings_exteraless_chats_show_spoilers_directly(),
+		{ u"chat"_q, u"spoiler"_q, u"hidden"_q },
+		Exteraless::Config::Instance().showSpoilersDirectly(),
+		[](bool value) {
+			Exteraless::Config::Instance().setShowSpoilersDirectly(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/silent-by-default"_q,
 		tr::lng_settings_exteraless_chats_silent_by_default(),
 		{ u"silent"_q, u"sound"_q, u"send"_q },

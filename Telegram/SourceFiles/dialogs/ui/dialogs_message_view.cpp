@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_message_view.h"
 
+#include "exteraless/config.h"
+
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/view/history_view_element.h"
@@ -15,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_three_state_icon.h"
 #include "dialogs/ui/dialogs_layout.h"
 #include "dialogs/ui/dialogs_topics_view.h"
+#include "ui/effects/animation_value.h"
 #include "ui/effects/spoiler_mess.h"
 #include "ui/text/custom_emoji_helper.h"
 #include "ui/text/text_options.h"
@@ -311,6 +314,9 @@ void MessageView::prepare(
 		std::move(textToCache),
 		DialogTextOptions(),
 		std::move(context));
+	if (Exteraless::Config::Instance().showSpoilersDirectly()) {
+		_textCache.setSpoilerRevealed(true, anim::type::instant);
+	}
 	_textCachedFor = item;
 	_unreadMedia = item->isUnreadMedia();
 	_imagesCache = std::move(preview.images);

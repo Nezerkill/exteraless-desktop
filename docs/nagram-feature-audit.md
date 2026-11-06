@@ -472,9 +472,18 @@ Hijri через `Exteraless::PersianDateText(date, latin, withYear)`
 цифры ASCII или `U+06F0..U+06F9`), подмена стоит в `langDayOfMonth*` и
 `langDateTime*` (`lang/lang_keys.cpp`) и меняет только `lt_date` — время не
 тронуто; год для `withYear` решается по григорианскому календарю (граница —
-Навруз), RTL и порядок строки не переупорядочиваются. В desktop — только
-upstream-поведение (markdown при вставке, спойлеры, ссылки); остальное
-отсутствует.
+Навруз), RTL и порядок строки не переупорядочиваются. Показ спойлеров сразу —
+✅ NB-89: `OEChatsShowSpoilersDirectly` (bool, default `false`, алиас
+`showSpoilersDirectly`) раскрывает текстовые спойлеры и превью в списке чатов —
+принудительный `setSpoilerRevealed(true, anim::type::instant)` и пропуск
+link-filter в `InitElementTextPart`, тот же флаг на `_textCache` в
+`MessageView::prepare`. Медиа-гейт `EffectiveSpoiler`
+(`data/data_media_types.cpp`) различает случаи: спойлер снимается только у
+обычного пользовательского медиа, а TTL, `isMediaSensitive()` и платное медиа
+(`invoice()->isPaidMedia`) его сохраняют, `hasSpoiler()` не тронут. В desktop
+из остального — только upstream-поведение (markdown при вставке, ссылки);
+тулбар форматирования, markdown-парсер и подсветка синтаксиса (вторая половина
+NB-89) отсутствуют.
 
 ### 6.19 Речь: Vosk и транскрипция
 

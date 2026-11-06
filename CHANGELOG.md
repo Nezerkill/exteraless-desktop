@@ -2,6 +2,27 @@
 
 ## 2026-11-06
 
+- Chats / Спойлеры сразу (NB-89, первая половина): `OEChatsShowSpoilersDirectly`
+  (bool, default `false`, алиас `showSpoilersDirectly`) раскрывает спойлеры
+  без нажатия. В `InitElementTextPart` режим добавляет
+  `setSpoilerRevealed(true, anim::type::instant)` и пропускает установку
+  `setSpoilerLinkFilter`, а превью в списке чатов делает то же для
+  `_textCache` в `MessageView::prepare`. Медиа гейтит `EffectiveSpoiler` в
+  `data/data_media_types.cpp`: спойлер снимается только у обычного
+  пользовательского медиа, а TTL, `isMediaSensitive()` и платное медиа
+  (`invoice()->isPaidMedia`) его сохраняют, `Media::hasSpoiler()` не тронут.
+  Тумблер «Show spoilers without tapping» в Chats, один lang-ключ
+  `lng_settings_exteraless_chats_show_spoilers_directly`, CLI `spoilers-direct`
+  и `spoilers-direct-set`, `check_spoilers_direct` — 7 проверок (две на
+  неверный вызов CLI); раннеры 818/32/213 PASS (backup 101, CLI 61);
+  `.extera` — 122 ключа (117 + 3 + 2, сверено с legacy-кортежем `run_checks`),
+  ключ пишется как `showSpoilersDirectly`; `kKeysCount` 11205
+  (`kTagsCount` 185); sha256 патча `cfa7a617…`, `nix flake check` PASS.
+  Ограничения: спойлер раскрывается после перестройки текста, а не мгновенно —
+  открытый чат обновится на ближайшем событии; счётчики и превью
+  чувствительного, платного и TTL-медиа остаются как в upstream; Xvfb-смоук не
+  выполнялся. Тулбар форматирования (вторая половина NB-89) не сделан —
+  follow-up.
 - Chats / Стили шапки чата (NB-63): `OEChatsChatHeaderStyle` (int `0..2`,
   default `0`; `0` — upstream, `1` — iOS-центровка, `2` — M3) перестраивает
   шапку чата. При `1` и `2` имя и статус центрируются внутри доступной ширины

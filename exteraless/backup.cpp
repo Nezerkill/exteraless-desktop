@@ -217,6 +217,7 @@ constexpr auto kChatsHideArchive = "OEChatsHideArchive";
 constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
 constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
 constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsShowSpoilersDirectly = "OEChatsShowSpoilersDirectly";
 constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
 constexpr auto kChatsHidePanelsOnScroll = "OEChatsHidePanelsOnScroll";
 constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
@@ -234,6 +235,7 @@ constexpr auto kHideStoriesFromHeader = "hideStoriesFromHeader";
 constexpr auto kHideStoriesFromHeaderUpper = "HideStoriesFromHeader";
 constexpr auto kZalgoFilter = "zalgoFilter";
 constexpr auto kZalgoFilterUpper = "ZalgoFilter";
+constexpr auto kShowSpoilersDirectly = "showSpoilersDirectly";
 constexpr auto kStickerTimeMode = "stickerTimeMode";
 constexpr auto kStickerSizeAlias = "stickerSize";
 constexpr auto kStickerShapeAlias = "stickerShape";
@@ -513,6 +515,7 @@ QString BuildBackup() {
 		= chats.disableAutoDownloadingArchive;
 	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
 	extera[kZalgoFilter] = config.zalgoFilter();
+	extera[kShowSpoilersDirectly] = config.showSpoilersDirectly();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -1002,6 +1005,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kZalgoFilterUpper)
 			&& value.isBool()) {
 			config.setZalgoFilter(value.toBool());
+		} else if ((key == kChatsShowSpoilersDirectly
+			|| key == kShowSpoilersDirectly)
+			&& value.isBool()) {
+			config.setShowSpoilersDirectly(value.toBool());
 		} else if ((key == kChatsHideArchive
 			|| key == kHideArchiveAlias
 			|| key == kHideArchiveAliasUpper

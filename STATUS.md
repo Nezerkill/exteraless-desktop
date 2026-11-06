@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 811 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 818 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -112,7 +112,8 @@
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
   19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
-  8 header-style, 101 backup); плагины без изменений — 32 и 213 проверок.
+  8 header-style, 7 spoilers-direct, 101 backup); плагины без изменений —
+  32 и 213 проверок.
 - Стили шапки чата (NB-63): `OEChatsChatHeaderStyle` (int `0..2`, default `0`;
   `0` — upstream, `1` — iOS-центровка, `2` — M3) центрирует имя и статус шапки
   внутри доступной ширины (`headerAvail` — `width()` минус `_leftTaken` и
@@ -136,6 +137,30 @@
   `nix flake check` PASS. Ограничения: статус typing/connecting может слегка
   съезжать при центровке; в replies-чате бара нет, поэтому режим там не
   проявляется; Xvfb-смоук не выполнялся.
+- Спойлеры сразу (NB-89, первая половина): `OEChatsShowSpoilersDirectly` (bool,
+  default `false`, алиас `showSpoilersDirectly`) раскрывает текстовые
+  спойлеры без нажатия. В `InitElementTextPart`
+  (`history/view/history_view_text_helper.cpp`) режим добавляет
+  `setSpoilerRevealed(true, anim::type::instant)` и пропускает установку
+  `setSpoilerLinkFilter`, а превью в списке чатов делает то же для
+  `_textCache` в `MessageView::prepare` (`dialogs/ui/dialogs_message_view.cpp`).
+  Медиа гейтит `EffectiveSpoiler` (`data/data_media_types.cpp`) на входе
+  `MediaPhoto::createView` и `MediaFile::createView`: спойлер снимается только
+  у обычного пользовательского медиа, а TTL, `isMediaSensitive()` и платное
+  медиа (`invoice()->isPaidMedia`) его сохраняют, `Media::hasSpoiler()` не
+  тронут (меняется лишь `hasSpoilerForPreview()`). Тумблер «Show spoilers
+  without tapping» в Chats, один lang-ключ
+  `lng_settings_exteraless_chats_show_spoilers_directly`, CLI `spoilers-direct`
+  и `spoilers-direct-set`, `check_spoilers_direct` — 7 проверок, две из них на
+  неверный вызов CLI (счётчик выше 818, CLI 61, backup 101, плагины 32 и 213
+  без изменений); `.extera` — 122 ключа (117 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`), экспортируется как `showSpoilersDirectly`, импорт принимает и
+  `OEChatsShowSpoilersDirectly`; `kKeysCount` 11205 (`kTagsCount` 185);
+  sha256 патча `cfa7a617…`, `nix flake check` PASS. Ограничения: спойлер
+  раскрывается после перестройки текста, а не мгновенно — открытый чат
+  обновится на ближайшем событии; счётчики и превью чувствительного, платного
+  и TTL-медиа остаются как в upstream; Xvfb-смоук не выполнялся. Тулбар
+  форматирования (вторая половина NB-89) не сделан — follow-up.
 - Мини-аватарки отправителей (NB-62): `OEChatsSenderMiniAvatars` (bool,
   default `false`, алиас `senderMiniAvatars`) рисует мини-аватарку отправителя
   в превью диалога. Пейнт — в `PaintRow` (`dialogs/ui/dialogs_layout.cpp`) перед

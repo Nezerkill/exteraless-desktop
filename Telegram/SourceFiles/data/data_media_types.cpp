@@ -78,6 +78,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/calls_instance.h"
 #include "core/application.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
+#include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "storage/file_upload.h"
 #include "window/window_session_controller.h" // SessionController::uiShow.
@@ -438,6 +439,21 @@ TextForMimeData WithCaptionClipboardText(
 		: tr::lng_in_dlg_album(tr::now);
 }
 
+[[nodiscard]] bool EffectiveSpoiler(
+		not_null<HistoryItem*> item,
+		bool spoiler,
+		crl::time ttlSeconds) {
+	if (!spoiler
+		|| ttlSeconds
+		|| item->isMediaSensitive()
+		|| !Exteraless::Config::Instance().showSpoilersDirectly()) {
+		return spoiler;
+	}
+	const auto media = item->media();
+	const auto invoice = media ? media->invoice() : nullptr;
+	return (invoice && invoice->isPaidMedia);
+}
+
 } // namespace
 
 Invoice ComputeInvoiceData(
@@ -771,7 +787,9 @@ bool Media::hasSpoiler() const {
 }
 
 bool Media::hasSpoilerForPreview() const {
-	return hasSpoiler() || ttlSeconds();
+	return ttlSeconds()
+		|| (hasSpoiler()
+			&& !Exteraless::Config::Instance().showSpoilersDirectly());
 }
 
 crl::time Media::ttlSeconds() const {
@@ -1078,7 +1096,7 @@ std::unique_ptr<HistoryView::Media> MediaPhoto::createView(
 		message,
 		realParent,
 		_photo,
-		_spoiler);
+		EffectiveSpoiler(parent(), _spoiler, ttlSeconds()));
 }
 
 MediaFile::MediaFile(
@@ -1478,6 +1496,7 @@ std::unique_ptr<HistoryView::Media> MediaFile::createView(
 		not_null<HistoryView::Element*> message,
 		not_null<HistoryItem*> realParent,
 		HistoryView::Element *replacing) {
+	const auto spoiler = EffectiveSpoiler(parent(), _spoiler, ttlSeconds());
 	if (_document->sticker()) {
 		return std::make_unique<HistoryView::UnwrappedMedia>(
 			message,
@@ -1502,14 +1521,14 @@ std::unique_ptr<HistoryView::Media> MediaFile::createView(
 				message,
 				realParent,
 				_document,
-				_spoiler);
+				spoiler);
 		}
 	} else if (_document->isAnimation() || _document->isVideoFile()) {
 		return std::make_unique<HistoryView::Gif>(
 			message,
 			realParent,
 			_document,
-			_spoiler);
+			spoiler);
 	} else if (_document->isTheme() && _document->hasThumbnail()) {
 		return std::make_unique<HistoryView::ThemeDocument>(
 			message,

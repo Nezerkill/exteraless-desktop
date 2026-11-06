@@ -271,6 +271,8 @@ public:
 	void setBlockWin32Executables(bool value);
 	[[nodiscard]] bool zalgoFilter() const;
 	void setZalgoFilter(bool value);
+	[[nodiscard]] bool showSpoilersDirectly() const;
+	void setShowSpoilersDirectly(bool value);
 	void setChatsMenuReply(bool value);
 	void setChatsMenuEdit(bool value);
 	void setChatsMenuPin(bool value);
