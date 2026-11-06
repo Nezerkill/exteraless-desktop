@@ -93,6 +93,8 @@ public:
 	void setCustomEditedMark(const QString &value);
 	[[nodiscard]] bool showForwardDate() const;
 	void setShowForwardDate(bool value);
+	[[nodiscard]] bool senderMiniAvatars() const;
+	void setSenderMiniAvatars(bool value);
 	[[nodiscard]] bool mediaViewerMenuForward() const;
 	void setMediaViewerMenuForward(bool value);
 	[[nodiscard]] bool mediaViewerMenuCopyFrame() const;

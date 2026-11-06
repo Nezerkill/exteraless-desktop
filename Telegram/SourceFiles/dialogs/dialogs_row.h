@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "data/data_peer.h"
 #include "ui/effects/animations.h"
 #include "ui/text/text.h"
 #include "ui/unread_badge.h"
@@ -73,9 +74,19 @@ public:
 	[[nodiscard]] Ui::PeerUserpicView &userpicView() const {
 		return _userpic;
 	}
+	[[nodiscard]] Ui::PeerUserpicView &senderUserpicView(
+		not_null<PeerData*> peer) const {
+		if (_senderUserpicPeer != peer.get()) {
+			_senderUserpicPeer = peer.get();
+			_senderUserpic = peer->createUserpicView();
+		}
+		return _senderUserpic;
+	}
 
 private:
 	mutable Ui::PeerUserpicView _userpic;
+	mutable Ui::PeerUserpicView _senderUserpic;
+	mutable PeerData *_senderUserpicPeer = nullptr;
 	mutable std::unique_ptr<Ui::RippleAnimation> _ripple;
 
 };

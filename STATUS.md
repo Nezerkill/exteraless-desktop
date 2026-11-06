@@ -99,20 +99,42 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 796 проверок PASS
-  (44 strip, 10 reactions, 59 CLI, 7 config, 22 general, 9 bot-privacy,
+- Chats: `exteraless/tests/chats/run_checks.py` — 802 проверки PASS
+  (44 strip, 10 reactions, 60 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
   19 pluginops, 5 send-as, 5 profile-buttons, 31 inline-math,
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 21 sticker-size,
-  6 edited-mark, 5 forward-date, 5 media-menu, 5 chat-menu,
-  5 disable-link-preview, 5 hide-all-chats, 13 hide-archive-sort,
+  6 edited-mark, 5 forward-date, 5 sender-mini-avatars, 5 media-menu,
+  5 chat-menu, 5 disable-link-preview, 5 hide-all-chats, 13 hide-archive-sort,
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
   19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
   101 backup); плагины без изменений — 32 и 213 проверок.
+- Мини-аватарки отправителей (NB-62): `OEChatsSenderMiniAvatars` (bool,
+  default `false`, алиас `senderMiniAvatars`) рисует мини-аватарку отправителя
+  в превью диалога. Пейнт — в `PaintRow` (`dialogs/ui/dialogs_layout.cpp`) перед
+  `paintItemCallback`: `sender` берётся как `item->displayFrom()` при предикате
+  (превью не скрыто, автор поста не спрятан, отправитель не обычный
+  пользователь, кроме гостевого бота), а отрисовка требует места под аватарку —
+  `itemWidth` не меньше `skip` плюс `st::dialogsTextWidthMin`; затем сдвигаются
+  `itemLeft` и `itemWidth`. Кэш `PeerUserpicView` держит `BasicRow`
+  (`dialogs/dialogs_row.h`), сброс — при смене пира. Style-ключи:
+  `dialogsSenderMiniAvatar` (16 px), `...Skip` (2 px), `...Top` (1 px) и
+  `...Right` — объявлен, не используется (аватарка привязана к левому краю
+  имени). Тумблер «Show mini avatars next to sender names» в Chats, один
+  lang-ключ `lng_settings_exteraless_chats_sender_mini_avatars`, CLI
+  `sender-mini-avatars`/`sender-mini-avatars-set`, `check_sender_mini_avatars` —
+  5 проверок плюс одна на неверный вызов CLI (счётчик выше 802, CLI 60, backup
+  101, плагины 32 и 213 без изменений); `.extera` — 120 ключей (115 + 3 + 2,
+  сверено с legacy-кортежем `run_checks`), `kKeysCount` 11200 (`kTagsCount`
+  185), sha256 патча `105a17c7…`, `nix flake check` PASS. Ограничения:
+  применяется при следующей отрисовке строки — принудительного репейнта нет;
+  фото отправителя подтягивается при первом показе, до этого рисуются инициалы;
+  у постов со скрытым автором и при `hideSender` аватарки нет; Xvfb-смоук не
+  выполнялся.
 - Канал обновлений (NB-54): `OEGeneralAutoUpdateChannel` (int `0..2`, default
   `1`; `0` — off, `1` — release, `2` — beta, значение клампится) задаёт канал
   релизов, алиас `autoUpdateChannel`. Разбор списка релизов — Qt-only модуль

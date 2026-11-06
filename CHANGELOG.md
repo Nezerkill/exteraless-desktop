@@ -2,6 +2,31 @@
 
 ## 2026-11-06
 
+- Chats / Мини-аватарки отправителей (NB-62): `OEChatsSenderMiniAvatars` (bool,
+  default `false`, алиас `senderMiniAvatars`) рисует мини-аватарку отправителя
+  в превью диалога. Пейнт стоит в `PaintRow`
+  (`dialogs/ui/dialogs_layout.cpp`) перед `paintItemCallback`: `sender` берётся
+  как `item->displayFrom()` при предикате (превью не скрыто, автор поста не
+  спрятан, отправитель не обычный пользователь, кроме гостевого бота), а
+  отрисовка требует места под аватарку — `itemWidth` не меньше `skip` плюс
+  `st::dialogsTextWidthMin`; затем сдвигаются `itemLeft` и `itemWidth`, поэтому
+  имя и превью ужимаются рядом. Кэш `PeerUserpicView` держит `BasicRow`
+  (`dialogs/dialogs_row.h`) и сбрасывает его при смене пира. Четыре style-ключа:
+  `dialogsSenderMiniAvatar` (16 px), `dialogsSenderMiniAvatarSkip` (2 px),
+  `dialogsSenderMiniAvatarTop` (1 px) и `dialogsSenderMiniAvatarRight` —
+  объявлен в `dialogs.style`, но не используется, аватарка привязана к левому
+  краю имени. В Chats тумблер «Show mini avatars next to sender names» и
+  lang-ключ `lng_settings_exteraless_chats_sender_mini_avatars`. `.extera` —
+  120 ключей (115 + 3 + 2, сверено с legacy-кортежем `run_checks`), CLI
+  `sender-mini-avatars` и `sender-mini-avatars-set`,
+  `check_sender_mini_avatars` — 5 проверок плюс одна на неверный вызов CLI;
+  раннеры 802/32/213 PASS (backup 101, CLI 60), `kKeysCount` 11200
+  (`kTagsCount` 185), sha256 патча `105a17c7…`, `nix flake check` PASS.
+  Ограничения: значение применяется при следующей отрисовке строки —
+  принудительного репейнта нет, поэтому открытый список чатов обновится на
+  ближайшем событии; фото отправителя подтягивается при первом показе, до этого
+  рисуются инициалы; аватарки нет у постов со скрытым автором и там, где превью
+  скрыто (`hideSender`); Xvfb-смоук не выполнялся.
 - General / Канал обновлений (NB-54): `OEGeneralAutoUpdateChannel` (int
   `0..2`, default `1`; `0` — off, `1` — release, `2` — beta, значение
   клампится) задаёт канал релизов, алиас `autoUpdateChannel`. Разбор списка

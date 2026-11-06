@@ -1124,6 +1124,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setShowForwardDate(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/sender-mini-avatars"_q,
+		tr::lng_settings_exteraless_chats_sender_mini_avatars(),
+		{ u"sender"_q, u"avatar"_q },
+		Exteraless::Config::Instance().senderMiniAvatars(),
+		[](bool value) {
+			Exteraless::Config::Instance().setSenderMiniAvatars(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/disable-link-preview"_q,
 		tr::lng_settings_exteraless_chats_disable_link_preview(),
 		{ u"link"_q, u"preview"_q },

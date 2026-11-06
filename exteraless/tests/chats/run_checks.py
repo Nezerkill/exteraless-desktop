@@ -176,6 +176,8 @@ def check_cli_args(ledger, cli):
         ("seek-duration-set without value", ["seek-duration-set"]),
         ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
         ("forward-date-set with wrong count", ["forward-date-set"]),
+        ("sender-mini-avatars-set with wrong count",
+         ["sender-mini-avatars-set"]),
         ("media-menu-set with wrong count", ["media-menu-set", "1"]),
         ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
         ("disable-link-preview-set with wrong count",
@@ -618,7 +620,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 114,
+            len(section) == 115,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -639,7 +641,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 119,
+            sum(len(value) for value in exported.values()) == 120,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -659,7 +661,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 119,
+                data.get("applied") == 120,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -766,6 +768,7 @@ def check_backup(ledger, cli, work):
             "OEChatsUseEditedIcon": True,
             "OEChatsCustomEditedMark": "изм.",
             "OEChatsShowForwardDate": True,
+            "OEChatsSenderMiniAvatars": True,
             "OEMediaViewerMenuForward": False,
             "OEMediaViewerMenuCopyFrame": False,
             "OEMediaViewerMenuCopyPhoto": True,
@@ -830,7 +833,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 119,
+            data.get("applied") == 120,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1124,10 +1127,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 114",
+            "backup legacy eight completed to 115",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (114, 3, 2),
+             len(sections["mainconfig"])) == (115, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -3987,6 +3990,60 @@ def check_forward_date(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_sender_mini_avatars(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "sender-mini-avatars-defaults")
+    data = json_call(
+        ledger, cli, ["sender-mini-avatars"], env,
+        "sender-mini-avatars defaults")
+    if data is not None:
+        ledger.check(
+            "sender mini avatars default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["sender-mini-avatars-set", "1"], env,
+        "sender-mini-avatars set")
+    if data is not None:
+        ledger.check("sender mini avatars set on", data == 1, data)
+    reloaded = json_call(
+        ledger, cli, ["sender-mini-avatars"], env,
+        "sender-mini-avatars reload")
+    if reloaded is not None:
+        ledger.check(
+            "sender mini avatars persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "sender-mini-avatars-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"senderMiniAvatars": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sender-mini-avatars alias")
+    if data is not None:
+        ledger.check(
+            "sender mini avatars alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sender-mini-avatars"], env,
+        "sender-mini-avatars alias read")
+    if reloaded is not None:
+        ledger.check(
+            "sender mini avatars alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_persian(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -5933,6 +5990,8 @@ def main():
         avatar_corners = check_avatar_corners(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
+        sender_mini_avatars = check_sender_mini_avatars(
+            ledger, cli, work)
         media_menu = check_media_menu(ledger, cli, work)
         chat_menu = check_chat_menu(ledger, cli, work)
         disable_link_preview = check_disable_link_preview(ledger, cli, work)
@@ -5990,6 +6049,8 @@ def main():
     print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
+    print(f"sender-mini-avatars: "
+          f"{sender_mini_avatars[0] - sender_mini_avatars[1]} passed")
     print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
     print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
     print(f"disable-link-preview: "

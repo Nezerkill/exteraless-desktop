@@ -169,6 +169,8 @@ using Exteraless::ChatsSettings;
 		<< "<prerelease 0|1>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
+		<< "  exteraless-chats-cli sender-mini-avatars\n"
+		<< "  exteraless-chats-cli sender-mini-avatars-set <0|1>\n"
 		<< "  exteraless-chats-cli edited-mark\n"
 		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 		<< "  exteraless-chats-cli seek-duration\n"
@@ -1544,6 +1546,28 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		Exteraless::Config::Instance().setShowForwardDate(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("sender-mini-avatars")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().senderMiniAvatars() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("sender-mini-avatars-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setSenderMiniAvatars(value);
 		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}

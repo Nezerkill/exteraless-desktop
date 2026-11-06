@@ -40,6 +40,7 @@ constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
+constexpr auto kChatsSenderMiniAvatars = "OEChatsSenderMiniAvatars";
 constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
@@ -463,6 +464,14 @@ bool Config::showForwardDate() const {
 
 void Config::setShowForwardDate(bool value) {
 	setValue(kShowForwardDate, value);
+}
+
+bool Config::senderMiniAvatars() const {
+	return boolValue(kChatsSenderMiniAvatars, false);
+}
+
+void Config::setSenderMiniAvatars(bool value) {
+	setValue(kChatsSenderMiniAvatars, value);
 }
 
 bool Config::mediaViewerMenuForward() const {
@@ -1269,6 +1278,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kUseEditedIcon
 			|| key == kCustomEditedMark
 			|| key == kShowForwardDate
+			|| key == kChatsSenderMiniAvatars
 			|| key == kMediaViewerMenuForward
 			|| key == kMediaViewerMenuCopyFrame
 			|| key == kMediaViewerMenuCopyPhoto

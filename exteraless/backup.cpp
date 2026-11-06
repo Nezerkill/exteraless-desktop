@@ -46,6 +46,7 @@ constexpr auto kSeekDuration = "OEChatsSeekDuration";
 constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
+constexpr auto kChatsSenderMiniAvatars = "OEChatsSenderMiniAvatars";
 constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
@@ -79,6 +80,7 @@ constexpr auto kMediaViewerMenuCopyPhotoAlias = "mediaViewerMenuItemCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfileAlias
 	= "mediaViewerMenuItemSetProfilePhoto";
 constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
+constexpr auto kChatsSenderMiniAvatarsAlias = "senderMiniAvatars";
 constexpr auto kDisableLinkPreviewByDefaultAlias
 	= "disableLinkPreviewByDefault";
 constexpr auto kDisableLinkPreviewByDefaultAliasUpper
@@ -443,6 +445,7 @@ QString BuildBackup() {
 	extera[kUseEditedIcon] = config.useEditedIcon();
 	extera[kCustomEditedMark] = config.customEditedMark();
 	extera[kShowForwardDate] = config.showForwardDate();
+	extera[kChatsSenderMiniAvatars] = config.senderMiniAvatars();
 	extera[kMediaViewerMenuForward] = config.mediaViewerMenuForward();
 	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
@@ -766,6 +769,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
 			&& value.isBool()) {
 			config.setShowForwardDate(value.toBool());
+		} else if ((key == kChatsSenderMiniAvatars
+			|| key == kChatsSenderMiniAvatarsAlias)
+			&& value.isBool()) {
+			config.setSenderMiniAvatars(value.toBool());
 		} else if ((key == kMediaViewerMenuForward
 			|| key == kMediaViewerMenuForwardAlias)
 			&& value.isBool()) {

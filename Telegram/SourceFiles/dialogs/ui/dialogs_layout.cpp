@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_three_state_icon.h"
 #include "dialogs/dialogs_quick_action.h"
 #include "dialogs/ui/dialogs_video_userpic.h"
+#include "exteraless/config.h"
 #include "history/history.h"
 #include "history/history_item.h"
 #include "history/history_item_components.h"
@@ -455,6 +456,7 @@ void PaintRow(
 		const FakeRow *fakeRow,
 		BadgesState badgesState,
 		base::flags<Flag> flags,
+		bool hideSender,
 		PaintItemCallback &&paintItemCallback) {
 	const auto supportMode = entry->session().supportMode();
 	if (supportMode) {
@@ -809,7 +811,29 @@ void PaintRow(
 			PaintDialogDate(p, entry, fakeRow, date, rectForName, context);
 		}
 
-		paintItemCallback(nameleft, namewidth);
+		auto itemLeft = nameleft;
+		auto itemWidth = namewidth;
+		const auto sender = (!hideSender
+			&& !item->isPostHidingAuthor()
+			&& from
+			&& (!from->isUser() || item->isGuestChatBotMessage()))
+			? item->displayFrom()
+			: nullptr;
+		const auto skip = st::dialogsSenderMiniAvatar
+			+ st::dialogsSenderMiniAvatarSkip;
+		if (sender
+			&& Exteraless::Config::Instance().senderMiniAvatars()
+			&& itemWidth >= skip + st::dialogsTextWidthMin) {
+			sender->paintUserpic(p, row->senderUserpicView(sender), {
+				.position = QPoint(
+					itemLeft,
+					texttop + st::dialogsSenderMiniAvatarTop),
+				.size = st::dialogsSenderMiniAvatar,
+			});
+			itemLeft += skip;
+			itemWidth -= skip;
+		}
+		paintItemCallback(itemLeft, itemWidth);
 	} else if (entry->isPinnedDialog(context.filter)
 		&& (context.filter || !entry->fixedOnTopIndex())) {
 		auto &icon = ThreeStateIcon(
@@ -1264,6 +1288,7 @@ void RowPainter::Paint(
 		nullptr,
 		badgesState,
 		flags,
+		false,
 		paintItemCallback);
 }
 
@@ -1376,6 +1401,7 @@ void RowPainter::Paint(
 		row,
 		badgesState,
 		flags,
+		previewOptions.hideSender,
 		paintItemCallback);
 }
 

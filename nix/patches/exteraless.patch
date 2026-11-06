@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..5552a78 100644
+index ffc8ec9..b87fbe4 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..5552a78 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,201 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,202 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -178,6 +178,7 @@ index ffc8ec9..5552a78 100644
 +"lng_settings_exteraless_chats_seek_duration" = "Seek duration";
 +"lng_settings_exteraless_chats_use_edited_icon" = "Use icon for edited messages";
 +"lng_settings_exteraless_chats_forward_date" = "Show the original date on forwarded messages";
++"lng_settings_exteraless_chats_sender_mini_avatars" = "Show mini avatars next to sender names";
 +"lng_settings_exteraless_chats_disable_link_preview" = "Disable link preview by default";
 +"lng_settings_exteraless_chats_hide_all_chats" = "Hide \"All Chats\" folder";
 +"lng_settings_exteraless_chats_hide_archive" = "Hide archive folder";
@@ -1291,6 +1292,21 @@ index a1d5d89..033ded5 100644
  			MTP_vector<MTPint>(std::move(ids))
  		)).done(finish).fail(finish).send();
  		_incrementViewsPending.remove(peer);
+diff --git a/Telegram/SourceFiles/dialogs/dialogs.style b/Telegram/SourceFiles/dialogs/dialogs.style
+index 5b15fcf..093a805 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs.style
++++ b/Telegram/SourceFiles/dialogs/dialogs.style
+@@ -495,6 +495,10 @@ dialogsMiniPreview: 16px;
+ dialogsMiniPreviewRadius: 2px;
+ dialogsMiniPreviewSkip: 2px;
+ dialogsMiniPreviewRight: 3px;
++dialogsSenderMiniAvatar: 16px;
++dialogsSenderMiniAvatarSkip: 2px;
++dialogsSenderMiniAvatarRight: 3px;
++dialogsSenderMiniAvatarTop: 1px;
+ dialogsMiniPlay: icon{{ "dialogs/dialogs_mini_play", videoPlayIconFg }};
+ 
+ dialogsUnreadMediaDotEmoji: IconEmoji {
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
 index 2f0a620..63b7144 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
@@ -1338,6 +1354,38 @@ index 2f0a620..63b7144 100644
  	return archiveIsInMainMenu
  		? (collapsedHasArchive || !_skipTopDialog)
  		: archiveIsCollapsed
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_row.h b/Telegram/SourceFiles/dialogs/dialogs_row.h
+index a2ac2e4..ac722c5 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs_row.h
++++ b/Telegram/SourceFiles/dialogs/dialogs_row.h
+@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #pragma once
+ 
++#include "data/data_peer.h"
+ #include "ui/effects/animations.h"
+ #include "ui/text/text.h"
+ #include "ui/unread_badge.h"
+@@ -73,9 +74,19 @@ public:
+ 	[[nodiscard]] Ui::PeerUserpicView &userpicView() const {
+ 		return _userpic;
+ 	}
++	[[nodiscard]] Ui::PeerUserpicView &senderUserpicView(
++		not_null<PeerData*> peer) const {
++		if (_senderUserpicPeer != peer.get()) {
++			_senderUserpicPeer = peer.get();
++			_senderUserpic = peer->createUserpicView();
++		}
++		return _senderUserpic;
++	}
+ 
+ private:
+ 	mutable Ui::PeerUserpicView _userpic;
++	mutable Ui::PeerUserpicView _senderUserpic;
++	mutable PeerData *_senderUserpicPeer = nullptr;
+ 	mutable std::unique_ptr<Ui::RippleAnimation> _ripple;
+ 
+ };
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
 index 3f79e39..053625c 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_widget.cpp
@@ -1426,6 +1474,73 @@ index ee8bff7..8274456 100644
  	object_ptr<HistoryView::TopBarWidget> _subsectionTopBar = { nullptr };
  	struct {
  		object_ptr<Ui::IconButton> toggle;
+diff --git a/Telegram/SourceFiles/dialogs/ui/dialogs_layout.cpp b/Telegram/SourceFiles/dialogs/ui/dialogs_layout.cpp
+index dd2fd64..07f14c9 100644
+--- a/Telegram/SourceFiles/dialogs/ui/dialogs_layout.cpp
++++ b/Telegram/SourceFiles/dialogs/ui/dialogs_layout.cpp
+@@ -24,6 +24,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "dialogs/dialogs_three_state_icon.h"
+ #include "dialogs/dialogs_quick_action.h"
+ #include "dialogs/ui/dialogs_video_userpic.h"
++#include "exteraless/config.h"
+ #include "history/history.h"
+ #include "history/history_item.h"
+ #include "history/history_item_components.h"
+@@ -455,6 +456,7 @@ void PaintRow(
+ 		const FakeRow *fakeRow,
+ 		BadgesState badgesState,
+ 		base::flags<Flag> flags,
++		bool hideSender,
+ 		PaintItemCallback &&paintItemCallback) {
+ 	const auto supportMode = entry->session().supportMode();
+ 	if (supportMode) {
+@@ -809,7 +811,29 @@ void PaintRow(
+ 			PaintDialogDate(p, entry, fakeRow, date, rectForName, context);
+ 		}
+ 
+-		paintItemCallback(nameleft, namewidth);
++		auto itemLeft = nameleft;
++		auto itemWidth = namewidth;
++		const auto sender = (!hideSender
++			&& !item->isPostHidingAuthor()
++			&& from
++			&& (!from->isUser() || item->isGuestChatBotMessage()))
++			? item->displayFrom()
++			: nullptr;
++		const auto skip = st::dialogsSenderMiniAvatar
++			+ st::dialogsSenderMiniAvatarSkip;
++		if (sender
++			&& Exteraless::Config::Instance().senderMiniAvatars()
++			&& itemWidth >= skip + st::dialogsTextWidthMin) {
++			sender->paintUserpic(p, row->senderUserpicView(sender), {
++				.position = QPoint(
++					itemLeft,
++					texttop + st::dialogsSenderMiniAvatarTop),
++				.size = st::dialogsSenderMiniAvatar,
++			});
++			itemLeft += skip;
++			itemWidth -= skip;
++		}
++		paintItemCallback(itemLeft, itemWidth);
+ 	} else if (entry->isPinnedDialog(context.filter)
+ 		&& (context.filter || !entry->fixedOnTopIndex())) {
+ 		auto &icon = ThreeStateIcon(
+@@ -1264,6 +1288,7 @@ void RowPainter::Paint(
+ 		nullptr,
+ 		badgesState,
+ 		flags,
++		false,
+ 		paintItemCallback);
+ }
+ 
+@@ -1376,6 +1401,7 @@ void RowPainter::Paint(
+ 		row,
+ 		badgesState,
+ 		flags,
++		previewOptions.hideSender,
+ 		paintItemCallback);
+ }
+ 
 diff --git a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp b/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
 index 2bdf47a..e66bf76 100644
 --- a/Telegram/SourceFiles/dialogs/ui/dialogs_suggestions.cpp
@@ -7659,10 +7774,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..d9a132d
+index 0000000..58e0ab1
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2394 @@
+@@ -0,0 +1,2402 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -8787,6 +8902,14 @@ index 0000000..d9a132d
 +		Exteraless::Config::Instance().showForwardDate(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setShowForwardDate(value);
++		});
++	addChatsToggle(
++		u"exteraless/chats/sender-mini-avatars"_q,
++		tr::lng_settings_exteraless_chats_sender_mini_avatars(),
++		{ u"sender"_q, u"avatar"_q },
++		Exteraless::Config::Instance().senderMiniAvatars(),
++		[](bool value) {
++			Exteraless::Config::Instance().setSenderMiniAvatars(value);
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/disable-link-preview"_q,
@@ -11430,10 +11553,10 @@ index 0000000..ed1057d
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..b549c1e
+index 0000000..69c482f
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1070 @@
+@@ -0,0 +1,1077 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -11482,6 +11605,7 @@ index 0000000..b549c1e
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 +constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
++constexpr auto kChatsSenderMiniAvatars = "OEChatsSenderMiniAvatars";
 +constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
@@ -11515,6 +11639,7 @@ index 0000000..b549c1e
 +constexpr auto kMediaViewerMenuSetProfileAlias
 +	= "mediaViewerMenuItemSetProfilePhoto";
 +constexpr auto kShowForwardDateAlias = "dateOfForwardedMsg";
++constexpr auto kChatsSenderMiniAvatarsAlias = "senderMiniAvatars";
 +constexpr auto kDisableLinkPreviewByDefaultAlias
 +	= "disableLinkPreviewByDefault";
 +constexpr auto kDisableLinkPreviewByDefaultAliasUpper
@@ -11879,6 +12004,7 @@ index 0000000..b549c1e
 +	extera[kUseEditedIcon] = config.useEditedIcon();
 +	extera[kCustomEditedMark] = config.customEditedMark();
 +	extera[kShowForwardDate] = config.showForwardDate();
++	extera[kChatsSenderMiniAvatars] = config.senderMiniAvatars();
 +	extera[kMediaViewerMenuForward] = config.mediaViewerMenuForward();
 +	extera[kMediaViewerMenuCopyFrame] = config.mediaViewerMenuCopyFrame();
 +	extera[kMediaViewerMenuCopyPhoto] = config.mediaViewerMenuCopyPhoto();
@@ -12202,6 +12328,10 @@ index 0000000..b549c1e
 +		} else if ((key == kShowForwardDate || key == kShowForwardDateAlias)
 +			&& value.isBool()) {
 +			config.setShowForwardDate(value.toBool());
++		} else if ((key == kChatsSenderMiniAvatars
++			|| key == kChatsSenderMiniAvatarsAlias)
++			&& value.isBool()) {
++			config.setSenderMiniAvatars(value.toBool());
 +		} else if ((key == kMediaViewerMenuForward
 +			|| key == kMediaViewerMenuForwardAlias)
 +			&& value.isBool()) {
@@ -12628,10 +12758,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..6265abf
+index 0000000..ee3be42
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1542 @@
+@@ -0,0 +1,1552 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -12674,6 +12804,7 @@ index 0000000..6265abf
 +constexpr auto kUseEditedIcon = "OEChatsUseEditedIcon";
 +constexpr auto kCustomEditedMark = "OEChatsCustomEditedMark";
 +constexpr auto kShowForwardDate = "OEChatsShowForwardDate";
++constexpr auto kChatsSenderMiniAvatars = "OEChatsSenderMiniAvatars";
 +constexpr auto kMediaViewerMenuForward = "OEMediaViewerMenuForward";
 +constexpr auto kMediaViewerMenuCopyFrame = "OEMediaViewerMenuCopyFrame";
 +constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
@@ -13097,6 +13228,14 @@ index 0000000..6265abf
 +
 +void Config::setShowForwardDate(bool value) {
 +	setValue(kShowForwardDate, value);
++}
++
++bool Config::senderMiniAvatars() const {
++	return boolValue(kChatsSenderMiniAvatars, false);
++}
++
++void Config::setSenderMiniAvatars(bool value) {
++	setValue(kChatsSenderMiniAvatars, value);
 +}
 +
 +bool Config::mediaViewerMenuForward() const {
@@ -13903,6 +14042,7 @@ index 0000000..6265abf
 +			|| key == kUseEditedIcon
 +			|| key == kCustomEditedMark
 +			|| key == kShowForwardDate
++			|| key == kChatsSenderMiniAvatars
 +			|| key == kMediaViewerMenuForward
 +			|| key == kMediaViewerMenuCopyFrame
 +			|| key == kMediaViewerMenuCopyPhoto
@@ -14176,10 +14316,10 @@ index 0000000..6265abf
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..22aef62
+index 0000000..d5e8e4a
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,312 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -14275,6 +14415,8 @@ index 0000000..22aef62
 +	void setCustomEditedMark(const QString &value);
 +	[[nodiscard]] bool showForwardDate() const;
 +	void setShowForwardDate(bool value);
++	[[nodiscard]] bool senderMiniAvatars() const;
++	void setSenderMiniAvatars(bool value);
 +	[[nodiscard]] bool mediaViewerMenuForward() const;
 +	void setMediaViewerMenuForward(bool value);
 +	[[nodiscard]] bool mediaViewerMenuCopyFrame() const;
@@ -17398,10 +17540,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..72c163b
+index 0000000..e18fe2e
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2515 @@
+@@ -0,0 +1,2539 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -17573,6 +17715,8 @@ index 0000000..72c163b
 +		<< "<prerelease 0|1>\n"
 +		<< "  exteraless-chats-cli forward-date\n"
 +		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
++		<< "  exteraless-chats-cli sender-mini-avatars\n"
++		<< "  exteraless-chats-cli sender-mini-avatars-set <0|1>\n"
 +		<< "  exteraless-chats-cli edited-mark\n"
 +		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 +		<< "  exteraless-chats-cli seek-duration\n"
@@ -18951,6 +19095,28 @@ index 0000000..72c163b
 +		std::cout << (value ? "1" : "0") << '\n';
 +		return 0;
 +	}
++	if (mode == QStringLiteral("sender-mini-avatars")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().senderMiniAvatars() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("sender-mini-avatars-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setSenderMiniAvatars(value);
++		std::cout << (value ? "1" : "0") << '\n';
++		return 0;
++	}
 +	if (mode == QStringLiteral("edited-mark")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -20078,10 +20244,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..12ef1e6
+index 0000000..6b3b82d
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,6033 @@
+@@ -0,0 +1,6094 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -20260,6 +20426,8 @@ index 0000000..12ef1e6
 +        ("seek-duration-set without value", ["seek-duration-set"]),
 +        ("edited-mark-set with wrong count", ["edited-mark-set", "1"]),
 +        ("forward-date-set with wrong count", ["forward-date-set"]),
++        ("sender-mini-avatars-set with wrong count",
++         ["sender-mini-avatars-set"]),
 +        ("media-menu-set with wrong count", ["media-menu-set", "1"]),
 +        ("chat-menu-set with wrong count", ["chat-menu-set", "1"]),
 +        ("disable-link-preview-set with wrong count",
@@ -20702,7 +20870,7 @@ index 0000000..12ef1e6
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 114,
++            len(section) == 115,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -20723,7 +20891,7 @@ index 0000000..12ef1e6
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 119,
++            sum(len(value) for value in exported.values()) == 120,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -20743,7 +20911,7 @@ index 0000000..12ef1e6
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 119,
++                data.get("applied") == 120,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -20850,6 +21018,7 @@ index 0000000..12ef1e6
 +            "OEChatsUseEditedIcon": True,
 +            "OEChatsCustomEditedMark": "изм.",
 +            "OEChatsShowForwardDate": True,
++            "OEChatsSenderMiniAvatars": True,
 +            "OEMediaViewerMenuForward": False,
 +            "OEMediaViewerMenuCopyFrame": False,
 +            "OEMediaViewerMenuCopyPhoto": True,
@@ -20914,7 +21083,7 @@ index 0000000..12ef1e6
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 119,
++            data.get("applied") == 120,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -21208,10 +21377,10 @@ index 0000000..12ef1e6
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 114",
++            "backup legacy eight completed to 115",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (114, 3, 2),
++             len(sections["mainconfig"])) == (115, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -24071,6 +24240,60 @@ index 0000000..12ef1e6
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_sender_mini_avatars(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "sender-mini-avatars-defaults")
++    data = json_call(
++        ledger, cli, ["sender-mini-avatars"], env,
++        "sender-mini-avatars defaults")
++    if data is not None:
++        ledger.check(
++            "sender mini avatars default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["sender-mini-avatars-set", "1"], env,
++        "sender-mini-avatars set")
++    if data is not None:
++        ledger.check("sender mini avatars set on", data == 1, data)
++    reloaded = json_call(
++        ledger, cli, ["sender-mini-avatars"], env,
++        "sender-mini-avatars reload")
++    if reloaded is not None:
++        ledger.check(
++            "sender mini avatars persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    env = make_env(work / "sender-mini-avatars-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"senderMiniAvatars": True},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "sender-mini-avatars alias")
++    if data is not None:
++        ledger.check(
++            "sender mini avatars alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["sender-mini-avatars"], env,
++        "sender-mini-avatars alias read")
++    if reloaded is not None:
++        ledger.check(
++            "sender mini avatars alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_persian(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -26017,6 +26240,8 @@ index 0000000..12ef1e6
 +        avatar_corners = check_avatar_corners(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
++        sender_mini_avatars = check_sender_mini_avatars(
++            ledger, cli, work)
 +        media_menu = check_media_menu(ledger, cli, work)
 +        chat_menu = check_chat_menu(ledger, cli, work)
 +        disable_link_preview = check_disable_link_preview(ledger, cli, work)
@@ -26074,6 +26299,8 @@ index 0000000..12ef1e6
 +    print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
++    print(f"sender-mini-avatars: "
++          f"{sender_mini_avatars[0] - sender_mini_avatars[1]} passed")
 +    print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
 +    print(f"chat-menu: {chat_menu[0] - chat_menu[1]} passed")
 +    print(f"disable-link-preview: "
