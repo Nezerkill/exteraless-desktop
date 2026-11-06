@@ -27,6 +27,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_photo.h"
 #include "data/data_session.h"
 #include "data/data_user.h"
+#include "exteraless/config.h"
 #include "history/view/history_view_group_call_bar.h"
 #include "history/view/media/history_view_media_generic.h"
 #include "history/view/media/history_view_service_box.h"
@@ -302,11 +303,13 @@ auto GenerateChatIntro(
 				.link = std::make_shared<LambdaClickHandler>(send),
 			};
 		};
-		push(std::make_unique<StickerInBubblePart>(
-			parent,
-			replacing,
-			sticker,
-			st::chatIntroStickerPadding));
+		if (!Exteraless::Config::Instance().chatsSettings().hideGreetingSticker) {
+			push(std::make_unique<StickerInBubblePart>(
+				parent,
+				replacing,
+				sticker,
+				st::chatIntroStickerPadding));
+		}
 	};
 }
 

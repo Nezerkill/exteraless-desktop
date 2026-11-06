@@ -19,6 +19,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_story.h"
 #include "data/data_todo_list.h"
 #include "data/data_user.h"
+#include "exteraless/config.h"
 #include "history/view/history_view_item_preview.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -736,7 +737,10 @@ void Reply::updateName(
 }
 
 bool Reply::hasBackgroundEmoji() const {
-	return _colorPeer && (_colorPeer->backgroundEmojiId() != 0);
+	const auto settings = Exteraless::Config::Instance().chatsSettings();
+	return settings.replyEmoji
+		&& _colorPeer
+		&& (_colorPeer->backgroundEmojiId() != 0);
 }
 
 int Reply::nameIconsSkip() const {
@@ -828,11 +832,12 @@ void Reply::paint(
 		bool inBubble) const {
 	const auto st = context.st;
 	const auto stm = context.messageStyle();
+	const auto settings = Exteraless::Config::Instance().chatsSettings();
 
 	y += st::historyReplyTop;
 	const auto rect = QRect(x, y, w, _height);
 	const auto selected = context.selected();
-	const auto backgroundEmojiId = _colorPeer
+	const auto backgroundEmojiId = (settings.replyEmoji && _colorPeer)
 		? _colorPeer->backgroundEmojiId()
 		: DocumentId();
 	const auto colorIndexPlusOne = _colorPeer
@@ -841,9 +846,15 @@ void Reply::paint(
 	const auto &colorCollectible = _colorPeer
 		? _colorPeer->colorCollectible()
 		: nullptr;
-	const auto useColorCollectible = colorCollectible && !context.outbg;
-	const auto useColorIndex = colorIndexPlusOne && !context.outbg;
-	const auto colorPattern = colorCollectible
+	const auto useColorCollectible = settings.replyColors
+		&& colorCollectible
+		&& !context.outbg;
+	const auto useColorIndex = settings.replyColors
+		&& colorIndexPlusOne
+		&& !context.outbg;
+	const auto colorPattern = !settings.replyColors
+		? 0
+		: colorCollectible
 		? st->collectiblePatternIndex(colorCollectible)
 		: colorIndexPlusOne
 		? st->colorPatternIndex(colorIndexPlusOne - 1)
@@ -879,18 +890,27 @@ void Reply::paint(
 			inBubble,
 			useColorIndex ? colorIndexPlusOne : 0)];
 	const auto rippleColor = cache->bg;
-	if (!inBubble) {
-		cache->bg = QColor(0, 0, 0, 0);
-	}
-	Ui::Text::ValidateQuotePaintCache(*cache, quoteSt);
-	Ui::Text::FillQuotePaint(p, rect, *cache, quoteSt);
+	const auto paintCache = [&]() -> Ui::Text::QuotePaintCache* {
+		if (settings.replyBackground && inBubble) {
+			return cache;
+		}
+		if (!_ownedQuoteCache || _ownedQuoteCacheSource != cache) {
+			_ownedQuoteCacheSource = cache;
+			_ownedQuoteCache = std::make_unique<Ui::Text::QuotePaintCache>(
+				*cache);
+			_ownedQuoteCache->bg.setAlpha(0);
+		}
+		return _ownedQuoteCache.get();
+	}();
+	Ui::Text::ValidateQuotePaintCache(*paintCache, quoteSt);
+	Ui::Text::FillQuotePaint(p, rect, *paintCache, quoteSt);
 	if (backgroundEmojiData) {
 		ValidateBackgroundEmoji(
 			backgroundEmojiId,
 			colorCollectible,
 			backgroundEmojiData,
 			backgroundEmojiCache,
-			cache,
+			paintCache,
 			view);
 		if (!backgroundEmojiCache->frames[0].isNull()) {
 			FillBackgroundEmoji(
@@ -900,9 +920,6 @@ void Reply::paint(
 				*backgroundEmojiCache,
 				backgroundEmojiData->firstGiftFrame);
 		}
-	}
-	if (!inBubble) {
-		cache->bg = rippleColor;
 	}
 
 	if (_ripple.animation) {
@@ -1018,7 +1035,8 @@ void Reply::paint(
 			if (namew > 0) {
 				p.setPen(!inBubble
 					? st->msgImgReplyBarColor()->c
-					: (colorCollectible || colorIndexPlusOne)
+					: (settings.replyColors
+						&& (colorCollectible || colorIndexPlusOne))
 					? FromNameFg(
 						context,
 						colorIndexPlusOne - 1,

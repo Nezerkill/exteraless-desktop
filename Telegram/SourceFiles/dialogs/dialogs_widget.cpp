@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_top_bar_suggestion.h"
 #include "dialogs/dialogs_quick_action.h"
 #include "dialogs/dialogs_key.h"
+#include "exteraless/config.h"
 #include "exteraless/pill_stack.h"
 #include "history/history.h"
 #include "history/history_item.h"
@@ -2876,6 +2877,7 @@ void Widget::updateStoriesVisibility() {
 		|| (widthAnimation && !suggestionsAnimation)
 		|| _childList
 		|| _stories->empty()
+		|| Exteraless::Config::Instance().chatsSettings().hideStoriesHeader
 		|| (pulledDown && hiddenAnimated);
 	const auto hidden = hiddenInstant || hiddenAnimated;
 	const auto changed = (_stories->toggledHidden() != hidden);
@@ -2919,6 +2921,7 @@ void Widget::updateStoriesTitleShown() {
 }
 
 void Widget::showFast() {
+	updateStoriesVisibility();
 	if (isHidden()) {
 		_inner->clearSelection();
 	}

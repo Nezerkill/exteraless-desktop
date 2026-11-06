@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_search_from_controllers.h"
 #include "dialogs/dialogs_search_tags.h"
 #include "dialogs/dialogs_quick_action.h"
+#include "exteraless/config.h"
 #include "history/view/history_view_context_menu.h"
 #include "history/view/history_view_subsection_tabs.h"
 #include "history/history.h"
@@ -664,7 +665,12 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
 		? _shownList->begin()->get()->folder()
 		: nullptr;
 	const auto inMainMenu = session().settings().archiveInMainMenu();
-	if (archive && (session().settings().archiveCollapsed() || inMainMenu)) {
+	const auto hideArchive = Exteraless::Config::Instance()
+		.chatsSettings().hideArchive;
+	const auto skip = inMainMenu || hideArchive;
+	if (archive && (session().settings().archiveCollapsed()
+			|| inMainMenu
+			|| hideArchive)) {
 		if (_selected && _selected->folder() == archive) {
 			_selected = nullptr;
 		}
@@ -672,7 +678,7 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
 			clearPressed();
 		}
 		_skipTopDialog = true;
-		if (!inMainMenu && !_filterId) {
+		if (!skip && !_filterId) {
 			_collapsedRows.push_back(
 				std::make_unique<CollapsedRow>(archive));
 		}
@@ -4874,8 +4880,10 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
 		&& (_collapsedRows.back()->folder != nullptr);
 	const auto archiveIsCollapsed = (archive != nullptr)
 		&& session().settings().archiveCollapsed();
+	const auto hideArchive = Exteraless::Config::Instance()
+		.chatsSettings().hideArchive;
 	const auto archiveIsInMainMenu = (archive != nullptr)
-		&& session().settings().archiveInMainMenu();
+		&& (session().settings().archiveInMainMenu() || hideArchive);
 	return archiveIsInMainMenu
 		? (collapsedHasArchive || !_skipTopDialog)
 		: archiveIsCollapsed

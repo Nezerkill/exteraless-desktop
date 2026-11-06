@@ -64,6 +64,7 @@ private:
 
 	bool readyToRequest() const override;
 	int64 takeNextRequestOffset() override;
+	[[nodiscard]] int partSize() const override;
 	bool feedPart(int64 offset, const QByteArray &bytes) override;
 	void cancelOnFail() override;
 	bool setWebFileSizeHook(int64 size) override;

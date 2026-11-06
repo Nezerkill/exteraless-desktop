@@ -1229,16 +1229,21 @@ int TopBarWidget::countSelectedButtonsTop(float64 selectedShown) {
 }
 
 void TopBarWidget::updateSearchVisibility() {
+	const auto peer = _activeChat.key.peer();
 	const auto pinnedInSavedMessages = (_activeChat.section == Section::Pinned)
-		&& _activeChat.key.peer()
-		&& _activeChat.key.peer()->isSelf();
+		&& peer
+		&& peer->isSelf();
 	const auto searchAllowedMode = (_activeChat.section == Section::History)
 		|| (_activeChat.section == Section::Replies)
 		|| (_activeChat.section == Section::Pinned
 			&& !pinnedInSavedMessages)
 		|| (_activeChat.section == Section::SavedSublist
 			&& _activeChat.key.sublist());
-	_search->setVisible(searchAllowedMode && !_chooseForReportReason);
+	_search->setVisible(searchAllowedMode
+		&& !_chooseForReportReason
+		&& !(peer
+			&& peer->isBroadcast()
+			&& Exteraless::Config::Instance().hideChannelSearchButton()));
 }
 
 void TopBarWidget::updateInfoButtonVisibility() {
@@ -1546,7 +1551,8 @@ void TopBarWidget::updateControlsVisibility() {
 	}();
 	_call->setVisible(historyMode
 		&& callsEnabled
-		&& !_chooseForReportReason);
+		&& !_chooseForReportReason
+		&& !Exteraless::Config::Instance().hideCallButton());
 	const auto groupCallsEnabled = [&] {
 		if (const auto peer = _activeChat.key.peer()) {
 			if (!peer->isUser() && peer->canManageGroupCall()) {

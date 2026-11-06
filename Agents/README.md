@@ -22,8 +22,11 @@ sibling-чекаутом: `../exteraless`.
   - `math.*` — оценка inline-математики (`2+2=` → `4`);
   - `save_path.*` — подпапка чата при автосохранении файлов;
   - `ghost_schedule.*` — решение об отложенной Ghost-отправке (+12 с);
-  - `chats.*` — `ChatsSettings`, правило скрытия реакций и unread capsule;
-  - `links.*` — `StripTracking` для http/https-ссылок.
+  - `chats.*` — `ChatsSettings` (включая `stickerSize`: int 4..20, default
+    14), правило скрытия реакций и unread capsule;
+  - `links.*` — `StripTracking` для http/https-ссылок;
+  - `zalgo.*` — фильтр Zalgo-текста: серии из 4+ комбинирующих знаков и карта
+    смещений для пересчёта entities.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
   один `QProcess` на приложение (bwrap + Python host), JSON-lines IPC,
   проверка путей, audit-лог, load/unload и остановка host при выходе.
@@ -38,7 +41,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (549 проверок: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, silent, sections, ai-editor, pluginops, send-as, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, always-show-download, false-bottom, decoration, shortcuts, message-menu-style, backup);
+  (672 проверки: strip, reactions, CLI, config, general, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, autodownload-rules, download-boost, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
@@ -83,12 +86,112 @@ sibling-чекаутом: `../exteraless`.
   на plain-text/URL paste без HTML; allowlist
   консервативный (`utm_*` плюс известные click-id), `ref`/`source`/`s`/`si`
   и прочие неоднозначные параметры сохраняются, percent-encoded имена не
-  декодируются. Backup пишет все 56 desktop-ключей в секциях `exteraconfig`,
+  декодируются. Backup пишет все 106 desktop-ключей в секциях `exteraconfig`,
   `pillstackconfig` и `mainconfig`; `OEProxyAutoDisabled` при импорте
-  сбрасывается, потому что это производное сетевое состояние.
+  сбрасывается, потому что это производное сетевое состояние. Полосу историй
+  над списком чатов скрывает `OEChatsHideStoriesHeader` (default `false`,
+  тумблер в Chats, бэкап-алиасы `hideStoriesFromHeader`/
+  `HideStoriesFromHeader`); ключ читается при следующем пересчёте видимости —
+  live-сигнала нет, поэтому включение видно после возврата из настроек или
+  рестарта. Zalgo-текст в сообщениях вычищает `OEChatsZalgoFilter` (default
+  `false`, тумблер «Filter Zalgo text» в Chats, бэкап-алиас `zalgoFilter`):
+  `exteraless/zalgo.{h,cpp}` ищет серию из четырёх и более `Mark_*` и режет её,
+  вставка — в `Element::setTextWithLinks` с пересчётом entities (карта
+  pangu-стиля, обнулившиеся отбрасываются), поэтому фильтр применяется при
+  переоткрытии чата, а не на лету. Размер стикеров задаёт
+  `OEChatsStickerSize` (4..20, default 14, слайдер «Sticker size» в Chats):
+  `Sticker::Size()` считает множитель `1 + (v - 14) / 15` от 224 px с клампом
+  50..336 px; при 14 работает upstream `OptionStickerSize`, алиас
+  `stickerSize` в `.extera` принимается с округлением, а размер применяется
+  при переоткрытии чата. Форму задаёт `OEChatsStickerShape` (`0..2`,
+  default `0`, выбор «Sticker shape» Square/Rounded/Bubble в Chats): `0` —
+  квадрат, как в upstream, `1` — скругление 4 px (`MsgFileThumbRadiusSmall`),
+  `2` — «bubble» (`BubbleRadiusLarge`); клип `QPainterPath`/`setClipPath` в
+  `paintAnimationFrame`/`paintPixmap`/`paintPath` считается по фактическому
+  rect отрисовки, а `customEmojiPart()`/`emojiSticker()` его пропускают, так
+  что inline custom emoji и emoji-стикеры не трогаются.
+  Кнопки профиля скрывают `OEChatsHideGiftButton`
+  (Gift), `OEChatsHideCallButton` (Call в профиле и в шапке чата) и
+  `OEChatsHideChannelSearchButton` (Search в шапке канала): тумблеры в Chats,
+  алиасы `hideGiftButtonInChannel`/`hideGiftButton`, `hideCallButton` и
+  `hideChannelSearchButton`, значение применяется после переоткрытия профиля
+  или чата, `Ctrl+F` и меню «⋯» продолжают работать, `_groupCall` не трогали.
+  Результаты опроса до голосования показывает `OEChatsShowResultsBeforeVoting`
+  (default `false`, тумблер «Show poll results before voting» в Chats,
+  бэкап-алиас `showResultsBeforeVoting`): предикат
+  `Poll::showResultsBeforeVote()` пропускает только публичный опрос без голоса
+  и без скрытых результатов, где `totalVoters > 0` и есть ответ с голосами, а
+  `canVote()` смягчён, поэтому голосовать по-прежнему можно; multi-choice вне
+  объёма, результаты применяются после переоткрытия или обновления опроса.
+  Окраску цитаты ответа выключают `OEChatsReplyColors`, `OEChatsReplyEmoji` и
+  `OEChatsReplyBackground` (все default `true`, подсекция Replies в Chats):
+  у каждой цитаты свой `QuotePaintCache`, поэтому общий кэш не мутируется, а
+  legacy-алиас `messageColoredBackground` сводится к `replyBackground` и
+  отключает окраску только при явном `false`; медиа-карточки и ручные цитаты
+  остаются цветными, а значение применяется после переоткрытия чата.
+  Папку архива из списка чатов скрывает `OEChatsHideArchive` (default `false`,
+  бэкап-алиасы `hideArchive`/`HideArchive`/`hideArchiveFolder`) через уже
+  существующий skip-путь `_skipTopDialog` в `InnerWidget`; `shouldBeInChatList`
+  не меняется, поэтому счётчики папок остаются корректными, а внешнее условие —
+  `archiveInMainMenu() || hideArchive`. Чаты с непрочитанными поднимает
+  `OEChatsSortByUnread` (default `false`, бэкап-алиасы
+  `sortByUnread`/`SortByUnread`) через upstream-опцию
+  `Dialogs::kOptionDialogsUnreadOnTop` без правок индексного списка. Оба ключа
+  применяются сразу (`notifyListChanged`/пересорт), поиск и окно Archive архив
+  по-прежнему видят, а при `hideArchive` с выключенным `archiveInMainMenu`
+  вернуть архив можно только тумблером.
+  Ширину баббла в broadcast-каналах снимает `OEChatsWideChannelPosts`
+  (default `false`, тумблер «Wide channel posts» в Chats, бэкап-алиасы
+  `wideChannelPosts`/`WideChannelPosts`): гейт рядом с
+  `UnlimitedMessageWidth`, megagroup отсекается через `isBroadcast()`, медиа
+  не затрагиваются, а ширина применяется после переоткрытия чата или ресайза.
+  Мелочи чата (NB-86) задают `OEChatsHideGreetingSticker` и
+  `OEChatsHidePanelsOnScroll` (обе default `false`) — гейт приветственного
+  стикера в `GenerateChatIntro` и закрытие панелей `hidePanelsAnimated` в
+  `onScroll` — плюс `OEChatsChannelBottomButton` (int 0/1/2, default `1`:
+  `0` скрыть, `1` mute, `2` пока mute, Discuss — follow-up); алиасы
+  `disableGreetingSticker`, `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`,
+  `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton`
+  (true → 0). Панели закрывает и автокомплит, hide-режим уносит gift/direct-
+  иконки, значение применяется после переоткрытия, а `keepAttachButton` и
+  `quickTransition*` — N/A (кнопки/жеста в desktop нет).
+  Автоскачивание архивов и Windows-исполняемых выключают
+  `OEChatsDisableAutoDownloadingArchive` (bool, default `false`) и
+  `OEChatsBlockWin32ExecutableFiles` (bool, default `true`): гейты в
+  `DocumentMedia::automaticLoad` и `VideoPreload::Can`, а
+  `Exteraless::IsWin32Executable` (`exteraless/links.cpp`) держит свой список
+  из 18 расширений, поэтому глобальный `kExecutable` не тронут; алиасы
+  `disableAutoDownloadingArchive` и `Win32ExecutableFiles` принимаются в
+  `.extera` (104 ключа, CLI 4 режима). Правила действуют на новые загрузки —
+  уже скачанное не удаляется, `.exe` под Linux теперь тоже блокируется
+  (раньше качался), а photo-preload без имени файла не покрыт.
+  Скорость загрузки и отдачи задают `OEChatsDownloadSpeedBoost` (int `0..2`,
+  default `0`) и `OEChatsUploadBoost` (bool, default `false`): пул сессий
+  1/2/4 и часть 128K/512K/1M в `storage/download_manager_mtproto.cpp` (окно
+  ожидания считается в частях, таймауты не менялись), часть отдачи до 512K
+  при капе 1M в `Uploader::Entry::setDocSize` (пейсинг не тронут); алиасы
+  `downloadSpeedBoost`/`UploadBoost` и legacy `OEGeneralDownloadSpeedBoost`,
+  Radioenum Off/Boost/Ultra и тумблер в Chats, CLI 4 режима. При boost > 0
+  CDN-редиректы могут не пройти hash-проверку (слайсинг CDN остался 128K),
+  preload/streaming остались на 128K, а на слабой сети пул может сжаться —
+  нужен замер MB/s.
+- ID и DC в профиле: `OEGeneralShowIdDc` (default `false`) добавляет строку
+  «ID and DC» (`id: 123456 · DC 2`) в профиль контакта (`makeInfo()` в
+  `info/profile/info_profile_actions.cpp`) и в свой профиль (`SetupRows()` в
+  `settings/sections/settings_information.cpp`); клик копирует `bareId` без
+  префикса чата. Текст — `Info::Profile::IdDcText`
+  (`info/profile/info_profile_values.cpp`), формат —
+  `Exteraless::FormatIdDc` (`exteraless/format.{h,cpp}`). DC берётся из
+  `mainDcId()` текущего аккаунта, поэтому дата-центр собеседника не
+  показывается; значение не реактивно — строка появляется при следующем
+  открытии профиля. Строка подавлена, если включён upstream-тумблер
+  «Show peer ID below about» (`show-peer-id-below-about`). Тумблер — в
+  General, бэкап-алиасы `showIdAndDc` (bool) и `idDcType` (число).
 - Двойной тап по сообщению: `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut`
   (-1 — как в настройках Telegram, 0 — ничего, 1/2 — любимая реакция, 4 —
-  ответ); резолвер — `exteraless/doubletap.{h,cpp}`.
+  ответ); резолвер — `exteraless/doubletap.{h,cpp}`. Поддержаны ещё шесть
+  Android-действий (3 translate, 5 save, 8 edit, 10 delete, 11 forward,
+  12 download), 6/7/9 дают «ничего», а 2 остаётся «Send reaction».
 - Время на стикерах: `OEChatsStickerTimeSide` (сбоку) и
   `OEChatsHideStickerTime` (скрыто), отрисовка и hit-test в `UnwrappedMedia`
   через `Element::drawSideInfo`/`sideInfoRect`/`sideInfoTextState`.

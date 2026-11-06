@@ -1880,6 +1880,17 @@ Section DetailsFiller::makeInfo() {
 			SetupAboutPeerIdDrag(about.text, _peer);
 		}
 	}
+	const auto idDcText = IdDcText(_peer);
+	if (!idDcText.isEmpty() && !ShowPeerIdBelowAbout.value()) {
+		const auto bareId = QString::number(
+			_peer->id.value & PeerId::kChatTypeMask);
+		addInfoOneLine(
+			tr::lng_info_id_dc_label(),
+			rpl::single(tr::marked(tr::link(
+				idDcText,
+				u"internal:~peer_id~:copy:"_q + bareId))),
+			idDcText);
+	}
 	raw->toggleOn(tracker.atLeastOneShownValue());
 	raw->finishAnimating();
 

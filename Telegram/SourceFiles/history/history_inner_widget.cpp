@@ -2744,6 +2744,54 @@ void HistoryInner::mouseDoubleClickEvent(QMouseEvent *e) {
 				case Exteraless::DoubleTapAction::Reply: {
 					_widget->replyToMessage(item);
 				} break;
+				case Exteraless::DoubleTapAction::Translate: {
+					const auto text = item->originalText();
+					if (item->isRegular() && !Ui::SkipTranslate(text)) {
+						_controller->show(Box(
+							Ui::TranslateBox,
+							item->history()->peer,
+							item->id,
+							text,
+							hasCopyRestriction(item)));
+					}
+				} break;
+				case Exteraless::DoubleTapAction::Save: {
+					if (item->isRegular()) {
+						Window::ForwardToSelf(
+							_controller->uiShow(),
+							{ { item->fullId() } });
+					}
+				} break;
+				case Exteraless::DoubleTapAction::Edit: {
+					if (item->isRegular()
+						&& item->allowsEdit(base::unixtime::now())) {
+						_widget->editMessage(item, TextSelection());
+					}
+				} break;
+				case Exteraless::DoubleTapAction::Delete: {
+					if (item->isRegular() && item->canDelete()) {
+						_controller->show(Box<DeleteMessagesBox>(item));
+					}
+				} break;
+				case Exteraless::DoubleTapAction::Forward: {
+					if (item->isRegular() && item->allowsForward()) {
+						Window::ShowForwardMessagesBox(
+							_controller,
+							MessageIdsList{ item->fullId() });
+					}
+				} break;
+				case Exteraless::DoubleTapAction::Download: {
+					const auto media = item->media();
+					const auto document = media
+						? media->document()
+						: nullptr;
+					if (item->isRegular() && document) {
+						DocumentSaveClickHandler::SaveAndTrack(
+							item->fullId(),
+							document,
+							DocumentSaveClickHandler::Mode::ToCacheOrFile);
+					}
+				} break;
 				default: break;
 				}
 			} else {

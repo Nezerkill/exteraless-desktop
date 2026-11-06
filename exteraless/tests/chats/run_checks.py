@@ -165,6 +165,7 @@ def check_cli_args(ledger, cli):
         ("ai-editor-set with wrong count", ["ai-editor-set"]),
         ("plugin-filename without name", ["plugin-filename"]),
         ("send-as-set with wrong count", ["send-as-set"]),
+        ("profile-buttons-set with wrong count", ["profile-buttons-set"]),
         ("inline-math-set with wrong count", ["inline-math-set"]),
         ("save-subfolder-set with wrong count", ["save-subfolder-set"]),
         ("ghost-schedule-set with wrong count", ["ghost-schedule-set"]),
@@ -177,6 +178,18 @@ def check_cli_args(ledger, cli):
          ["disable-link-preview-set"]),
         ("hide-all-chats-set with wrong count",
          ["hide-all-chats-set"]),
+        ("greeting-sticker-set with wrong count",
+         ["greeting-sticker-set"]),
+        ("panels-on-scroll-set with wrong count",
+         ["panels-on-scroll-set"]),
+        ("channel-bottom-button-set with wrong count",
+         ["channel-bottom-button-set"]),
+        ("channel-bottom-button-set out of range",
+         ["channel-bottom-button-set", "3"]),
+        ("download-boost-set with wrong count",
+         ["download-boost-set"]),
+        ("upload-boost-set with wrong count",
+         ["upload-boost-set"]),
         ("always-show-download-set with wrong count",
          ["always-show-download-set"]),
         ("false-bottom-set with wrong count", ["false-bottom-set"]),
@@ -194,6 +207,9 @@ def check_cli_args(ledger, cli):
         ("plugin-delete without args", ["plugin-delete"]),
         ("deleted-trim without json", ["deleted-trim", "10", "10"]),
         ("deleted-entry without json", ["deleted-entry"]),
+        ("autodownload-archive-set with wrong count",
+         ["autodownload-archive-set"]),
+        ("win32-exe-set with wrong count", ["win32-exe-set"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -497,7 +513,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 79,
+            len(section) == 101,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -518,7 +534,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 84,
+            sum(len(value) for value in exported.values()) == 106,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -538,7 +554,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 84,
+                data.get("applied") == 106,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -609,6 +625,11 @@ def check_backup(ledger, cli, work):
             "OEChatsDoubleTapOut": 4,
             "OEChatsStickerTimeSide": True,
             "OEChatsHideStickerTime": False,
+            "OEChatsStickerSize": 14,
+            "OEChatsStickerShape": 1,
+            "OEChatsReplyColors": False,
+            "OEChatsReplyEmoji": True,
+            "OEChatsReplyBackground": False,
             "OEGhostShowStatus": True,
             "OEGhostSendReadLocked": True,
             "OEGhostSendStoriesLocked": False,
@@ -624,6 +645,9 @@ def check_backup(ledger, cli, work):
             "OESettingsHideHelp": True,
             "OEAppearanceHideAiEditor": True,
             "OEChatsHideSendAsPeer": True,
+            "OEChatsHideGiftButton": True,
+            "OEChatsHideCallButton": True,
+            "OEChatsHideChannelSearchButton": True,
             "OEChatsInlineMathResult": True,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
@@ -641,6 +665,16 @@ def check_backup(ledger, cli, work):
             "OEChatsChatMenuClearDeleted": False,
             "OEChatsDisableLinkPreviewByDefault": True,
             "OEChatsHideAllChatsFolder": True,
+            "OEChatsHideArchive": True,
+            "OEChatsHideGreetingSticker": True,
+            "OEChatsHidePanelsOnScroll": True,
+            "OEChatsChannelBottomButton": 2,
+            "OEChatsDownloadSpeedBoost": 2,
+            "OEChatsUploadBoost": True,
+            "OEChatsSortByUnread": True,
+            "OEChatsWideChannelPosts": True,
+            "OEChatsDisableAutoDownloadingArchive": True,
+            "OEChatsBlockWin32ExecutableFiles": False,
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
@@ -651,6 +685,10 @@ def check_backup(ledger, cli, work):
             "OEChatsShortcutMembers": True,
             "OEChatsGroupedMessageMenu": True,
             "OEChatsDefaultDeleteMenu": True,
+            "OEChatsShowResultsBeforeVoting": True,
+            "hideStoriesFromHeader": True,
+            "showIdAndDc": True,
+            "zalgoFilter": True,
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -672,7 +710,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 84,
+            data.get("applied") == 106,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -759,6 +797,22 @@ def check_backup(ledger, cli, work):
             "backup full hide all chats",
             section.get("OEChatsHideAllChatsFolder") is True,
             section.get("OEChatsHideAllChatsFolder"))
+        ledger.check(
+            "backup full hide archive",
+            section.get("OEChatsHideArchive") is True,
+            section.get("OEChatsHideArchive"))
+        ledger.check(
+            "backup full chat misc",
+            section.get("OEChatsHideGreetingSticker") is True
+            and section.get("OEChatsHidePanelsOnScroll") is True
+            and section.get("OEChatsChannelBottomButton") == 2,
+            (section.get("OEChatsHideGreetingSticker"),
+             section.get("OEChatsHidePanelsOnScroll"),
+             section.get("OEChatsChannelBottomButton")))
+        ledger.check(
+            "backup full sort by unread",
+            section.get("OEChatsSortByUnread") is True,
+            section.get("OEChatsSortByUnread"))
         ledger.check(
             "backup full always show download",
             section.get("OEChatsAlwaysShowDownloadIcon") is True,
@@ -946,10 +1000,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 84",
+            "backup legacy eight completed to 101",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (79, 3, 2),
+             len(sections["mainconfig"])) == (101, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1623,14 +1677,16 @@ def check_doubletap(ledger, cli, work):
         ("none", "0", "none"),
         ("reaction", "1", "reaction"),
         ("show reactions maps to reaction", "2", "reaction"),
-        ("translate maps to none", "3", "none"),
+        ("translate", "3", "translate"),
         ("reply", "4", "reply"),
-        ("save maps to none", "5", "none"),
-        ("repeat maps to none", "6", "none"),
-        ("edit maps to none", "8", "none"),
-        ("delete maps to none", "10", "none"),
-        ("forward maps to none", "11", "none"),
-        ("download maps to none", "12", "none"),
+        ("save", "5", "save"),
+        ("repeat stays inert", "6", "none"),
+        ("repeat-as-copy stays inert", "7", "none"),
+        ("edit", "8", "edit"),
+        ("unnamed action 9 stays inert", "9", "none"),
+        ("delete", "10", "delete"),
+        ("forward", "11", "forward"),
+        ("download", "12", "download"),
     ]
     for name, value, expected in resolve_cases:
         result = run(cli, ["doubletap-resolve", value])
@@ -2598,6 +2654,119 @@ def check_pangu(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_zalgo(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "zalgo-defaults")
+    data = json_call(ledger, cli, ["zalgo"], env, "zalgo defaults")
+    if data is not None:
+        ledger.check(
+            "zalgo default off",
+            data.get("zalgoFilter") is False,
+            data)
+
+    classic = "a\u0301\u0302\u0303\u0304b"
+    arabic = "\u0628\u0650\u0633\u0652\u0645\u0650 "
+    arabic += "\u0627\u0644\u0644\u0651\u064e\u0647\u0650"
+    cases = [
+        (classic, "ab"),
+        ("cafe\u0301", "cafe\u0301"),
+        (arabic, arabic),
+        ("\U0001f468\u200d\U0001f469\u200d\U0001f467",
+         "\U0001f468\u200d\U0001f469\u200d\U0001f467"),
+        ("plain text", "plain text"),
+    ]
+    for text, expected in cases:
+        result = run(cli, ["zalgo-apply", text])
+        actual = result.stdout.rstrip("\n")
+        ledger.check(
+            f"zalgo apply {text}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {actual!r}, want {expected!r}")
+
+    padding = "x" * (2048 - len(classic))
+    inside = classic + padding
+    outside = inside + "x"
+    for text, expected in ((inside, "ab" + padding), (outside, outside)):
+        result = run(cli, ["zalgo-apply", text])
+        actual = result.stdout.rstrip("\n")
+        ledger.check(
+            f"zalgo apply length {len(text)}",
+            result.returncode == 0 and actual == expected,
+            f"exit {result.returncode}, got {len(actual)} chars, "
+            f"want {len(expected)}")
+
+    data = json_call(
+        ledger, cli, ["zalgo-tags", classic, "1", "4"], env, "zalgo tags")
+    if data is not None:
+        ledger.check(
+            "zalgo tags dropped marks",
+            data.get("text") == "ab"
+            and data.get("offset") == 1
+            and data.get("length") == 0,
+            data)
+    data = json_call(
+        ledger, cli, ["zalgo-tags", classic, "5", "1"], env,
+        "zalgo tags tail")
+    if data is not None:
+        ledger.check(
+            "zalgo tags shifted tail",
+            data.get("text") == "ab"
+            and data.get("offset") == 1
+            and data.get("length") == 1,
+            data)
+
+    env = make_env(work / "zalgo-set")
+    data = json_call(
+        ledger, cli, ["zalgo-set", "1"], env, "zalgo set")
+    if data is not None:
+        ledger.check(
+            "zalgo set on",
+            data == 1,
+            data)
+    reloaded = json_call(ledger, cli, ["zalgo"], env, "zalgo reload")
+    if reloaded is not None:
+        ledger.check(
+            "zalgo persisted",
+            reloaded.get("zalgoFilter") is True,
+            reloaded)
+
+    env = make_env(work / "zalgo-fromjson")
+    root = {
+        "version": 1,
+        "exteraconfig": {"zalgoFilter": True},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "zalgo alias")
+    if data is not None:
+        ledger.check(
+            "zalgo alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(ledger, cli, ["zalgo"], env, "zalgo alias read")
+    if reloaded is not None:
+        ledger.check(
+            "zalgo alias value",
+            reloaded.get("zalgoFilter") is True,
+            reloaded)
+
+    for name, arguments in (
+            ("zalgo-set with wrong count", ["zalgo-set"]),
+            ("zalgo-apply without text", ["zalgo-apply"]),
+            ("zalgo-tags with wrong count", ["zalgo-tags", "a", "0"])):
+        result = run(cli, arguments)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_silent(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -2899,6 +3068,72 @@ def check_send_as(ledger, cli, work):
         ledger.check(
             "send as alias value",
             reloaded.get("hidden") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_profile_buttons(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "profile-buttons-defaults")
+    data = json_call(
+        ledger, cli, ["profile-buttons"], env, "profile buttons defaults")
+    if data is not None:
+        ledger.check(
+            "profile buttons default shown",
+            data.get("gift") is False
+            and data.get("call") is False
+            and data.get("search") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["profile-buttons-set", "1", "0", "1"], env,
+        "profile buttons set")
+    if data is not None:
+        ledger.check(
+            "profile buttons set",
+            data.get("gift") is True
+            and data.get("call") is False
+            and data.get("search") is True,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["profile-buttons"], env, "profile buttons reload")
+    if reloaded is not None:
+        ledger.check(
+            "profile buttons persisted",
+            reloaded.get("gift") is True
+            and reloaded.get("call") is False
+            and reloaded.get("search") is True,
+            reloaded)
+
+    env = make_env(work / "profile-buttons-backup")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsHideGiftButton": True,
+            "OEChatsHideCallButton": True,
+            "OEChatsHideChannelSearchButton": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "profile buttons backup")
+    if data is not None:
+        ledger.check(
+            "profile buttons backup applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["profile-buttons"], env, "profile buttons backup read")
+    if reloaded is not None:
+        ledger.check(
+            "profile buttons backup values",
+            reloaded.get("gift") is True
+            and reloaded.get("call") is True
+            and reloaded.get("search") is True,
             reloaded)
 
     return (
@@ -3228,6 +3463,208 @@ def check_seek_duration(ledger, cli, work):
             "seek duration key value",
             reloaded.get("seconds") == 30,
             reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_sticker_size(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "sticker-size-defaults")
+    data = json_call(
+        ledger, cli, ["sticker-size"], env, "sticker-size defaults")
+    if data is not None:
+        ledger.check(
+            "sticker size default",
+            data.get("stickerSize") == 14,
+            data)
+
+    data = json_call(
+        ledger, cli, ["sticker-size-set", "12"], env, "sticker-size set")
+    if data is not None:
+        ledger.check(
+            "sticker size set",
+            data.get("stickerSize") == 12,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-size"], env, "sticker-size reload")
+    if reloaded is not None:
+        ledger.check(
+            "sticker size persisted",
+            reloaded.get("stickerSize") == 12,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["sticker-size-set", "1"], env,
+        "sticker-size clamp low")
+    if data is not None:
+        ledger.check(
+            "sticker size clamp low",
+            data.get("stickerSize") == 4,
+            data)
+
+    data = json_call(
+        ledger, cli, ["sticker-size-set", "30"], env,
+        "sticker-size clamp high")
+    if data is not None:
+        ledger.check(
+            "sticker size clamp high",
+            data.get("stickerSize") == 20,
+            data)
+
+    env = make_env(work / "sticker-size-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"stickerSize": 13.7},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sticker-size alias")
+    if data is not None:
+        ledger.check(
+            "sticker size alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-size"], env, "sticker-size alias read")
+    if reloaded is not None:
+        ledger.check(
+            "sticker size alias rounded",
+            reloaded.get("stickerSize") == 14,
+            reloaded)
+
+    env = make_env(work / "sticker-size-key")
+    root = {
+        "version": 1,
+        "exteraconfig": {"OEChatsStickerSize": 18},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sticker-size key")
+    if data is not None:
+        ledger.check(
+            "sticker size key applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-size"], env, "sticker-size key read")
+    if reloaded is not None:
+        ledger.check(
+            "sticker size key value",
+            reloaded.get("stickerSize") == 18,
+            reloaded)
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "sticker-size export")
+    if current is not None:
+        section = current.get("exteraconfig") or {}
+        ledger.check(
+            "sticker size export key",
+            section.get("OEChatsStickerSize") == 18,
+            section.get("OEChatsStickerSize"))
+
+    env = make_env(work / "sticker-shape-defaults")
+    data = json_call(
+        ledger, cli, ["sticker-shape"], env, "sticker-shape defaults")
+    if data is not None:
+        ledger.check(
+            "sticker shape default",
+            data.get("stickerShape") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["sticker-shape-set", "1"], env, "sticker-shape set")
+    if data is not None:
+        ledger.check(
+            "sticker shape set",
+            data.get("stickerShape") == 1,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-shape"], env, "sticker-shape reload")
+    if reloaded is not None:
+        ledger.check(
+            "sticker shape persisted",
+            reloaded.get("stickerShape") == 1,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["sticker-shape-set", "2"], env, "sticker-shape bubble")
+    if data is not None:
+        ledger.check(
+            "sticker shape bubble",
+            data.get("stickerShape") == 2,
+            data)
+
+    data = json_call(
+        ledger, cli, ["sticker-shape-set", "3"], env,
+        "sticker-shape clamp high")
+    if data is not None:
+        ledger.check(
+            "sticker shape clamp high",
+            data.get("stickerShape") == 2,
+            data)
+
+    data = json_call(
+        ledger, cli, ["sticker-shape-set", "-1"], env,
+        "sticker-shape clamp low")
+    if data is not None:
+        ledger.check(
+            "sticker shape clamp low",
+            data.get("stickerShape") == 0,
+            data)
+
+    env = make_env(work / "sticker-shape-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"stickerShape": 1.4},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sticker-shape alias")
+    if data is not None:
+        ledger.check(
+            "sticker shape alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-shape"], env, "sticker-shape alias read")
+    if reloaded is not None:
+        ledger.check(
+            "sticker shape alias rounded",
+            reloaded.get("stickerShape") == 1,
+            reloaded)
+
+    env = make_env(work / "sticker-shape-key")
+    root = {
+        "version": 1,
+        "exteraconfig": {"OEChatsStickerShape": 2},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "sticker-shape key")
+    if data is not None:
+        ledger.check(
+            "sticker shape key applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["sticker-shape"], env, "sticker-shape key read")
+    if reloaded is not None:
+        ledger.check(
+            "sticker shape key value",
+            reloaded.get("stickerShape") == 2,
+            reloaded)
+    current = json_call(
+        ledger, cli, ["backup-export-current"], env, "sticker-shape export")
+    if current is not None:
+        section = current.get("exteraconfig") or {}
+        ledger.check(
+            "sticker shape export key",
+            section.get("OEChatsStickerShape") == 2,
+            section.get("OEChatsStickerShape"))
 
     return (
         ledger.checks - before_checks,
@@ -3607,6 +4044,258 @@ def check_hide_all_chats(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_hide_archive_sort(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "hide-archive-sort-defaults")
+    data = json_call(
+        ledger, cli, ["hide-archive"], env,
+        "hide-archive defaults")
+    if data is not None:
+        ledger.check(
+            "hide archive default off",
+            data.get("hidden") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["sort-unread"], env,
+        "sort-unread defaults")
+    if data is not None:
+        ledger.check(
+            "sort by unread default off",
+            data.get("sorted") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["hide-archive-set", "1"], env,
+        "hide-archive set")
+    if data is not None:
+        ledger.check("hide archive set on", data == 1, data)
+    data = json_call(
+        ledger, cli, ["sort-unread-set", "1"], env,
+        "sort-unread set")
+    if data is not None:
+        ledger.check("sort by unread set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["hide-archive"], env,
+        "hide-archive reload")
+    if reloaded is not None:
+        ledger.check(
+            "hide archive persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["sort-unread"], env,
+        "sort-unread reload")
+    if reloaded is not None:
+        ledger.check(
+            "sort by unread persisted",
+            reloaded.get("sorted") is True,
+            reloaded)
+
+    for in_main_menu in (False, True):
+        for hide_archive in (False, True):
+            expected = in_main_menu or hide_archive
+            data = json_call(
+                ledger, cli,
+                ["archive-skip",
+                 "1" if in_main_menu else "0",
+                 "1" if hide_archive else "0"],
+                env,
+                f"archive-skip {int(in_main_menu)}"
+                f"{int(hide_archive)}")
+            if data is not None:
+                ledger.check(
+                    f"archive skip {int(in_main_menu)}"
+                    f"{int(hide_archive)}",
+                    data.get("skip") is expected,
+                    data)
+
+    env = make_env(work / "hide-archive-sort-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "hideArchiveFolder": True,
+            "SortByUnread": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "hide-archive-sort alias")
+    if data is not None:
+        ledger.check(
+            "hide archive alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["hide-archive"], env,
+        "hide-archive alias read")
+    if reloaded is not None:
+        ledger.check(
+            "hide archive alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["sort-unread"], env,
+        "sort-unread alias read")
+    if reloaded is not None:
+        ledger.check(
+            "sort by unread alias value",
+            reloaded.get("sorted") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_autodownload_rules(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "autodownload-rules-defaults")
+    data = json_call(
+        ledger, cli, ["autodownload-archive"], env,
+        "autodownload-archive defaults")
+    if data is not None:
+        ledger.check(
+            "archive autodownload default on",
+            data.get("disabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["win32-exe"], env,
+        "win32-exe defaults")
+    if data is not None:
+        ledger.check(
+            "win32 executables default blocked",
+            data.get("blocked") is True,
+            data)
+
+    data = json_call(
+        ledger, cli, ["autodownload-archive-set", "1"], env,
+        "autodownload-archive set")
+    if data is not None:
+        ledger.check("archive autodownload set off", data == 1, data)
+    data = json_call(
+        ledger, cli, ["win32-exe-set", "0"], env,
+        "win32-exe set")
+    if data is not None:
+        ledger.check("win32 executables set allowed", data == 0, data)
+
+    reloaded = json_call(
+        ledger, cli, ["autodownload-archive"], env,
+        "autodownload-archive reload")
+    if reloaded is not None:
+        ledger.check(
+            "archive autodownload persisted",
+            reloaded.get("disabled") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["win32-exe"], env,
+        "win32-exe reload")
+    if reloaded is not None:
+        ledger.check(
+            "win32 executables persisted",
+            reloaded.get("blocked") is False,
+            reloaded)
+
+    env = make_env(work / "autodownload-rules-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "disableAutoDownloadingArchive": True,
+            "Win32ExecutableFiles": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "autodownload-rules alias")
+    if data is not None:
+        ledger.check(
+            "autodownload alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["autodownload-archive"], env,
+        "autodownload-archive alias read")
+    if reloaded is not None:
+        ledger.check(
+            "archive autodownload alias value",
+            reloaded.get("disabled") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["win32-exe"], env,
+        "win32-exe alias read")
+    if reloaded is not None:
+        ledger.check(
+            "win32 executables alias value",
+            reloaded.get("blocked") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_wide_posts(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "wide-posts-defaults")
+    data = json_call(
+        ledger, cli, ["wide-posts"], env,
+        "wide-posts defaults")
+    if data is not None:
+        ledger.check(
+            "wide channel posts default off",
+            data.get("wideChannelPosts") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["wide-posts-set", "1"], env,
+        "wide-posts set")
+    if data is not None:
+        ledger.check("wide channel posts set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["wide-posts"], env,
+        "wide-posts reload")
+    if reloaded is not None:
+        ledger.check(
+            "wide channel posts persisted",
+            reloaded.get("wideChannelPosts") is True,
+            reloaded)
+
+    env = make_env(work / "wide-posts-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "wideChannelPosts": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "wide-posts alias")
+    if data is not None:
+        ledger.check(
+            "wide channel posts alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["wide-posts"], env,
+        "wide-posts alias read")
+    if reloaded is not None:
+        ledger.check(
+            "wide channel posts alias value",
+            reloaded.get("wideChannelPosts") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_always_show_download(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -3658,6 +4347,177 @@ def check_always_show_download(ledger, cli, work):
         ledger.check(
             "always show download alias value",
             reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_show_results_before_voting(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "show-results-before-voting-defaults")
+    data = json_call(
+        ledger, cli, ["show-results-before-voting"], env,
+        "show-results-before-voting defaults")
+    if data is not None:
+        ledger.check(
+            "show results before voting default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["show-results-before-voting-set", "1"], env,
+        "show-results-before-voting set")
+    if data is not None:
+        ledger.check("show results before voting set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["show-results-before-voting"], env,
+        "show-results-before-voting reload")
+    if reloaded is not None:
+        ledger.check(
+            "show results before voting persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "show-results-before-voting-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "showResultsBeforeVoting": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "show-results-before-voting alias")
+    if data is not None:
+        ledger.check(
+            "show results before voting alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["show-results-before-voting"], env,
+        "show-results-before-voting alias read")
+    if reloaded is not None:
+        ledger.check(
+            "show results before voting alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    env = make_env(work / "show-results-before-voting-oe")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEChatsShowResultsBeforeVoting": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "show-results-before-voting OE")
+    if data is not None:
+        ledger.check(
+            "show results before voting OE key applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["show-results-before-voting"], env,
+        "show-results-before-voting OE read")
+    if reloaded is not None:
+        ledger.check(
+            "show results before voting OE value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_reply_style(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "reply-style-defaults")
+    data = json_call(
+        ledger, cli, ["reply-style"], env, "reply-style defaults")
+    if data is not None:
+        ledger.check(
+            "reply style defaults on",
+            data.get("colors") is True
+            and data.get("emoji") is True
+            and data.get("background") is True,
+            data)
+
+    data = json_call(
+        ledger, cli, ["reply-style-set", "0", "1", "0"], env,
+        "reply-style set")
+    if data is not None:
+        ledger.check(
+            "reply style set applied",
+            data.get("colors") is False
+            and data.get("emoji") is True
+            and data.get("background") is False,
+            data)
+
+    reloaded = json_call(
+        ledger, cli, ["reply-style"], env, "reply-style reload")
+    if reloaded is not None:
+        ledger.check(
+            "reply style persisted",
+            reloaded.get("colors") is False
+            and reloaded.get("emoji") is True
+            and reloaded.get("background") is False,
+            reloaded)
+
+    env = make_env(work / "reply-style-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "replyColors": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "reply-style alias")
+    if data is not None:
+        ledger.check(
+            "reply style alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["reply-style"], env, "reply-style alias read")
+    if reloaded is not None:
+        ledger.check(
+            "reply style alias value",
+            reloaded.get("colors") is False
+            and reloaded.get("emoji") is True
+            and reloaded.get("background") is True,
+            reloaded)
+
+    env = make_env(work / "reply-style-legacy")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "messageColoredBackground": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "reply-style legacy")
+    if data is not None:
+        ledger.check(
+            "reply style legacy applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["reply-style"], env, "reply-style legacy read")
+    if reloaded is not None:
+        ledger.check(
+            "reply style legacy value",
+            reloaded.get("background") is False,
             reloaded)
 
     return (
@@ -3913,6 +4773,257 @@ def check_message_menu_style(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_chat_misc(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "chat-misc-defaults")
+    data = json_call(
+        ledger, cli, ["greeting-sticker"], env,
+        "greeting sticker defaults")
+    if data is not None:
+        ledger.check(
+            "greeting sticker default shown",
+            data.get("hidden") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["panels-on-scroll"], env,
+        "panels on scroll defaults")
+    if data is not None:
+        ledger.check(
+            "panels on scroll default shown",
+            data.get("hidden") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["channel-bottom-button"], env,
+        "channel bottom button defaults")
+    if data is not None:
+        ledger.check(
+            "channel bottom button default mute",
+            data.get("mode") == 1,
+            data)
+
+    data = json_call(
+        ledger, cli, ["greeting-sticker-set", "1"], env,
+        "greeting sticker set")
+    if data is not None:
+        ledger.check(
+            "greeting sticker set hidden",
+            data.get("hidden") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["panels-on-scroll-set", "1"], env,
+        "panels on scroll set")
+    if data is not None:
+        ledger.check(
+            "panels on scroll set hidden",
+            data.get("hidden") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["channel-bottom-button-set", "2"], env,
+        "channel bottom button set")
+    if data is not None:
+        ledger.check(
+            "channel bottom button set discuss",
+            data.get("mode") == 2,
+            data)
+
+    reloaded = json_call(
+        ledger, cli, ["greeting-sticker"], env,
+        "greeting sticker reload")
+    if reloaded is not None:
+        ledger.check(
+            "greeting sticker persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["panels-on-scroll"], env,
+        "panels on scroll reload")
+    if reloaded is not None:
+        ledger.check(
+            "panels on scroll persisted",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["channel-bottom-button"], env,
+        "channel bottom button reload")
+    if reloaded is not None:
+        ledger.check(
+            "channel bottom button persisted",
+            reloaded.get("mode") == 2,
+            reloaded)
+
+    env = make_env(work / "chat-misc-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "disableGreetingSticker": True,
+            "hideKeyboardOnScroll": True,
+            "bottomButton": 2,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "chat misc alias")
+    if data is not None:
+        ledger.check(
+            "chat misc alias applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["greeting-sticker"], env,
+        "greeting sticker alias read")
+    if reloaded is not None:
+        ledger.check(
+            "greeting sticker alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["panels-on-scroll"], env,
+        "panels on scroll alias read")
+    if reloaded is not None:
+        ledger.check(
+            "panels on scroll alias value",
+            reloaded.get("hidden") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["channel-bottom-button"], env,
+        "channel bottom button alias read")
+    if reloaded is not None:
+        ledger.check(
+            "channel bottom button alias value",
+            reloaded.get("mode") == 2,
+            reloaded)
+
+    env = make_env(work / "chat-misc-legacy")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "DisableChannelMuteButton": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "chat misc legacy")
+    if data is not None:
+        ledger.check(
+            "chat misc legacy applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["channel-bottom-button"], env,
+        "channel bottom button legacy read")
+    if reloaded is not None:
+        ledger.check(
+            "legacy mute button hides bottom button",
+            reloaded.get("mode") == 0,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def check_download_boost(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "download-boost-defaults")
+    data = json_call(
+        ledger, cli, ["download-boost"], env,
+        "download boost defaults")
+    if data is not None:
+        ledger.check(
+            "download boost default off",
+            data.get("mode") == 0,
+            data)
+    data = json_call(
+        ledger, cli, ["upload-boost"], env,
+        "upload boost defaults")
+    if data is not None:
+        ledger.check(
+            "upload boost default off",
+            data.get("enabled") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["download-boost-set", "2"], env,
+        "download boost set")
+    if data is not None:
+        ledger.check(
+            "download boost set ultra",
+            data.get("mode") == 2,
+            data)
+    data = json_call(
+        ledger, cli, ["upload-boost-set", "1"], env,
+        "upload boost set")
+    if data is not None:
+        ledger.check("upload boost set on", data == 1, data)
+
+    reloaded = json_call(
+        ledger, cli, ["download-boost"], env,
+        "download boost reload")
+    if reloaded is not None:
+        ledger.check(
+            "download boost persisted",
+            reloaded.get("mode") == 2,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["upload-boost"], env,
+        "upload boost reload")
+    if reloaded is not None:
+        ledger.check(
+            "upload boost persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["download-boost-set", "5"], env,
+        "download boost clamp")
+    if data is not None:
+        ledger.check(
+            "download boost clamped to ultra",
+            data.get("mode") == 2,
+            data)
+
+    env = make_env(work / "download-boost-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "downloadSpeedBoost": 2,
+            "uploadBoost": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "download boost alias")
+    if data is not None:
+        ledger.check(
+            "download boost alias applied",
+            data.get("applied") == 2 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["download-boost"], env,
+        "download boost alias read")
+    if reloaded is not None:
+        ledger.check(
+            "download boost alias value",
+            reloaded.get("mode") == 2,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["upload-boost"], env,
+        "upload boost alias read")
+    if reloaded is not None:
+        ledger.check(
+            "upload boost alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -3940,26 +5051,37 @@ def main():
         vpn = check_vpn(ledger, cli)
         proxy_rules = check_proxy_rules(ledger, cli)
         pangu = check_pangu(ledger, cli, work)
+        zalgo = check_zalgo(ledger, cli, work)
         silent = check_silent(ledger, cli, work)
         sections = check_settings_sections(ledger, cli, work)
         ai_editor = check_ai_editor(ledger, cli, work)
         pluginops = check_plugin_installer(ledger, cli, work)
         send_as = check_send_as(ledger, cli, work)
+        profile_buttons = check_profile_buttons(ledger, cli, work)
         inline_math = check_inline_math(ledger, cli, work)
         save_subfolder = check_save_subfolder(ledger, cli, work)
         ghost_schedule = check_ghost_schedule(ledger, cli, work)
         seek_duration = check_seek_duration(ledger, cli, work)
+        sticker_size = check_sticker_size(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
         media_menu = check_media_menu(ledger, cli, work)
         chat_menu = check_chat_menu(ledger, cli, work)
         disable_link_preview = check_disable_link_preview(ledger, cli, work)
         hide_all_chats = check_hide_all_chats(ledger, cli, work)
+        hide_archive_sort = check_hide_archive_sort(ledger, cli, work)
+        autodownload_rules = check_autodownload_rules(ledger, cli, work)
+        wide_posts = check_wide_posts(ledger, cli, work)
         always_show_download = check_always_show_download(ledger, cli, work)
+        show_results_before_voting = check_show_results_before_voting(
+            ledger, cli, work)
+        reply_style = check_reply_style(ledger, cli, work)
         false_bottom = check_false_bottom(ledger, cli, work)
         decoration = check_decoration(ledger, cli, work)
         shortcuts = check_shortcuts(ledger, cli, work)
         menu_style = check_message_menu_style(ledger, cli, work)
+        chat_misc = check_chat_misc(ledger, cli, work)
+        download_boost = check_download_boost(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
@@ -3979,15 +5101,19 @@ def main():
     print(f"vpn: {vpn[0] - vpn[1]} passed")
     print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")
     print(f"pangu: {pangu[0] - pangu[1]} passed")
+    print(f"zalgo: {zalgo[0] - zalgo[1]} passed")
     print(f"silent: {silent[0] - silent[1]} passed")
     print(f"sections: {sections[0] - sections[1]} passed")
     print(f"ai-editor: {ai_editor[0] - ai_editor[1]} passed")
     print(f"pluginops: {pluginops[0] - pluginops[1]} passed")
     print(f"send-as: {send_as[0] - send_as[1]} passed")
+    print(f"profile-buttons: "
+          f"{profile_buttons[0] - profile_buttons[1]} passed")
     print(f"inline-math: {inline_math[0] - inline_math[1]} passed")
     print(f"save-subfolder: {save_subfolder[0] - save_subfolder[1]} passed")
     print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
     print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
+    print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"media-menu: {media_menu[0] - media_menu[1]} passed")
@@ -3996,13 +5122,24 @@ def main():
           f"{disable_link_preview[0] - disable_link_preview[1]} passed")
     print(f"hide-all-chats: "
           f"{hide_all_chats[0] - hide_all_chats[1]} passed")
+    print(f"hide-archive-sort: "
+          f"{hide_archive_sort[0] - hide_archive_sort[1]} passed")
+    print(f"autodownload-rules: "
+          f"{autodownload_rules[0] - autodownload_rules[1]} passed")
+    print(f"wide-posts: {wide_posts[0] - wide_posts[1]} passed")
     print(f"always-show-download: "
           f"{always_show_download[0] - always_show_download[1]} passed")
+    print(f"show-results-before-voting: "
+          f"{show_results_before_voting[0] - show_results_before_voting[1]} "
+          f"passed")
+    print(f"reply-style: {reply_style[0] - reply_style[1]} passed")
     print(f"false-bottom: {false_bottom[0] - false_bottom[1]} passed")
     print(f"decoration: {decoration[0] - decoration[1]} passed")
     print(f"shortcuts: {shortcuts[0] - shortcuts[1]} passed")
     print(f"message-menu-style: "
           f"{menu_style[0] - menu_style[1]} passed")
+    print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
+    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:
         print(

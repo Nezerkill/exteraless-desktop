@@ -136,4 +136,33 @@ QString StripTrackingInText(const QString &text) {
 	return output;
 }
 
+bool IsWin32Executable(const QString &filepath) {
+	const auto dot = filepath.lastIndexOf(u'.');
+	if (dot < 0) {
+		return false;
+	}
+	const auto extension = filepath.mid(dot + 1).toLower();
+	static const auto kWin32Executables = QStringList{
+		QStringLiteral("exe"),
+		QStringLiteral("msi"),
+		QStringLiteral("bat"),
+		QStringLiteral("cmd"),
+		QStringLiteral("com"),
+		QStringLiteral("scr"),
+		QStringLiteral("ps1"),
+		QStringLiteral("vbs"),
+		QStringLiteral("js"),
+		QStringLiteral("jar"),
+		QStringLiteral("lnk"),
+		QStringLiteral("reg"),
+		QStringLiteral("msc"),
+		QStringLiteral("cpl"),
+		QStringLiteral("gadget"),
+		QStringLiteral("hta"),
+		QStringLiteral("wsf"),
+		QStringLiteral("wsh"),
+	};
+	return kWin32Executables.contains(extension);
+}
+
 } // namespace Exteraless

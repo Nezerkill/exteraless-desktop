@@ -138,8 +138,12 @@ int64 mtpFileLoader::takeNextRequestOffset() {
 	Expects(readyToRequest());
 
 	const auto result = _nextRequestOffset;
-	_nextRequestOffset += Storage::kDownloadPartSize;
+	_nextRequestOffset += partSize();
 	return result;
+}
+
+int mtpFileLoader::partSize() const {
+	return Storage::BoostedDownloadPartSize();
 }
 
 bool mtpFileLoader::feedPart(int64 offset, const QByteArray &bytes) {

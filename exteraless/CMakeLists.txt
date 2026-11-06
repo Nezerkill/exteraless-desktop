@@ -34,6 +34,8 @@ add_library(exteraless STATIC
     plugins/scanner.h
     save_path.cpp
     save_path.h
+    zalgo.cpp
+    zalgo.h
 )
 
 target_link_libraries(exteraless

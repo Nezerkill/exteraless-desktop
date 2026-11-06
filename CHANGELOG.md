@@ -1,5 +1,247 @@
 # Changelog
 
+## 2026-11-06
+
+- Chats / Boost скачивания и загрузки (NB-76): `OEChatsDownloadSpeedBoost`
+  (int `0..2`, default `0`) и `OEChatsUploadBoost` (bool, default `false`).
+  Загрузка — пул сессий 1/2/4 и часть 128K/512K/1M (`BoostedDownloadPartSize()`
+  и `StartSessionsCount()` в `storage/download_manager_mtproto.cpp`), окно
+  ожидания считается в частях, а сами таймауты не менялись. Отдача — часть
+  поднимается до 512K при капе 1M в `Uploader::Entry::setDocSize`
+  (`storage/file_upload.cpp`), пейсинг не тронут. Алиасы
+  `downloadSpeedBoost`/`UploadBoost` и legacy `OEGeneralDownloadSpeedBoost`
+  принимаются в `.extera` (всего 106 ключей: 104 + 2, сверено с
+  legacy-кортежем `run_checks`), в Chats — Radioenum Off/Boost/Ultra и
+  тумблер, пять lang-ключей, CLI — четыре режима (`download-boost`,
+  `download-boost-set`, `upload-boost`, `upload-boost-set`);
+  `check_download_boost` — 10 проверок, итого 672 PASS (backup 100) плюс 32 и
+  213 у плагинов; `kKeysCount` 11176, sha256 патча `7689cc10…`,
+  `nix flake check` PASS. Ограничения: при boost > 0 CDN-редиректы могут не
+  пройти hash-проверку (слайсинг CDN остался 128K); на слабой сети пул может
+  сжаться, потому что пороги времени не менялись — нужен замер MB/s; смена
+  boost посреди загрузки меняет шаг офсета; preload и streaming остались на
+  128K; Xvfb-смоук и сетевой замер не выполнялись.
+- Chats / Auto-download rules (NB-60): `OEChatsDisableAutoDownloadingArchive`
+  (bool, default `false`) и `OEChatsBlockWin32ExecutableFiles` (bool, default
+  `true`) — архив больше не скачивается автоматически, а Windows-исполняемые
+  считаются опасными. Гейты — в `DocumentMedia::automaticLoad`
+  (`data/data_document_media.cpp`) и `VideoPreload::Can`
+  (`data/data_media_preload.cpp`); helper `Exteraless::IsWin32Executable`
+  (`exteraless/links.cpp`) держит свой список из 18 расширений, поэтому
+  глобальный `kExecutable` (`core/mime_type.cpp`) не тронут. Android-алиасы
+  `disableAutoDownloadingArchive` и `Win32ExecutableFiles` принимаются в
+  `.extera` (всего 104 ключа: 102 + 2, сверено с legacy-кортежем `run_checks`),
+  два тумблера — в Chats, два lang-ключа в `lang.strings`, CLI —
+  `autodownload-archive`, `autodownload-archive-set`, `win32-exe` и
+  `win32-exe-set`; `check_autodownload_rules` — 9 проверок плюс две на неверное
+  число аргументов, итого 660 PASS (backup 100, CLI 51) плюс 32 и 213 у
+  плагинов; `kKeysCount` 11171, sha256 патча `baf908c7…`,
+  `nix flake check` PASS. Ограничения: правила действуют на новые загрузки,
+  уже скачанное не удаляется; `.exe` под Linux теперь тоже блокируется
+  (раньше качался); photo-preload без имени файла не покрыт — пустое имя не
+  блокируется; Xvfb-смоук не выполнялся.
+- Chats / Мелочи чата (NB-86): три ключа — `OEChatsHideGreetingSticker` и
+  `OEChatsHidePanelsOnScroll` (обе bool, default `false`) плюс
+  `OEChatsChannelBottomButton` (int 0/1/2, default `1`). Приветственный стикер
+  отсекается гейтом в `GenerateChatIntro`, панели закрываются через
+  `hidePanelsAnimated` в `onScroll`, нижняя кнопка канала: `0` — скрыть,
+  `1` — mute, `2` — пока mute (Discuss — follow-up). Алиасы
+  `disableGreetingSticker`, `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`,
+  `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0).
+  `.extera` — 102 ключа (99 + 3, сверено с legacy-кортежем `run_checks`), два
+  тумблера и Radioenum Hide/Mute/Discuss, шесть lang-ключей, CLI 3 группы;
+  `check_chat_misc` — 15 проверок, итого 649 PASS (backup 100) плюс 32 и 213 у
+  плагинов; `kKeysCount` 11169, sha256 патча `0dff2727…`,
+  `nix flake check` PASS. `keepAttachButton` и `quickTransition*` — N/A
+  (кнопки/жеста нет). Ограничения: panels закрывает и автокомплит (проверить
+  под Xvfb: автоскролл не должен закрывать), bottom hide уносит gift/direct-
+  иконки, применяется после переоткрытия, Xvfb-смоук не выполнялся.
+- Chats / Double tap actions: резолвер `exteraless/doubletap.{h,cpp}` понимает
+  ещё шесть Android-действий — `translate` (3), `save` (5), `edit` (8),
+  `delete` (10), `forward` (11) и `download` (12); 6/7/9 по-прежнему дают
+  «ничего», а 2 остаётся `Send reaction` — расхождение с Android. Селекторы
+  для всех шести — в подсекции Chats, шесть lang-ключей `double_tap_*` — в
+  `lang.strings`; новых `OE`-ключей нет, `.extera` не менялся. CLI —
+  `doubletap`, `doubletap-set` и `doubletap-resolve` (`resolve_cases` — 14,
+  проверок doubletap 22 → 24), итого 629 PASS (backup 99) плюс 32 и 213 у
+  плагинов; `kKeysCount` 11163, sha256 патча `900ed89d…`, `nix flake check`
+  PASS. Ограничения: клик-хендлеры перехватывают часть действий, delete идёт
+  через бокс подтверждения, repeat/LLM — N/A.
+- Chats / Wide channel posts: настройка `OEChatsWideChannelPosts` (default
+  `false`) снимает ограничение ширины баббла в broadcast-каналах, и пост
+  растягивается на всю доступную ширину. Гейт — в `Message` рядом с
+  `UnlimitedMessageWidth`: лимит `_bubbleWidthLimit` уходит в `0x3FFFFFF`,
+  но только для broadcast — megagroup отсекается через `isBroadcast()`, а
+  медиа-сообщения не затрагиваются. Android-алиасы `wideChannelPosts` и
+  `WideChannelPosts` принимаются в `.extera` (всего 99 ключей: 94 в
+  `exteraconfig`, 3 в `pillstackconfig`, 2 в `mainconfig`), тумблер «Wide
+  channel posts» добавлен в Chats, lang-ключ
+  `lng_settings_exteraless_chats_wide_channel_posts` — в `lang.strings`,
+  CLI — `wide-posts` и `wide-posts-set`; `check_wide_posts` в
+  `run_checks.py` — 5 проверок (дефолт, сеттер, персистентность, алиас и
+  его значение), итого 627 PASS (backup 99) плюс 32 и 213 у плагинов;
+  `kKeysCount` 11157, sha256 патча `c5309705…`, `nix flake check` PASS.
+  Широкие посты ленты — N/A: лент в desktop нет. Ограничения: ширина
+  применяется после переоткрытия чата или ресайза, кап `maxWidth` общий с
+  `UnlimitedMessageWidth`, GUI-смоук под Xvfb не выполнялся.
+- Chats / Reply style: три настройки `OEChatsReplyColors`, `OEChatsReplyEmoji`
+  и `OEChatsReplyBackground` (все default `true`) — выключатели поверх текущего
+  поведения цитаты ответа: при `false` цитата рисуется так же, как в upstream.
+  Отрисовка — `history/view/history_view_reply.cpp`: у каждой цитаты свой
+  `QuotePaintCache`, общий кэш не мутируется, а отдельный guard для custom
+  emoji не нужен — эмодзи блока свои. Android-алиасы `replyColors`,
+  `replyEmoji` и `replyBackground` принимаются в `.extera` (всего 96 ключей:
+  91 в `exteraconfig`, 3 в `pillstackconfig`, 2 в `mainconfig`), при этом
+  legacy-алиас `messageColoredBackground` сводится к `replyBackground` и
+  отключает окраску только при явном `false`. Три тумблера добавлены в
+  подсекцию Replies в Chats, четыре lang-ключа в `lang.strings`, CLI —
+  `reply-style` и `reply-style-set`; `check_reply_style` в `run_checks.py` —
+  7 проверок (дефолт, сеттер, персистентность, legacy-алиас, `OE`-ключ),
+  итого 607 PASS (backup 97) плюс 32 и 213 у плагинов; `kKeysCount` 11154,
+  sha256 патча `27098fd7…`, `nix flake check` PASS. Ограничения: медиа-карточки
+  и ручные цитаты остаются цветными — осознанно; окраска применяется после
+  переоткрытия чата (ширина цитаты считается от `_hasBackgroundEmoji`),
+  GUI-смоук под Xvfb не выполнялся.
+- Chats / Profile buttons: три настройки `OEChatsHideGiftButton`,
+  `OEChatsHideCallButton` и `OEChatsHideChannelSearchButton` (все default
+  `false`) убирают кнопки Gift и Call в профиле
+  (`info/profile/info_profile_top_bar.cpp`), Call — в шапке чата, а Search — в
+  шапке канала (`history/view/history_view_top_bar_widget.cpp`). Android-алиасы
+  `hideGiftButtonInChannel`/`hideGiftButton`, `hideCallButton` и
+  `hideChannelSearchButton` принимаются в `.extera` (всего 91 ключ: 86 в
+  `exteraconfig`, 3 в `pillstackconfig`, 2 в `mainconfig`; экспорт пишет
+  `OEChats*`), три тумблера добавлены в Chats, три lang-ключа в
+  `lang.strings`, CLI — `profile-buttons` и `profile-buttons-set`;
+  `check_profile_buttons` в `run_checks.py` — 5 проверок плюс проверка
+  неверного числа аргументов, итого 582 PASS (backup 97) плюс 32 и 213 у
+  плагинов; `kKeysCount` 11145, sha256 патча `486d82fd…`,
+  `nix flake check` PASS. Money и Share в профиле desktop отдельных кнопок не
+  имеют — N/A, как `hideCameraTile`. Ограничения: значение применяется после
+  переоткрытия профиля или чата, `Ctrl+F` и меню «⋯» продолжают работать,
+  `_groupCall` не трогали, GUI-смоук под Xvfb не выполнялся.
+- Chats / Zalgo: настройка `OEChatsZalgoFilter` (default `false`) вычищает
+  «zalgo»-текст из сообщений; модуль `exteraless/zalgo.{h,cpp}` находит серию
+  из четырёх и более комбинирующих знаков (`Mark_NonSpacing`,
+  `Mark_SpacingCombining`, `Mark_Enclosing`) и выбрасывает их, не разрывая
+  суррогатные пары; текст короче 4 и длиннее 2048 символов не трогается.
+  Вставка — в `Element::setTextWithLinks`
+  (`history/view/history_view_element.cpp`) с пересчётом entities по карте
+  смещений в стиле pangu: обнулившиеся entities отбрасываются, остальные
+  сдвигаются и обрезаются. Android-алиас `zalgoFilter` принимается в `.extera`
+  (всего 87 ключей; экспорт пишет `zalgoFilter`), тумблер «Filter Zalgo text»
+  добавлен в Chats, CLI — `zalgo`, `zalgo-set`, `zalgo-apply` и `zalgo-tags`;
+  `check_zalgo` в `run_checks.py` — 17 проверок (дефолт, пороги длины,
+  суррогаты, сдвиг тегов, персистентность, алиас, ошибки CLI), итого 566 PASS
+  плюс 32 и 213 у плагинов; `kKeysCount` 11141, sha256 патча `4d44da74…`,
+  `nix flake check` PASS. Ограничения: матры арабского и индийских
+  письменностей серией 4+ тоже вырезаются (паритет Android); в уже открытом
+  чате фильтр применяется только при переоткрытии (live-сигнала нет);
+  GUI-смоук под Xvfb не выполнялся.
+- Chats / Stories header: настройка `OEChatsHideStoriesHeader` (default
+  `false`) скрывает полосу историй над списком чатов. Android-алиасы
+  `hideStoriesFromHeader` и `HideStoriesFromHeader` принимаются в `.extera`
+  (всего 85 ключей; экспорт пишет `hideStoriesFromHeader`), тумблер добавлен
+  в Chats, CLI — `storiesheader` и `storiesheader-set` (дефолт, сеттер,
+  чтение из `.extera`, бэкап). Xvfb-план: полоса исчезает, строки списка не
+  сдвигаются; GUI-смоук ещё не выполнялся, `out/bin/Telegram` собран до
+  правок NB-10.
+- General / Profile: настройка `OEGeneralShowIdDc` (default `false`) добавляет
+  в профиль строку «ID and DC» вида `id: 123456 · DC 2`; по клику копируется
+  «голый» id без префикса чата (`bareId`). Текст собирает `IdDcText`
+  (`info/profile/info_profile_values.cpp`), формат — `Exteraless::FormatIdDc`
+  (`exteraless/format.cpp`), строку выводят `makeInfo()` в
+  `info/profile/info_profile_actions.cpp` и `SetupRows()` в
+  `settings/sections/settings_information.cpp` (свой профиль). Строка не
+  дублируется, если в экспериментальных настройках включён upstream-тумблер
+  «Show peer ID below about» (`ShowPeerIdBelowAbout`). Android-алиасы
+  `showIdAndDc` (bool) и `idDcType` (число) принимаются в `.extera` (всего
+  86 ключей; экспорт пишет `showIdAndDc`), тумблер добавлен в General, CLI —
+  `id-dc`, `id-dc-set` и `id-dc-format`. Xvfb-план: профиль контакта и свой,
+  строка видна и `bareId` копируется; GUI-смоук не выполнялся,
+  `out/bin/Telegram` (02:15) собран раньше правок NB-09.
+- Chats / Sticker size: настройка `OEChatsStickerSize` (int, 4..20, default
+  `14`) меняет размер стикеров в чате. В `Sticker::Size()`
+  (`history/view/media/history_view_sticker.cpp`) множитель
+  `1 + (v - 14) / 15` применяется к базе 224 px: при `4` выходит 75 px, при
+  `20` — 314 px, результат клампится в 50..336 px и переводится через
+  `style::ConvertScale`. При `14` работает прежний путь с
+  `OptionStickerSize`, поэтому поведение по умолчанию не меняется. Android-алиас
+  `stickerSize` принимается в `.extera` (дробное округляется), экспорт пишет
+  `OEChatsStickerSize` (всего 88 ключей), слайдер «Sticker size» 4..20
+  добавлен в Chats (`Ui::SettingsSlider`), lang-ключ
+  `lng_settings_exteraless_chats_sticker_size`, CLI — `sticker-size` и
+  `sticker-size-set`; `check_sticker_size` в `run_checks.py` — 10 проверок
+  (дефолт, сеттер, персистентность, клампы 1→4 и 30→20, алиас с округлением,
+  ключ `.extera`, экспорт), итого 576 PASS плюс 32 и 213 у плагинов;
+  `kKeysCount` 11142, sha256 патча `c47276be…`, `nix flake check` PASS. Размер
+  применяется при переоткрытии чата — live-сигнала нет; GUI-смоук под Xvfb не
+  выполнялся.
+- Chats / Sticker shape: настройка `OEChatsStickerShape` (int, `0..2`,
+  default `0`) задаёт форму стикеров в чате: `0` — квадрат, как в upstream,
+  `1` — скругление 4 px (`Ui::MsgFileThumbRadiusSmall`), `2` — «bubble»
+  (`Ui::BubbleRadiusLarge`). Форма добавляет `QPainterPath` со скруглением и
+  `setClipPath` в `paintAnimationFrame`, `paintPixmap` и `paintPath`
+  (`history/view/media/history_view_sticker.cpp`); клип считается по
+  фактическому rect отрисовки, а не по размеру картинки. При `0` клипа нет, а
+  `customEmojiPart()` и `emojiSticker()` его пропускают — inline custom emoji
+  и emoji-стикеры не трогаются. Android-алиас `stickerShape` принимается в
+  `.extera` (дробное округляется, всего 93 ключа), выбор «Sticker shape»
+  (Square/Rounded/Bubble) сделан на `Ui::Radioenum` в Chats, четыре
+  lang-ключа в `lang.strings`, CLI — `sticker-shape` и `sticker-shape-set`;
+  `check_sticker_size` в `run_checks.py` теперь покрывает и форму — 21
+  проверка в группе `sticker-size`, итого 593 PASS (backup 97) плюс 32 и 213
+  у плагинов; `kKeysCount` 11149, sha256 патча `9b497121…`,
+  `nix flake check` PASS. NB-69 закрыт полностью — размер и форма. Не
+  покрыто: premium-effect и панель стикеров — там клипа нет; dice
+  клипуются, это сознательное решение. GUI-смоук под Xvfb не выполнялся.
+- Chats / Poll results: настройка `OEChatsShowResultsBeforeVoting` (default
+  `false`) показывает результаты опроса до голосования. Предикат
+  `Poll::showResultsBeforeVote()` (`history/view/media/history_view_poll.cpp`)
+  отдаёт результаты только для публичного опроса без голоса и без скрытых
+  результатов, где `totalVoters > 0` и есть хотя бы один ответ с голосами;
+  admin-режим, `Context::MediaEditor`, уже отданный голос, `Closed`,
+  `HideResultsUntilClose`, `MultiChoice`, `totalVoters <= 0` и пустые `votes`
+  предикат отсекает. `showVotes()` учитывает новый предикат, а `canVote()`
+  смягчён до `!showVotes() || showResultsBeforeVote()`, поэтому голосование
+  остаётся доступным. Android-алиас `showResultsBeforeVoting` принимается в
+  `.extera` (всего 93 ключа: 88 в `exteraconfig`, 3 в `pillstackconfig`, 2 в
+  `mainconfig`; сверено с legacy-кортежем `run_checks.py`), тумблер «Show poll
+  results before voting» добавлен в Chats, lang-ключ
+  `lng_settings_exteraless_chats_show_results_before_vote`, CLI —
+  `show-results-before-voting` и `show-results-before-voting-set`;
+  `check_show_results_before_voting` в `run_checks.py` — 7 проверок (дефолт
+  off, сеттер, персистентность, алиас, `OE`-ключ), итого 600 PASS (backup 97)
+  плюс 32 и 213 у плагинов; `kKeysCount` 11150, sha256 патча `39c78761…`,
+  `nix flake check` PASS. Ограничения: multi-choice вне объёма, результаты
+  применяются после переоткрытия или обновления опроса, сервер может не отдать
+  счётчики (`hide_results_until_close` скрыт всегда), Xvfb-смоук не
+  выполнялся.
+- Chats / Archive and unread order: настройки `OEChatsHideArchive` и
+  `OEChatsSortByUnread` (обе default `false`) скрывают папку архива из списка
+  чатов и поднимают чаты с непрочитанными наверх. `hideArchive` идёт по уже
+  существующему skip-пути `_skipTopDialog` в
+  `InnerWidget::refreshWithCollapsedRows` (`dialogs/dialogs_inner_widget.cpp`)
+  с внешним условием `archiveInMainMenu() || hideArchive`;
+  `shouldBeInChatList` не трогали — иначе счётчики папок уходят в минус.
+  `sortByUnread` — upstream-опция `Dialogs::kOptionDialogsUnreadOnTop`
+  (`dialogs/dialogs_entry.cpp`): её значение засевается из конфига в
+  конструкторе `Application` (`core/application.cpp`), поэтому индексный
+  список и `dialogs_indexed_list.cpp` не менялись. Android-алиасы
+  `hideArchive`/`HideArchive`/`hideArchiveFolder` и
+  `sortByUnread`/`SortByUnread` принимаются в `.extera` (всего 98 ключей: 93 в
+  `exteraconfig`, 3 в `pillstackconfig`, 2 в `mainconfig`; сверено с
+  legacy-кортежем `run_checks.py`), два тумблера добавлены в Chats, два
+  lang-ключа в `lang.strings`, CLI — `hide-archive`, `hide-archive-set`,
+  `sort-unread`, `sort-unread-set` и `archive-skip`;
+  `check_hide_archive_sort` в `run_checks.py` — 13 проверок плюс две проверки
+  в `backup`, итого 622 PASS (backup 99) плюс 32 и 213 у плагинов;
+  `kKeysCount` 11156, sha256 патча `24e1446f…`, `nix flake check` PASS.
+  Ограничения: оба ключа применяются через `notifyListChanged`/пересорт, так
+  что скрытие архива и новая сортировка видны сразу, без перезапуска; поиск и
+  окно Archive архив по-прежнему видят; при `hideArchive` и выключенном
+  `archiveInMainMenu` вернуть архив можно только тумблером; GUI-смоук под
+  Xvfb не выполнялся.
+
 ## 2026-11-05
 
 - Chats / Message menu: настройки `OEChatsGroupedMessageMenu` (default

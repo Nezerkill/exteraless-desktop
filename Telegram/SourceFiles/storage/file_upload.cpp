@@ -31,6 +31,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "storage/storage_account.h"
 #include "apiwrap.h"
+#include "exteraless/config.h"
 
 #include <QtCore/QFileInfo>
 
@@ -157,6 +158,11 @@ void Uploader::Entry::setDocSize(int64 size) {
 				}
 			}
 		}
+	}
+	if (Exteraless::Config::Instance().chatsSettings().uploadBoost) {
+		setPartSize(std::min(
+			std::max(docPartSize * 4, 512 * 1024),
+			1024 * 1024));
 	}
 }
 

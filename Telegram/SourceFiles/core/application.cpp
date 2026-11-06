@@ -62,6 +62,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "tray.h"
 #include "core/click_handler_types.h" // ClickHandlerContext.
 #include "core/crash_reports.h"
+#include "dialogs/dialogs_entry.h"
 #include "main/main_account.h"
 #include "main/main_domain.h"
 #include "main/main_session.h"
@@ -189,6 +190,9 @@ Application::Application()
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
 	Exteraless::Config::Instance().setWorkingDir(cWorkingDir());
+	base::options::lookup<bool>(
+		Dialogs::kOptionDialogsUnreadOnTop
+	).set(Exteraless::Config::Instance().chatsSettings().sortByUnread);
 	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
 
 	_platformIntegration->init();

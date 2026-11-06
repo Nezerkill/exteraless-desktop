@@ -8,6 +8,7 @@
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
 #include "base/openssl_help.h"
+#include "base/options.h"
 #include "core/application.h"
 #include "core/file_utilities.h"
 #include "main/main_domain.h"
@@ -22,6 +23,7 @@
 #include "styles/style_layers.h"
 #include "data/data_session.h"
 #include "data/data_chat_filters.h"
+#include "dialogs/dialogs_entry.h"
 #include "lang/lang_keys.h"
 #include "settings/settings_builder.h"
 #include "settings/sections/settings_main.h"
@@ -31,6 +33,7 @@
 #include "ui/ui_utility.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/checkbox.h"
+#include "ui/widgets/discrete_sliders.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
@@ -42,6 +45,9 @@
 
 namespace Settings {
 namespace {
+
+constexpr auto kStickerSizeMin = 4;
+constexpr auto kStickerSizeMax = 20;
 
 class ExteralessSection final : public Section<ExteralessSection> {
 public:
@@ -194,6 +200,23 @@ const auto kMeta = Builder::BuildHelper({
 		}) | rpl::on_next([=](bool value) {
 			Exteraless::Config::Instance().setShowSeconds(value);
 		}, showSeconds->lifetime());
+	}
+
+	const auto showIdDc = builder.addButton({
+		.id = u"exteraless/show-id-dc"_q,
+		.title = tr::lng_settings_exteraless_show_id_dc(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().showIdDc()),
+		.keywords = { u"id"_q, u"dc"_q, u"profile"_q },
+	});
+	if (showIdDc) {
+		showIdDc->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value != Exteraless::Config::Instance().showIdDc());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setShowIdDc(value);
+		}, showIdDc->lifetime());
 	}
 
 	const auto hideAi = builder.addButton({
@@ -596,6 +619,15 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setChatsRemoveMessageTail(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/wide-channel-posts"_q,
+		tr::lng_settings_exteraless_chats_wide_channel_posts(),
+		{ u"chat"_q, u"channel"_q, u"wide"_q, u"post"_q },
+		Exteraless::Config::Instance().chatsSettings().wideChannelPosts,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsWideChannelPosts(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/hide-reactions-channels"_q,
 		tr::lng_settings_exteraless_chats_hide_reactions_channels(),
 		{ u"chat"_q, u"reactions"_q, u"channel"_q },
@@ -649,6 +681,15 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setChatsUnreadCapsule(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/hide-stories-header"_q,
+		tr::lng_settings_exteraless_chats_hide_stories_header(),
+		{ u"chat"_q, u"stories"_q, u"header"_q },
+		Exteraless::Config::Instance().chatsSettings().hideStoriesHeader,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHideStoriesHeader(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/save-deleted"_q,
 		tr::lng_settings_exteraless_chats_save_deleted(),
 		{ u"chat"_q, u"deleted"_q, u"history"_q, u"ayu"_q },
@@ -682,6 +723,14 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setPanguOnSending(value);
 		});
 	addChatsToggle(
+		u"exteraless/chats/zalgo-filter"_q,
+		tr::lng_settings_exteraless_chats_zalgo_filter(),
+		{ u"zalgo"_q, u"filter"_q },
+		Exteraless::Config::Instance().zalgoFilter(),
+		[](bool value) {
+			Exteraless::Config::Instance().setZalgoFilter(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/silent-by-default"_q,
 		tr::lng_settings_exteraless_chats_silent_by_default(),
 		{ u"silent"_q, u"sound"_q, u"send"_q },
@@ -696,6 +745,30 @@ const auto kMeta = Builder::BuildHelper({
 		Exteraless::Config::Instance().hideSendAsPeer(),
 		[](bool value) {
 			Exteraless::Config::Instance().setHideSendAsPeer(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-gift"_q,
+		tr::lng_settings_exteraless_chats_hide_gift(),
+		{ u"gift"_q, u"button"_q, u"profile"_q },
+		Exteraless::Config::Instance().hideGiftButton(),
+		[](bool value) {
+			Exteraless::Config::Instance().setHideGiftButton(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-call"_q,
+		tr::lng_settings_exteraless_chats_hide_call(),
+		{ u"call"_q, u"button"_q, u"profile"_q },
+		Exteraless::Config::Instance().hideCallButton(),
+		[](bool value) {
+			Exteraless::Config::Instance().setHideCallButton(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-channel-search"_q,
+		tr::lng_settings_exteraless_chats_hide_channel_search(),
+		{ u"search"_q, u"button"_q, u"channel"_q },
+		Exteraless::Config::Instance().hideChannelSearchButton(),
+		[](bool value) {
+			Exteraless::Config::Instance().setHideChannelSearchButton(value);
 		});
 	addChatsToggle(
 		u"exteraless/chats/forward-date"_q,
@@ -726,6 +799,67 @@ const auto kMeta = Builder::BuildHelper({
 			}
 		});
 	addChatsToggle(
+		u"exteraless/chats/hide-archive"_q,
+		tr::lng_settings_exteraless_chats_hide_archive(),
+		{ u"archive"_q, u"folder"_q, u"hide"_q },
+		Exteraless::Config::Instance().chatsSettings().hideArchive,
+		[=](bool value) {
+			Exteraless::Config::Instance().setChatsHideArchive(value);
+			if (const auto controller = builder.controller()) {
+				controller->session().data().chatsFilters().notifyListChanged();
+			}
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-greeting-sticker"_q,
+		tr::lng_settings_exteraless_chats_hide_greeting_sticker(),
+		{ u"greeting"_q, u"sticker"_q, u"hide"_q },
+		Exteraless::Config::Instance()
+			.chatsSettings().hideGreetingSticker,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHideGreetingSticker(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/hide-panels-on-scroll"_q,
+		tr::lng_settings_exteraless_chats_hide_panels_on_scroll(),
+		{ u"panel"_q, u"scroll"_q, u"hide"_q },
+		Exteraless::Config::Instance()
+			.chatsSettings().hidePanelsOnScroll,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setChatsHidePanelsOnScroll(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/sort-unread"_q,
+		tr::lng_settings_exteraless_chats_sort_by_unread(),
+		{ u"sort"_q, u"unread"_q, u"chats"_q },
+		Exteraless::Config::Instance().chatsSettings().sortByUnread,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsSortByUnread(value);
+			base::options::lookup<bool>(
+				Dialogs::kOptionDialogsUnreadOnTop).set(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/disable-archive-autodownload"_q,
+		tr::lng_settings_exteraless_chats_disable_archive_autodownload(),
+		{ u"archive"_q, u"download"_q, u"auto"_q },
+		Exteraless::Config::Instance()
+			.chatsSettings().disableAutoDownloadingArchive,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setDisableAutoDownloadingArchive(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/block-win32-executables"_q,
+		tr::lng_settings_exteraless_chats_block_win32_executables(),
+		{ u"executable"_q, u"exe"_q, u"download"_q },
+		Exteraless::Config::Instance()
+			.chatsSettings().blockWin32Executables,
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setBlockWin32Executables(value);
+		});
+	addChatsToggle(
 		u"exteraless/chats/always-show-download"_q,
 		tr::lng_settings_exteraless_chats_always_show_download(),
 		{ u"download"_q, u"icon"_q, u"media"_q },
@@ -740,6 +874,44 @@ const auto kMeta = Builder::BuildHelper({
 		Exteraless::Config::Instance().useEditedIcon(),
 		[](bool value) {
 			Exteraless::Config::Instance().setUseEditedIcon(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/show-results-before-voting"_q,
+		tr::lng_settings_exteraless_chats_show_results_before_vote(),
+		{ u"poll"_q, u"results"_q, u"vote"_q },
+		Exteraless::Config::Instance().showResultsBeforeVoting(),
+		[](bool value) {
+			Exteraless::Config::Instance()
+				.setShowResultsBeforeVoting(value);
+		});
+
+	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/replies"_q,
+		.title = tr::lng_settings_exteraless_chats_replies(),
+	});
+	addChatsToggle(
+		u"exteraless/chats/reply-colors"_q,
+		tr::lng_settings_exteraless_chats_reply_colors(),
+		{ u"reply"_q, u"quote"_q, u"color"_q },
+		Exteraless::Config::Instance().replyColors(),
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsReplyColors(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/reply-emoji"_q,
+		tr::lng_settings_exteraless_chats_reply_emoji(),
+		{ u"reply"_q, u"quote"_q, u"emoji"_q },
+		Exteraless::Config::Instance().replyEmoji(),
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsReplyEmoji(value);
+		});
+	addChatsToggle(
+		u"exteraless/chats/reply-background"_q,
+		tr::lng_settings_exteraless_chats_reply_background(),
+		{ u"reply"_q, u"quote"_q, u"background"_q },
+		Exteraless::Config::Instance().replyBackground(),
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsReplyBackground(value);
 		});
 	const auto editedMark = std::make_shared<rpl::variable<QString>>(
 		Exteraless::Config::Instance().customEditedMark().isEmpty()
@@ -1031,8 +1203,20 @@ const auto kMeta = Builder::BuildHelper({
 		case 1:
 		case 2:
 			return tr::lng_settings_exteraless_double_tap_reaction(tr::now);
+		case 3:
+			return tr::lng_settings_exteraless_double_tap_translate(tr::now);
 		case 4:
 			return tr::lng_settings_exteraless_double_tap_reply(tr::now);
+		case 5:
+			return tr::lng_settings_exteraless_double_tap_save(tr::now);
+		case 8:
+			return tr::lng_settings_exteraless_double_tap_edit(tr::now);
+		case 10:
+			return tr::lng_settings_exteraless_double_tap_delete(tr::now);
+		case 11:
+			return tr::lng_settings_exteraless_double_tap_forward(tr::now);
+		case 12:
+			return tr::lng_settings_exteraless_double_tap_download(tr::now);
 		}
 		return tr::lng_settings_exteraless_double_tap_none(tr::now);
 	};
@@ -1052,6 +1236,12 @@ const auto kMeta = Builder::BuildHelper({
 			u"click"_q,
 			u"reaction"_q,
 			u"reply"_q,
+			u"translate"_q,
+			u"forward"_q,
+			u"save"_q,
+			u"delete"_q,
+			u"edit"_q,
+			u"download"_q,
 		};
 		builder.addButton({
 			.id = std::move(id),
@@ -1080,6 +1270,18 @@ const auto kMeta = Builder::BuildHelper({
 						{ 1, tr::lng_settings_exteraless_double_tap_reaction(
 							tr::now) },
 						{ 4, tr::lng_settings_exteraless_double_tap_reply(
+							tr::now) },
+						{ 3, tr::lng_settings_exteraless_double_tap_translate(
+							tr::now) },
+						{ 5, tr::lng_settings_exteraless_double_tap_save(
+							tr::now) },
+						{ 8, tr::lng_settings_exteraless_double_tap_edit(
+							tr::now) },
+						{ 10, tr::lng_settings_exteraless_double_tap_delete(
+							tr::now) },
+						{ 11, tr::lng_settings_exteraless_double_tap_forward(
+							tr::now) },
+						{ 12, tr::lng_settings_exteraless_double_tap_download(
 							tr::now) },
 					};
 					const auto inner = box->addRow(
@@ -1182,6 +1384,211 @@ const auto kMeta = Builder::BuildHelper({
 		},
 		.keywords = { u"sticker"_q, u"time"_q, u"timestamp"_q },
 	});
+
+	const auto stickerSize = Exteraless::Config::Instance().stickerSize();
+	builder.addSubsectionTitle({
+		.id = u"exteraless/chats/sticker-size"_q,
+		.title = tr::lng_settings_exteraless_chats_sticker_size(),
+		.keywords = { u"sticker"_q, u"size"_q },
+	});
+	builder.add([=](const Builder::WidgetContext &ctx) {
+		const auto slider = ctx.container->add(
+			object_ptr<Ui::SettingsSlider>(
+				ctx.container,
+				st::settingsSlider),
+			st::settingsBigScalePadding);
+		for (auto size = kStickerSizeMin; size <= kStickerSizeMax; ++size) {
+			slider->addSection(QString::number(size));
+		}
+		slider->setActiveSectionFast(stickerSize - kStickerSizeMin);
+		slider->sectionActivated(
+		) | rpl::on_next([=](int section) {
+			Exteraless::Config::Instance().setStickerSize(
+				section + kStickerSizeMin);
+		}, slider->lifetime());
+		return Builder::SectionBuilder::WidgetToAdd{};
+	});
+
+	const auto stickerShapeLabel = [](int shape) {
+		switch (shape) {
+		case 1:
+			return tr::lng_settings_exteraless_chats_sticker_shape_rounded(
+				tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_chats_sticker_shape_bubble(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_sticker_shape_square(
+			tr::now);
+	};
+	const auto stickerShapeMode = [] {
+		return Exteraless::Config::Instance().stickerShape();
+	};
+	const auto stickerShape = std::make_shared<rpl::variable<QString>>(
+		stickerShapeLabel(stickerShapeMode()));
+	builder.addButton({
+		.id = u"exteraless/chats/sticker-shape"_q,
+		.title = tr::lng_settings_exteraless_chats_sticker_shape(),
+		.st = &st::settingsButtonNoIcon,
+		.label = stickerShape->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				stickerShapeMode());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_sticker_shape());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							stickerShapeLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance().setStickerShape(value);
+					stickerShape->force_assign(stickerShapeLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"sticker"_q, u"shape"_q, u"rounded"_q, u"bubble"_q },
+	});
+
+	const auto channelBottomButtonLabel = [](int mode) {
+		switch (mode) {
+		case 0:
+			return tr::lng_settings_exteraless_chats_channel_bottom_button_hide(
+				tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_chats_channel_bottom_button_discuss(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_channel_bottom_button_mute(
+			tr::now);
+	};
+	const auto channelBottomButtonMode = [] {
+		return Exteraless::Config::Instance()
+			.chatsSettings().channelBottomButton;
+	};
+	const auto channelBottomButton = std::make_shared<rpl::variable<QString>>(
+		channelBottomButtonLabel(channelBottomButtonMode()));
+	builder.addButton({
+		.id = u"exteraless/chats/channel-bottom-button"_q,
+		.title = tr::lng_settings_exteraless_chats_channel_bottom_button(),
+		.st = &st::settingsButtonNoIcon,
+		.label = channelBottomButton->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				channelBottomButtonMode());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_channel_bottom_button());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							channelBottomButtonLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setChatsChannelBottomButton(value);
+					channelBottomButton->force_assign(
+						channelBottomButtonLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"channel"_q, u"bottom"_q, u"button"_q, u"mute"_q,
+			u"discuss"_q },
+	});
+
+	const auto downloadBoostLabel = [](int mode) {
+		switch (mode) {
+		case 0:
+			return tr::lng_settings_exteraless_chats_download_boost_off(
+				tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_chats_download_boost_ultra(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_download_boost_boost(
+			tr::now);
+	};
+	const auto downloadBoostMode = [] {
+		return Exteraless::Config::Instance()
+			.chatsSettings().downloadSpeedBoost;
+	};
+	const auto downloadBoost = std::make_shared<rpl::variable<QString>>(
+		downloadBoostLabel(downloadBoostMode()));
+	builder.addButton({
+		.id = u"exteraless/chats/download-boost"_q,
+		.title = tr::lng_settings_exteraless_chats_download_boost(),
+		.st = &st::settingsButtonNoIcon,
+		.label = downloadBoost->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				downloadBoostMode());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_download_boost());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							downloadBoostLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setChatsDownloadSpeedBoost(value);
+					downloadBoost->force_assign(
+						downloadBoostLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"download"_q, u"boost"_q, u"speed"_q },
+	});
+
+	addChatsToggle(
+		u"exteraless/chats/upload-boost"_q,
+		tr::lng_settings_exteraless_chats_upload_boost(),
+		{ u"upload"_q, u"boost"_q, u"speed"_q },
+		Exteraless::Config::Instance().chatsSettings().uploadBoost,
+		[](bool value) {
+			Exteraless::Config::Instance().setChatsUploadBoost(value);
+		});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/pill-stack"_q,

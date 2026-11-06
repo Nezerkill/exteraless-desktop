@@ -74,6 +74,7 @@ void CopyPhoneToClipboard(rpl::producer<TextWithEntities> phone);
 	const QString &value);
 [[nodiscard]] rpl::producer<TextWithEntities> AboutValue(
 	not_null<PeerData*> peer);
+[[nodiscard]] QString IdDcText(not_null<PeerData*> peer);
 
 struct LinkWithUrl {
 	QString text;

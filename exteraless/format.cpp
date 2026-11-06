@@ -33,4 +33,13 @@ QString FormatClock(QTime time, const QLocale &locale) {
 		locale);
 }
 
+QString FormatIdDc(quint64 bareId, int dcId, bool enabled) {
+	if (!enabled) {
+		return {};
+	}
+	return QStringLiteral("id: %1 · DC %2")
+		.arg(bareId)
+		.arg(dcId);
+}
+
 } // namespace Exteraless

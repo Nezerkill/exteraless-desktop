@@ -23,6 +23,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "core/application.h"
 #include "core/mime_type.h"
+#include "exteraless/config.h"
+#include "exteraless/links.h"
 #include "storage/file_download.h"
 #include "ui/chat/attach/attach_prepare.h"
 #include "ui/image/svg_preview.h"
@@ -323,8 +325,15 @@ void DocumentMedia::automaticLoad(
 	const auto filename = toCache
 		? QString()
 		: DocumentFileNameForSave(_owner);
+	const auto nameType = Core::DetectNameType(indata);
+	const auto chatsSettings = Exteraless::Config::Instance().chatsSettings();
 	const auto shouldLoadFromCloud = (indata.isEmpty()
-		|| Core::DetectNameType(indata) != Core::NameType::Executable)
+		|| nameType != Core::NameType::Executable)
+		&& !(chatsSettings.disableAutoDownloadingArchive
+			&& nameType == Core::NameType::Archive)
+		&& !(chatsSettings.blockWin32Executables
+			&& !indata.isEmpty()
+			&& Exteraless::IsWin32Executable(indata))
 		&& (item
 			? Data::AutoDownload::Should(
 				_owner->session().settings().autoDownload(),

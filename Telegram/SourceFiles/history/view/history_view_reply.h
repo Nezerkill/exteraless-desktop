@@ -147,6 +147,8 @@ private:
 	ClickHandlerPtr _link;
 	std::unique_ptr<Ui::SpoilerAnimation> _spoiler;
 	mutable QImage _spoilerCache;
+	mutable std::unique_ptr<Ui::Text::QuotePaintCache> _ownedQuoteCache;
+	mutable const Ui::Text::QuotePaintCache *_ownedQuoteCacheSource = nullptr;
 	mutable PeerData *_externalSender = nullptr;
 	mutable PeerData *_colorPeer = nullptr;
 	mutable struct {

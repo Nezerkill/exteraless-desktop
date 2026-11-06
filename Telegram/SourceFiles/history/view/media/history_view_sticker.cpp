@@ -33,10 +33,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_document_media.h"
 #include "data/data_file_click_handler.h"
 #include "data/data_file_origin.h"
+#include "exteraless/config.h"
 #include "chat_helpers/stickers_lottie.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_helpers.h"
 #include "styles/style_menu_icons.h"
+
+#include <cmath>
 
 namespace HistoryView {
 namespace {
@@ -81,6 +84,26 @@ base::options::option<int> OptionStickerSize({
 	const auto green = (result.green() * ra + add.green() * aa) >> 8;
 	const auto blue = (result.blue() * ra + add.blue() * aa) >> 8;
 	return QColor(red, green, blue, result.alpha());
+}
+
+[[nodiscard]] int StickerShapeRadius() {
+	switch (Exteraless::Config::Instance().chatsSettings().stickerShape) {
+	case 1: return Ui::MsgFileThumbRadiusSmall();
+	case 2: return Ui::BubbleRadiusLarge();
+	}
+	return 0;
+}
+
+bool ApplyStickerShapeClip(Painter &p, const QRect &rect, bool skip) {
+	const auto radius = skip ? 0 : StickerShapeRadius();
+	if (radius <= 0) {
+		return false;
+	}
+	auto path = QPainterPath();
+	path.addRoundedRect(rect, radius, radius);
+	p.save();
+	p.setClipPath(path);
+	return true;
 }
 
 } // namespace
@@ -198,6 +221,15 @@ bool Sticker::readyToDrawAnimationFrame() {
 }
 
 QSize Sticker::Size() {
+	const auto v = Exteraless::Config::Instance().chatsSettings().stickerSize;
+	if (v != 14) {
+		const auto side = std::clamp(
+			int(std::lround(224 * (1 + (v - 14) / 15.0))),
+			50,
+			336);
+		const auto scaled = style::ConvertScale(side);
+		return { scaled, scaled };
+	}
 	const auto side = std::min(st::maxStickerSize, kMaxSizeFixed);
 	if (OptionStickerSize.value() > 0) [[unlikely]] {
 		const auto scaled = std::clamp(
@@ -350,13 +382,19 @@ void Sticker::paintAnimationFrame(
 			context.st->msgStickerOverlay()->c)
 		: image;
 	const auto size = prepared.size() / style::DevicePixelRatio();
-	p.drawImage(
-		QRect(
-			QPoint(
-				r.x() + (r.width() - size.width()) / 2,
-				r.y() + (r.height() - size.height()) / 2),
-			size),
-		prepared);
+	const auto rect = QRect(
+		QPoint(
+			r.x() + (r.width() - size.width()) / 2,
+			r.y() + (r.height() - size.height()) / 2),
+		size);
+	const auto clipped = ApplyStickerShapeClip(
+		p,
+		rect,
+		customEmojiPart() || emojiSticker());
+	p.drawImage(rect, prepared);
+	if (clipped) {
+		p.restore();
+	}
 	if (!_lastFrameCached.isNull()) {
 		return;
 	}
@@ -399,6 +437,11 @@ bool Sticker::paintPixmap(
 	const auto position = QPoint(
 		r.x() + (r.width() - size.width()) / 2,
 		r.y() + (r.height() - size.height()) / 2);
+	const auto rect = QRect(position, size);
+	const auto clipped = ApplyStickerShapeClip(
+		p,
+		rect,
+		customEmojiPart() || emojiSticker());
 	const auto mirror = mirrorHorizontal();
 	if (mirror) {
 		p.save();
@@ -411,6 +454,9 @@ bool Sticker::paintPixmap(
 	}
 	p.drawPixmap(position, pixmap);
 	if (mirror) {
+		p.restore();
+	}
+	if (clipped) {
 		p.restore();
 	}
 	return true;
@@ -436,12 +482,19 @@ void Sticker::paintPath(
 		pathGradient->clearOverridenColors();
 	}
 	p.setBrush(context.imageStyle()->msgServiceBg);
+	const auto clipped = ApplyStickerShapeClip(
+		p,
+		r,
+		customEmojiPart() || emojiSticker());
 	ChatHelpers::PaintStickerThumbnailPath(
 		p,
 		_dataMedia.get(),
 		r,
 		pathGradient,
 		mirrorHorizontal());
+	if (clipped) {
+		p.restore();
+	}
 	if (helper) {
 		pathGradient->clearOverridenColors();
 	}

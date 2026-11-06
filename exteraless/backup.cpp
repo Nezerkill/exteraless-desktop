@@ -7,6 +7,8 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
@@ -24,6 +26,9 @@ constexpr auto kAddCommaAfterMention = "addCommaAfterMention";
 constexpr auto kDisableNumberRounding = "disableNumberRounding";
 constexpr auto kFormatTimeWithSeconds = "formatTimeWithSeconds";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
+constexpr auto kShowIdAndDc = "showIdAndDc";
+constexpr auto kShowIdDc = "OEGeneralShowIdDc";
+constexpr auto kIdDcType = "idDcType";
 constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
@@ -31,6 +36,9 @@ constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
+constexpr auto kHideGiftButton = "OEChatsHideGiftButton";
+constexpr auto kHideCallButton = "OEChatsHideCallButton";
+constexpr auto kHideChannelSearchButton = "OEChatsHideChannelSearchButton";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
@@ -48,6 +56,7 @@ constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
+constexpr auto kShowResultsBeforeVoting = "OEChatsShowResultsBeforeVoting";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 constexpr auto kDecoration = "OEAppearanceChatDecoration";
@@ -75,6 +84,14 @@ constexpr auto kDisableLinkPreviewByDefaultAliasUpper
 constexpr auto kHideAllChatsFolderAlias = "hideAllTab";
 constexpr auto kHideAllChatsFolderAliasUpper = "HideAllTab";
 constexpr auto kHideAllChatsFolderAliasChats = "hideAllChats";
+constexpr auto kHideArchiveAlias = "hideArchive";
+constexpr auto kHideArchiveAliasUpper = "HideArchive";
+constexpr auto kHideArchiveFolderAlias = "hideArchiveFolder";
+constexpr auto kSortByUnreadAlias = "sortByUnread";
+constexpr auto kSortByUnreadAliasUpper = "SortByUnread";
+constexpr auto kWideChannelPostsAlias = "wideChannelPosts";
+constexpr auto kWideChannelPostsAliasUpper = "WideChannelPosts";
+constexpr auto kShowResultsBeforeVotingAlias = "showResultsBeforeVoting";
 constexpr auto kAlwaysShowDownloadIconAlias = "alwaysShowDownloadIcon";
 constexpr auto kAlwaysShowDownloadIconAliasUpper = "AlwaysShowDownloadIcon";
 constexpr auto kFalseBottomAlias = "falseBottom";
@@ -96,6 +113,10 @@ constexpr auto kGhostScheduledSendAlias = "GhostScheduledSend";
 constexpr auto kSaveToChatSubfolderAlias = "saveToChatSubfolder";
 constexpr auto kInlineMathAlias = "inlineMathResult";
 constexpr auto kHideSendAsAlias = "hideSendAsChannel";
+constexpr auto kHideGiftButtonAlias = "hideGiftButton";
+constexpr auto kHideGiftButtonInChannelAlias = "hideGiftButtonInChannel";
+constexpr auto kHideCallButtonAlias = "hideCallButton";
+constexpr auto kHideChannelSearchButtonAlias = "hideChannelSearchButton";
 constexpr auto kHideAiEditorAlias = "hideAiEditor";
 constexpr auto kHidePremiumAlias = "hidePremiumSection";
 constexpr auto kHideHelpAlias = "hideHelpSection";
@@ -159,9 +180,51 @@ constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
 constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
+constexpr auto kChatsStickerSize = "OEChatsStickerSize";
+constexpr auto kChatsStickerShape = "OEChatsStickerShape";
+constexpr auto kChatsReplyColors = "OEChatsReplyColors";
+constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
+constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
 constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
+constexpr auto kChatsHideStoriesHeader = "OEChatsHideStoriesHeader";
+constexpr auto kChatsHideArchive = "OEChatsHideArchive";
+constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
+constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
+constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
+constexpr auto kChatsHidePanelsOnScroll = "OEChatsHidePanelsOnScroll";
+constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
+constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
+constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
+constexpr auto kChatsDisableAutoDownloadingArchive
+	= "OEChatsDisableAutoDownloadingArchive";
+constexpr auto kChatsBlockWin32ExecutableFiles
+	= "OEChatsBlockWin32ExecutableFiles";
+constexpr auto kDisableAutoDownloadingArchiveAlias
+	= "disableAutoDownloadingArchive";
+constexpr auto kBlockWin32ExecutableFilesAlias = "Win32ExecutableFiles";
 constexpr auto kHideStickerTime = "hideStickerTime";
+constexpr auto kHideStoriesFromHeader = "hideStoriesFromHeader";
+constexpr auto kHideStoriesFromHeaderUpper = "HideStoriesFromHeader";
+constexpr auto kZalgoFilter = "zalgoFilter";
+constexpr auto kZalgoFilterUpper = "ZalgoFilter";
 constexpr auto kStickerTimeMode = "stickerTimeMode";
+constexpr auto kStickerSizeAlias = "stickerSize";
+constexpr auto kStickerShapeAlias = "stickerShape";
+constexpr auto kReplyColorsAlias = "replyColors";
+constexpr auto kReplyEmojiAlias = "replyEmoji";
+constexpr auto kReplyBackgroundAlias = "replyBackground";
+constexpr auto kMessageColoredBackground = "messageColoredBackground";
+constexpr auto kMessageColoredBackgroundUpper = "MessageColoredBackground";
+constexpr auto kDisableGreetingSticker = "disableGreetingSticker";
+constexpr auto kHideKeyboardOnScroll = "hideKeyboardOnScroll";
+constexpr auto kHideKeyboardOnChatScroll = "HideKeyboardOnChatScroll";
+constexpr auto kBottomButton = "bottomButton";
+constexpr auto kBottomButtonUpper = "BottomButton";
+constexpr auto kDownloadSpeedBoostAlias = "downloadSpeedBoost";
+constexpr auto kUploadBoostAlias = "uploadBoost";
+constexpr auto kUploadBoostAliasUpper = "UploadBoost";
+constexpr auto kDisableChannelMuteButton = "DisableChannelMuteButton";
 constexpr auto kDoubleTapAction = "doubleTapAction";
 constexpr auto kDoubleTapActionOut = "doubleTapActionOutOwner";
 
@@ -277,6 +340,7 @@ QString BuildBackup() {
 	extera[kAddCommaAfterMention] = config.addCommaAfterMention();
 	extera[kDisableNumberRounding] = config.disableNumberRounding();
 	extera[kFormatTimeWithSeconds] = config.showSeconds();
+	extera[kShowIdAndDc] = config.showIdDc();
 	extera[kHidePhoneNumber] = config.hidePhone();
 	extera[kDoNotUseProxy] = config.proxyDisableConditions();
 	extera[kRemoveMessageTail] = chats.removeMessageTail;
@@ -308,6 +372,9 @@ QString BuildBackup() {
 	extera[kHideHelpSection] = config.hideHelpSection();
 	extera[kHideAiEditor] = config.hideAiEditor();
 	extera[kHideSendAsPeer] = config.hideSendAsPeer();
+	extera[kHideGiftButton] = config.hideGiftButton();
+	extera[kHideCallButton] = config.hideCallButton();
+	extera[kHideChannelSearchButton] = config.hideChannelSearchButton();
 	extera[kInlineMathResult] = config.inlineMathResult();
 	extera[kSaveToChatSubfolder] = config.saveToChatSubfolder();
 	extera[kGhostScheduledSend] = config.ghostScheduledSend();
@@ -326,6 +393,7 @@ QString BuildBackup() {
 	extera[kDisableLinkPreviewByDefault]
 		= config.disableLinkPreviewByDefault();
 	extera[kHideAllChatsFolder] = config.hideAllChatsFolder();
+	extera[kShowResultsBeforeVoting] = config.showResultsBeforeVoting();
 	extera[kAlwaysShowDownloadIcon] = config.alwaysShowDownloadIcon();
 	extera[kFalseBottom] = config.falseBottom();
 	extera[kDecoration] = config.decoration();
@@ -354,7 +422,25 @@ QString BuildBackup() {
 	extera[kChatsDoubleTapIn] = config.chatsDoubleTapIn();
 	extera[kChatsDoubleTapOut] = config.chatsDoubleTapOut();
 	extera[kChatsStickerTimeSide] = chats.stickerTimeSide;
+	extera[kChatsStickerSize] = chats.stickerSize;
+	extera[kChatsStickerShape] = chats.stickerShape;
+	extera[kChatsReplyColors] = chats.replyColors;
+	extera[kChatsReplyEmoji] = chats.replyEmoji;
+	extera[kChatsReplyBackground] = chats.replyBackground;
 	extera[kChatsHideStickerTime] = chats.hideStickerTime;
+	extera[kHideStoriesFromHeader] = chats.hideStoriesHeader;
+	extera[kChatsHideArchive] = chats.hideArchive;
+	extera[kChatsSortByUnread] = chats.sortByUnread;
+	extera[kChatsWideChannelPosts] = chats.wideChannelPosts;
+	extera[kChatsHideGreetingSticker] = chats.hideGreetingSticker;
+	extera[kChatsHidePanelsOnScroll] = chats.hidePanelsOnScroll;
+	extera[kChatsChannelBottomButton] = chats.channelBottomButton;
+	extera[kChatsDownloadSpeedBoost] = chats.downloadSpeedBoost;
+	extera[kChatsUploadBoost] = chats.uploadBoost;
+	extera[kChatsDisableAutoDownloadingArchive]
+		= chats.disableAutoDownloadingArchive;
+	extera[kChatsBlockWin32ExecutableFiles] = chats.blockWin32Executables;
+	extera[kZalgoFilter] = config.zalgoFilter();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -455,6 +541,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 			&& value.isBool()) {
 			config.setHidePhone(value.toBool());
+		} else if ((key == kShowIdAndDc || key == kShowIdDc)
+			&& value.isBool()) {
+			config.setShowIdDc(value.toBool());
+		} else if (key == kIdDcType && value.isDouble()) {
+			config.setShowIdDc(value.toInt() != 0);
 		} else if (key == kDoNotUseProxy && ValidProxyConditions(value)) {
 			config.setProxyDisableConditions(value.toInt());
 		} else if (key == kRemoveMessageTail && value.isBool()) {
@@ -532,6 +623,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHideSendAsPeer || key == kHideSendAsAlias)
 			&& value.isBool()) {
 			config.setHideSendAsPeer(value.toBool());
+		} else if ((key == kHideGiftButton
+			|| key == kHideGiftButtonInChannelAlias
+			|| key == kHideGiftButtonAlias)
+			&& value.isBool()) {
+			config.setHideGiftButton(value.toBool());
+		} else if ((key == kHideCallButton || key == kHideCallButtonAlias)
+			&& value.isBool()) {
+			config.setHideCallButton(value.toBool());
+		} else if ((key == kHideChannelSearchButton
+			|| key == kHideChannelSearchButtonAlias)
+			&& value.isBool()) {
+			config.setHideChannelSearchButton(value.toBool());
 		} else if ((key == kInlineMathResult || key == kInlineMathAlias)
 			&& value.isBool()) {
 			config.setInlineMathResult(value.toBool());
@@ -600,6 +703,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kHideAllChatsFolderAliasChats)
 			&& value.isBool()) {
 			config.setHideAllChatsFolder(value.toBool());
+		} else if ((key == kShowResultsBeforeVoting
+			|| key == kShowResultsBeforeVotingAlias)
+			&& value.isBool()) {
+			config.setShowResultsBeforeVoting(value.toBool());
 		} else if ((key == kAlwaysShowDownloadIcon
 			|| key == kAlwaysShowDownloadIconAlias
 			|| key == kAlwaysShowDownloadIconAliasUpper)
@@ -715,9 +822,98 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setChatsDoubleTapOut(value.toInt());
 		} else if (key == kChatsStickerTimeSide && value.isBool()) {
 			config.setChatsStickerTimeSide(value.toBool());
+		} else if (key == kChatsStickerSize && IntegralInRange(value, 4, 20)) {
+			config.setStickerSize(value.toInt());
+		} else if (key == kStickerSizeAlias && value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setStickerSize(std::clamp(rounded, 4, 20));
+		} else if (key == kChatsStickerShape && IntegralInRange(value, 0, 2)) {
+			config.setStickerShape(value.toInt());
+		} else if (key == kStickerShapeAlias && value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setStickerShape(std::clamp(rounded, 0, 2));
+		} else if ((key == kChatsReplyColors || key == kReplyColorsAlias)
+			&& value.isBool()) {
+			config.setChatsReplyColors(value.toBool());
+		} else if ((key == kChatsReplyEmoji || key == kReplyEmojiAlias)
+			&& value.isBool()) {
+			config.setChatsReplyEmoji(value.toBool());
+		} else if ((key == kChatsReplyBackground || key == kReplyBackgroundAlias)
+			&& value.isBool()) {
+			config.setChatsReplyBackground(value.toBool());
+		} else if ((key == kMessageColoredBackground
+			|| key == kMessageColoredBackgroundUpper)
+			&& value.isBool()) {
+			if (!value.toBool()) {
+				config.setChatsReplyBackground(false);
+			}
 		} else if ((key == kChatsHideStickerTime || key == kHideStickerTime)
 			&& value.isBool()) {
 			config.setChatsHideStickerTime(value.toBool());
+		} else if ((key == kChatsHideStoriesHeader
+			|| key == kHideStoriesFromHeader
+			|| key == kHideStoriesFromHeaderUpper)
+			&& value.isBool()) {
+			config.setChatsHideStoriesHeader(value.toBool());
+		} else if ((key == kChatsZalgoFilter
+			|| key == kZalgoFilter
+			|| key == kZalgoFilterUpper)
+			&& value.isBool()) {
+			config.setZalgoFilter(value.toBool());
+		} else if ((key == kChatsHideArchive
+			|| key == kHideArchiveAlias
+			|| key == kHideArchiveAliasUpper
+			|| key == kHideArchiveFolderAlias)
+			&& value.isBool()) {
+			config.setChatsHideArchive(value.toBool());
+		} else if ((key == kChatsSortByUnread
+			|| key == kSortByUnreadAlias
+			|| key == kSortByUnreadAliasUpper)
+			&& value.isBool()) {
+			config.setChatsSortByUnread(value.toBool());
+		} else if ((key == kChatsWideChannelPosts
+			|| key == kWideChannelPostsAlias
+			|| key == kWideChannelPostsAliasUpper)
+			&& value.isBool()) {
+			config.setChatsWideChannelPosts(value.toBool());
+		} else if ((key == kChatsHideGreetingSticker
+			|| key == kDisableGreetingSticker)
+			&& value.isBool()) {
+			config.setChatsHideGreetingSticker(value.toBool());
+		} else if ((key == kChatsHidePanelsOnScroll
+			|| key == kHideKeyboardOnScroll
+			|| key == kHideKeyboardOnChatScroll)
+			&& value.isBool()) {
+			config.setChatsHidePanelsOnScroll(value.toBool());
+		} else if ((key == kChatsChannelBottomButton
+			|| key == kBottomButton
+			|| key == kBottomButtonUpper)
+			&& IntegralInRange(value, 0, 2)) {
+			config.setChatsChannelBottomButton(value.toInt());
+		} else if ((key == kChatsDownloadSpeedBoost
+			|| key == QStringLiteral("OEGeneralDownloadSpeedBoost"))
+			&& IntegralInRange(value, 0, 2)) {
+			config.setChatsDownloadSpeedBoost(value.toInt());
+		} else if (key == kDownloadSpeedBoostAlias && value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setChatsDownloadSpeedBoost(std::clamp(rounded, 0, 2));
+		} else if ((key == kChatsUploadBoost
+			|| key == kUploadBoostAlias
+			|| key == kUploadBoostAliasUpper)
+			&& value.isBool()) {
+			config.setChatsUploadBoost(value.toBool());
+		} else if (key == kDisableChannelMuteButton && value.isBool()) {
+			if (value.toBool()) {
+				config.setChatsChannelBottomButton(0);
+			}
+		} else if ((key == kChatsDisableAutoDownloadingArchive
+			|| key == kDisableAutoDownloadingArchiveAlias)
+			&& value.isBool()) {
+			config.setDisableAutoDownloadingArchive(value.toBool());
+		} else if ((key == kChatsBlockWin32ExecutableFiles
+			|| key == kBlockWin32ExecutableFilesAlias)
+			&& value.isBool()) {
+			config.setBlockWin32Executables(value.toBool());
 		} else if (key == kStickerTimeMode
 			&& value.isDouble()
 			&& value.toInt() >= 0

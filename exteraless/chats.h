@@ -12,6 +12,22 @@ struct ChatsSettings {
 	bool unreadCapsule = false;
 	bool stickerTimeSide = false;
 	bool hideStickerTime = false;
+	int stickerSize = 14;
+	int stickerShape = 0;
+	bool replyColors = true;
+	bool replyEmoji = true;
+	bool replyBackground = true;
+	bool hideStoriesHeader = false;
+	bool hideArchive = false;
+	bool sortByUnread = false;
+	bool wideChannelPosts = false;
+	bool hideGreetingSticker = false;
+	bool hidePanelsOnScroll = false;
+	int channelBottomButton = 1;
+	int downloadSpeedBoost = 0;
+	bool uploadBoost = false;
+	bool disableAutoDownloadingArchive = false;
+	bool blockWin32Executables = true;
 };
 
 [[nodiscard]] bool HiddenReactionsFor(
@@ -26,5 +42,11 @@ struct ChatsSettings {
 	bool user);
 
 [[nodiscard]] bool UnreadCapsuleEnabled();
+
+[[nodiscard]] constexpr bool ArchiveRowSkipped(
+		bool inMainMenu,
+		bool hideArchive) {
+	return inMainMenu || hideArchive;
+}
 
 } // namespace Exteraless

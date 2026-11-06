@@ -25,6 +25,8 @@ namespace Storage {
 // fixed part size download for hash checking.
 constexpr auto kDownloadPartSize = 128 * 1024;
 
+[[nodiscard]] int BoostedDownloadPartSize();
+
 class DownloadMtprotoTask;
 
 class DownloadManagerMtproto final : public base::has_weak_ptr {
@@ -206,6 +208,9 @@ private:
 
 	// Called only if readyToRequest() == true.
 	[[nodiscard]] virtual int64 takeNextRequestOffset() = 0;
+	[[nodiscard]] virtual int partSize() const {
+		return kDownloadPartSize;
+	}
 	virtual bool feedPart(int64 offset, const QByteArray &bytes) = 0;
 	virtual bool setWebFileSizeHook(int64 size);
 	virtual void cancelOnFail() = 0;

@@ -22,6 +22,7 @@ constexpr auto kRelativeLastSeen = "OERelativeLastSeen";
 constexpr auto kAddCommaAfterMention = "OEAddCommaAfterMention";
 constexpr auto kDisableNumberRounding = "OEGeneralDisableNumberRounding";
 constexpr auto kShowSeconds = "OEGeneralShowSeconds";
+constexpr auto kShowIdDc = "OEGeneralShowIdDc";
 constexpr auto kTranslucentDeleted = "OEChatsTranslucentDeleted";
 constexpr auto kPanguOnSending = "OEChatsPanguOnSending";
 constexpr auto kSilentByDefault = "OEChatsSilentByDefault";
@@ -29,6 +30,9 @@ constexpr auto kHidePremiumSection = "OESettingsHidePremium";
 constexpr auto kHideHelpSection = "OESettingsHideHelp";
 constexpr auto kHideAiEditor = "OEAppearanceHideAiEditor";
 constexpr auto kHideSendAsPeer = "OEChatsHideSendAsPeer";
+constexpr auto kHideGiftButton = "OEChatsHideGiftButton";
+constexpr auto kHideCallButton = "OEChatsHideCallButton";
+constexpr auto kHideChannelSearchButton = "OEChatsHideChannelSearchButton";
 constexpr auto kInlineMathResult = "OEChatsInlineMathResult";
 constexpr auto kSaveToChatSubfolder = "OEGeneralSaveToChatSubfolder";
 constexpr auto kGhostScheduledSend = "OEGhostScheduledSend";
@@ -46,6 +50,7 @@ constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
 constexpr auto kChatMenuClearDeleted = "OEChatsChatMenuClearDeleted";
 constexpr auto kDisableLinkPreviewByDefault = "OEChatsDisableLinkPreviewByDefault";
 constexpr auto kHideAllChatsFolder = "OEChatsHideAllChatsFolder";
+constexpr auto kShowResultsBeforeVoting = "OEChatsShowResultsBeforeVoting";
 constexpr auto kAlwaysShowDownloadIcon = "OEChatsAlwaysShowDownloadIcon";
 constexpr auto kFalseBottom = "OEPrivacyFalseBottom";
 constexpr auto kDecoration = "OEAppearanceChatDecoration";
@@ -115,7 +120,26 @@ constexpr auto kChatsMenuDelete = "OEChatsMenuDelete";
 constexpr auto kChatsDoubleTapIn = "OEChatsDoubleTapIn";
 constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
 constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
+constexpr auto kChatsStickerSize = "OEChatsStickerSize";
+constexpr auto kChatsStickerShape = "OEChatsStickerShape";
+constexpr auto kChatsReplyColors = "OEChatsReplyColors";
+constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
+constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
 constexpr auto kChatsHideStickerTime = "OEChatsHideStickerTime";
+constexpr auto kChatsHideStoriesHeader = "OEChatsHideStoriesHeader";
+constexpr auto kChatsHideArchive = "OEChatsHideArchive";
+constexpr auto kChatsSortByUnread = "OEChatsSortByUnread";
+constexpr auto kChatsWideChannelPosts = "OEChatsWideChannelPosts";
+constexpr auto kChatsHideGreetingSticker = "OEChatsHideGreetingSticker";
+constexpr auto kChatsHidePanelsOnScroll = "OEChatsHidePanelsOnScroll";
+constexpr auto kChatsChannelBottomButton = "OEChatsChannelBottomButton";
+constexpr auto kChatsDownloadSpeedBoost = "OEChatsDownloadSpeedBoost";
+constexpr auto kChatsUploadBoost = "OEChatsUploadBoost";
+constexpr auto kChatsZalgoFilter = "OEChatsZalgoFilter";
+constexpr auto kChatsDisableAutoDownloadingArchive
+	= "OEChatsDisableAutoDownloadingArchive";
+constexpr auto kChatsBlockWin32ExecutableFiles
+	= "OEChatsBlockWin32ExecutableFiles";
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -274,6 +298,14 @@ void Config::setShowSeconds(bool value) {
 	setValue(kShowSeconds, value);
 }
 
+bool Config::showIdDc() const {
+	return boolValue(kShowIdDc, false);
+}
+
+void Config::setShowIdDc(bool value) {
+	setValue(kShowIdDc, value);
+}
+
 bool Config::translucentDeletedMessages() const {
 	return boolValue(kTranslucentDeleted, true);
 }
@@ -328,6 +360,30 @@ bool Config::hideSendAsPeer() const {
 
 void Config::setHideSendAsPeer(bool value) {
 	setValue(kHideSendAsPeer, value);
+}
+
+bool Config::hideGiftButton() const {
+	return boolValue(kHideGiftButton, false);
+}
+
+void Config::setHideGiftButton(bool value) {
+	setValue(kHideGiftButton, value);
+}
+
+bool Config::hideCallButton() const {
+	return boolValue(kHideCallButton, false);
+}
+
+void Config::setHideCallButton(bool value) {
+	setValue(kHideCallButton, value);
+}
+
+bool Config::hideChannelSearchButton() const {
+	return boolValue(kHideChannelSearchButton, false);
+}
+
+void Config::setHideChannelSearchButton(bool value) {
+	setValue(kHideChannelSearchButton, value);
 }
 
 bool Config::inlineMathResult() const {
@@ -465,6 +521,14 @@ bool Config::hideAllChatsFolder() const {
 
 void Config::setHideAllChatsFolder(bool value) {
 	setValue(kHideAllChatsFolder, value);
+}
+
+bool Config::showResultsBeforeVoting() const {
+	return boolValue(kShowResultsBeforeVoting, false);
+}
+
+void Config::setShowResultsBeforeVoting(bool value) {
+	setValue(kShowResultsBeforeVoting, value);
 }
 
 bool Config::alwaysShowDownloadIcon() const {
@@ -882,12 +946,116 @@ void Config::setChatsDoubleTapOut(int value) {
 	setValue(kChatsDoubleTapOut, SanitizeDoubleTapValue(value));
 }
 
+int Config::stickerSize() const {
+	return std::clamp(intValue(kChatsStickerSize, 14), 4, 20);
+}
+
+void Config::setStickerSize(int value) {
+	setValue(kChatsStickerSize, std::clamp(value, 4, 20));
+}
+
+void Config::setChatsStickerSize(int value) {
+	setStickerSize(value);
+}
+
+int Config::stickerShape() const {
+	return std::clamp(intValue(kChatsStickerShape, 0), 0, 2);
+}
+
+void Config::setStickerShape(int value) {
+	setValue(kChatsStickerShape, std::clamp(value, 0, 2));
+}
+
+bool Config::replyColors() const {
+	return boolValue(kChatsReplyColors, true);
+}
+
+void Config::setChatsReplyColors(bool value) {
+	setValue(kChatsReplyColors, value);
+}
+
+bool Config::replyEmoji() const {
+	return boolValue(kChatsReplyEmoji, true);
+}
+
+void Config::setChatsReplyEmoji(bool value) {
+	setValue(kChatsReplyEmoji, value);
+}
+
+bool Config::replyBackground() const {
+	return boolValue(kChatsReplyBackground, true);
+}
+
+void Config::setChatsReplyBackground(bool value) {
+	setValue(kChatsReplyBackground, value);
+}
+
 void Config::setChatsStickerTimeSide(bool value) {
 	setValue(kChatsStickerTimeSide, value);
 }
 
 void Config::setChatsHideStickerTime(bool value) {
 	setValue(kChatsHideStickerTime, value);
+}
+
+void Config::setChatsHideStoriesHeader(bool value) {
+	setValue(kChatsHideStoriesHeader, value);
+}
+
+void Config::setChatsHideArchive(bool value) {
+	setValue(kChatsHideArchive, value);
+}
+
+void Config::setChatsSortByUnread(bool value) {
+	setValue(kChatsSortByUnread, value);
+}
+
+void Config::setChatsWideChannelPosts(bool value) {
+	setValue(kChatsWideChannelPosts, value);
+}
+
+void Config::setChatsHideGreetingSticker(bool value) {
+	setValue(kChatsHideGreetingSticker, value);
+}
+
+void Config::setChatsHidePanelsOnScroll(bool value) {
+	setValue(kChatsHidePanelsOnScroll, value);
+}
+
+void Config::setChatsChannelBottomButton(int value) {
+	setValue(kChatsChannelBottomButton, std::clamp(value, 0, 2));
+}
+
+void Config::setChatsDownloadSpeedBoost(int value) {
+	setValue(kChatsDownloadSpeedBoost, std::clamp(value, 0, 2));
+}
+
+void Config::setChatsUploadBoost(bool value) {
+	setValue(kChatsUploadBoost, value);
+}
+
+bool Config::disableAutoDownloadingArchive() const {
+	return boolValue(kChatsDisableAutoDownloadingArchive, false);
+}
+
+void Config::setDisableAutoDownloadingArchive(bool value) {
+	setValue(kChatsDisableAutoDownloadingArchive, value);
+}
+
+bool Config::blockWin32Executables() const {
+	return boolValue(kChatsBlockWin32ExecutableFiles, true);
+}
+
+void Config::setBlockWin32Executables(bool value) {
+	setValue(kChatsBlockWin32ExecutableFiles, value);
+}
+
+bool Config::zalgoFilter() const {
+	return boolValue(kChatsZalgoFilter, false);
+}
+
+void Config::setZalgoFilter(bool value) {
+	setValue(kChatsZalgoFilter, value);
 }
 
 bool Config::pluginEnabled(const QString &id) const {
@@ -950,6 +1118,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kAddCommaAfterMention
 			|| key == kDisableNumberRounding
 			|| key == kShowSeconds
+			|| key == kShowIdDc
 			|| key == kTranslucentDeleted
 			|| key == kPanguOnSending
 			|| key == kSilentByDefault
@@ -957,6 +1126,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kHideHelpSection
 			|| key == kHideAiEditor
 			|| key == kHideSendAsPeer
+			|| key == kHideGiftButton
+			|| key == kHideCallButton
+			|| key == kHideChannelSearchButton
 			|| key == kInlineMathResult
 			|| key == kSaveToChatSubfolder
 			|| key == kGhostScheduledSend
@@ -974,6 +1146,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatMenuClearDeleted
 			|| key == kDisableLinkPreviewByDefault
 			|| key == kHideAllChatsFolder
+			|| key == kShowResultsBeforeVoting
 			|| key == kAlwaysShowDownloadIcon
 			|| key == kFalseBottom
 			|| key == kDecoration
@@ -1029,7 +1202,24 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kChatsDoubleTapIn
 			|| key == kChatsDoubleTapOut
 			|| key == kChatsStickerTimeSide
-			|| key == kChatsHideStickerTime) {
+			|| key == kChatsStickerSize
+			|| key == kChatsStickerShape
+			|| key == kChatsReplyColors
+			|| key == kChatsReplyEmoji
+			|| key == kChatsReplyBackground
+			|| key == kChatsHideStickerTime
+			|| key == kChatsHideStoriesHeader
+			|| key == kChatsHideArchive
+			|| key == kChatsSortByUnread
+			|| key == kChatsWideChannelPosts
+			|| key == kChatsHideGreetingSticker
+			|| key == kChatsHidePanelsOnScroll
+			|| key == kChatsChannelBottomButton
+			|| key == kChatsDownloadSpeedBoost
+			|| key == kChatsUploadBoost
+			|| key == kChatsDisableAutoDownloadingArchive
+			|| key == kChatsBlockWin32ExecutableFiles
+			|| key == kChatsZalgoFilter) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);
@@ -1133,6 +1323,31 @@ void Config::refreshChats() const {
 	_chats.unreadCapsule = boolValue(kChatsUnreadCapsule, false);
 	_chats.stickerTimeSide = boolValue(kChatsStickerTimeSide, false);
 	_chats.hideStickerTime = boolValue(kChatsHideStickerTime, false);
+	_chats.stickerSize
+		= std::clamp(intValue(kChatsStickerSize, 14), 4, 20);
+	_chats.stickerShape
+		= std::clamp(intValue(kChatsStickerShape, 0), 0, 2);
+	_chats.replyColors = boolValue(kChatsReplyColors, true);
+	_chats.replyEmoji = boolValue(kChatsReplyEmoji, true);
+	_chats.replyBackground = boolValue(kChatsReplyBackground, true);
+	_chats.hideStoriesHeader = boolValue(kChatsHideStoriesHeader, false);
+	_chats.hideArchive = boolValue(kChatsHideArchive, false);
+	_chats.sortByUnread = boolValue(kChatsSortByUnread, false);
+	_chats.wideChannelPosts = boolValue(kChatsWideChannelPosts, false);
+	_chats.hideGreetingSticker = boolValue(
+		kChatsHideGreetingSticker, false);
+	_chats.hidePanelsOnScroll = boolValue(kChatsHidePanelsOnScroll, false);
+	_chats.channelBottomButton
+		= std::clamp(intValue(kChatsChannelBottomButton, 1), 0, 2);
+	_chats.downloadSpeedBoost
+		= std::clamp(intValue(kChatsDownloadSpeedBoost, 0), 0, 2);
+	_chats.uploadBoost = boolValue(kChatsUploadBoost, false);
+	_chats.disableAutoDownloadingArchive = boolValue(
+		kChatsDisableAutoDownloadingArchive,
+		false);
+	_chats.blockWin32Executables = boolValue(
+		kChatsBlockWin32ExecutableFiles,
+		true);
 
 	_messageMenu.reply = boolValue(kChatsMenuReply, true);
 	_messageMenu.edit = boolValue(kChatsMenuEdit, true);

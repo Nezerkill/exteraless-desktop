@@ -83,6 +83,7 @@ enum class NameType : uchar {
 };
 
 [[nodiscard]] QString FileExtension(const QString &filepath);
+[[nodiscard]] bool IsWin32Executable(const QString &name);
 [[nodiscard]] NameType DetectNameType(const QString &filepath);
 [[nodiscard]] bool NameTypeAllowsThumbnail(NameType type);
 [[nodiscard]] bool IsIpRevealingPath(const QString &filepath);

@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/ui_integration.h" // TextContext
 #include "data/data_cloud_file.h"
 #include "data/data_location.h"
+#include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "lang/lang_tag.h"
 #include "history/history.h"
@@ -2241,6 +2242,22 @@ QSize Poll::countOptimalSize() {
 	return { maxWidth, minHeight };
 }
 
+bool Poll::showResultsBeforeVote() const {
+	if (!Exteraless::Config::Instance().showResultsBeforeVoting()
+		|| _adminShowResults
+		|| (_parent->context() == Context::MediaEditor)
+		|| _voted
+		|| (_flags & PollData::Flag::Closed)
+		|| (_flags & PollData::Flag::HideResultsUntilClose)
+		|| (_flags & PollData::Flag::MultiChoice)
+		|| _poll->totalVoters <= 0) {
+		return false;
+	}
+	return ranges::any_of(_poll->answers, [](const PollAnswer &answer) {
+		return answer.votes > 0;
+	});
+}
+
 bool Poll::showVotes() const {
 	if (_adminShowResults || (_parent->context() == Context::MediaEditor)) {
 		return true;
@@ -2250,7 +2267,8 @@ bool Poll::showVotes() const {
 	}
 	return _voted
 		|| (_flags & PollData::Flag::Closed)
-		|| voteRestricted();
+		|| voteRestricted()
+		|| showResultsBeforeVote();
 }
 
 PollData::VoteRestriction Poll::knownVoteRestriction() const {
@@ -2327,7 +2345,7 @@ bool Poll::isAuthorNotVoted() const {
 }
 
 bool Poll::canVote() const {
-	return !showVotes()
+	return (!showVotes() || showResultsBeforeVote())
 		&& !_voted
 		&& _parent->data()->isRegular()
 		&& (knownVoteRestriction() == PollData::VoteRestriction::None);

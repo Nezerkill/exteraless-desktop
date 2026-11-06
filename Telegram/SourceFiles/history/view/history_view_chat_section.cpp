@@ -4583,6 +4583,9 @@ void ChatWidget::onScroll() {
 	}
 	if (!_synteticScrollEvent) {
 		_lastUserScrolled = crl::now();
+		if (Exteraless::Config::Instance().chatsSettings().hidePanelsOnScroll) {
+			_composeControls->hidePanelsAnimated();
+		}
 	}
 	updateInnerVisibleArea();
 }

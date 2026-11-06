@@ -43,6 +43,22 @@ namespace {
 	return base::flat_set<QString>(list.begin(), list.end());
 }
 
+// The Windows executable rule must hold on every platform, so the list
+// is kept apart from the per-platform one below.
+const auto kWin32ExecutableExtensions = u"\
+ad ade adp ahk app application appref-ms asp aspx asx bas bat bin cab cdxml \
+cer cfg cgi chi chm cmd cnt com conf cpl crt csh der diagcab dll drv eml \
+exe fon fxp gadget grp hlp hpj hta htt inf ini ins inx isp isu its jar jnlp \
+job js jse jsp key ksh lexe library-ms lnk local lua mad maf mag mam \
+manifest maq mar mas mat mau mav maw mcf mda mdb mde mdt mdw mdz mht mhtml \
+mjs mmc mof msc msg msh msh1 msh2 msh1xml msh2xml mshxml msi msp mst ops \
+osd paf pcd phar php php3 php4 php5 php7 phps php-s pht phtml pif pl plg pm \
+pod prf prg ps1 ps2 ps1xml ps2xml psc1 psc2 psd1 psm1 pssc pst py py3 pyc \
+pyd pyi pyo pyw pyzw pyz rb reg rgs scf scr sct search-ms settingcontent-ms \
+sh shb shs slk sys swf t tmp u3p url vb vbe vbp vbs vbscript vdx vsmacros \
+vsd vsdm vsdx vss vssm vssx vst vstm vstx vsw vsx vtx website wlua ws wsc \
+wsf wsh xbap xll xlsb xlsm xnk xs"_q;
+
 } // namespace
 
 MimeType::MimeType(const QMimeType &type) : _typeStruct(type) {
@@ -254,6 +270,12 @@ QString FileExtension(const QString &filepath) {
 	return QString(last.base(), last - reversed.begin());
 }
 
+bool IsWin32Executable(const QString &name) {
+	static const auto kExtensions = SplitExtensions(
+		kWin32ExecutableExtensions);
+	return kExtensions.contains(FileExtension(name).toLower());
+}
+
 NameType DetectNameType(const QString &filepath) {
 	static const auto kImage = SplitExtensions(u"\
 afdesign ai avif bmp dng gif heic icns ico jfif jpeg jpg jpg-large jxl nef \
@@ -285,19 +307,7 @@ tdesktop-endpoints"_q);
 
 	static const auto kExecutable = SplitExtensions(
 #ifdef Q_OS_WIN
-		u"\
-ad ade adp ahk app application appref-ms asp aspx asx bas bat bin cab cdxml \
-cer cfg cgi chi chm cmd cnt com conf cpl crt csh der diagcab dll drv eml \
-exe fon fxp gadget grp hlp hpj hta htt inf ini ins inx isp isu its jar jnlp \
-job js jse jsp key ksh lexe library-ms lnk local lua mad maf mag mam \
-manifest maq mar mas mat mau mav maw mcf mda mdb mde mdt mdw mdz mht mhtml \
-mjs mmc mof msc msg msh msh1 msh2 msh1xml msh2xml mshxml msi msp mst ops \
-osd paf pcd phar php php3 php4 php5 php7 phps php-s pht phtml pif pl plg pm \
-pod prf prg ps1 ps2 ps1xml ps2xml psc1 psc2 psd1 psm1 pssc pst py py3 pyc \
-pyd pyi pyo pyw pyzw pyz rb reg rgs scf scr sct search-ms settingcontent-ms \
-sh shb shs slk sys swf t tmp u3p url vb vbe vbp vbs vbscript vdx vsmacros \
-vsd vsdm vsdx vss vssm vssx vst vstm vstx vsw vsx vtx website wlua ws wsc \
-wsf wsh xbap xll xlsb xlsm xnk xs"_q
+		kWin32ExecutableExtensions
 #elif defined Q_OS_MAC // Q_OS_MAC
 		u"\
 applescript action app bin command csh osx workflow terminal url caction \

@@ -46,6 +46,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_changes.h"
 #include "data/data_channel.h"
 #include "data/data_premium_limits.h"
+#include "info/profile/info_profile_actions.h"
 #include "info/profile/info_profile_values.h"
 #include "info/profile/info_profile_badge.h"
 #include "info/profile/info_profile_phone_menu.h"
@@ -657,6 +658,21 @@ void SetupRows(
 		{ &st::menuIconUsername });
 	if (targets) {
 		targets->username = usernameButton;
+	}
+
+	const auto idDcText = Info::Profile::IdDcText(self);
+	if (!idDcText.isEmpty()
+		&& !base::options::value<bool>(
+			Info::Profile::kOptionShowPeerIdBelowAbout)) {
+		const auto bareId = QString::number(
+			self->id.value & PeerId::kChatTypeMask);
+		AddRow(
+			container,
+			tr::lng_info_id_dc_label(),
+			rpl::single(tr::marked(idDcText)),
+			tr::lng_mediaview_copy(tr::now),
+			[=] { QGuiApplication::clipboard()->setText(bareId); },
+			{ &st::menuIconInfo });
 	}
 
 	Ui::AddSkip(container);

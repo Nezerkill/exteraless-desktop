@@ -49,6 +49,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_forum_topic.h"
 #include "data/data_saved_sublist.h"
 #include "mainwidget.h"
+#include "exteraless/config.h"
 #include "lang/lang_keys.h"
 #include "lang/lang_numbers_animation.h"
 #include "menu/menu_send.h"
@@ -587,6 +588,10 @@ bool WrapWidget::closeByOutsideClick() const {
 
 void WrapWidget::addProfileCallsButton() {
 	Expects(_topBar != nullptr);
+
+	if (Exteraless::Config::Instance().hideCallButton()) {
+		return;
+	}
 
 	const auto peer = key().peer();
 	const auto user = peer ? peer->asUser() : nullptr;

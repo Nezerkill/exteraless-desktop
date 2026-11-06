@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/profile/info_profile_values.h"
 
 #include "exteraless/config.h"
+#include "exteraless/format.h"
 
 #include "api/api_chat_participants.h"
 #include "apiwrap.h"
@@ -275,6 +276,13 @@ rpl::producer<TextWithEntities> AboutValue(not_null<PeerData*> peer) {
 	) | rpl::map([peer](const QString &value) {
 		return AboutWithEntities(peer, value);
 	});
+}
+
+QString IdDcText(not_null<PeerData*> peer) {
+	return Exteraless::FormatIdDc(
+		peer->id.value & PeerId::kChatTypeMask,
+		peer->session().mainDcId(),
+		Exteraless::Config::Instance().showIdDc());
 }
 
 QString TopicLink(not_null<Data::ForumTopic*> topic, bool full) {

@@ -71,6 +71,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_message_reactions.h"
 #include "data/data_user.h"
 #include "exteraless/chats.h"
+#include "exteraless/config.h"
+#include "exteraless/zalgo.h"
 #include "lang/lang_keys.h"
 #include "styles/style_chat.h"
 #include "styles/style_chat_style.h"
@@ -509,6 +511,33 @@ int KeyboardStyle::minButtonWidth(
 				result.from += modification.added;
 			}
 		}
+	}
+	return result;
+}
+
+[[nodiscard]] TextWithEntities FilterZalgo(const TextWithEntities &text) {
+	const auto filtered = Exteraless::ApplyZalgoFilterWithMap(text.text);
+	const auto sourceSize = int(text.text.size());
+	const auto map = [&](int index) {
+		return filtered.map[std::clamp(index, 0, sourceSize)];
+	};
+	auto result = TextWithEntities();
+	result.text = filtered.text;
+	result.entities.reserve(text.entities.size());
+	for (auto entity : text.entities) {
+		const auto from = map(entity.offset());
+		const auto to = map(entity.offset() + entity.length());
+		const auto length = std::clamp(to - from, 0, entity.length());
+		if (!length) {
+			continue;
+		}
+		if (from >= entity.offset()) {
+			entity.shiftRight(from - entity.offset());
+		} else {
+			entity.shiftLeft(entity.offset() - from);
+		}
+		entity.shrinkFromRight(entity.length() - length);
+		result.entities.push_back(std::move(entity));
 	}
 	return result;
 }
@@ -2311,9 +2340,16 @@ void Element::setTextWithLinks(
 		.session = &history()->session(),
 		.repaint = [=] { customEmojiRepaint(); },
 	});
+	auto filteredText = TextWithEntities();
+	auto filtered = &text;
+	if (Exteraless::Config::Instance().zalgoFilter()
+		&& Exteraless::HasZalgoRun(text.text)) {
+		filteredText = FilterZalgo(text);
+		filtered = &filteredText;
+	}
 	if (_flags & Flag::ServiceMessage) {
 		const auto &options = Ui::ItemTextServiceOptions();
-		_text.setMarkedText(st::serviceTextStyle, text, options, context);
+		_text.setMarkedText(st::serviceTextStyle, *filtered, options, context);
 		auto linkIndex = 0;
 		for (const auto &link : links) {
 			// Link indices start with 1.
@@ -2323,8 +2359,8 @@ void Element::setTextWithLinks(
 		const auto item = data();
 		const auto &options = Ui::ItemTextOptions(item);
 		clearSpecialOnlyEmoji();
-		_text.setMarkedText(st::messageTextStyle, text, options, context);
-		if (!item->_text.empty() && _text.isEmpty()){
+		_text.setMarkedText(st::messageTextStyle, *filtered, options, context);
+		if (!filtered->empty() && _text.isEmpty()){
 			// If server has allowed some text that we've trim-ed entirely,
 			// just replace it with something so that UI won't look buggy.
 			_text.setMarkedText(

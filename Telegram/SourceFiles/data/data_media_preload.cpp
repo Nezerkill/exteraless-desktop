@@ -15,6 +15,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
+#include "core/mime_type.h"
+#include "exteraless/config.h"
 #include "media/streaming/media_streaming_reader.h"
 #include "storage/file_download.h" // kMaxFileInMemory.
 
@@ -153,7 +155,11 @@ VideoPreload::~VideoPreload() {
 bool VideoPreload::Can(not_null<DocumentData*> video) {
 	return video->canBeStreamed()
 		&& video->videoPreloadLocation().valid()
-		&& video->bigFileBaseCacheKey();
+		&& video->bigFileBaseCacheKey()
+		&& !(Exteraless::Config::Instance(
+			).chatsSettings().disableAutoDownloadingArchive
+			&& Core::DetectNameType(video->filename())
+				== Core::NameType::Archive);
 }
 
 bool VideoPreload::readyToRequest() const {

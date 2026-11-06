@@ -15,4 +15,9 @@ namespace Exteraless {
 	QTime time,
 	const QLocale &locale = QLocale());
 
+[[nodiscard]] QString FormatIdDc(
+	quint64 bareId,
+	int dcId,
+	bool enabled);
+
 } // namespace Exteraless

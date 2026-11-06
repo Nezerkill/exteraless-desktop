@@ -228,11 +228,11 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Относительное «был в сети» | `OERelativeLastSeen` | ✅ `data/data_peer_values.cpp` |
 | Время с секундами | `NekoConfig.showSeconds` | ✅ `OEGeneralShowSeconds` (NB-07), `FormatClock` в `history_view_bottom_info` и `format_values` |
 | Фильтр Zalgo | `NaConfig.zalgoFilter` | ❌ (`ui/text/*`, `data/data_messages.cpp`) |
-| Boost скачивания/загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | ❌ (`data/data_download_manager.cpp`, `mtproto/session_private.cpp`) |
+| Boost скачивания/загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | ✅ `OEChatsDownloadSpeedBoost` (NB-76, int `0..2`, default `0`) — пул сессий 1/2/4 и часть 128K/512K/1M в `storage/download_manager_mtproto.cpp`; `OEChatsUploadBoost` (NB-76, bool, default `false`) — часть отдачи до 512K при капе 1M в `storage/file_upload.cpp`; таймауты и пейсинг не менялись, CDN-слайсинг и preload/streaming остались 128K |
 | IPv6 / DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | ❌ (`mtproto/connection_*`), upstream умеет IPv6 в настройках соединения |
-| Скрыть телефон, показать ID/DC | `NekoConfig.hidePhone`, `NaConfig.idDcType` | 🟡 `OEGeneralHidePhone` (NB-37) скрывает телефон в профиле; ID/DC — в NB-09 |
-| Сортировка списка чатов | `sortByUnread`, `sortByUnmuted`, `sortByUser`, `sortByContacts` | ❌ (`dialogs/dialogs_indexed_list.cpp`) |
-| Скрыть архив, свайп-архив | `hideArchive`, `openArchiveOnPull`, `doNotUnarchiveBySwipe` | ❌/➖ (`dialogs/dialogs_widget.cpp`) |
+| Скрыть телефон, показать ID/DC | `NekoConfig.hidePhone`, `NaConfig.idDcType` | ✅ `OEGeneralHidePhone` (NB-37) скрывает телефон в профиле; `OEGeneralShowIdDc` (NB-09) показывает `id: … · DC …` в профиле контакта и своём, клик копирует `bareId`; DC — текущего аккаунта |
+| Сортировка списка чатов | `sortByUnread`, `sortByUnmuted`, `sortByUser`, `sortByContacts` | ✅ `sortByUnread` — `OEChatsSortByUnread` (NB-15, default `false`) через upstream-опцию `Dialogs::kOptionDialogsUnreadOnTop` (`dialogs/dialogs_entry.cpp`), индексный список не менялся; `sortByUnmuted`/`sortByUser`/`sortByContacts` — ❌ (`dialogs/dialogs_indexed_list.cpp`) |
+| Скрыть архив, свайп-архив | `hideArchive`, `openArchiveOnPull`, `doNotUnarchiveBySwipe` | ✅/➖ `OEChatsHideArchive` (NB-15, default `false`) прячет архив существующим skip-путём `_skipTopDialog` (`dialogs/dialogs_inner_widget.cpp`), `shouldBeInChatList` не менялся; свайп-архив (`openArchiveOnPull`, `doNotUnarchiveBySwipe`) — ➖ (`dialogs/dialogs_widget.cpp`) |
 | Папка сохранения и подпапка на чат | `customSavePath`, `saveToChatSubfolder` | 🟡/❌ (`data/data_download_manager.cpp`, `settings/sections/settings_advanced.cpp`) |
 | Bot privacy (выделенный аккаунт) | `OEGeneralBotPrivacyUserId`, `botPrivacyEnabled`, `alwaysAsk` | ❌ (`main/main_domain.cpp`, `Window::ShowAccountSelector`) |
 | Локальный premium, игнор ограничений | `localPremium`, `ignoreContentRestrictions` | ❌ (спорные по смыслу) |
@@ -247,20 +247,20 @@ Nix-сборка её содержат и у неё есть отдельные 
 |---|---|---|
 | Уже перенесено | `removeMessageTail`, `hideReactions*`, `stripTrackingOnOpen/Paste`, `unreadCapsule` | ✅ |
 | Стикеры | `stickerSize`, `stickerShape`, `stickerTimeSide`, `hideTimeForSticker` | 🟡 время на стикерах — NB-14 (`stickerTimeMode`/`hideStickerTime`); размер и форма не перенесены |
-| Ответы и цитаты | `replyColors`, `replyEmoji`, `replyBackground`, `messageColoredBackground` | ❌ (`history/view/history_view_reply.cpp`) |
+| Ответы и цитаты | `replyColors`, `replyEmoji`, `replyBackground`, `messageColoredBackground` | ✅ `OEChatsReplyColors`/`OEChatsReplyEmoji`/`OEChatsReplyBackground` (NB-70) в `history/view/history_view_reply.cpp` — тумблеры default `true` выключают окраску цитаты (при `false` как в upstream), legacy `messageColoredBackground` сводится к `replyBackground`; медиа-карточки и ручные цитаты остаются цветными осознанно |
 | Пункты меню сообщения | ~24 ключа `NekoConfig.show*`, `NaConfig.show*`, `ActionBarButton*` | ✅ 11 чекбоксов видимости `OEChatsMenu*` (NB-11), поддержаны в обоих контекстных меню сообщений |
 | Пункты меню чата | 14 ключей `NaConfig.chatMenuItem*`, `shortcuts*` | ❌ (`window/window_peer_menu.cpp`) |
 | Меню медиавьюера | 6 ключей `mediaViewerMenuItem*` | ❌ (`media/view/media_view_overlay_widget.cpp`) |
 | Группировка и порядок меню | `groupedMessageMenu`, `defaultDeleteMenu`, `textStyleOrder` | ❌ |
-| Широкие посты | `wideChannelPosts`, `wideFeedPosts` | ❌ (`history/view/history_view_message.cpp`) |
+| Широкие посты | `wideChannelPosts`, `wideFeedPosts` | ✅ `OEChatsWideChannelPosts` (NB-13) в `history/view/history_view_message.cpp`: гейт рядом с `UnlimitedMessageWidth`, только для broadcast (`isBroadcast`, megagroup отсечён), медиа не затрагиваются; `wideFeedPosts` — N/A, лент в desktop нет |
 | Дата на форварде, иконка вместо «edited» | `dateOfForwardedMsg`, `replaceEditedWithIcon`, `customEditedMessage` | ❌ (`history_view_bottom_info.cpp`) |
-| Двойной тап | `doubleTapAction`, `doubleTapActionOut` | 🟡 `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (NB-12): ничего/реакция/ответ, остальные действия — NB-91 |
-| Опросы | `showResultsBeforeVoting` | ❌ (`data/data_poll.cpp`, `history/view/media/history_view_poll.cpp`) |
+| Двойной тап | `doubleTapAction`, `doubleTapActionOut` | ✅ `OEChatsDoubleTapIn`/`OEChatsDoubleTapOut` (NB-12 + NB-91): ничего/реакция/ответ/перевод/сохранение/правка/удаление/форвард/скачивание; repeat/repeat-as-copy и LLM-перевод — N/A, значение 2 остаётся отправкой реакции (расхождение с Android) |
+| Опросы | `showResultsBeforeVoting` | ✅ `OEChatsShowResultsBeforeVoting` (NB-71) показывает результаты до голосования: `Poll::showResultsBeforeVote()` исключает admin-режим, MediaEditor, уже отданный голос, `Closed`, `HideResultsUntilClose`, `MultiChoice` и опросы без голосов, голосование сохранено; multi-choice вне объёма |
 | Inline-математика | `inlineMathResult`, `inlineMathCurrency` | ❌ (`chat_helpers/message_field.cpp`, `field_autocomplete.cpp`) |
 | Скрытие кнопок профиля/шапки | `hideGiftButtonInChannel`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton`, `hideSendAsPeer`, `hideCameraTile` | ❌ (`info/profile/*`, `history_view_top_bar_widget.cpp`, `compose_controls`) |
 | Медиа и качество | `alwaysSendInHD`, `preferOriginalQuality`, `hdrPhotos`, `doubleTapSeekDuration`, `swipeToPip`, `zoomSlider`, `staticZoom`, `enhancedVideoBitrate`, `defaultHlsVideoQuality`, `playerDecoder` | ❌/➖ (`media/view/*`, `media/streaming/*`; в upstream есть булев hwaccel) |
 | Автопауза и звук | `pauseVoice`, `pauseRound`, `autoPauseVideo`, `unmuteWithVolumeButtons`, `noiseSuppressAndVoiceEnhance`, `dontAutoPlayNextVoice` | ❌/⛔ (`media/audio/*`, `calls/*`) |
-| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ❌/🟡 |
+| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ✅/N/A по NB-86: `OEChatsHideGreetingSticker`/`OEChatsHidePanelsOnScroll` (default `false`) — гейт в `GenerateChatIntro` и `hidePanelsAnimated` в `onScroll`, алиасы `disableGreetingSticker` и `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`; `OEChatsChannelBottomButton` (0/1/2, default 1) — hide/mute, режим 2 пока показывает mute (Discuss — follow-up), алиасы `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `keepAttachButton`/`quickTransition*` — N/A, кнопки и жеста в desktop нет; остальные ключи строки в этом переносе не участвовали |
 | Камера кружков | `cameraType`, `cameraMirrorMode`, `cameraStabilization`, `extendedFps`, `alwaysSendInHD`, `hideCameraTile` | ⛔ CameraX и драйверы |
 
 ### 6.5 Ghost, удалённые и изменённые сообщения
@@ -432,7 +432,16 @@ HLS-качество по умолчанию, улучшенный битрей�
 свой битрейт аудио, MP4-документ как видео, премиум-эмодзи стикером, правила
 автоскачивания архивов и `.exe`. Desktop: субтитры в видео есть, внешних
 файлов нет; правила автоскачивания по типам есть в
-`settings/sections/settings_local_storage.cpp`; остальное отсутствует.
+`settings/sections/settings_local_storage.cpp`, а правила для архивов и `.exe`
+— ✅ NB-60: `OEChatsDisableAutoDownloadingArchive` (bool, default `false`) и
+`OEChatsBlockWin32ExecutableFiles` (bool, default `true`) гейтят
+`DocumentMedia::automaticLoad` и `VideoPreload::Can`, helper —
+`Exteraless::IsWin32Executable` (18 расширений, свой список, глобальный
+`kExecutable` не тронут); алиасы `disableAutoDownloadingArchive` и
+`Win32ExecutableFiles`, `.extera` 104 ключа, CLI 4 режима. Правила действуют
+на новые загрузки (уже скачанное не удаляется), `.exe` под Linux теперь тоже
+блокируется (раньше качался), photo-preload без имени не покрыт; остальное
+отсутствует.
 
 ### 6.18 Текст, математика, типографика
 
@@ -565,7 +574,7 @@ M-нумерацию:
 | Файлы `app/exteraless` | 268 | не считал | 269 java + 12 kotlin | ≈280 |
 | `unlimitedPinnedDialogs` | ❌ реализуемо | ⛔ лимит серверный | в 7.3.1 нет клиентского лимита пинов | ⛔ |
 | `hideDividers` | ❌ (аналог `st::dividerPaint`) | ⛔ у строк нет разделителей | `dialogs/ui/dialogs_layout.cpp` рисует строки без линии | ⛔ |
-| `sortByUnread` | P0 (средний риск) | P2 (высокий риск для индексных списков) | зависит от `dialogs/dialogs_indexed_list.cpp` | приоритет взят по первому отчёту (P0), риск — по второму (высокий); задача NB-15 |
+| `sortByUnread` | P0 (средний риск) | P2 (высокий риск для индексных списков) | зависит от `dialogs/dialogs_indexed_list.cpp` | ✅ NB-15 закрыта через upstream-опцию `dialogs-unread-on-top` (`core/application.cpp`), индексный список не менялся; риск high → S/M-lite |
 | Переводчики | ➖/⛔ дубль upstream | P2: свои провайдеры нужны | upstream умеет только серверный перевод | серверный — ➖, провайдеры — P2 |
 | Тесты | не запускались, числа из `STATUS.md` | 93 / 32 / 213 PASS | совпадает со `STATUS.md` | числа подтверждены |
 | `result/`, `nix/smoke-test.sh`, база патча | не проверялись | M7/M8/M10 | `result/` старее дерева; скрипт указывает на каталог; тег локальный | замечания отчёта 2 действительны |

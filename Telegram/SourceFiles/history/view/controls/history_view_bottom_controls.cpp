@@ -21,6 +21,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "data/notify/data_notify_settings.h"
+#include "exteraless/config.h"
 #include "history/history.h"
 #include "history/history_item_helpers.h"
 #include "history/view/controls/compose_controls_common.h"
@@ -567,10 +568,11 @@ bool BottomControls::isMuteUnmute() const {
 	if (_mode != BottomControlsMode::History) {
 		return false;
 	}
-	return (_peer->isBroadcast() && !_peer->asChannel()->canPostMessages())
-		|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer))
-		|| _peer->isRepliesChat()
-		|| _peer->isVerifyCodes();
+	return Exteraless::Config::Instance().chatsSettings().channelBottomButton != 0
+		&& ((_peer->isBroadcast() && !_peer->asChannel()->canPostMessages())
+			|| (_peer->isGigagroup() && !Data::CanSendAnything(_peer))
+			|| _peer->isRepliesChat()
+			|| _peer->isVerifyCodes());
 }
 
 bool BottomControls::isReportMessages() const {

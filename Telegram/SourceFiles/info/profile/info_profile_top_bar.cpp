@@ -47,6 +47,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "editor/photo_editor_common.h"
 #include "editor/photo_editor_layer_widget.h"
 #include "editor/video/video_editor_layer.h"
+#include "exteraless/config.h"
 #include "history/history.h"
 #include "info/info_memento.h"
 #include "info/profile/info_profile_badge.h"
@@ -1103,7 +1104,8 @@ void TopBar::setupActions(not_null<Window::SessionController*> controller) {
 		&& user
 		&& !user->sharedMediaInfo()
 		&& !user->isInaccessible()
-		&& user->callsStatus() != UserData::CallsStatus::Disabled) {
+		&& user->callsStatus() != UserData::CallsStatus::Disabled
+		&& !Exteraless::Config::Instance().hideCallButton()) {
 		const auto call = Ui::CreateChild<TopBarActionButton>(
 			this,
 			tr::lng_profile_action_short_call(tr::now),
@@ -1185,7 +1187,8 @@ void TopBar::setupActions(not_null<Window::SessionController*> controller) {
 	if (chechMax()) {
 		return;
 	}
-	if (Ui::CanSendStarGiftTo(peer)) {
+	if (!Exteraless::Config::Instance().hideGiftButton()
+		&& Ui::CanSendStarGiftTo(peer)) {
 		const auto giftButton = Ui::CreateChild<TopBarActionButton>(
 			this,
 			tr::lng_profile_action_short_gift(tr::now),

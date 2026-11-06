@@ -87,6 +87,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/moderate_messages_box.h"
 #include "boxes/premium_preview_box.h"
 #include "boxes/send_gif_with_caption_box.h"
+#include "boxes/translate_box.h"
 #include "core/crash_reports.h"
 #include "data/components/sponsored_messages.h"
 #include "data/data_session.h"
@@ -3944,6 +3945,49 @@ void ListWidget::mouseDoubleClickEvent(QMouseEvent *e) {
 			} break;
 			case Exteraless::DoubleTapAction::Reply: {
 				replyToMessageRequestNotify({ item->fullId() });
+			} break;
+			case Exteraless::DoubleTapAction::Translate: {
+				const auto text = item->originalText();
+				if (!Ui::SkipTranslate(text)) {
+					controller()->show(Box(
+						Ui::TranslateBox,
+						item->history()->peer,
+						item->id,
+						text,
+						hasCopyRestriction(item)));
+				}
+			} break;
+			case Exteraless::DoubleTapAction::Save: {
+				Window::ForwardToSelf(
+					controller()->uiShow(),
+					{ { item->fullId() } });
+			} break;
+			case Exteraless::DoubleTapAction::Edit: {
+				if (item->allowsEdit(base::unixtime::now())) {
+					editMessageRequestNotify(item->fullId());
+				}
+			} break;
+			case Exteraless::DoubleTapAction::Delete: {
+				if (item->canDelete()) {
+					controller()->show(Box<DeleteMessagesBox>(item));
+				}
+			} break;
+			case Exteraless::DoubleTapAction::Forward: {
+				if (item->allowsForward()) {
+					Window::ShowForwardMessagesBox(
+						controller(),
+						MessageIdsList{ item->fullId() });
+				}
+			} break;
+			case Exteraless::DoubleTapAction::Download: {
+				const auto media = item->media();
+				const auto document = media ? media->document() : nullptr;
+				if (document) {
+					DocumentSaveClickHandler::SaveAndTrack(
+						item->fullId(),
+						document,
+						DocumentSaveClickHandler::Mode::ToCacheOrFile);
+				}
 			} break;
 			default: break;
 			}

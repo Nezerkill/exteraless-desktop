@@ -6750,7 +6750,10 @@ int Message::resizeContentGetHeight(int newWidth) {
 		}
 	}
 	accumulate_min(contentWidth, maxWidth());
-	_bubbleWidthLimit = (UnlimitedMessageWidth.value() && !mediaDisplayed)
+	_bubbleWidthLimit = ((UnlimitedMessageWidth.value()
+		|| (Exteraless::Config::Instance().chatsSettings().wideChannelPosts
+			&& item->history()->peer->isBroadcast()))
+		&& !mediaDisplayed)
 		? 0x3FFFFFF
 		: std::max({
 			st::msgMaxWidth,

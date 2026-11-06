@@ -14,6 +14,7 @@
 #include "exteraless/plugins/installer.h"
 #include "exteraless/proxy_rules.h"
 #include "exteraless/save_path.h"
+#include "exteraless/zalgo.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -47,6 +48,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli config-reset\n"
 		<< "  exteraless-chats-cli general\n"
 		<< "  exteraless-chats-cli general-set <0|1> [<showSeconds:0|1>]\n"
+		<< "  exteraless-chats-cli id-dc\n"
+		<< "  exteraless-chats-cli id-dc-set <0|1>\n"
+		<< "  exteraless-chats-cli id-dc-format <bareId> <dc> <0|1>\n"
 		<< "  exteraless-chats-cli clock <hh> <mm> <ss> <0|1> [<locale>]\n"
 		<< "  exteraless-chats-cli message-menu\n"
 		<< "  exteraless-chats-cli message-menu-set <reply> <edit> <pin> "
@@ -81,6 +85,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli pangu-set <0|1>\n"
 		<< "  exteraless-chats-cli pangu-apply <text>\n"
 		<< "  exteraless-chats-cli pangu-tags <text> <offset> <length>\n"
+		<< "  exteraless-chats-cli zalgo\n"
+		<< "  exteraless-chats-cli zalgo-set <0|1>\n"
+		<< "  exteraless-chats-cli zalgo-apply <text>\n"
+		<< "  exteraless-chats-cli zalgo-tags <text> <offset> <length>\n"
 		<< "  exteraless-chats-cli silent\n"
 		<< "  exteraless-chats-cli silent-set <0|1>\n"
 		<< "  exteraless-chats-cli settings-sections\n"
@@ -92,8 +100,34 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli disable-link-preview-set <0|1>\n"
 		<< "  exteraless-chats-cli hide-all-chats\n"
 		<< "  exteraless-chats-cli hide-all-chats-set <0|1>\n"
+		<< "  exteraless-chats-cli hide-archive\n"
+		<< "  exteraless-chats-cli hide-archive-set <0|1>\n"
+		<< "  exteraless-chats-cli autodownload-archive\n"
+		<< "  exteraless-chats-cli autodownload-archive-set <0|1>\n"
+		<< "  exteraless-chats-cli win32-exe\n"
+		<< "  exteraless-chats-cli win32-exe-set <0|1>\n"
+		<< "  exteraless-chats-cli greeting-sticker\n"
+		<< "  exteraless-chats-cli greeting-sticker-set <0|1>\n"
+		<< "  exteraless-chats-cli panels-on-scroll\n"
+		<< "  exteraless-chats-cli panels-on-scroll-set <0|1>\n"
+		<< "  exteraless-chats-cli channel-bottom-button\n"
+		<< "  exteraless-chats-cli channel-bottom-button-set <0..2>\n"
+		<< "  exteraless-chats-cli download-boost\n"
+		<< "  exteraless-chats-cli download-boost-set <0..2>\n"
+		<< "  exteraless-chats-cli upload-boost\n"
+		<< "  exteraless-chats-cli upload-boost-set <0|1>\n"
+		<< "  exteraless-chats-cli wide-posts\n"
+		<< "  exteraless-chats-cli wide-posts-set <0|1>\n"
+		<< "  exteraless-chats-cli sort-unread\n"
+		<< "  exteraless-chats-cli sort-unread-set <0|1>\n"
+		<< "  exteraless-chats-cli archive-skip <inMainMenu> <hideArchive>\n"
 		<< "  exteraless-chats-cli always-show-download\n"
 		<< "  exteraless-chats-cli always-show-download-set <0|1>\n"
+		<< "  exteraless-chats-cli show-results-before-voting\n"
+		<< "  exteraless-chats-cli show-results-before-voting-set <0|1>\n"
+		<< "  exteraless-chats-cli reply-style\n"
+		<< "  exteraless-chats-cli reply-style-set <colors> <emoji> "
+		<< "<background>\n"
 		<< "  exteraless-chats-cli false-bottom\n"
 		<< "  exteraless-chats-cli false-bottom-set <0|1>\n"
 		<< "  exteraless-chats-cli decoration\n"
@@ -116,6 +150,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli edited-mark-set <icon> <mark>\n"
 		<< "  exteraless-chats-cli seek-duration\n"
 		<< "  exteraless-chats-cli seek-duration-set <seconds>\n"
+		<< "  exteraless-chats-cli sticker-size\n"
+		<< "  exteraless-chats-cli sticker-size-set <4..20>\n"
+		<< "  exteraless-chats-cli sticker-shape\n"
+		<< "  exteraless-chats-cli sticker-shape-set <0..2>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
 		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -125,6 +163,11 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli math-eval <expression>\n"
 		<< "  exteraless-chats-cli send-as\n"
 		<< "  exteraless-chats-cli send-as-set <0|1>\n"
+		<< "  exteraless-chats-cli profile-buttons\n"
+		<< "  exteraless-chats-cli profile-buttons-set <gift> <call> "
+		<< "<search>\n"
+		<< "  exteraless-chats-cli storiesheader\n"
+		<< "  exteraless-chats-cli storiesheader-set <0|1>\n"
 		<< "  exteraless-chats-cli plugin-filename <name>\n"
 		<< "  exteraless-chats-cli plugin-install <source> <directory>\n"
 		<< "  exteraless-chats-cli plugin-delete <directory> <file>\n"
@@ -315,8 +358,24 @@ void PrintStickerTime() {
 		return QStringLiteral("none");
 	case Exteraless::DoubleTapAction::SendReaction:
 		return QStringLiteral("reaction");
+	case Exteraless::DoubleTapAction::Translate:
+		return QStringLiteral("translate");
 	case Exteraless::DoubleTapAction::Reply:
 		return QStringLiteral("reply");
+	case Exteraless::DoubleTapAction::Save:
+		return QStringLiteral("save");
+	case Exteraless::DoubleTapAction::Repeat:
+		return QStringLiteral("repeat");
+	case Exteraless::DoubleTapAction::RepeatAsCopy:
+		return QStringLiteral("repeatcopy");
+	case Exteraless::DoubleTapAction::Edit:
+		return QStringLiteral("edit");
+	case Exteraless::DoubleTapAction::Delete:
+		return QStringLiteral("delete");
+	case Exteraless::DoubleTapAction::Forward:
+		return QStringLiteral("forward");
+	case Exteraless::DoubleTapAction::Download:
+		return QStringLiteral("download");
 	default:
 		break;
 	}
@@ -466,6 +525,56 @@ int main(int argc, char *argv[]) {
 		PrintGeneral();
 		return 0;
 	}
+	if (mode == QStringLiteral("id-dc")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("showIdDc"),
+				Exteraless::Config::Instance().showIdDc() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("id-dc-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setShowIdDc(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("showIdDc"),
+				Exteraless::Config::Instance().showIdDc() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("id-dc-format")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto bareId = arguments[2].toULongLong(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		const auto dcId = arguments[3].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		auto enabled = false;
+		if (!ReadFlag(arguments[4], &enabled)) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::FormatIdDc(
+				bareId,
+				dcId,
+				enabled).toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
 	if (mode == QStringLiteral("clock")) {
 		if (arguments.size() != 6 && arguments.size() != 7) {
 			return PrintUsage();
@@ -597,6 +706,268 @@ int main(int argc, char *argv[]) {
 		std::cout << (value ? "1" : "0") << '\n';
 		return 0;
 	}
+	if (mode == QStringLiteral("hide-archive")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance().chatsSettings().hideArchive },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("hide-archive-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsHideArchive(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("autodownload-archive")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("disabled"),
+				Exteraless::Config::Instance()
+					.chatsSettings().disableAutoDownloadingArchive },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("autodownload-archive-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setDisableAutoDownloadingArchive(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("win32-exe")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("blocked"),
+				Exteraless::Config::Instance()
+					.chatsSettings().blockWin32Executables },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("win32-exe-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setBlockWin32Executables(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("greeting-sticker")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hideGreetingSticker },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("greeting-sticker-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsHideGreetingSticker(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hideGreetingSticker },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("panels-on-scroll")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hidePanelsOnScroll },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("panels-on-scroll-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsHidePanelsOnScroll(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("hidden"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hidePanelsOnScroll },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("channel-bottom-button")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("mode"),
+				Exteraless::Config::Instance()
+					.chatsSettings().channelBottomButton },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("channel-bottom-button-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok || value < 0 || value > 2) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsChannelBottomButton(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("mode"),
+				Exteraless::Config::Instance()
+					.chatsSettings().channelBottomButton },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("download-boost")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("mode"),
+				Exteraless::Config::Instance()
+					.chatsSettings().downloadSpeedBoost },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("download-boost-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsDownloadSpeedBoost(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("mode"),
+				Exteraless::Config::Instance()
+					.chatsSettings().downloadSpeedBoost },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("upload-boost")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance()
+					.chatsSettings().uploadBoost },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("upload-boost-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsUploadBoost(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("wide-posts")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("wideChannelPosts"),
+				Exteraless::Config::Instance()
+					.chatsSettings().wideChannelPosts },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("wide-posts-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsWideChannelPosts(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("sort-unread")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("sorted"),
+				Exteraless::Config::Instance().chatsSettings().sortByUnread },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("sort-unread-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsSortByUnread(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("archive-skip")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto inMainMenu = false;
+		auto hideArchive = false;
+		if (!ReadFlag(arguments[2], &inMainMenu)
+			|| !ReadFlag(arguments[3], &hideArchive)) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("skip"),
+				Exteraless::ArchiveRowSkipped(inMainMenu, hideArchive) },
+		});
+		return 0;
+	}
 	if (mode == QStringLiteral("always-show-download")) {
 		if (arguments.size() != 2) {
 			return PrintUsage();
@@ -617,6 +988,62 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setAlwaysShowDownloadIcon(value);
 		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("show-results-before-voting")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance()
+					.showResultsBeforeVoting() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("show-results-before-voting-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setShowResultsBeforeVoting(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("reply-style")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("colors"), config.replyColors() },
+			{ QStringLiteral("emoji"), config.replyEmoji() },
+			{ QStringLiteral("background"), config.replyBackground() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("reply-style-set")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 3>();
+		for (auto i = 0; i != 3; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setChatsReplyColors(flags[0]);
+		config.setChatsReplyEmoji(flags[1]);
+		config.setChatsReplyBackground(flags[2]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("colors"), config.replyColors() },
+			{ QStringLiteral("emoji"), config.replyEmoji() },
+			{ QStringLiteral("background"), config.replyBackground() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("false-bottom")) {
@@ -900,6 +1327,58 @@ int main(int argc, char *argv[]) {
 		});
 		return 0;
 	}
+	if (mode == QStringLiteral("sticker-size")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("stickerSize"),
+				Exteraless::Config::Instance().stickerSize() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("sticker-size-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setStickerSize(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("stickerSize"),
+				Exteraless::Config::Instance().stickerSize() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("sticker-shape")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("stickerShape"),
+				Exteraless::Config::Instance().stickerShape() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("sticker-shape-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setStickerShape(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("stickerShape"),
+				Exteraless::Config::Instance().stickerShape() },
+		});
+		return 0;
+	}
 	if (mode == QStringLiteral("save-subfolder")) {
 		if (arguments.size() != 2) {
 			return PrintUsage();
@@ -995,6 +1474,68 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setHideSendAsPeer(value);
 		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("profile-buttons")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		PrintJson(QJsonObject{
+			{ QStringLiteral("gift"), config.hideGiftButton() },
+			{ QStringLiteral("call"), config.hideCallButton() },
+			{ QStringLiteral("search"),
+				config.hideChannelSearchButton() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("profile-buttons-set")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto flags = std::array<bool, 3>();
+		for (auto i = 0; i != 3; ++i) {
+			if (!ReadFlag(arguments[2 + i], &flags[i])) {
+				return PrintUsage();
+			}
+		}
+		auto &config = Exteraless::Config::Instance();
+		config.setHideGiftButton(flags[0]);
+		config.setHideCallButton(flags[1]);
+		config.setHideChannelSearchButton(flags[2]);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("gift"), config.hideGiftButton() },
+			{ QStringLiteral("call"), config.hideCallButton() },
+			{ QStringLiteral("search"),
+				config.hideChannelSearchButton() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("storiesheader")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("storiesHeader"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hideStoriesHeader },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("storiesheader-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setChatsHideStoriesHeader(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("storiesHeader"),
+				Exteraless::Config::Instance()
+					.chatsSettings().hideStoriesHeader },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("plugin-filename")) {
@@ -1155,6 +1696,63 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("offset"), pangu.map[from] },
 			{ QStringLiteral("length"),
 				pangu.map[to] - pangu.map[from] },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("zalgo")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("zalgoFilter"),
+				Exteraless::Config::Instance().zalgoFilter() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("zalgo-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setZalgoFilter(value);
+		std::cout << (value ? "1" : "0") << '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("zalgo-apply")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		std::cout
+			<< Exteraless::ApplyZalgoFilter(arguments[2])
+				.toUtf8().constData()
+			<< '\n';
+		return 0;
+	}
+	if (mode == QStringLiteral("zalgo-tags")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto offset = arguments[3].toInt(&ok);
+		if (!ok || offset < 0) {
+			return PrintUsage();
+		}
+		const auto length = arguments[4].toInt(&ok);
+		if (!ok || length < 0) {
+			return PrintUsage();
+		}
+		const auto &text = arguments[2];
+		const auto zalgo = Exteraless::ApplyZalgoFilterWithMap(text);
+		const auto from = std::clamp(offset, 0, int(text.size()));
+		const auto to = std::clamp(offset + length, from, int(text.size()));
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"), zalgo.text },
+			{ QStringLiteral("offset"), zalgo.map[from] },
+			{ QStringLiteral("length"),
+				zalgo.map[to] - zalgo.map[from] },
 		});
 		return 0;
 	}
