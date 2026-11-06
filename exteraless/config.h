@@ -300,6 +300,13 @@ public:
 	[[nodiscard]] int translationDeepLFormality() const;
 	void setTranslationDeepLFormality(int value);
 
+	[[nodiscard]] QString aiEndpoint() const;
+	void setAiEndpoint(const QString &value);
+	[[nodiscard]] QString aiModel() const;
+	void setAiModel(const QString &value);
+	[[nodiscard]] QString aiApiKey() const;
+	void setAiApiKey(const QString &value);
+
 	[[nodiscard]] bool pluginEnabled(const QString &id) const;
 	void setPluginEnabled(const QString &id, bool enabled);
 	[[nodiscard]] QJsonObject pluginStates() const;

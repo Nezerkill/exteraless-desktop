@@ -164,6 +164,9 @@ constexpr auto kTranslationProvider = "OETranslationProvider";
 constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
 constexpr auto kTranslationDeepLKey = "OETranslationDeepLKey";
 constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
+constexpr auto kAiEndpoint = "OEAiEndpoint";
+constexpr auto kAiModel = "OEAiModel";
+constexpr auto kAiApiKey = "OEAiApiKey";
 
 [[nodiscard]] int SanitizeAudioBitrate(int value) {
 	switch (value) {
@@ -1282,6 +1285,32 @@ void Config::setTranslationDeepLFormality(int value) {
 	setValue(kTranslationDeepLFormality, std::clamp(value, 0, 2));
 }
 
+QString Config::aiEndpoint() const {
+	return stringValue(
+		kAiEndpoint,
+		QStringLiteral("https://api.openai.com/v1"));
+}
+
+void Config::setAiEndpoint(const QString &value) {
+	setValue(kAiEndpoint, value);
+}
+
+QString Config::aiModel() const {
+	return stringValue(kAiModel, QStringLiteral("gpt-4o-mini"));
+}
+
+void Config::setAiModel(const QString &value) {
+	setValue(kAiModel, value);
+}
+
+QString Config::aiApiKey() const {
+	return stringValue(kAiApiKey, QString());
+}
+
+void Config::setAiApiKey(const QString &value) {
+	setValue(kAiApiKey, value);
+}
+
 bool Config::pluginEnabled(const QString &id) const {
 	if (!IsValidPluginId(id)) {
 		return false;
@@ -1466,7 +1495,10 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kTranslationProvider
 			|| key == kTranslationGoogleCloudKey
 			|| key == kTranslationDeepLKey
-			|| key == kTranslationDeepLFormality) {
+			|| key == kTranslationDeepLFormality
+			|| key == kAiEndpoint
+			|| key == kAiModel
+			|| key == kAiApiKey) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
 			unknown->push_back(key);

@@ -446,6 +446,8 @@ PRIVATE
     boxes/stickers_box.h
     boxes/transfer_gift_box.cpp
     boxes/transfer_gift_box.h
+    boxes/ai_request_box.cpp
+    boxes/ai_request_box.h
     boxes/compose_ai_box.cpp
     boxes/compose_ai_box.h
     boxes/create_ai_box.cpp

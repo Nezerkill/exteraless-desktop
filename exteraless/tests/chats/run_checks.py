@@ -621,7 +621,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 122,
+            len(section) == 124,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -642,7 +642,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 127,
+            sum(len(value) for value in exported.values()) == 129,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -662,7 +662,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 127,
+                data.get("applied") == 129,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -820,6 +820,8 @@ def check_backup(ledger, cli, work):
             "OEGeneralPersianCalendarLatin": True,
             "OETranslationProvider": 2,
             "OETranslationDeepLFormality": 1,
+            "OEAiEndpoint": "https://full.test/v1",
+            "OEAiModel": "full-model",
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -841,7 +843,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 127,
+            data.get("applied") == 129,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1135,10 +1137,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 122",
+            "backup legacy eight completed to 124",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (122, 3, 2),
+             len(sections["mainconfig"])) == (124, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6516,6 +6518,149 @@ def check_translation(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ai(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "ai-defaults")
+    data = json_call(ledger, cli, ["ai-config"], env, "ai config defaults")
+    if data is not None:
+        ledger.check(
+            "ai endpoint default",
+            data.get("endpoint") == "https://api.openai.com/v1",
+            data)
+        ledger.check(
+            "ai model default",
+            data.get("model") == "gpt-4o-mini",
+            data)
+        ledger.check(
+            "ai key default absent",
+            data.get("hasKey") is False,
+            data)
+
+    data = json_call(
+        ledger, cli, ["ai-config-set-endpoint", "https://example.test/v1"],
+        env, "ai endpoint set")
+    if data is not None:
+        ledger.check(
+            "ai endpoint set",
+            data.get("endpoint") == "https://example.test/v1",
+            data)
+    data = json_call(
+        ledger, cli, ["ai-config-set-model", "test-model"], env,
+        "ai model set")
+    if data is not None:
+        ledger.check("ai model set", data.get("model") == "test-model", data)
+    ai_key = "sk-test-0123456789abcdef"
+    data = json_call(
+        ledger, cli, ["ai-config-set-key", ai_key], env, "ai key set")
+    if data is not None:
+        ledger.check("ai key set has key", data.get("hasKey") is True, data)
+        ledger.check(
+            "ai key not printed",
+            ai_key not in json.dumps(data),
+            "secret found in ai config output")
+    reloaded = json_call(ledger, cli, ["ai-config"], env, "ai config reload")
+    if reloaded is not None:
+        ledger.check(
+            "ai config persisted",
+            reloaded.get("endpoint") == "https://example.test/v1"
+            and reloaded.get("model") == "test-model"
+            and reloaded.get("hasKey") is True,
+            reloaded)
+        ledger.check(
+            "ai config reload not leaked",
+            ai_key not in json.dumps(reloaded),
+            reloaded)
+
+    prompt = "Hello from checks"
+    data = json_call(
+        ledger, cli, ["ai-request-json", prompt], env, "ai request json")
+    if data is not None:
+        messages = data.get("messages")
+        ledger.check(
+            "ai request model",
+            data.get("model") == "test-model",
+            data)
+        ledger.check(
+            "ai request user message",
+            isinstance(messages, list) and len(messages) == 1
+            and messages[0].get("role") == "user"
+            and messages[0].get("content") == prompt,
+            messages)
+        ledger.check(
+            "ai request not streaming",
+            data.get("stream") is False,
+            data)
+        ledger.check(
+            "ai request has no secret",
+            ai_key not in json.dumps(data),
+            "secret found in request body")
+
+    data = json_call(
+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"],
+        env, "ai export")
+    if data is not None:
+        section = backup_sections(data)["exteraconfig"]
+        ledger.check(
+            "ai export endpoint",
+            section.get("OEAiEndpoint") == "https://example.test/v1",
+            section.get("OEAiEndpoint"))
+        ledger.check(
+            "ai export model",
+            section.get("OEAiModel") == "test-model",
+            section.get("OEAiModel"))
+        ledger.check(
+            "ai export has no key",
+            "OEAiApiKey" not in section,
+            sorted(section))
+        ledger.check(
+            "ai export leaks no key material",
+            ai_key not in json.dumps(data),
+            "secret found in backup export")
+
+    env = make_env(work / "ai-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "aiEndpoint": "https://alias.test/v1",
+            "aiModel": "alias-model",
+            "aiApiKey": ai_key,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ai alias import")
+    if data is not None:
+        ledger.check(
+            "ai alias applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(ledger, cli, ["ai-config"], env, "ai alias reload")
+    if reloaded is not None:
+        ledger.check(
+            "ai alias values",
+            reloaded.get("endpoint") == "https://alias.test/v1"
+            and reloaded.get("model") == "alias-model"
+            and reloaded.get("hasKey") is True,
+            reloaded)
+
+    for name, arguments in [
+            ("ai endpoint set without value", ["ai-config-set-endpoint"]),
+            ("ai model set without value", ["ai-config-set-model"]),
+            ("ai key set without value", ["ai-config-set-key"]),
+            ("ai request without prompt", ["ai-request-json"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -6585,6 +6730,7 @@ def main():
         media_quality = check_media_quality(ledger, cli, work)
         update_channel = check_update_channel(ledger, cli, work)
         translation = check_translation(ledger, cli, work)
+        ai = check_ai(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
@@ -6660,6 +6806,7 @@ def main():
     print(f"update-channel: "
           f"{update_channel[0] - update_channel[1]} passed")
     print(f"translation: {translation[0] - translation[1]} passed")
+    print(f"ai: {ai[0] - ai[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")

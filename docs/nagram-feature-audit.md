@@ -153,6 +153,7 @@ A–F. Это одно и то же деление, и ниже использу
 | 16 | `.extera` backup | — | `exteraless/backup.cpp` (25 ключей в трёх секциях, invisible-Unicode envelope) | ✅ 25 из 25 desktop-ключей |
 | 17 | Брендинг | — | `core/launcher.cpp`, `boxes/about_box.cpp`, `core/version.h`, `Telegram/build/version` | ✅ |
 | 18 | WEB proxy | — | `mtproto/web_proxy/*` (6 файлов) + `mtproto/details/mtproto_web_proxy_socket.{h,cpp}`, ~3.1k строк; UI в `boxes/connection_box.cpp`, статус в `core/application.cpp` | 🟡 код есть и компилируется, серверная часть (`tproxy-server`) не развёрнута |
+| 19 | AI-ассистент (MVP) | `OEAiEndpoint`, `OEAiModel`, `OEAiApiKey` | `exteraless/ai_client.{h,cpp}` (сборка запроса без сети), `boxes/ai_request_box.{h,cpp}`, пункт «Ask AI» в `history/view/history_view_context_menu.cpp` | ✅ NB-48, с оговорками: бокс запрос→ответ без стриминга, ролей и истории |
 
 Пункт 18 — desktop-only подсистема: её нет в Android-реестре и её не
 упоминают `docs/feature-mapping.md`, `README.md` или `STATUS.md`, хотя код и
@@ -179,8 +180,8 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Chats и меню | `ChatsConfig` (50) + `NekoConfig`/`NaConfig` | ~120 | 🟡 6 реализовано |
 | Ghost / deleted / edits (Ayu) | `NekoConfig`, `NaConfig`, `com/radolyn/ayugram/*` | ~50 | 🟡 6 частично |
 | Прокси и сеть | `OEProxy*`, `NekoConfig` (DNS/IPv6) | ~10 | ✅ базово, ❌ DoH/IPv6 |
-| Перевод и LLM | `NekoConfig`, `tw/nekomimi/nekogram/{translate,llm}` | ~55 | ➖ серверный перевод, 🟡 провайдеры Google/DeepL ✅ NB-49, LLM ❌ (NB-48); ключи plaintext без consent'а |
-| AI-ассистент | `AiConfig`, `app/exteraless/ai/*` | 13 ключей + UI | ❌ (upstream AI — другой продукт) |
+| Перевод и LLM | `NekoConfig`, `tw/nekomimi/nekogram/{translate,llm}` | ~55 | ➖ серверный перевод, 🟡 провайдеры Google/DeepL ✅ NB-49, LLM ✅ NB-48 только как ассистент (бокс запрос→ответ; LLM-переводчик, пресеты и стриминг — ❌); ключи plaintext без consent'а |
+| AI-ассистент | `AiConfig`, `app/exteraless/ai/*` | 13 ключей + UI | ✅ NB-48, с оговорками: MVP — `OEAiEndpoint`/`OEAiModel`/`OEAiApiKey` (алиасы `aiEndpoint`/`aiModel`/`aiApiKey`), OpenAI-совместимый `exteraless/ai_client.{h,cpp}` без сети, бокс «Ask AI» (`boxes/ai_request_box.{h,cpp}`), CLI 5 режимов; ❌ не сделаны роли и промпты (`KEY_ROLES`), история (`KEY_HISTORY`), стриминг, вставка ответа цитатой, замена редактора и саммари; ключ plaintext в `tdata/exteraless.json`, текст уходит на произвольный endpoint без consent'а в UI |
 | Feed (лента каналов) | `app/exteraless/feed/*` (14 файлов), `FeedConfig` | 4 ключа на аккаунт | ❌ не начато |
 | Cloud settings | `OpenExteraCloudActivity`, `CloudSettingsHelper` | 4 ключа | ❌ |
 | Pill Stack | `PillStackConfig`, `app/exteraless/pillstack/*` | 15 типов пилюль | ✅ 8 из 15 |
@@ -324,10 +325,33 @@ JSON-sidecar `tdata/exteraless/deleted_messages.json` версии 2 с 17 по�
 
 Собственный AI (не Telegram AI): `AiConfig` с сервисами `endpoint`+`model`+`key`,
 роли и промпты, локальная история, стриминг, вставка ответа цитатой,
-замена Telegram-редактора и саммари. В desktop отсутствует; upstream имеет
-`boxes/compose_ai_box.cpp` и `api/api_compose_with_ai.cpp` — это другой
-продукт (Telegram AI), а не пользовательские провайдеры. Ключи скрытия
-AI-кнопок (`OEAppearanceHideAi*`) тоже не портированы.
+замена Telegram-редактора и саммари.
+
+✅ NB-48, MVP 2026-11-06, с оговорками: `OEAiEndpoint` (строка, default
+`https://api.openai.com/v1`), `OEAiModel` (строка, default `gpt-4o-mini`) и
+`OEAiApiKey` (строка, default пусто; секрет — в `.extera`/бэкап не
+экспортируется, импорт принимает и `aiApiKey`), алиасы `aiEndpoint`/`aiModel`/
+`aiApiKey`; запрос собирает Qt-only модуль `exteraless/ai_client.{h,cpp}`
+(`ChatCompletionsUrl`, `BuildRequestJson` с `stream: false`, `ParseResponse`
+по `choices[].message.content`), сети он не делает; в контекстном меню
+текстовых сообщений пункт «Ask AI» открывает `Ui::AiRequestBox`
+(`boxes/ai_request_box.{h,cpp}`) — поле запроса, ответ, Send/Copy/Close,
+ключ читается при отправке, пустой даёт тост; сеть живёт только в боксе
+(`QNetworkAccessManager`). CLI `exteraless-chats-cli` — 5 режимов
+(`ai-config`, `ai-config-set-endpoint`, `ai-config-set-model`,
+`ai-config-set-key`, `ai-request-json`), ключ в выводе не печатается;
+`check_ai` — 23 проверки, раннеры 891/32/213 PASS.
+
+Не сделано (follow-up): стриминг и SSE, роли/промпты (`KEY_ROLES`),
+локальная история (`KEY_HISTORY`), вставка ответа цитатой, замена
+Telegram-редактора, саммари. Ограничения: ключ лежит plaintext в
+`tdata/exteraless.json` (маскировка в UI/CLI и no-export, OS-keychain нет),
+текст сообщения уходит на произвольный endpoint без consent'а в UI, запрос
+идёт мимо прокси Telegram (свой `QNetworkAccessManager`), Xvfb-смоук не
+выполнялся. Upstream имеет `boxes/compose_ai_box.cpp` и
+`api/api_compose_with_ai.cpp` — это другой продукт (Telegram AI), а не
+пользовательские провайдеры. Ключи скрытия AI-кнопок
+(`OEAppearanceHideAi*`) не портированы.
 
 ### 6.9 Feed
 

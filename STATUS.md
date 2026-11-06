@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 868 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 891 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,11 +111,41 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  19 update-channel, 32 translation, 10 download-boost,
+  19 update-channel, 32 translation, 23 ai, 10 download-boost,
   48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   101 backup);
   плагины без изменений — 32 и 213 проверок.
+- AI-ассистент, MVP (NB-48): `OEAiEndpoint` (строка, default
+  `https://api.openai.com/v1`), `OEAiModel` (строка, default `gpt-4o-mini`) и
+  `OEAiApiKey` (строка, default пусто; секрет — в `.extera`/бэкап не
+  экспортируется, импорт принимает и `aiApiKey`) задают провайдера, алиасы
+  `aiEndpoint`/`aiModel`/`aiApiKey`. Запрос собирает Qt-only модуль
+  `exteraless/ai_client.{h,cpp}`: `ChatCompletionsUrl` дописывает
+  `/chat/completions` (пустой endpoint → OpenAI-адрес), `BuildRequestJson`
+  даёт OpenAI-совместимое тело (`model`, `messages` с `user` и необязательным
+  `system`, `stream: false`), `ParseResponse` берёт первый непустой
+  `choices[].message.content` и текст ошибки из `error.message`/`error.type`;
+  сети модуль не делает. В Exteraless Chats пункт «AI assistant» открывает
+  бокс с полями Endpoint, Model и маскированным полем ключа
+  (`CloudPassword::AddPasswordField`), четыре lang-ключа
+  `lng_settings_exteraless_ai*`; в контекстном меню текстовых сообщений пункт
+  «Ask AI» открывает `Ui::AiRequestBox` (`boxes/ai_request_box.{h,cpp}`) —
+  поле запроса, строка ответа и кнопки Send/Copy/Close, ключ читается при
+  каждой отправке (пустой → тост, запрос не уходит), сеть только здесь (свой
+  `QNetworkAccessManager`). CLI 5 режимов (`ai-config`,
+  `ai-config-set-endpoint`, `ai-config-set-model`, `ai-config-set-key`,
+  `ai-request-json`), ключ в выводе не печатается (только `hasKey`);
+  `check_ai` — 23 проверки, группа `cli` не росла (61; счётчик выше 891,
+  backup 101, плагины 32 и 213 без изменений); `.extera` — 129 ключей
+  (124 + 3 + 2, сверено с legacy-кортежем `run_checks`); `kKeysCount` 11220
+  (`kTagsCount` 185); sha256 патча `8e87990a…`, `nix flake check` PASS.
+  Ограничения: ключ лежит открытым текстом в `tdata/exteraless.json` —
+  только маскировка в UI/CLI и исключение из экспорта, OS-keychain нет; текст
+  сообщения уходит на произвольный endpoint без согласия в UI; запрос идёт
+  мимо прокси Telegram (свой `QNetworkAccessManager`); Xvfb-смоук не
+  выполнялся. Follow-up: стриминг, роли/промпты, локальная история, вставка
+  ответа цитатой, замена редактора и саммари не сделаны.
 - Провайдеры перевода (NB-49): `OETranslationProvider` (int `0..3`, default
   `0`: `0` — auto/upstream, `1` — Google, `2` — DeepL, `3` зарезервирован под
   LLM из NB-48) выбирает провайдера, `OETranslationGoogleCloudKey` и
@@ -981,7 +1011,8 @@
 
 ### После MVP
 
-- [ ] AI-клиент.
+- [x] AI-клиент: MVP (NB-48) — endpoint/model/key и бокс запрос→ответ;
+  стриминг, роли, история, замена редактора и саммари — follow-up.
 - [ ] Feed.
 - [ ] Плеер и now playing/MPRIS.
 - [ ] Иконпаки.

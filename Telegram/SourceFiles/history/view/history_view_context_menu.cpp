@@ -72,6 +72,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/boxes/show_or_premium_box.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/power_saving.h"
+#include "boxes/ai_request_box.h"
 #include "boxes/delete_messages_box.h"
 #include "boxes/moderate_messages_box.h"
 #include "boxes/report_messages_box.h"
@@ -1957,6 +1958,14 @@ void FillContextMenuItems(
 							list->hasCopyRestriction(view->data())));
 					}
 				}, &st::menuIconTranslate);
+			}
+			if (item->isRegular() && !translate.text.isEmpty()) {
+				const auto prompt = translate.text;
+				result->addAction(u"Ask AI"_q, [=] {
+					list->controller()->show(Box(
+						Ui::AiRequestBox,
+						prompt));
+				}, &st::menuIconSearch);
 			}
 		}
 	}

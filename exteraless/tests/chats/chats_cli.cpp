@@ -1,3 +1,4 @@
+#include "exteraless/ai_client.h"
 #include "exteraless/backup.h"
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
@@ -178,6 +179,11 @@ using Exteraless::ChatsSettings;
 		<< "<key>\n"
 		<< "  exteraless-chats-cli translation-formality\n"
 		<< "  exteraless-chats-cli translation-formality-set <0..2>\n"
+		<< "  exteraless-chats-cli ai-config\n"
+		<< "  exteraless-chats-cli ai-config-set-endpoint <url>\n"
+		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
+		<< "  exteraless-chats-cli ai-config-set-key <key>\n"
+		<< "  exteraless-chats-cli ai-request-json <prompt>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli sender-mini-avatars\n"
@@ -329,6 +335,15 @@ void PrintTranslationFormality() {
 	PrintJson(QJsonObject{
 		{ QStringLiteral("formality"),
 			Exteraless::Config::Instance().translationDeepLFormality() },
+	});
+}
+
+void PrintAiConfig() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("endpoint"), config.aiEndpoint() },
+		{ QStringLiteral("model"), config.aiModel() },
+		{ QStringLiteral("hasKey"), !config.aiApiKey().isEmpty() },
 	});
 }
 
@@ -1638,6 +1653,49 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setTranslationDeepLFormality(value);
 		PrintTranslationFormality();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-config")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintAiConfig();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-config-set-endpoint")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiEndpoint(arguments[2]);
+		PrintAiConfig();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-config-set-model")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiModel(arguments[2]);
+		PrintAiConfig();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-config-set-key")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiApiKey(arguments[2]);
+		PrintAiConfig();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-request-json")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto &config = Exteraless::Config::Instance();
+		const auto body = Exteraless::BuildRequestJson(
+			config.aiEndpoint(),
+			config.aiModel(),
+			Exteraless::AiRequest{ .prompt = arguments[2] });
+		PrintJson(QJsonDocument::fromJson(body).object());
 		return 0;
 	}
 	if (mode == QStringLiteral("forward-date")) {

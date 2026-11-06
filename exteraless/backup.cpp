@@ -278,6 +278,12 @@ constexpr auto kTranslationProviderAlias = "translationProvider";
 constexpr auto kTranslationGoogleCloudKeyAlias = "googleCloudTranslateKey";
 constexpr auto kTranslationDeepLKeyAlias = "deepLTranslateKey";
 constexpr auto kTranslationDeepLFormalityAlias = "deepLFormality";
+constexpr auto kAiEndpoint = "OEAiEndpoint";
+constexpr auto kAiModel = "OEAiModel";
+constexpr auto kAiApiKey = "OEAiApiKey";
+constexpr auto kAiEndpointAlias = "aiEndpoint";
+constexpr auto kAiModelAlias = "aiModel";
+constexpr auto kAiApiKeyAlias = "aiApiKey";
 
 constexpr auto kShowCopyPhotoButton = "showCopyPhotoButton";
 constexpr auto kShowReportButton = "showReportButton";
@@ -539,6 +545,8 @@ QString BuildBackup() {
 	extera[kShowFormattingButtons] = config.showFormattingButtons();
 	extera[kTranslationProvider] = config.translationProvider();
 	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
+	extera[kAiEndpoint] = config.aiEndpoint();
+	extera[kAiModel] = config.aiModel();
 
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
@@ -1127,6 +1135,16 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kTranslationDeepLKeyAlias)
 			&& value.isString()) {
 			config.setTranslationDeepLKey(value.toString());
+		} else if ((key == kAiEndpoint || key == kAiEndpointAlias)
+			&& value.isString()) {
+			config.setAiEndpoint(value.toString());
+		} else if ((key == kAiModel || key == kAiModelAlias)
+			&& value.isString()) {
+			config.setAiModel(value.toString());
+		} else if ((key == kAiApiKey || key == kAiApiKeyAlias)
+			&& value.isString()) {
+			// WHY: old backups carry the secret; import accepts, export omits.
+			config.setAiApiKey(value.toString());
 		} else {
 			return false;
 		}

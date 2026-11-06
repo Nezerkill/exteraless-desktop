@@ -9397,5 +9397,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_translation_formality" = "DeepL formality";
 "lng_settings_exteraless_translation_formality_more" = "More formal";
 "lng_settings_exteraless_translation_formality_less" = "Less formal";
+"lng_settings_exteraless_ai" = "AI assistant";
+"lng_settings_exteraless_ai_endpoint" = "Endpoint";
+"lng_settings_exteraless_ai_model" = "Model";
+"lng_settings_exteraless_ai_key" = "API key";
 
 // Keys finished

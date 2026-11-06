@@ -2,6 +2,36 @@
 
 ## 2026-11-06
 
+- Chats / AI-ассистент, MVP (NB-48): `OEAiEndpoint` (строка, default
+  `https://api.openai.com/v1`), `OEAiModel` (строка, default `gpt-4o-mini`) и
+  `OEAiApiKey` (строка, default пусто; секрет — в `.extera`/бэкап не
+  экспортируется, импорт принимает и `aiApiKey`) задают провайдера; алиасы
+  `aiEndpoint`/`aiModel`/`aiApiKey`. Запрос собирает Qt-only модуль
+  `exteraless/ai_client.{h,cpp}`: `ChatCompletionsUrl` дописывает
+  `/chat/completions` к endpoint (пустой → OpenAI-адрес), `BuildRequestJson`
+  отдаёт OpenAI-совместимое тело (`model`, `messages` с `user` и
+  необязательным `system`, `stream: false`), `ParseResponse` берёт первый
+  непустой `choices[].message.content` (строка или массив частей) и текст
+  ошибки из `error.message`/`error.type`; сети модуль не делает. В Exteraless
+  Chats пункт «AI assistant» открывает бокс с полями Endpoint, Model и
+  маскированным полем ключа (`CloudPassword::AddPasswordField`), четыре
+  lang-ключа `lng_settings_exteraless_ai*`; в контекстном меню текстовых
+  сообщений пункт «Ask AI» открывает `Ui::AiRequestBox`
+  (`boxes/ai_request_box.{h,cpp}`) — поле запроса, строка ответа и кнопки
+  Send/Copy/Close, ключ читается при каждой отправке (пустой → тост, запрос
+  не уходит). Сеть — только в боксе, свой `QNetworkAccessManager`. CLI 5
+  режимов (`ai-config`, `ai-config-set-endpoint`, `ai-config-set-model`,
+  `ai-config-set-key`, `ai-request-json`), ключ в выводе не печатается
+  (только `hasKey`); `check_ai` — 23 проверки, группа `cli` не росла (61);
+  раннеры 891/32/213 PASS (backup 101); `.extera` — 129 ключей
+  (124 + 3 + 2, сверено с legacy-кортежем `run_checks`); `kKeysCount` 11220
+  (`kTagsCount` 185); sha256 патча `8e87990a…`, `nix flake check` PASS. Ограничения: ключ лежит
+  открытым текстом в `tdata/exteraless.json` — только маскировка в UI/CLI и
+  исключение из экспорта, OS-keychain нет; текст сообщения уходит на
+  произвольный endpoint без согласия в UI; запрос идёт мимо прокси Telegram
+  (свой `QNetworkAccessManager`); Xvfb-смоук не выполнялся. Follow-up:
+  стриминг, роли и промпты, локальная история, вставка ответа цитатой,
+  замена редактора и саммари не сделаны.
 - Перевод / Провайдеры Google и DeepL (NB-49): `OETranslationProvider`
   (int `0..3`, default `0`: `0` — auto/upstream, `1` — Google, `2` — DeepL,
   `3` зарезервирован под LLM из NB-48) выбирает провайдера перевода,

@@ -713,6 +713,67 @@ const auto kMeta = Builder::BuildHelper({
 		},
 	});
 
+	builder.addButton({
+		.id = u"exteraless/ai-config"_q,
+		.title = tr::lng_settings_exteraless_ai(),
+		.st = &st::settingsButtonNoIcon,
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_ai());
+				box->setWidth(st::boxWideWidth);
+				const auto endpoint = box->addRow(
+					object_ptr<Ui::InputField>(
+						box,
+						st::defaultInputField,
+						Ui::InputField::Mode::SingleLine,
+						tr::lng_settings_exteraless_ai_endpoint(),
+						TextWithTags{
+							Exteraless::Config::Instance().aiEndpoint() }),
+					st::boxRowPadding);
+				const auto model = box->addRow(
+					object_ptr<Ui::InputField>(
+						box,
+						st::defaultInputField,
+						Ui::InputField::Mode::SingleLine,
+						tr::lng_settings_exteraless_ai_model(),
+						TextWithTags{
+							Exteraless::Config::Instance().aiModel() }),
+					st::boxRowPadding);
+				const auto key = CloudPassword::AddPasswordField(
+					box->verticalLayout(),
+					tr::lng_settings_exteraless_ai_key(),
+					Exteraless::Config::Instance().aiApiKey());
+				box->addButton(tr::lng_box_ok(), [=] {
+					auto &config = Exteraless::Config::Instance();
+					const auto endpointText
+						= endpoint->getTextWithTags().text.trimmed();
+					if (!endpointText.isEmpty()) {
+						config.setAiEndpoint(endpointText);
+					}
+					const auto modelText
+						= model->getTextWithTags().text.trimmed();
+					if (!modelText.isEmpty()) {
+						config.setAiModel(modelText);
+					}
+					config.setAiApiKey(key->text());
+					box->closeBox();
+				});
+				box->setFocusCallback([=] { endpoint->setFocusFast(); });
+			}));
+		},
+		.keywords = {
+			u"ai"_q,
+			u"assistant"_q,
+			u"endpoint"_q,
+			u"model"_q,
+			u"key"_q,
+		},
+	});
+
 	builder.addSubsectionTitle({
 		.id = u"exteraless/media"_q,
 		.title = tr::lng_settings_exteraless_media(),

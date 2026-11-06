@@ -1,4 +1,6 @@
 add_library(exteraless STATIC
+    ai_client.cpp
+    ai_client.h
     backup.cpp
     backup.h
     chats.cpp
