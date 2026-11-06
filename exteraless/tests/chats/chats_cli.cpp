@@ -159,6 +159,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli sticker-size-set <4..20>\n"
 		<< "  exteraless-chats-cli sticker-shape\n"
 		<< "  exteraless-chats-cli sticker-shape-set <0..2>\n"
+		<< "  exteraless-chats-cli avatar-corners\n"
+		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
 		<< "  exteraless-chats-cli save-subfolder\n"
 		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -1429,6 +1431,32 @@ int main(int argc, char *argv[]) {
 		PrintJson(QJsonObject{
 			{ QStringLiteral("stickerShape"),
 				Exteraless::Config::Instance().stickerShape() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("avatar-corners")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("radius"),
+				Exteraless::Config::Instance().avatarRadius() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("avatar-corners-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAvatarRadius(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("radius"),
+				Exteraless::Config::Instance().avatarRadius() },
 		});
 		return 0;
 	}

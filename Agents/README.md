@@ -48,9 +48,12 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (734 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, autodownload-rules, download-boost, subtitles, backup);
+  (742 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, autodownload-rules, download-boost, subtitles, avatar-corners, backup);
   в приложение не входят.
-- `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек.
+- `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
+  пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
+  юзерпика через `Ui::Radioenum` Circle/Square/Rounded, а маску применяет
+  `Ui::ValidateUserpicCache` в `Telegram/SourceFiles/ui/userpic_view.cpp`.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
   сообщений, показывает реакции и метки reply/forward/edited, а также
   значок/кастомную метку, прозрачность и цвет (NB-20); inline-показ в чате —

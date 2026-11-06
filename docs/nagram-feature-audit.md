@@ -202,7 +202,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 
 | Группа | Примеры ключей | Desktop |
 |---|---|---|
-| Скругления и аватарки | `avatarCorners`, `singleCornerRadius`, `avatarSquareness`, `senderMiniAvatars` | ❌ (геометрия через `dialogs/dialogs_row.cpp`, `ui/userpic_view.cpp`, маска — в `lib_ui/ui/image/*`) |
+| Скругления и аватарки | `avatarCorners`, `singleCornerRadius`, `avatarSquareness`, `senderMiniAvatars` | ✅ NB-61 (скругления): `OEChatsAvatarRadius` (int `-1..32`, default `-1` — круг как в upstream, `0` — квадрат, `N` — радиус px), `avatarCorners`/`singleCornerRadius` как абсолютный радиус и `avatarSquareness` → `round(32 * (1 - q))`; маска в `Ui::ValidateUserpicCache` (`ui/userpic_view.cpp`), пункт «Avatar corners» с `Ui::Radioenum`; `data_peer` и `UserpicButton` остались круглыми; `senderMiniAvatars` — отдельная NB-62 |
 | Шапки и навигация | `iosChatHeader`, `iosNavigationBarStyle`, `newChatHeaderStyle`, `centerTitle`, `hideActionBarStatus` | ❌ (`history/view/history_view_top_bar_widget.cpp`, `window/window_top_bar_wrap.h`) |
 | Секции и списки | `sectionRadius`, `separateHeaders`, `sectionsSeparatedHeaders`, `m3ListItems` | ❌ (карточек-секций в настройках tdesktop нет) |
 | Стекло и блюр | `glassMessageMenu`, `glassOutlineStyle`, `forceBlur` | ❌ (`menu/*`, `window/themes/*`) |

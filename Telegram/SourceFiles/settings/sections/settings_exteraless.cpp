@@ -1577,6 +1577,75 @@ const auto kMeta = Builder::BuildHelper({
 		.keywords = { u"sticker"_q, u"shape"_q, u"rounded"_q, u"bubble"_q },
 	});
 
+	const auto avatarCornersLabel = [](int radius) {
+		if (radius < 0) {
+			return tr::lng_settings_exteraless_chats_avatar_corners_circle(
+				tr::now);
+		} else if (radius == 0) {
+			return tr::lng_settings_exteraless_chats_avatar_corners_square(
+				tr::now);
+		}
+		return tr::lng_settings_exteraless_chats_avatar_corners_rounded(
+			tr::now,
+			lt_radius,
+			QString::number(radius));
+	};
+	const auto avatarCornersPreset = [](int radius) {
+		return (radius == -1)
+			|| (radius == 0)
+			|| (radius == 4)
+			|| (radius == 8)
+			|| (radius == 12)
+			|| (radius == 16)
+			|| (radius == 24);
+	};
+	const auto avatarCorners = std::make_shared<rpl::variable<QString>>(
+		avatarCornersLabel(Exteraless::Config::Instance().avatarRadius()));
+	builder.addButton({
+		.id = u"exteraless/chats/avatar-corners"_q,
+		.title = tr::lng_settings_exteraless_chats_avatar_corners(),
+		.st = &st::settingsButtonNoIcon,
+		.label = avatarCorners->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto current = Exteraless::Config::Instance().avatarRadius();
+			auto values = std::vector<int>{ -1, 0, 4, 8, 12, 16, 24 };
+			if (!avatarCornersPreset(current)) {
+				values.push_back(current);
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				current);
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_chats_avatar_corners());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (const auto radius : values) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							radius,
+							avatarCornersLabel(radius),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int radius) {
+					Exteraless::Config::Instance().setAvatarRadius(radius);
+					avatarCorners->force_assign(
+						avatarCornersLabel(radius));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"avatar"_q, u"corners"_q, u"circle"_q, u"square"_q,
+			u"rounded"_q },
+	});
+
 	const auto channelBottomButtonLabel = [](int mode) {
 		switch (mode) {
 		case 0:

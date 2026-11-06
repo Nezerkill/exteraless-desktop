@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 734 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 742 проверки PASS
   (44 strip, 10 reactions, 58 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,7 +111,27 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 9 autodownload-rules, 10 download-boost,
-  48 subtitles, 100 backup); плагины без изменений — 32 и 213 проверок.
+  48 subtitles, 7 avatar-corners, 100 backup); плагины без изменений — 32 и
+  213 проверок.
+- Avatar corners (NB-61): `OEChatsAvatarRadius` (int `-1..32`, default `-1`;
+  `-1` — круг как в upstream, `0` — квадрат, `N` — радиус в px) задаёт форму
+  загруженного и пустого юзерпика. Маска выбирается в `Ui::ValidateUserpicCache`
+  (`ui/userpic_view.cpp`): при `radius >= 0` — `Images::Round` и
+  `EmptyUserpic::paintRounded`, иначе `Images::Circle`/`paintCircle`; радиус
+  входит в ключ кэша (`PeerUserpicView::radius`), поэтому смена значения
+  перегенерирует картинку. Алиасы: `avatarCorners`/`singleCornerRadius` —
+  абсолютный радиус (кламп `-1..32`), `avatarSquareness` (0..1) —
+  `round(32 * (1 - q))`. В Chats пункт «Avatar corners» с `Ui::Radioenum`
+  Circle/Square/Rounded 4/8/12/16/24 и строкой для произвольного значения;
+  четыре lang-ключа `lng_settings_exteraless_chats_avatar_corners*`
+  (`_rounded` с `lt_radius` и `QString::number`). `.extera` — 112 ключей, CLI
+  `avatar-corners`/`avatar-corners-set`, `check_avatar_corners` — 7 проверок
+  (счётчик выше 742, CLI 58, плагины 32 и 213 без изменений). `kKeysCount`
+  11187, sha256 патча `b58e4a17…`, `nix flake check` PASS (прогон из батча,
+  повторно не запускался). Ограничения: форма применяется при следующей
+  отрисовке, уже нарисованные аватарки не меняются мгновенно;
+  `Data::Peer::GenerateUserpicImage` и `UserpicButton` (`useForumShape`)
+  остались круглыми; онлайн-точка не тронута; Xvfb-смоук не выполнялся.
 - Profile buttons (NB-73): `OEChatsHideGiftButton`, `OEChatsHideCallButton` и
   `OEChatsHideChannelSearchButton` (все default `false`) убирают кнопки Gift и
   Call в профиле (`info/profile/info_profile_top_bar.cpp`), Call — в шапке

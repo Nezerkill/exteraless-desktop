@@ -2,6 +2,26 @@
 
 ## 2026-11-06
 
+- Chats / Скругления аватарок (NB-61): `OEChatsAvatarRadius` (int `-1..32`,
+  default `-1`; `-1` — круг как в upstream, `0` — квадрат, `N` — радиус в px)
+  задаёт форму загруженного и пустого юзерпика. Выбор маски — в
+  `Ui::ValidateUserpicCache` (`ui/userpic_view.cpp`): при `radius >= 0`
+  `Images::Round`/`EmptyUserpic::paintRounded`, иначе `Images::Circle`/
+  `paintCircle`; радиус входит в ключ кэша (`PeerUserpicView::radius`), поэтому
+  смена значения перегенерирует картинку. Алиасы: `avatarCorners` и
+  `singleCornerRadius` — абсолютный радиус (кламп `-1..32`), `avatarSquareness`
+  (0..1) пересчитывается как `round(32 * (1 - q))`. В Chats — пункт «Avatar
+  corners» с `Ui::Radioenum` Circle/Square/Rounded 4/8/12/16/24 плюс отдельная
+  строка для произвольного текущего значения; четыре lang-ключа
+  `lng_settings_exteraless_chats_avatar_corners*` (`_rounded` с `lt_radius`,
+  значение подставляется `QString::number`). `.extera` — 112 ключей, CLI
+  `avatar-corners` и `avatar-corners-set`, `check_avatar_corners` — 7 проверок;
+  раннеры 742/32/213 PASS (backup 100), `kKeysCount` 11187, sha256 патча
+  `b58e4a17…`, `nix flake check` PASS (прогон из батча, здесь не повторялся).
+  Ограничения: форма применяется при следующей отрисовке — уже нарисованные
+  аватарки не перерисовываются мгновенно; `Data::Peer::GenerateUserpicImage` и
+  `UserpicButton` (`useForumShape`) остались круглыми; онлайн-точка не тронута;
+  Xvfb-смоук не выполнялся.
 - Media / Внешние субтитры (NB-32), фаза 2: рендер, меню и память по видео.
   `media_subtitles.{h,cpp}` (`Telegram/CMakeLists.txt`) добавляют
   `Exteraless::Subtitles`: он помнит путь, метку и разобранные реплики для

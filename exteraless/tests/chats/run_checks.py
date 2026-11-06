@@ -151,6 +151,7 @@ def check_cli_args(ledger, cli):
         ("doubletap-set with wrong count", ["doubletap-set", "1"]),
         ("doubletap-resolve without value", ["doubletap-resolve"]),
         ("stickertime-set with wrong count", ["stickertime-set", "1"]),
+        ("avatar-corners-set with wrong count", ["avatar-corners-set"]),
         ("pillorder-set without order", ["pillorder-set"]),
         ("pillorder-reset with args", ["pillorder-reset", "x"]),
         ("ghost-set with wrong count", ["ghost-set"]),
@@ -617,7 +618,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 106,
+            len(section) == 107,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -638,7 +639,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 111,
+            sum(len(value) for value in exported.values()) == 112,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -658,7 +659,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 111,
+                data.get("applied") == 112,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -731,6 +732,7 @@ def check_backup(ledger, cli, work):
             "OEChatsHideStickerTime": False,
             "OEChatsStickerSize": 14,
             "OEChatsStickerShape": 1,
+            "OEChatsAvatarRadius": 10,
             "OEChatsReplyColors": False,
             "OEChatsReplyEmoji": True,
             "OEChatsReplyBackground": False,
@@ -821,7 +823,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 111,
+            data.get("applied") == 112,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1111,10 +1113,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 106",
+            "backup legacy eight completed to 107",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (106, 3, 2),
+             len(sections["mainconfig"])) == (107, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -3782,6 +3784,79 @@ def check_sticker_size(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_avatar_corners(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "avatar-corners-defaults")
+    data = json_call(
+        ledger, cli, ["avatar-corners"], env, "avatar corners defaults")
+    if data is not None:
+        ledger.check(
+            "avatar corners default circle",
+            data.get("radius") == -1,
+            data)
+
+    data = json_call(
+        ledger, cli, ["avatar-corners-set", "8"], env,
+        "avatar corners set")
+    if data is not None:
+        ledger.check(
+            "avatar corners set rounded",
+            data.get("radius") == 8,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["avatar-corners"], env, "avatar corners reload")
+    if reloaded is not None:
+        ledger.check(
+            "avatar corners persisted",
+            reloaded.get("radius") == 8,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["avatar-corners-set", "0"], env,
+        "avatar corners square")
+    if data is not None:
+        ledger.check(
+            "avatar corners square",
+            data.get("radius") == 0,
+            data)
+
+    data = json_call(
+        ledger, cli, ["avatar-corners-set", "99"], env,
+        "avatar corners clamp")
+    if data is not None:
+        ledger.check(
+            "avatar corners clamped to 32",
+            data.get("radius") == 32,
+            data)
+
+    env = make_env(work / "avatar-corners-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"avatarCorners": 12},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "avatar corners alias")
+    if data is not None:
+        ledger.check(
+            "avatar corners alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["avatar-corners"], env, "avatar corners alias read")
+    if reloaded is not None:
+        ledger.check(
+            "avatar corners alias value",
+            reloaded.get("radius") == 12,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_edited_mark(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -5396,6 +5471,7 @@ def main():
         ghost_schedule = check_ghost_schedule(ledger, cli, work)
         seek_duration = check_seek_duration(ledger, cli, work)
         sticker_size = check_sticker_size(ledger, cli, work)
+        avatar_corners = check_avatar_corners(ledger, cli, work)
         edited_mark = check_edited_mark(ledger, cli, work)
         forward_date = check_forward_date(ledger, cli, work)
         media_menu = check_media_menu(ledger, cli, work)
@@ -5449,6 +5525,7 @@ def main():
     print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
     print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
     print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
+    print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
     print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
     print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
     print(f"media-menu: {media_menu[0] - media_menu[1]} passed")

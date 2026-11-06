@@ -28,6 +28,7 @@ struct ChatsSettings {
 	bool uploadBoost = false;
 	bool disableAutoDownloadingArchive = false;
 	bool blockWin32Executables = true;
+	int avatarRadius = -1; // -1 circle, 0 square, N > 0 is N px
 };
 
 [[nodiscard]] bool HiddenReactionsFor(

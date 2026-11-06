@@ -190,6 +190,7 @@ constexpr auto kChatsDoubleTapOut = "OEChatsDoubleTapOut";
 constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 constexpr auto kChatsStickerShape = "OEChatsStickerShape";
+constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
 constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -219,6 +220,9 @@ constexpr auto kZalgoFilterUpper = "ZalgoFilter";
 constexpr auto kStickerTimeMode = "stickerTimeMode";
 constexpr auto kStickerSizeAlias = "stickerSize";
 constexpr auto kStickerShapeAlias = "stickerShape";
+constexpr auto kAvatarCornersAlias = "avatarCorners";
+constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
+constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
 constexpr auto kReplyColorsAlias = "replyColors";
 constexpr auto kReplyEmojiAlias = "replyEmoji";
 constexpr auto kReplyBackgroundAlias = "replyBackground";
@@ -463,6 +467,7 @@ QString BuildBackup() {
 	extera[kChatsStickerTimeSide] = chats.stickerTimeSide;
 	extera[kChatsStickerSize] = chats.stickerSize;
 	extera[kChatsStickerShape] = chats.stickerShape;
+	extera[kChatsAvatarRadius] = chats.avatarRadius;
 	extera[kChatsReplyColors] = chats.replyColors;
 	extera[kChatsReplyEmoji] = chats.replyEmoji;
 	extera[kChatsReplyBackground] = chats.replyBackground;
@@ -889,6 +894,17 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if (key == kStickerShapeAlias && value.isDouble()) {
 			const auto rounded = int(std::lround(value.toDouble()));
 			config.setStickerShape(std::clamp(rounded, 0, 2));
+		} else if (key == kChatsAvatarRadius && IntegralInRange(value, -1, 32)) {
+			config.setAvatarRadius(value.toInt());
+		} else if ((key == kAvatarCornersAlias
+			|| key == kSingleCornerRadiusAlias)
+			&& value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setAvatarRadius(std::clamp(rounded, -1, 32));
+		} else if (key == kAvatarSquarenessAlias && value.isDouble()) {
+			const auto squareness = std::clamp(value.toDouble(), 0., 1.);
+			const auto rounded = int(std::lround(32. * (1. - squareness)));
+			config.setAvatarRadius(std::clamp(rounded, 0, 32));
 		} else if ((key == kChatsReplyColors || key == kReplyColorsAlias)
 			&& value.isBool()) {
 			config.setChatsReplyColors(value.toBool());

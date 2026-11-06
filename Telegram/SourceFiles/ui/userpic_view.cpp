@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "ui/userpic_view.h"
 
+#include "exteraless/config.h"
 #include "ui/empty_userpic.h"
 #include "ui/painter.h"
 #include "ui/image/image_prepare.h"
@@ -142,8 +143,11 @@ void ValidateUserpicCache(
 	const auto full = QSize(size, size);
 	const auto version = style::PaletteVersion();
 	const auto shapeValue = static_cast<uint32>(shape) & 3;
+	const auto radius = Exteraless::Config::Instance()
+		.chatsSettings().avatarRadius;
 	const auto regenerate = (view.cached.size() != QSize(size, size))
 		|| (view.shape != shapeValue)
+		|| (view.radius != radius)
 		|| (cloud && !view.empty.null())
 		|| (empty && empty != view.empty.get())
 		|| (empty && view.paletteVersion != version);
@@ -152,6 +156,7 @@ void ValidateUserpicCache(
 	}
 	view.empty = empty;
 	view.shape = shapeValue;
+	view.radius = radius;
 	view.paletteVersion = version;
 
 	if (cloud) {
@@ -167,6 +172,10 @@ void ValidateUserpicCache(
 				Images::CornersMask(size
 					* Ui::ForumUserpicRadiusMultiplier()
 					/ style::DevicePixelRatio()));
+		} else if (radius >= 0) {
+			view.cached = Images::Round(
+				std::move(view.cached),
+				Images::CornersMask(radius));
 		} else {
 			view.cached = Images::Circle(std::move(view.cached));
 		}
@@ -187,6 +196,14 @@ void ValidateUserpicCache(
 				size,
 				size,
 				size * Ui::ForumUserpicRadiusMultiplier());
+		} else if (radius >= 0) {
+			empty->paintRounded(
+				p,
+				0,
+				0,
+				size,
+				size,
+				radius * style::DevicePixelRatio());
 		} else {
 			empty->paintCircle(p, 0, 0, size, size);
 		}

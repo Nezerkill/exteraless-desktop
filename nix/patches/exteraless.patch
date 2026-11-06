@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..6d283f4 100644
+index ffc8ec9..5586dd8 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..6d283f4 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,185 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,189 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -246,6 +246,10 @@ index ffc8ec9..6d283f4 100644
 +"lng_settings_exteraless_chats_sticker_shape_square" = "Square";
 +"lng_settings_exteraless_chats_sticker_shape_rounded" = "Rounded";
 +"lng_settings_exteraless_chats_sticker_shape_bubble" = "Bubble";
++"lng_settings_exteraless_chats_avatar_corners" = "Avatar corners";
++"lng_settings_exteraless_chats_avatar_corners_circle" = "Circle";
++"lng_settings_exteraless_chats_avatar_corners_square" = "Square";
++"lng_settings_exteraless_chats_avatar_corners_rounded" = "Rounded {radius}";
 +"lng_settings_exteraless_pill_stack" = "Pill Stack";
 +"lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
 +"lng_settings_exteraless_pill_stack_visible" = "Visible pills";
@@ -7382,10 +7386,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..e0d0e18
+index 0000000..e5db9f3
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2093 @@
+@@ -0,0 +1,2162 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -8965,6 +8969,75 @@ index 0000000..e0d0e18
 +		.keywords = { u"sticker"_q, u"shape"_q, u"rounded"_q, u"bubble"_q },
 +	});
 +
++	const auto avatarCornersLabel = [](int radius) {
++		if (radius < 0) {
++			return tr::lng_settings_exteraless_chats_avatar_corners_circle(
++				tr::now);
++		} else if (radius == 0) {
++			return tr::lng_settings_exteraless_chats_avatar_corners_square(
++				tr::now);
++		}
++		return tr::lng_settings_exteraless_chats_avatar_corners_rounded(
++			tr::now,
++			lt_radius,
++			QString::number(radius));
++	};
++	const auto avatarCornersPreset = [](int radius) {
++		return (radius == -1)
++			|| (radius == 0)
++			|| (radius == 4)
++			|| (radius == 8)
++			|| (radius == 12)
++			|| (radius == 16)
++			|| (radius == 24);
++	};
++	const auto avatarCorners = std::make_shared<rpl::variable<QString>>(
++		avatarCornersLabel(Exteraless::Config::Instance().avatarRadius()));
++	builder.addButton({
++		.id = u"exteraless/chats/avatar-corners"_q,
++		.title = tr::lng_settings_exteraless_chats_avatar_corners(),
++		.st = &st::settingsButtonNoIcon,
++		.label = avatarCorners->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto current = Exteraless::Config::Instance().avatarRadius();
++			auto values = std::vector<int>{ -1, 0, 4, 8, 12, 16, 24 };
++			if (!avatarCornersPreset(current)) {
++				values.push_back(current);
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				current);
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_chats_avatar_corners());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (const auto radius : values) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							radius,
++							avatarCornersLabel(radius),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int radius) {
++					Exteraless::Config::Instance().setAvatarRadius(radius);
++					avatarCorners->force_assign(
++						avatarCornersLabel(radius));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"avatar"_q, u"corners"_q, u"circle"_q, u"square"_q,
++			u"rounded"_q },
++	});
++
 +	const auto channelBottomButtonLabel = [](int mode) {
 +		switch (mode) {
 +		case 0:
@@ -9974,6 +10047,76 @@ index 96a776b..75d8ea4 100644
  	} else if (std::abs(lastDate.daysTo(nowDate)) < 7) {
  		return langDayOfWeek(lastDate);
  	} else {
+diff --git a/Telegram/SourceFiles/ui/userpic_view.cpp b/Telegram/SourceFiles/ui/userpic_view.cpp
+index b6cf3a5..34093fe 100644
+--- a/Telegram/SourceFiles/ui/userpic_view.cpp
++++ b/Telegram/SourceFiles/ui/userpic_view.cpp
+@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "ui/userpic_view.h"
+ 
++#include "exteraless/config.h"
+ #include "ui/empty_userpic.h"
+ #include "ui/painter.h"
+ #include "ui/image/image_prepare.h"
+@@ -142,8 +143,11 @@ void ValidateUserpicCache(
+ 	const auto full = QSize(size, size);
+ 	const auto version = style::PaletteVersion();
+ 	const auto shapeValue = static_cast<uint32>(shape) & 3;
++	const auto radius = Exteraless::Config::Instance()
++		.chatsSettings().avatarRadius;
+ 	const auto regenerate = (view.cached.size() != QSize(size, size))
+ 		|| (view.shape != shapeValue)
++		|| (view.radius != radius)
+ 		|| (cloud && !view.empty.null())
+ 		|| (empty && empty != view.empty.get())
+ 		|| (empty && view.paletteVersion != version);
+@@ -152,6 +156,7 @@ void ValidateUserpicCache(
+ 	}
+ 	view.empty = empty;
+ 	view.shape = shapeValue;
++	view.radius = radius;
+ 	view.paletteVersion = version;
+ 
+ 	if (cloud) {
+@@ -167,6 +172,10 @@ void ValidateUserpicCache(
+ 				Images::CornersMask(size
+ 					* Ui::ForumUserpicRadiusMultiplier()
+ 					/ style::DevicePixelRatio()));
++		} else if (radius >= 0) {
++			view.cached = Images::Round(
++				std::move(view.cached),
++				Images::CornersMask(radius));
+ 		} else {
+ 			view.cached = Images::Circle(std::move(view.cached));
+ 		}
+@@ -187,6 +196,14 @@ void ValidateUserpicCache(
+ 				size,
+ 				size,
+ 				size * Ui::ForumUserpicRadiusMultiplier());
++		} else if (radius >= 0) {
++			empty->paintRounded(
++				p,
++				0,
++				0,
++				size,
++				size,
++				radius * style::DevicePixelRatio());
+ 		} else {
+ 			empty->paintCircle(p, 0, 0, size, size);
+ 		}
+diff --git a/Telegram/SourceFiles/ui/userpic_view.h b/Telegram/SourceFiles/ui/userpic_view.h
+index 1ef0d98..e27d939 100644
+--- a/Telegram/SourceFiles/ui/userpic_view.h
++++ b/Telegram/SourceFiles/ui/userpic_view.h
+@@ -53,6 +53,7 @@ struct PeerUserpicView {
+ 	base::weak_ptr<const EmptyUserpic> empty;
+ 	uint32 paletteVersion : 30 = 0;
+ 	uint32 shape : 2 = 0;
++	int radius = -1;
+ };
+ 
+ [[nodiscard]] bool PeerUserpicLoading(const PeerUserpicView &view);
 diff --git a/Telegram/SourceFiles/window/window_filters_menu.cpp b/Telegram/SourceFiles/window/window_filters_menu.cpp
 index c49a9d3..f95e1e4 100644
 --- a/Telegram/SourceFiles/window/window_filters_menu.cpp
@@ -10757,10 +10900,10 @@ index 0000000..5dc5319
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..fbe1290
+index 0000000..63a9d71
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1006 @@
+@@ -0,0 +1,1022 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -10953,6 +11096,7 @@ index 0000000..fbe1290
 +constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
++constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 +constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -10982,6 +11126,9 @@ index 0000000..fbe1290
 +constexpr auto kStickerTimeMode = "stickerTimeMode";
 +constexpr auto kStickerSizeAlias = "stickerSize";
 +constexpr auto kStickerShapeAlias = "stickerShape";
++constexpr auto kAvatarCornersAlias = "avatarCorners";
++constexpr auto kSingleCornerRadiusAlias = "singleCornerRadius";
++constexpr auto kAvatarSquarenessAlias = "avatarSquareness";
 +constexpr auto kReplyColorsAlias = "replyColors";
 +constexpr auto kReplyEmojiAlias = "replyEmoji";
 +constexpr auto kReplyBackgroundAlias = "replyBackground";
@@ -11226,6 +11373,7 @@ index 0000000..fbe1290
 +	extera[kChatsStickerTimeSide] = chats.stickerTimeSide;
 +	extera[kChatsStickerSize] = chats.stickerSize;
 +	extera[kChatsStickerShape] = chats.stickerShape;
++	extera[kChatsAvatarRadius] = chats.avatarRadius;
 +	extera[kChatsReplyColors] = chats.replyColors;
 +	extera[kChatsReplyEmoji] = chats.replyEmoji;
 +	extera[kChatsReplyBackground] = chats.replyBackground;
@@ -11652,6 +11800,17 @@ index 0000000..fbe1290
 +		} else if (key == kStickerShapeAlias && value.isDouble()) {
 +			const auto rounded = int(std::lround(value.toDouble()));
 +			config.setStickerShape(std::clamp(rounded, 0, 2));
++		} else if (key == kChatsAvatarRadius && IntegralInRange(value, -1, 32)) {
++			config.setAvatarRadius(value.toInt());
++		} else if ((key == kAvatarCornersAlias
++			|| key == kSingleCornerRadiusAlias)
++			&& value.isDouble()) {
++			const auto rounded = int(std::lround(value.toDouble()));
++			config.setAvatarRadius(std::clamp(rounded, -1, 32));
++		} else if (key == kAvatarSquarenessAlias && value.isDouble()) {
++			const auto squareness = std::clamp(value.toDouble(), 0., 1.);
++			const auto rounded = int(std::lround(32. * (1. - squareness)));
++			config.setAvatarRadius(std::clamp(rounded, 0, 32));
 +		} else if ((key == kChatsReplyColors || key == kReplyColorsAlias)
 +			&& value.isBool()) {
 +			config.setChatsReplyColors(value.toBool());
@@ -11832,10 +11991,10 @@ index 0000000..c1bfde8
 +} // namespace Exteraless
 diff --git a/exteraless/chats.h b/exteraless/chats.h
 new file mode 100644
-index 0000000..52592ec
+index 0000000..101be39
 --- /dev/null
 +++ b/exteraless/chats.h
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,53 @@
 +#pragma once
 +
 +namespace Exteraless {
@@ -11866,6 +12025,7 @@ index 0000000..52592ec
 +	bool uploadBoost = false;
 +	bool disableAutoDownloadingArchive = false;
 +	bool blockWin32Executables = true;
++	int avatarRadius = -1; // -1 circle, 0 square, N > 0 is N px
 +};
 +
 +[[nodiscard]] bool HiddenReactionsFor(
@@ -11890,10 +12050,10 @@ index 0000000..52592ec
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..1246f5f
+index 0000000..c2cf951
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1450 @@
+@@ -0,0 +1,1461 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -12023,6 +12183,7 @@ index 0000000..1246f5f
 +constexpr auto kChatsStickerTimeSide = "OEChatsStickerTimeSide";
 +constexpr auto kChatsStickerSize = "OEChatsStickerSize";
 +constexpr auto kChatsStickerShape = "OEChatsStickerShape";
++constexpr auto kChatsAvatarRadius = "OEChatsAvatarRadius";
 +constexpr auto kChatsReplyColors = "OEChatsReplyColors";
 +constexpr auto kChatsReplyEmoji = "OEChatsReplyEmoji";
 +constexpr auto kChatsReplyBackground = "OEChatsReplyBackground";
@@ -12912,6 +13073,14 @@ index 0000000..1246f5f
 +	setValue(kChatsStickerShape, std::clamp(value, 0, 2));
 +}
 +
++int Config::avatarRadius() const {
++	return std::clamp(intValue(kChatsAvatarRadius, -1), -1, 32);
++}
++
++void Config::setAvatarRadius(int value) {
++	setValue(kChatsAvatarRadius, std::clamp(value, -1, 32));
++}
++
 +bool Config::replyColors() const {
 +	return boolValue(kChatsReplyColors, true);
 +}
@@ -13170,7 +13339,8 @@ index 0000000..1246f5f
 +			|| key == kChatsUploadBoost
 +			|| key == kChatsDisableAutoDownloadingArchive
 +			|| key == kChatsBlockWin32ExecutableFiles
-+			|| key == kChatsZalgoFilter) {
++			|| key == kChatsZalgoFilter
++			|| key == kChatsAvatarRadius) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
 +			unknown->push_back(key);
@@ -13299,6 +13469,7 @@ index 0000000..1246f5f
 +	_chats.blockWin32Executables = boolValue(
 +		kChatsBlockWin32ExecutableFiles,
 +		true);
++	_chats.avatarRadius = std::clamp(intValue(kChatsAvatarRadius, -1), -1, 32);
 +
 +	_messageMenu.reply = boolValue(kChatsMenuReply, true);
 +	_messageMenu.edit = boolValue(kChatsMenuEdit, true);
@@ -13346,10 +13517,10 @@ index 0000000..1246f5f
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..4480a14
+index 0000000..ef78312
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,292 @@
+@@ -0,0 +1,294 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -13578,6 +13749,8 @@ index 0000000..4480a14
 +	void setChatsStickerSize(int value);
 +	[[nodiscard]] int stickerShape() const;
 +	void setStickerShape(int value);
++	[[nodiscard]] int avatarRadius() const;
++	void setAvatarRadius(int value);
 +	[[nodiscard]] bool replyColors() const;
 +	void setChatsReplyColors(bool value);
 +	[[nodiscard]] bool replyEmoji() const;
@@ -16478,10 +16651,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..b58264c
+index 0000000..893d5db
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2266 @@
+@@ -0,0 +1,2294 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -16643,6 +16816,8 @@ index 0000000..b58264c
 +		<< "  exteraless-chats-cli sticker-size-set <4..20>\n"
 +		<< "  exteraless-chats-cli sticker-shape\n"
 +		<< "  exteraless-chats-cli sticker-shape-set <0..2>\n"
++		<< "  exteraless-chats-cli avatar-corners\n"
++		<< "  exteraless-chats-cli avatar-corners-set <-1..32>\n"
 +		<< "  exteraless-chats-cli save-subfolder\n"
 +		<< "  exteraless-chats-cli save-subfolder-set <0|1>\n"
 +		<< "  exteraless-chats-cli chat-folder <name>\n"
@@ -17916,6 +18091,32 @@ index 0000000..b58264c
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("avatar-corners")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("radius"),
++				Exteraless::Config::Instance().avatarRadius() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("avatar-corners-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setAvatarRadius(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("radius"),
++				Exteraless::Config::Instance().avatarRadius() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("save-subfolder")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -18909,10 +19110,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..0c3d47e
+index 0000000..c6bf62b
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,5490 @@
+@@ -0,0 +1,5567 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -19066,6 +19267,7 @@ index 0000000..0c3d47e
 +        ("doubletap-set with wrong count", ["doubletap-set", "1"]),
 +        ("doubletap-resolve without value", ["doubletap-resolve"]),
 +        ("stickertime-set with wrong count", ["stickertime-set", "1"]),
++        ("avatar-corners-set with wrong count", ["avatar-corners-set"]),
 +        ("pillorder-set without order", ["pillorder-set"]),
 +        ("pillorder-reset with args", ["pillorder-reset", "x"]),
 +        ("ghost-set with wrong count", ["ghost-set"]),
@@ -19532,7 +19734,7 @@ index 0000000..0c3d47e
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 106,
++            len(section) == 107,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -19553,7 +19755,7 @@ index 0000000..0c3d47e
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 111,
++            sum(len(value) for value in exported.values()) == 112,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -19573,7 +19775,7 @@ index 0000000..0c3d47e
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 111,
++                data.get("applied") == 112,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -19646,6 +19848,7 @@ index 0000000..0c3d47e
 +            "OEChatsHideStickerTime": False,
 +            "OEChatsStickerSize": 14,
 +            "OEChatsStickerShape": 1,
++            "OEChatsAvatarRadius": 10,
 +            "OEChatsReplyColors": False,
 +            "OEChatsReplyEmoji": True,
 +            "OEChatsReplyBackground": False,
@@ -19736,7 +19939,7 @@ index 0000000..0c3d47e
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 111,
++            data.get("applied") == 112,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -20026,10 +20229,10 @@ index 0000000..0c3d47e
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 106",
++            "backup legacy eight completed to 107",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (106, 3, 2),
++             len(sections["mainconfig"])) == (107, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -22697,6 +22900,79 @@ index 0000000..0c3d47e
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_avatar_corners(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "avatar-corners-defaults")
++    data = json_call(
++        ledger, cli, ["avatar-corners"], env, "avatar corners defaults")
++    if data is not None:
++        ledger.check(
++            "avatar corners default circle",
++            data.get("radius") == -1,
++            data)
++
++    data = json_call(
++        ledger, cli, ["avatar-corners-set", "8"], env,
++        "avatar corners set")
++    if data is not None:
++        ledger.check(
++            "avatar corners set rounded",
++            data.get("radius") == 8,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["avatar-corners"], env, "avatar corners reload")
++    if reloaded is not None:
++        ledger.check(
++            "avatar corners persisted",
++            reloaded.get("radius") == 8,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["avatar-corners-set", "0"], env,
++        "avatar corners square")
++    if data is not None:
++        ledger.check(
++            "avatar corners square",
++            data.get("radius") == 0,
++            data)
++
++    data = json_call(
++        ledger, cli, ["avatar-corners-set", "99"], env,
++        "avatar corners clamp")
++    if data is not None:
++        ledger.check(
++            "avatar corners clamped to 32",
++            data.get("radius") == 32,
++            data)
++
++    env = make_env(work / "avatar-corners-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {"avatarCorners": 12},
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "avatar corners alias")
++    if data is not None:
++        ledger.check(
++            "avatar corners alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["avatar-corners"], env, "avatar corners alias read")
++    if reloaded is not None:
++        ledger.check(
++            "avatar corners alias value",
++            reloaded.get("radius") == 12,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_edited_mark(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -24311,6 +24587,7 @@ index 0000000..0c3d47e
 +        ghost_schedule = check_ghost_schedule(ledger, cli, work)
 +        seek_duration = check_seek_duration(ledger, cli, work)
 +        sticker_size = check_sticker_size(ledger, cli, work)
++        avatar_corners = check_avatar_corners(ledger, cli, work)
 +        edited_mark = check_edited_mark(ledger, cli, work)
 +        forward_date = check_forward_date(ledger, cli, work)
 +        media_menu = check_media_menu(ledger, cli, work)
@@ -24364,6 +24641,7 @@ index 0000000..0c3d47e
 +    print(f"ghost-schedule: {ghost_schedule[0] - ghost_schedule[1]} passed")
 +    print(f"seek-duration: {seek_duration[0] - seek_duration[1]} passed")
 +    print(f"sticker-size: {sticker_size[0] - sticker_size[1]} passed")
++    print(f"avatar-corners: {avatar_corners[0] - avatar_corners[1]} passed")
 +    print(f"edited-mark: {edited_mark[0] - edited_mark[1]} passed")
 +    print(f"forward-date: {forward_date[0] - forward_date[1]} passed")
 +    print(f"media-menu: {media_menu[0] - media_menu[1]} passed")

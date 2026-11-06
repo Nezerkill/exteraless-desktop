@@ -9327,6 +9327,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_chats_sticker_shape_square" = "Square";
 "lng_settings_exteraless_chats_sticker_shape_rounded" = "Rounded";
 "lng_settings_exteraless_chats_sticker_shape_bubble" = "Bubble";
+"lng_settings_exteraless_chats_avatar_corners" = "Avatar corners";
+"lng_settings_exteraless_chats_avatar_corners_circle" = "Circle";
+"lng_settings_exteraless_chats_avatar_corners_square" = "Square";
+"lng_settings_exteraless_chats_avatar_corners_rounded" = "Rounded {radius}";
 "lng_settings_exteraless_pill_stack" = "Pill Stack";
 "lng_settings_exteraless_pill_stack_enabled" = "Show pills above the chat list";
 "lng_settings_exteraless_pill_stack_visible" = "Visible pills";
