@@ -2745,6 +2745,117 @@ const auto kMeta = Builder::BuildHelper({
 	});
 
 	builder.addSubsectionTitle({
+		.id = u"exteraless/network"_q,
+		.title = tr::lng_settings_exteraless_network(),
+	});
+
+	const auto ipv6Toggle = builder.addButton({
+		.id = u"exteraless/network/use-ipv6"_q,
+		.title = tr::lng_settings_exteraless_network_use_ipv6(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().networkUseIPv6()),
+		.keywords = { u"ipv6"_q, u"network"_q, u"connection"_q },
+	});
+	if (ipv6Toggle) {
+		ipv6Toggle->toggledChanges(
+		) | rpl::on_next([](bool value) {
+			auto &config = Exteraless::Config::Instance();
+			if (config.networkUseIPv6() == value) {
+				return;
+			}
+			config.setNetworkUseIPv6(value);
+			auto &app = Core::App();
+			app.settings().proxy().setTryIPv6(value);
+			for (const auto &account : app.domain().accounts()) {
+				account.account->mtp().restart();
+			}
+			app.saveSettingsDelayed();
+		}, ipv6Toggle->lifetime());
+	}
+
+	const auto dnsLabel = [](int type) {
+		return (type == 1)
+			? tr::lng_settings_exteraless_network_dns_system(tr::now)
+			: tr::lng_settings_exteraless_network_dns_builtin(tr::now);
+	};
+	const auto dnsValue = std::make_shared<rpl::variable<QString>>(
+		dnsLabel(Exteraless::Config::Instance().networkDnsType()));
+	builder.addButton({
+		.id = u"exteraless/network/dns"_q,
+		.title = tr::lng_settings_exteraless_network_dns(),
+		.st = &st::settingsButtonNoIcon,
+		.label = dnsValue->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().networkDnsType());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_network_dns());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 2; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							dnsLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance().setNetworkDnsType(value);
+					dnsValue->force_assign(dnsLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"dns"_q, u"doh"_q, u"network"_q },
+	});
+
+	const auto customDohValue = std::make_shared<rpl::variable<QString>>(
+		Exteraless::Config::Instance().networkCustomDoH());
+	builder.addButton({
+		.id = u"exteraless/network/custom-doh"_q,
+		.title = tr::lng_settings_exteraless_network_custom_doh(),
+		.st = &st::settingsButtonNoIcon,
+		.label = customDohValue->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_network_custom_doh());
+				box->setWidth(st::boxWideWidth);
+				const auto field = box->addRow(
+					object_ptr<Ui::InputField>(
+						box,
+						st::defaultInputField,
+						Ui::InputField::Mode::SingleLine,
+						tr::lng_settings_exteraless_network_custom_doh(),
+						TextWithTags{ Exteraless::Config::Instance()
+							.networkCustomDoH() }),
+					st::boxRowPadding);
+				box->addButton(tr::lng_box_ok(), [=] {
+					const auto url = field->getTextWithTags().text.trimmed();
+					Exteraless::Config::Instance().setNetworkCustomDoH(url);
+					customDohValue->force_assign(url);
+					box->closeBox();
+				});
+				box->setFocusCallback([=] { field->setFocusFast(); });
+			}));
+		},
+		.keywords = { u"doh"_q, u"dns"_q, u"url"_q },
+	});
+
+	builder.addSubsectionTitle({
 		.id = u"exteraless/plugins"_q,
 		.title = tr::lng_settings_exteraless_plugins(),
 	});

@@ -180,6 +180,13 @@ public:
 	[[nodiscard]] bool proxyAutoDisabled() const;
 	void setProxyAutoDisabled(bool value);
 
+	[[nodiscard]] bool networkUseIPv6() const;
+	void setNetworkUseIPv6(bool value);
+	[[nodiscard]] int networkDnsType() const;
+	void setNetworkDnsType(int value);
+	[[nodiscard]] QString networkCustomDoH() const;
+	void setNetworkCustomDoH(const QString &value);
+
 	[[nodiscard]] bool ghostSendReadPackets() const;
 	void setGhostSendReadPackets(bool value);
 	[[nodiscard]] bool ghostSendReadStories() const;

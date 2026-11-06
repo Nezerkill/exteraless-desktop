@@ -179,7 +179,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | General / Other | `GeneralConfig` (10) + `NekoConfig`/`NaConfig` | ~40 | 🟡 3 реализовано |
 | Chats и меню | `ChatsConfig` (50) + `NekoConfig`/`NaConfig` | ~120 | 🟡 6 реализовано |
 | Ghost / deleted / edits (Ayu) | `NekoConfig`, `NaConfig`, `com/radolyn/ayugram/*` | ~50 | 🟡 6 частично |
-| Прокси и сеть | `OEProxy*`, `NekoConfig` (DNS/IPv6) | ~10 | ✅ базово, ❌ DoH/IPv6 |
+| Прокси и сеть | `OEProxy*`, `NekoConfig` (DNS/IPv6) | ~10 | ✅ базово, ✅ DoH/IPv6 (NB-77, с оговорками — см. 6.3 и 6.6) |
 | Перевод и LLM | `NekoConfig`, `tw/nekomimi/nekogram/{translate,llm}` | ~55 | ➖ серверный перевод, 🟡 провайдеры Google/DeepL ✅ NB-49, LLM ✅ NB-48 только как ассистент (бокс запрос→ответ; LLM-переводчик, пресеты и стриминг — ❌); ключи plaintext без consent'а |
 | AI-ассистент | `AiConfig`, `app/exteraless/ai/*` | 13 ключей + UI | ✅ NB-48, с оговорками: MVP — `OEAiEndpoint`/`OEAiModel`/`OEAiApiKey` (алиасы `aiEndpoint`/`aiModel`/`aiApiKey`), OpenAI-совместимый `exteraless/ai_client.{h,cpp}` без сети, бокс «Ask AI» (`boxes/ai_request_box.{h,cpp}`), CLI 5 режимов; ❌ не сделаны роли и промпты (`KEY_ROLES`), история (`KEY_HISTORY`), стриминг, вставка ответа цитатой, замена редактора и саммари; ключ plaintext в `tdata/exteraless.json`, текст уходит на произвольный endpoint без consent'а в UI |
 | Feed (лента каналов) | `app/exteraless/feed/*` (14 файлов), `FeedConfig` | 4 ключа на аккаунт | ❌ не начато |
@@ -231,7 +231,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Время с секундами | `NekoConfig.showSeconds` | ✅ `OEGeneralShowSeconds` (NB-07), `FormatClock` в `history_view_bottom_info` и `format_values` |
 | Фильтр Zalgo | `NaConfig.zalgoFilter` | ❌ (`ui/text/*`, `data/data_messages.cpp`) |
 | Boost скачивания/загрузки | `OEGeneralDownloadSpeedBoost`, `NekoConfig.uploadBoost` | ✅ `OEChatsDownloadSpeedBoost` (NB-76, int `0..2`, default `0`) — пул сессий 1/2/4 и часть 128K/512K/1M в `storage/download_manager_mtproto.cpp`; `OEChatsUploadBoost` (NB-76, bool, default `false`) — часть отдачи до 512K при капе 1M в `storage/file_upload.cpp`; таймауты и пейсинг не менялись, CDN-слайсинг и preload/streaming остались 128K |
-| IPv6 / DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | ❌ (`mtproto/connection_*`), upstream умеет IPv6 в настройках соединения |
+| IPv6 / DNS over HTTPS | `NekoConfig.useIPv6`, `dnsType`, `customDoH` | ✅ NB-77, с оговорками: `OENetworkUseIPv6` (bool, default `true` вне Windows) засевается в `settings().proxy().setTryIPv6()` из `Application::startLocalStorage`; `OENetworkDnsType` (`0` — built-in DoH, `1` — system) и `OENetworkCustomDoH` правят `mtproto/details/mtproto_domain_resolver.cpp` (system-attempt через `QHostInfo` с TTL 5 минут, customDoH — prepend с fallback и диалектом по хосту); ❌ IPv6 работает только в сетях с IPv6, DoH виден только на прокси с hostname (DC — IP), customDoH идёт NoProxy, конфиг форка перезатирает тумблер upstream Proxies при рестарте |
 | Скрыть телефон, показать ID/DC | `NekoConfig.hidePhone`, `NaConfig.idDcType` | ✅ `OEGeneralHidePhone` (NB-37) скрывает телефон в профиле; `OEGeneralShowIdDc` (NB-09) показывает `id: … · DC …` в профиле контакта и своём, клик копирует `bareId`; DC — текущего аккаунта |
 | Сортировка списка чатов | `sortByUnread`, `sortByUnmuted`, `sortByUser`, `sortByContacts` | ✅ `sortByUnread` — `OEChatsSortByUnread` (NB-15, default `false`) через upstream-опцию `Dialogs::kOptionDialogsUnreadOnTop` (`dialogs/dialogs_entry.cpp`), индексный список не менялся; `sortByUnmuted`/`sortByUser`/`sortByContacts` — ❌ (`dialogs/dialogs_indexed_list.cpp`) |
 | Скрыть архив, свайп-архив | `hideArchive`, `openArchiveOnPull`, `doNotUnarchiveBySwipe` | ✅/➖ `OEChatsHideArchive` (NB-15, default `false`) прячет архив существующим skip-путём `_skipTopDialog` (`dialogs/dialogs_inner_widget.cpp`), `shouldBeInChatList` не менялся; свайп-архив (`openArchiveOnPull`, `doNotUnarchiveBySwipe`) — ➖ (`dialogs/dialogs_widget.cpp`) |
@@ -307,7 +307,7 @@ JSON-sidecar `tdata/exteraless/deleted_messages.json` версии 2 с 17 по�
 | Восстановление после смены сети | — | ✅ watcher в `exteraless/proxy_rules.cpp`, состояние в памяти |
 | Чипы-условия в UI | `ProxyDisableChipsView` | 🟡 чекбоксы в настройках вместо чипов |
 | Пинг прокси | `ProxyPingController` | ➖ `boxes/connection_box.cpp` |
-| DNS over HTTPS, свой DoH | `NekoConfig.dnsType`, `customDoH` | ❌ (`mtproto/*`) |
+| DNS over HTTPS, свой DoH | `NekoConfig.dnsType`, `customDoH` | ✅ NB-77, с оговорками: `OENetworkDnsType` (`0` — built-in DoH, `1` — system) и `OENetworkCustomDoH` (пусто — выключено) в `mtproto/details/mtproto_domain_resolver.cpp` — customDoH добавляется prepend'ом перед встроенными хостами с fallback'ом (cloudflare → JSON `/dns-query`, иначе Google `/resolve`), system-путь идёт через `QHostInfo`; ❌ customDoH идёт NoProxy, DoH без hostname (DC — IP) не проверить, конфиг форка — single source of truth |
 
 ### 6.7 Перевод и LLM
 

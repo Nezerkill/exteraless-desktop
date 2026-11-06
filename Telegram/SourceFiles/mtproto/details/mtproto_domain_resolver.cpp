@@ -11,9 +11,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/invoke_queued.h"
 #include "base/call_delayed.h"
 
+#include "exteraless/config.h"
+
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonObject>
+#include <QtNetwork/QAbstractSocket>
+#include <QtNetwork/QHostAddress>
+#include <QtNetwork/QHostInfo>
 #include <range/v3/algorithm/shuffle.hpp>
 #include <range/v3/algorithm/reverse.hpp>
 #include <range/v3/algorithm/remove.hpp>
@@ -25,6 +30,26 @@ namespace {
 constexpr auto kSendNextTimeout = crl::time(800);
 constexpr auto kMinTimeToLive = 10 * crl::time(1000);
 constexpr auto kMaxTimeToLive = 300 * crl::time(1000);
+
+[[nodiscard]] QUrl CustomDohEndpoint() {
+	const auto value = Exteraless::Config::Instance()
+		.networkCustomDoH()
+		.trimmed();
+	if (value.isEmpty()) {
+		return QUrl();
+	}
+	const auto text = value.contains(u"://"_q)
+		? value
+		: (u"https://"_q + value);
+	const auto result = QUrl(text, QUrl::StrictMode);
+	if (!result.isValid()
+		|| result.host().isEmpty()
+		|| (result.scheme() != u"https"_q
+			&& result.scheme() != u"http"_q)) {
+		return QUrl();
+	}
+	return result;
+}
 
 } // namespace
 
@@ -231,6 +256,25 @@ void DomainResolver::resolve(const AttemptKey &key) {
 
 	shuffle(0, 2);
 
+	const auto &config = Exteraless::Config::Instance();
+	if (config.networkDnsType() == 1) {
+		attempts.insert(begin(attempts), Attempt{ Type::System });
+	}
+	if (const auto endpoint = CustomDohEndpoint(); !endpoint.isEmpty()) {
+		// WHY: Cloudflare hosts serve the JSON DoH dialect, while the
+		// Google /resolve shape is what other JSON DNS proxies accept, so
+		// an unmatched custom host falls back to the Google dialect.
+		const auto cloudflare = endpoint.host().contains(
+			u"cloudflare"_q,
+			Qt::CaseInsensitive);
+		attempts.insert(begin(attempts), Attempt{
+			cloudflare ? Type::Mozilla : Type::Google,
+			endpoint.host(),
+			QString(),
+			endpoint,
+		});
+	}
+
 	ranges::reverse(attempts); // We go from last to first.
 
 	_attempts.emplace(key, Attempts{ std::move(attempts) });
@@ -274,13 +318,22 @@ void DomainResolver::sendNextRequest(const AttemptKey &key) {
 void DomainResolver::performRequest(
 		const AttemptKey &key,
 		const Attempt &attempt) {
-	auto url = QUrl();
-	url.setScheme("https");
+	if (attempt.type == Type::System) {
+		performSystemRequest(key);
+		return;
+	}
+	auto url = attempt.url;
+	if (url.host().isEmpty()) {
+		url = QUrl();
+		url.setScheme("https");
+		url.setHost(attempt.data);
+	}
 	auto request = QNetworkRequest();
 	switch (attempt.type) {
 	case Type::Mozilla: {
-		url.setHost(attempt.data);
-		url.setPath("/dns-query");
+		if (url.path().isEmpty() || url.path() == u"/"_q) {
+			url.setPath("/dns-query");
+		}
 		url.setQuery(QStringLiteral("name=%1&type=%2&random_padding=%3"
 		).arg(key.domain
 		).arg(key.ipv6 ? 28 : 1
@@ -288,8 +341,9 @@ void DomainResolver::performRequest(
 		request.setRawHeader("accept", "application/dns-json");
 	} break;
 	case Type::Google: {
-		url.setHost(attempt.data);
-		url.setPath("/resolve");
+		if (url.path().isEmpty() || url.path() == u"/"_q) {
+			url.setPath("/resolve");
+		}
 		url.setQuery(QStringLiteral("name=%1&type=%2&random_padding=%3"
 		).arg(key.domain
 		).arg(key.ipv6 ? 28 : 1
@@ -314,6 +368,38 @@ void DomainResolver::performRequest(
 	});
 }
 
+void DomainResolver::performSystemRequest(const AttemptKey &key) {
+	QHostInfo::lookupHost(key.domain, this, [=](const QHostInfo &info) {
+		if (info.error() != QHostInfo::NoError) {
+			return;
+		}
+		auto ips = QStringList();
+		for (const auto &address : info.addresses()) {
+			const auto ipv6 = (address.protocol()
+				== QAbstractSocket::IPv6Protocol);
+			if (ipv6 == key.ipv6 && !address.isNull()) {
+				ips.push_back(address.toString());
+			}
+		}
+		if (!ips.isEmpty()) {
+			storeResult(key, std::move(ips), kMaxTimeToLive);
+		}
+	});
+}
+
+void DomainResolver::storeResult(
+		const AttemptKey &key,
+		QStringList ips,
+		crl::time ttl) {
+	_requests.erase(key);
+	_attempts.erase(key);
+
+	_lastTimestamp = crl::now();
+	_cache[key] = CacheEntry{ std::move(ips), _lastTimestamp + ttl };
+
+	checkExpireAndPushResult(key.domain);
+}
+
 void DomainResolver::requestFinished(
 		const AttemptKey &key,
 		not_null<QNetworkReply*> reply) {
@@ -322,22 +408,16 @@ void DomainResolver::requestFinished(
 	if (response.empty()) {
 		return;
 	}
-	_requests.erase(key);
-	_attempts.erase(key);
 
-	auto entry = CacheEntry();
+	auto ips = QStringList();
 	auto ttl = kMaxTimeToLive;
 	for (const auto &item : response) {
-		entry.ips.push_back(item.data);
+		ips.push_back(item.data);
 		ttl = std::min(
 			ttl,
 			std::max(item.TTL * crl::time(1000), kMinTimeToLive));
 	}
-	_lastTimestamp = crl::now();
-	entry.expireAt = _lastTimestamp + ttl;
-	_cache[key] = std::move(entry);
-
-	checkExpireAndPushResult(key.domain);
+	storeResult(key, std::move(ips), ttl);
 }
 
 QByteArray DomainResolver::finalizeRequest(

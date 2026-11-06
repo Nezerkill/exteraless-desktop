@@ -88,6 +88,9 @@ constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
+constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
+constexpr auto kNetworkDnsType = "OENetworkDnsType";
+constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
 constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 constexpr auto kGhostSendOnline = "OEGhostSendOnline";
@@ -175,6 +178,14 @@ constexpr auto kAiEndpoint = "OEAiEndpoint";
 constexpr auto kAiModel = "OEAiModel";
 constexpr auto kAiApiKey = "OEAiApiKey";
 constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
+
+[[nodiscard]] constexpr bool DefaultNetworkUseIPv6() {
+#if defined Q_OS_WIN
+	return false;
+#else // Q_OS_WIN
+	return true;
+#endif // Q_OS_WIN
+}
 
 [[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
 	return value.isEmpty() ? QStringLiteral("ru") : value;
@@ -820,6 +831,31 @@ bool Config::proxyAutoDisabled() const {
 
 void Config::setProxyAutoDisabled(bool value) {
 	setValue(kProxyAutoDisabled, value);
+}
+
+bool Config::networkUseIPv6() const {
+	return boolValue(kNetworkUseIPv6, DefaultNetworkUseIPv6());
+}
+
+void Config::setNetworkUseIPv6(bool value) {
+	setValue(kNetworkUseIPv6, value);
+}
+
+int Config::networkDnsType() const {
+	// 0 = built-in DoH, 1 = system resolver.
+	return std::clamp(intValue(kNetworkDnsType, 0), 0, 1);
+}
+
+void Config::setNetworkDnsType(int value) {
+	setValue(kNetworkDnsType, std::clamp(value, 0, 1));
+}
+
+QString Config::networkCustomDoH() const {
+	return stringValue(kNetworkCustomDoH, QString());
+}
+
+void Config::setNetworkCustomDoH(const QString &value) {
+	setValue(kNetworkCustomDoH, value);
 }
 
 bool Config::ghostSendReadPackets() const {
@@ -1490,6 +1526,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGeneralBotPrivacyAsk
 			|| key == kProxyDisableConditions
 			|| key == kProxyAutoDisabled
+			|| key == kNetworkUseIPv6
+			|| key == kNetworkDnsType
+			|| key == kNetworkCustomDoH
 			|| key == kGhostSendReadPackets
 			|| key == kGhostSendReadStories
 			|| key == kGhostSendOnline

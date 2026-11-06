@@ -2,6 +2,35 @@
 
 ## 2026-11-07
 
+- Сеть: IPv6 и DNS over HTTPS (NB-77): `OENetworkUseIPv6` (bool, default
+  `!Q_OS_WIN`), `OENetworkDnsType` (int `0..1`, default `0`: `0` — built-in
+  DoH, `1` — system) и `OENetworkCustomDoH` (строка, пусто — выключено),
+  алиасы `useIPv6`/`dnsType`/`customDoH`. Резолвер
+  `mtproto/details/mtproto_domain_resolver.{h,cpp}` при `dnsType == 1`
+  вставляет первой попытку `Type::System` (`QHostInfo::lookupHost`, TTL 5
+  минут), а непустой customDoH — попытку с URL из конфига перед встроенными
+  хостами, поэтому встроенный путь остаётся fallback'ом; диалект выбирается
+  по хосту: cloudflare получает JSON `/dns-query`, остальные — Google-форму
+  `/resolve`, явный путь в URL сохраняется. IPv6-флаг засевается в
+  `Application::startLocalStorage` через `settings().proxy().setTryIPv6()`
+  после `Local::start()` — осознанно не в конструкторе, потому что
+  upstream-настройки читаются с диска позже. В Exteraless подсекция Network:
+  тумблер «Try IPv6 connections», селектор «DNS provider» (Built-in
+  DoH/System) и поле «Custom DoH URL», шесть lang-ключей
+  `lng_settings_exteraless_network*`; CLI 4 режима (`network`,
+  `network-set-ipv6`, `network-set-dns`, `network-set-doh`, `-` очищает
+  URL), `dnsType` клампится в `0..1`, тумблер сразу перезапускает MTP
+  аккаунтов. `.extera` — 138 ключей (133 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`); `check_network` — 17 проверок, раннеры 943/32/213 PASS
+  (backup 103); `kKeysCount` 11232 (`kTagsCount` 185); sha256 патча
+  `da3b860a…`, `nix flake check` PASS. Сборка потребовала `exteraless` в
+  `PRIVATE`-зависимостях `td_mtproto` (`Telegram/cmake/td_mtproto.cmake`),
+  иначе цель не собирается. Ограничения: IPv6 реально работает только в
+  сетях с IPv6; смоук «подключение через DoH» переписан — DC задан IP, и
+  DoH виден только на прокси с hostname; customDoH идёт мимо прокси
+  (`QNetworkProxy::NoProxy` в резолвере); single source of truth — конфиг
+  форка, поэтому тумблер upstream Proxies перезатирается при рестарте;
+  Xvfb-смоук не выполнялся.
 - Regex-фильтры сообщений (NB-22): движок `exteraless/regex_filters.{h,cpp}` —
   `Filter` с полями `regex`, `caseInsensitive`, `reversed` и `enabled`,
   разбор JSON-массива (`ParseFilters`), компиляция `QRegularExpression` с

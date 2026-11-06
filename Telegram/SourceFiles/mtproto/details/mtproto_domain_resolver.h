@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/weak_ptr.h"
 
 #include <QtCore/QPointer>
+#include <QtCore/QUrl>
 #include <QtNetwork/QNetworkReply>
 #include <optional>
 
@@ -52,11 +53,13 @@ private:
 	enum class Type {
 		Mozilla,
 		Google,
+		System,
 	};
 	struct Attempt {
 		Type type;
 		QString data;
 		QString host;
+		QUrl url;
 	};
 	struct AttemptKey {
 		QString domain;
@@ -82,6 +85,11 @@ private:
 	void resolve(const AttemptKey &key);
 	void sendNextRequest(const AttemptKey &key);
 	void performRequest(const AttemptKey &key, const Attempt &attempt);
+	void performSystemRequest(const AttemptKey &key);
+	void storeResult(
+		const AttemptKey &key,
+		QStringList ips,
+		crl::time ttl);
 	void checkExpireAndPushResult(const QString &domain);
 	void requestFinished(
 		const AttemptKey &key,

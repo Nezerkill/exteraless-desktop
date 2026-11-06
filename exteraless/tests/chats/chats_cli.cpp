@@ -29,6 +29,7 @@
 #include <QJsonObject>
 #include <QStringList>
 
+#include <algorithm>
 #include <array>
 #include <iostream>
 #include <vector>
@@ -243,7 +244,11 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli backup-import-json <json>\n"
 		<< "  exteraless-chats-cli subtitles-parse <file>\n"
 		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
-		<< "  exteraless-chats-cli subtitles-key <docId>\n";
+		<< "  exteraless-chats-cli subtitles-key <docId>\n"
+		<< "  exteraless-chats-cli network\n"
+		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
+		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
+		<< "  exteraless-chats-cli network-set-doh <url|->\n";
 	return 2;
 }
 
@@ -375,6 +380,15 @@ void PrintAiConfig() {
 		{ QStringLiteral("endpoint"), config.aiEndpoint() },
 		{ QStringLiteral("model"), config.aiModel() },
 		{ QStringLiteral("hasKey"), !config.aiApiKey().isEmpty() },
+	});
+}
+
+void PrintNetwork() {
+	const auto &config = Exteraless::Config::Instance();
+	PrintJson(QJsonObject{
+		{ QStringLiteral("useIPv6"), config.networkUseIPv6() },
+		{ QStringLiteral("dnsType"), config.networkDnsType() },
+		{ QStringLiteral("customDoh"), config.networkCustomDoH() },
 	});
 }
 
@@ -1829,6 +1843,50 @@ int main(int argc, char *argv[]) {
 			config.aiModel(),
 			Exteraless::AiRequest{ .prompt = arguments[2] });
 		PrintJson(QJsonDocument::fromJson(body).object());
+		return 0;
+	}
+	if (mode == QStringLiteral("network")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintNetwork();
+		return 0;
+	}
+	if (mode == QStringLiteral("network-set-ipv6")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setNetworkUseIPv6(value);
+		PrintNetwork();
+		return 0;
+	}
+	if (mode == QStringLiteral("network-set-dns")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setNetworkDnsType(
+			std::clamp(value, 0, 1));
+		PrintNetwork();
+		return 0;
+	}
+	if (mode == QStringLiteral("network-set-doh")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setNetworkCustomDoH(
+			(arguments[2] == QStringLiteral("-"))
+				? QString()
+				: arguments[2]);
+		PrintNetwork();
 		return 0;
 	}
 	if (mode == QStringLiteral("forward-date")) {

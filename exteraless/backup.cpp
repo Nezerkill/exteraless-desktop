@@ -181,6 +181,12 @@ constexpr auto kGhostReadExclusions = "OEGhostReadExclusions";
 constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
+constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
+constexpr auto kNetworkDnsType = "OENetworkDnsType";
+constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
+constexpr auto kNetworkUseIPv6Alias = "useIPv6";
+constexpr auto kNetworkDnsTypeAlias = "dnsType";
+constexpr auto kNetworkCustomDoHAlias = "customDoH";
 constexpr auto kPluginStates = "OEPluginStates";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
@@ -466,6 +472,9 @@ QString BuildBackup() {
 	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
 	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
 	extera[kProxyAutoDisabled] = config.proxyAutoDisabled();
+	extera[kNetworkUseIPv6] = config.networkUseIPv6();
+	extera[kNetworkDnsType] = config.networkDnsType();
+	extera[kNetworkCustomDoH] = config.networkCustomDoH();
 	extera[kPluginStates] = config.pluginStates();
 	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
@@ -757,6 +766,16 @@ BackupImportResult ApplyBackup(const QString &text) {
 			// Derived from the current network; a foreign backup must not
 			// re-enable the proxy, so import only resets it.
 			config.setProxyAutoDisabled(false);
+		} else if ((key == kNetworkUseIPv6 || key == kNetworkUseIPv6Alias)
+			&& value.isBool()) {
+			config.setNetworkUseIPv6(value.toBool());
+		} else if ((key == kNetworkDnsType || key == kNetworkDnsTypeAlias)
+			&& value.isDouble()) {
+			const auto rounded = int(std::lround(value.toDouble()));
+			config.setNetworkDnsType(std::clamp(rounded, 0, 1));
+		} else if ((key == kNetworkCustomDoH || key == kNetworkCustomDoHAlias)
+			&& value.isString()) {
+			config.setNetworkCustomDoH(value.toString());
 		} else if (key == kPluginStates && value.isObject()) {
 			config.setPluginStates(value.toObject());
 		} else if (key == kChatsStripTrackingOnOpen && value.isBool()) {

@@ -62,4 +62,5 @@ PUBLIC
     tdesktop::td_scheme
 PRIVATE
     desktop-app::external_zlib
+    exteraless
 )

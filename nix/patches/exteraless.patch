@@ -107,7 +107,7 @@ index 811707d..bbd7372 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..702b7ca 100644
+index ffc8ec9..4a3c12a 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -119,7 +119,7 @@ index ffc8ec9..702b7ca 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,228 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,234 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -346,6 +346,12 @@ index ffc8ec9..702b7ca 100644
 +"lng_settings_exteraless_ai_key" = "API key";
 +"lng_settings_exteraless_recognition_language" = "Speech recognition language";
 +"lng_media_view_transcribe_offline_na" = "Offline model is not installed";
++"lng_settings_exteraless_network" = "Network";
++"lng_settings_exteraless_network_use_ipv6" = "Try IPv6 connections";
++"lng_settings_exteraless_network_dns" = "DNS provider";
++"lng_settings_exteraless_network_dns_builtin" = "Built-in DoH";
++"lng_settings_exteraless_network_dns_system" = "System";
++"lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -1004,7 +1010,7 @@ index 401b0ab..7d99d8f 100644
  	};
  }
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..c6235fe 100644
+index 7a309ac..9be139c 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
 @@ -6,6 +6,10 @@ For license and copyright information please follow this link:
@@ -1064,6 +1070,18 @@ index 7a309ac..c6235fe 100644
  }
  
  void Application::checkSystemDarkMode() {
+@@ -943,6 +958,11 @@ void Application::badMtprotoConfigurationError() {
+ void Application::startLocalStorage() {
+ 	Ui::GL::DetectLastCheckCrash();
+ 	Local::start();
++	// WHY: the fork keeps the network preferences in its own config, while
++	// mtproto reads only the proxy settings, so seed them here, after the core
++	// settings have been read from disk and before any session is created.
++	settings().proxy().setTryIPv6(
++		Exteraless::Config::Instance().networkUseIPv6());
+ 	_saveSettingsTimer.emplace([=] { saveSettings(); });
+ 	settings().saveDelayedRequests() | rpl::on_next([=] {
+ 		saveSettingsDelayed();
 diff --git a/Telegram/SourceFiles/core/core_settings.cpp b/Telegram/SourceFiles/core/core_settings.cpp
 index 6ef88cd..95f09f5 100644
 --- a/Telegram/SourceFiles/core/core_settings.cpp
@@ -8707,6 +8725,220 @@ index 1a1f2bd..15602bf 100644
  	options.audioId = _instance->player().prepareLegacyState().id;
  	options.speed = _delegate->pipPlaybackSpeed();
  
+diff --git a/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.cpp b/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.cpp
+index eeac8f6..5b175c7 100644
+--- a/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.cpp
++++ b/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.cpp
+@@ -11,9 +11,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "base/invoke_queued.h"
+ #include "base/call_delayed.h"
+ 
++#include "exteraless/config.h"
++
+ #include <QtCore/QJsonDocument>
+ #include <QtCore/QJsonArray>
+ #include <QtCore/QJsonObject>
++#include <QtNetwork/QAbstractSocket>
++#include <QtNetwork/QHostAddress>
++#include <QtNetwork/QHostInfo>
+ #include <range/v3/algorithm/shuffle.hpp>
+ #include <range/v3/algorithm/reverse.hpp>
+ #include <range/v3/algorithm/remove.hpp>
+@@ -26,6 +31,26 @@ constexpr auto kSendNextTimeout = crl::time(800);
+ constexpr auto kMinTimeToLive = 10 * crl::time(1000);
+ constexpr auto kMaxTimeToLive = 300 * crl::time(1000);
+ 
++[[nodiscard]] QUrl CustomDohEndpoint() {
++	const auto value = Exteraless::Config::Instance()
++		.networkCustomDoH()
++		.trimmed();
++	if (value.isEmpty()) {
++		return QUrl();
++	}
++	const auto text = value.contains(u"://"_q)
++		? value
++		: (u"https://"_q + value);
++	const auto result = QUrl(text, QUrl::StrictMode);
++	if (!result.isValid()
++		|| result.host().isEmpty()
++		|| (result.scheme() != u"https"_q
++			&& result.scheme() != u"http"_q)) {
++		return QUrl();
++	}
++	return result;
++}
++
+ } // namespace
+ 
+ const std::vector<QString> &DnsDomains() {
+@@ -231,6 +256,25 @@ void DomainResolver::resolve(const AttemptKey &key) {
+ 
+ 	shuffle(0, 2);
+ 
++	const auto &config = Exteraless::Config::Instance();
++	if (config.networkDnsType() == 1) {
++		attempts.insert(begin(attempts), Attempt{ Type::System });
++	}
++	if (const auto endpoint = CustomDohEndpoint(); !endpoint.isEmpty()) {
++		// WHY: Cloudflare hosts serve the JSON DoH dialect, while the
++		// Google /resolve shape is what other JSON DNS proxies accept, so
++		// an unmatched custom host falls back to the Google dialect.
++		const auto cloudflare = endpoint.host().contains(
++			u"cloudflare"_q,
++			Qt::CaseInsensitive);
++		attempts.insert(begin(attempts), Attempt{
++			cloudflare ? Type::Mozilla : Type::Google,
++			endpoint.host(),
++			QString(),
++			endpoint,
++		});
++	}
++
+ 	ranges::reverse(attempts); // We go from last to first.
+ 
+ 	_attempts.emplace(key, Attempts{ std::move(attempts) });
+@@ -274,13 +318,22 @@ void DomainResolver::sendNextRequest(const AttemptKey &key) {
+ void DomainResolver::performRequest(
+ 		const AttemptKey &key,
+ 		const Attempt &attempt) {
+-	auto url = QUrl();
+-	url.setScheme("https");
++	if (attempt.type == Type::System) {
++		performSystemRequest(key);
++		return;
++	}
++	auto url = attempt.url;
++	if (url.host().isEmpty()) {
++		url = QUrl();
++		url.setScheme("https");
++		url.setHost(attempt.data);
++	}
+ 	auto request = QNetworkRequest();
+ 	switch (attempt.type) {
+ 	case Type::Mozilla: {
+-		url.setHost(attempt.data);
+-		url.setPath("/dns-query");
++		if (url.path().isEmpty() || url.path() == u"/"_q) {
++			url.setPath("/dns-query");
++		}
+ 		url.setQuery(QStringLiteral("name=%1&type=%2&random_padding=%3"
+ 		).arg(key.domain
+ 		).arg(key.ipv6 ? 28 : 1
+@@ -288,8 +341,9 @@ void DomainResolver::performRequest(
+ 		request.setRawHeader("accept", "application/dns-json");
+ 	} break;
+ 	case Type::Google: {
+-		url.setHost(attempt.data);
+-		url.setPath("/resolve");
++		if (url.path().isEmpty() || url.path() == u"/"_q) {
++			url.setPath("/resolve");
++		}
+ 		url.setQuery(QStringLiteral("name=%1&type=%2&random_padding=%3"
+ 		).arg(key.domain
+ 		).arg(key.ipv6 ? 28 : 1
+@@ -314,6 +368,38 @@ void DomainResolver::performRequest(
+ 	});
+ }
+ 
++void DomainResolver::performSystemRequest(const AttemptKey &key) {
++	QHostInfo::lookupHost(key.domain, this, [=](const QHostInfo &info) {
++		if (info.error() != QHostInfo::NoError) {
++			return;
++		}
++		auto ips = QStringList();
++		for (const auto &address : info.addresses()) {
++			const auto ipv6 = (address.protocol()
++				== QAbstractSocket::IPv6Protocol);
++			if (ipv6 == key.ipv6 && !address.isNull()) {
++				ips.push_back(address.toString());
++			}
++		}
++		if (!ips.isEmpty()) {
++			storeResult(key, std::move(ips), kMaxTimeToLive);
++		}
++	});
++}
++
++void DomainResolver::storeResult(
++		const AttemptKey &key,
++		QStringList ips,
++		crl::time ttl) {
++	_requests.erase(key);
++	_attempts.erase(key);
++
++	_lastTimestamp = crl::now();
++	_cache[key] = CacheEntry{ std::move(ips), _lastTimestamp + ttl };
++
++	checkExpireAndPushResult(key.domain);
++}
++
+ void DomainResolver::requestFinished(
+ 		const AttemptKey &key,
+ 		not_null<QNetworkReply*> reply) {
+@@ -322,22 +408,16 @@ void DomainResolver::requestFinished(
+ 	if (response.empty()) {
+ 		return;
+ 	}
+-	_requests.erase(key);
+-	_attempts.erase(key);
+ 
+-	auto entry = CacheEntry();
++	auto ips = QStringList();
+ 	auto ttl = kMaxTimeToLive;
+ 	for (const auto &item : response) {
+-		entry.ips.push_back(item.data);
++		ips.push_back(item.data);
+ 		ttl = std::min(
+ 			ttl,
+ 			std::max(item.TTL * crl::time(1000), kMinTimeToLive));
+ 	}
+-	_lastTimestamp = crl::now();
+-	entry.expireAt = _lastTimestamp + ttl;
+-	_cache[key] = std::move(entry);
+-
+-	checkExpireAndPushResult(key.domain);
++	storeResult(key, std::move(ips), ttl);
+ }
+ 
+ QByteArray DomainResolver::finalizeRequest(
+diff --git a/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.h b/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.h
+index cb1979b..a5cbae4 100644
+--- a/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.h
++++ b/Telegram/SourceFiles/mtproto/details/mtproto_domain_resolver.h
+@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "base/weak_ptr.h"
+ 
+ #include <QtCore/QPointer>
++#include <QtCore/QUrl>
+ #include <QtNetwork/QNetworkReply>
+ #include <optional>
+ 
+@@ -52,11 +53,13 @@ private:
+ 	enum class Type {
+ 		Mozilla,
+ 		Google,
++		System,
+ 	};
+ 	struct Attempt {
+ 		Type type;
+ 		QString data;
+ 		QString host;
++		QUrl url;
+ 	};
+ 	struct AttemptKey {
+ 		QString domain;
+@@ -82,6 +85,11 @@ private:
+ 	void resolve(const AttemptKey &key);
+ 	void sendNextRequest(const AttemptKey &key);
+ 	void performRequest(const AttemptKey &key, const Attempt &attempt);
++	void performSystemRequest(const AttemptKey &key);
++	void storeResult(
++		const AttemptKey &key,
++		QStringList ips,
++		crl::time ttl);
+ 	void checkExpireAndPushResult(const QString &domain);
+ 	void requestFinished(
+ 		const AttemptKey &key,
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 index d25fe3b..59d169d 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
@@ -8935,10 +9167,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..cf2aff2
+index 0000000..d98bec4
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2864 @@
+@@ -0,0 +1,2975 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -11686,6 +11918,117 @@ index 0000000..cf2aff2
 +	});
 +
 +	builder.addSubsectionTitle({
++		.id = u"exteraless/network"_q,
++		.title = tr::lng_settings_exteraless_network(),
++	});
++
++	const auto ipv6Toggle = builder.addButton({
++		.id = u"exteraless/network/use-ipv6"_q,
++		.title = tr::lng_settings_exteraless_network_use_ipv6(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().networkUseIPv6()),
++		.keywords = { u"ipv6"_q, u"network"_q, u"connection"_q },
++	});
++	if (ipv6Toggle) {
++		ipv6Toggle->toggledChanges(
++		) | rpl::on_next([](bool value) {
++			auto &config = Exteraless::Config::Instance();
++			if (config.networkUseIPv6() == value) {
++				return;
++			}
++			config.setNetworkUseIPv6(value);
++			auto &app = Core::App();
++			app.settings().proxy().setTryIPv6(value);
++			for (const auto &account : app.domain().accounts()) {
++				account.account->mtp().restart();
++			}
++			app.saveSettingsDelayed();
++		}, ipv6Toggle->lifetime());
++	}
++
++	const auto dnsLabel = [](int type) {
++		return (type == 1)
++			? tr::lng_settings_exteraless_network_dns_system(tr::now)
++			: tr::lng_settings_exteraless_network_dns_builtin(tr::now);
++	};
++	const auto dnsValue = std::make_shared<rpl::variable<QString>>(
++		dnsLabel(Exteraless::Config::Instance().networkDnsType()));
++	builder.addButton({
++		.id = u"exteraless/network/dns"_q,
++		.title = tr::lng_settings_exteraless_network_dns(),
++		.st = &st::settingsButtonNoIcon,
++		.label = dnsValue->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().networkDnsType());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(tr::lng_settings_exteraless_network_dns());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto value = 0; value != 2; ++value) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							dnsLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance().setNetworkDnsType(value);
++					dnsValue->force_assign(dnsLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"dns"_q, u"doh"_q, u"network"_q },
++	});
++
++	const auto customDohValue = std::make_shared<rpl::variable<QString>>(
++		Exteraless::Config::Instance().networkCustomDoH());
++	builder.addButton({
++		.id = u"exteraless/network/custom-doh"_q,
++		.title = tr::lng_settings_exteraless_network_custom_doh(),
++		.st = &st::settingsButtonNoIcon,
++		.label = customDohValue->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_network_custom_doh());
++				box->setWidth(st::boxWideWidth);
++				const auto field = box->addRow(
++					object_ptr<Ui::InputField>(
++						box,
++						st::defaultInputField,
++						Ui::InputField::Mode::SingleLine,
++						tr::lng_settings_exteraless_network_custom_doh(),
++						TextWithTags{ Exteraless::Config::Instance()
++							.networkCustomDoH() }),
++					st::boxRowPadding);
++				box->addButton(tr::lng_box_ok(), [=] {
++					const auto url = field->getTextWithTags().text.trimmed();
++					Exteraless::Config::Instance().setNetworkCustomDoH(url);
++					customDohValue->force_assign(url);
++					box->closeBox();
++				});
++				box->setFocusCallback([=] { field->setFocusFast(); });
++			}));
++		},
++		.keywords = { u"doh"_q, u"dns"_q, u"url"_q },
++	});
++
++	builder.addSubsectionTitle({
 +		.id = u"exteraless/plugins"_q,
 +		.title = tr::lng_settings_exteraless_plugins(),
 +	});
@@ -13348,6 +13691,16 @@ index b7b3acc..3052f11 100644
      desktop-app::lib_ui
 +    exteraless
  )
+diff --git a/Telegram/cmake/td_mtproto.cmake b/Telegram/cmake/td_mtproto.cmake
+index 79a0a3c..87a5eaa 100644
+--- a/Telegram/cmake/td_mtproto.cmake
++++ b/Telegram/cmake/td_mtproto.cmake
+@@ -62,4 +62,5 @@ PUBLIC
+     tdesktop::td_scheme
+ PRIVATE
+     desktop-app::external_zlib
++    exteraless
+ )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
 index 0000000..830a198
@@ -13566,10 +13919,10 @@ index 0000000..eb180ae
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..b29bd32
+index 0000000..5bec8b5
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1215 @@
+@@ -0,0 +1,1234 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -13753,6 +14106,12 @@ index 0000000..b29bd32
 +constexpr auto kGhostTypingExclusions = "OEGhostTypingExclusions";
 +constexpr auto kSaveDeletedMessages = "OESaveDeletedMessages";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
++constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
++constexpr auto kNetworkDnsType = "OENetworkDnsType";
++constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
++constexpr auto kNetworkUseIPv6Alias = "useIPv6";
++constexpr auto kNetworkDnsTypeAlias = "dnsType";
++constexpr auto kNetworkCustomDoHAlias = "customDoH";
 +constexpr auto kPluginStates = "OEPluginStates";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
@@ -14038,6 +14397,9 @@ index 0000000..b29bd32
 +	extera[kGhostTypingExclusions] = config.ghostTypingExclusions();
 +	extera[kSaveDeletedMessages] = config.saveDeletedMessages();
 +	extera[kProxyAutoDisabled] = config.proxyAutoDisabled();
++	extera[kNetworkUseIPv6] = config.networkUseIPv6();
++	extera[kNetworkDnsType] = config.networkDnsType();
++	extera[kNetworkCustomDoH] = config.networkCustomDoH();
 +	extera[kPluginStates] = config.pluginStates();
 +	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
@@ -14329,6 +14691,16 @@ index 0000000..b29bd32
 +			// Derived from the current network; a foreign backup must not
 +			// re-enable the proxy, so import only resets it.
 +			config.setProxyAutoDisabled(false);
++		} else if ((key == kNetworkUseIPv6 || key == kNetworkUseIPv6Alias)
++			&& value.isBool()) {
++			config.setNetworkUseIPv6(value.toBool());
++		} else if ((key == kNetworkDnsType || key == kNetworkDnsTypeAlias)
++			&& value.isDouble()) {
++			const auto rounded = int(std::lround(value.toDouble()));
++			config.setNetworkDnsType(std::clamp(rounded, 0, 1));
++		} else if ((key == kNetworkCustomDoH || key == kNetworkCustomDoHAlias)
++			&& value.isString()) {
++			config.setNetworkCustomDoH(value.toString());
 +		} else if (key == kPluginStates && value.isObject()) {
 +			config.setPluginStates(value.toObject());
 +		} else if (key == kChatsStripTrackingOnOpen && value.isBool()) {
@@ -14909,10 +15281,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..b6084c4
+index 0000000..9858991
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1742 @@
+@@ -0,0 +1,1781 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -15003,6 +15375,9 @@ index 0000000..b6084c4
 +constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 +constexpr auto kProxyDisableConditions = "OEProxyDisableConditions";
 +constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
++constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
++constexpr auto kNetworkDnsType = "OENetworkDnsType";
++constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
 +constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 +constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 +constexpr auto kGhostSendOnline = "OEGhostSendOnline";
@@ -15090,6 +15465,14 @@ index 0000000..b6084c4
 +constexpr auto kAiModel = "OEAiModel";
 +constexpr auto kAiApiKey = "OEAiApiKey";
 +constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
++
++[[nodiscard]] constexpr bool DefaultNetworkUseIPv6() {
++#if defined Q_OS_WIN
++	return false;
++#else // Q_OS_WIN
++	return true;
++#endif // Q_OS_WIN
++}
 +
 +[[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
 +	return value.isEmpty() ? QStringLiteral("ru") : value;
@@ -15735,6 +16118,31 @@ index 0000000..b6084c4
 +
 +void Config::setProxyAutoDisabled(bool value) {
 +	setValue(kProxyAutoDisabled, value);
++}
++
++bool Config::networkUseIPv6() const {
++	return boolValue(kNetworkUseIPv6, DefaultNetworkUseIPv6());
++}
++
++void Config::setNetworkUseIPv6(bool value) {
++	setValue(kNetworkUseIPv6, value);
++}
++
++int Config::networkDnsType() const {
++	// 0 = built-in DoH, 1 = system resolver.
++	return std::clamp(intValue(kNetworkDnsType, 0), 0, 1);
++}
++
++void Config::setNetworkDnsType(int value) {
++	setValue(kNetworkDnsType, std::clamp(value, 0, 1));
++}
++
++QString Config::networkCustomDoH() const {
++	return stringValue(kNetworkCustomDoH, QString());
++}
++
++void Config::setNetworkCustomDoH(const QString &value) {
++	setValue(kNetworkCustomDoH, value);
 +}
 +
 +bool Config::ghostSendReadPackets() const {
@@ -16405,6 +16813,9 @@ index 0000000..b6084c4
 +			|| key == kGeneralBotPrivacyAsk
 +			|| key == kProxyDisableConditions
 +			|| key == kProxyAutoDisabled
++			|| key == kNetworkUseIPv6
++			|| key == kNetworkDnsType
++			|| key == kNetworkCustomDoH
 +			|| key == kGhostSendReadPackets
 +			|| key == kGhostSendReadStories
 +			|| key == kGhostSendOnline
@@ -16657,10 +17068,10 @@ index 0000000..b6084c4
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..e0d23d1
+index 0000000..f32ba85
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,358 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -16842,6 +17253,13 @@ index 0000000..e0d23d1
 +
 +	[[nodiscard]] bool proxyAutoDisabled() const;
 +	void setProxyAutoDisabled(bool value);
++
++	[[nodiscard]] bool networkUseIPv6() const;
++	void setNetworkUseIPv6(bool value);
++	[[nodiscard]] int networkDnsType() const;
++	void setNetworkDnsType(int value);
++	[[nodiscard]] QString networkCustomDoH() const;
++	void setNetworkCustomDoH(const QString &value);
 +
 +	[[nodiscard]] bool ghostSendReadPackets() const;
 +	void setGhostSendReadPackets(bool value);
@@ -20103,10 +20521,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..9389368
+index 0000000..a66b7af
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2964 @@
+@@ -0,0 +1,3022 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -20138,6 +20556,7 @@ index 0000000..9389368
 +#include <QJsonObject>
 +#include <QStringList>
 +
++#include <algorithm>
 +#include <array>
 +#include <iostream>
 +#include <vector>
@@ -20352,7 +20771,11 @@ index 0000000..9389368
 +		<< "  exteraless-chats-cli backup-import-json <json>\n"
 +		<< "  exteraless-chats-cli subtitles-parse <file>\n"
 +		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
-+		<< "  exteraless-chats-cli subtitles-key <docId>\n";
++		<< "  exteraless-chats-cli subtitles-key <docId>\n"
++		<< "  exteraless-chats-cli network\n"
++		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
++		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
++		<< "  exteraless-chats-cli network-set-doh <url|->\n";
 +	return 2;
 +}
 +
@@ -20484,6 +20907,15 @@ index 0000000..9389368
 +		{ QStringLiteral("endpoint"), config.aiEndpoint() },
 +		{ QStringLiteral("model"), config.aiModel() },
 +		{ QStringLiteral("hasKey"), !config.aiApiKey().isEmpty() },
++	});
++}
++
++void PrintNetwork() {
++	const auto &config = Exteraless::Config::Instance();
++	PrintJson(QJsonObject{
++		{ QStringLiteral("useIPv6"), config.networkUseIPv6() },
++		{ QStringLiteral("dnsType"), config.networkDnsType() },
++		{ QStringLiteral("customDoh"), config.networkCustomDoH() },
 +	});
 +}
 +
@@ -21940,6 +22372,50 @@ index 0000000..9389368
 +		PrintJson(QJsonDocument::fromJson(body).object());
 +		return 0;
 +	}
++	if (mode == QStringLiteral("network")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintNetwork();
++		return 0;
++	}
++	if (mode == QStringLiteral("network-set-ipv6")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setNetworkUseIPv6(value);
++		PrintNetwork();
++		return 0;
++	}
++	if (mode == QStringLiteral("network-set-dns")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setNetworkDnsType(
++			std::clamp(value, 0, 1));
++		PrintNetwork();
++		return 0;
++	}
++	if (mode == QStringLiteral("network-set-doh")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setNetworkCustomDoH(
++			(arguments[2] == QStringLiteral("-"))
++				? QString()
++				: arguments[2]);
++		PrintNetwork();
++		return 0;
++	}
 +	if (mode == QStringLiteral("forward-date")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -23232,10 +23708,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..938d5d8
+index 0000000..9176ccc
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7135 @@
+@@ -0,0 +1,7287 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -24082,7 +24558,7 @@ index 0000000..938d5d8
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 130,
++            len(section) == 133,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -24103,7 +24579,7 @@ index 0000000..938d5d8
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 135,
++            sum(len(value) for value in exported.values()) == 138,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -24123,7 +24599,7 @@ index 0000000..938d5d8
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 135,
++                data.get("applied") == 138,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -24289,6 +24765,9 @@ index 0000000..938d5d8
 +            "OEAiEndpoint": "https://full.test/v1",
 +            "OEAiModel": "full-model",
 +            "OEGeneralRecognitionLanguage": "de",
++            "OENetworkUseIPv6": True,
++            "OENetworkDnsType": 1,
++            "OENetworkCustomDoH": "https://full.test/dns-query",
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -24310,7 +24789,7 @@ index 0000000..938d5d8
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 135,
++            data.get("applied") == 138,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -24321,6 +24800,15 @@ index 0000000..938d5d8
 +    if current is not None:
 +        sections = backup_sections(current)
 +        section = sections["exteraconfig"]
++        ledger.check(
++            "backup full network",
++            section.get("OENetworkUseIPv6") is True
++            and section.get("OENetworkDnsType") == 1
++            and section.get("OENetworkCustomDoH")
++            == "https://full.test/dns-query",
++            (section.get("OENetworkUseIPv6"),
++             section.get("OENetworkDnsType"),
++             section.get("OENetworkCustomDoH")))
 +        ledger.check(
 +            "backup full ghost flags",
 +            all(section.get(key) is False for key in (
@@ -24614,10 +25102,10 @@ index 0000000..938d5d8
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 130",
++            "backup legacy eight completed to 133",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (130, 3, 2),
++             len(sections["mainconfig"])) == (133, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -30207,6 +30695,144 @@ index 0000000..938d5d8
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_network(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "network-defaults")
++    data = json_call(
++        ledger, cli, ["network"], env, "network defaults")
++    if data is not None:
++        ledger.check(
++            "network ipv6 default boolean",
++            isinstance(data.get("useIPv6"), bool),
++            data.get("useIPv6"))
++        ledger.check(
++            "network dns default builtin doh",
++            data.get("dnsType") == 0,
++            data.get("dnsType"))
++        ledger.check(
++            "network doh default empty",
++            data.get("customDoh") == "",
++            data.get("customDoh"))
++
++    data = json_call(
++        ledger, cli, ["network-set-ipv6", "1"], env,
++        "network set ipv6")
++    if data is not None:
++        ledger.check(
++            "network set ipv6 on",
++            data.get("useIPv6") is True,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["network"], env, "network ipv6 reload")
++    if reloaded is not None:
++        ledger.check(
++            "network ipv6 persisted",
++            reloaded.get("useIPv6") is True,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["network-set-dns", "1"], env, "network set dns")
++    if data is not None:
++        ledger.check(
++            "network set dns system",
++            data.get("dnsType") == 1,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["network"], env, "network dns reload")
++    if reloaded is not None:
++        ledger.check(
++            "network dns persisted",
++            reloaded.get("dnsType") == 1,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["network-set-dns", "5"], env,
++        "network set dns clamp high")
++    if data is not None:
++        ledger.check(
++            "network dns clamped high",
++            data.get("dnsType") == 1,
++            data)
++    data = json_call(
++        ledger, cli, ["network-set-dns", "-3"], env,
++        "network set dns clamp low")
++    if data is not None:
++        ledger.check(
++            "network dns clamped low",
++            data.get("dnsType") == 0,
++            data)
++
++    doh_url = "https://dns.example/dns-query"
++    data = json_call(
++        ledger, cli, ["network-set-doh", doh_url], env,
++        "network set doh")
++    if data is not None:
++        ledger.check(
++            "network set doh url",
++            data.get("customDoh") == doh_url,
++            data)
++    reloaded = json_call(
++        ledger, cli, ["network"], env, "network doh reload")
++    if reloaded is not None:
++        ledger.check(
++            "network doh persisted",
++            reloaded.get("customDoh") == doh_url,
++            reloaded)
++    data = json_call(
++        ledger, cli, ["network-set-doh", "-"], env,
++        "network clear doh")
++    if data is not None:
++        ledger.check(
++            "network doh cleared",
++            data.get("customDoh") == "",
++            data)
++
++    env = make_env(work / "network-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "useIPv6": True,
++            "dnsType": 1,
++            "customDoH": "https://alias.test/dns-query",
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "network alias import")
++    if data is not None:
++        ledger.check(
++            "network alias applied",
++            data.get("applied") == 3 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["network"], env, "network alias reload")
++    if reloaded is not None:
++        ledger.check(
++            "network alias values",
++            reloaded.get("useIPv6") is True
++            and reloaded.get("dnsType") == 1
++            and reloaded.get("customDoh")
++            == "https://alias.test/dns-query",
++            reloaded)
++
++    for name, arguments in [
++            ("network set ipv6 invalid flag",
++             ["network-set-ipv6", "2"]),
++            ("network set dns without value", ["network-set-dns"]),
++            ("network set doh without value", ["network-set-doh"])]:
++        result = run(cli, arguments, env=env)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -30278,6 +30904,7 @@ index 0000000..938d5d8
 +        translation = check_translation(ledger, cli, work)
 +        ai = check_ai(ledger, cli, work)
 +        recognition = check_recognition(ledger, cli, work)
++        network = check_network(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        regex_filters = check_regex_filters(ledger, cli, work)
@@ -30356,6 +30983,7 @@ index 0000000..938d5d8
 +    print(f"translation: {translation[0] - translation[1]} passed")
 +    print(f"ai: {ai[0] - ai[1]} passed")
 +    print(f"recognition: {recognition[0] - recognition[1]} passed")
++    print(f"network: {network[0] - network[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")

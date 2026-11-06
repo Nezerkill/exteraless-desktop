@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 925 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 943 проверки PASS
   (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,11 +111,37 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  19 update-channel, 32 translation, 23 ai, 6 recognition, 10 download-boost,
-  48 subtitles, 7 avatar-corners,
+  19 update-channel, 32 translation, 23 ai, 6 recognition, 17 network,
+  10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 102 backup);
+  27 regex-filters, 103 backup);
   плагины без изменений — 32 и 213 проверок.
+- IPv6 и DNS over HTTPS (NB-77): `OENetworkUseIPv6` (bool, default `true` вне
+  Windows), `OENetworkDnsType` (int `0..1`, default `0`: `0` — built-in DoH,
+  `1` — system) и `OENetworkCustomDoH` (строка, пусто — выключено), алиасы
+  `useIPv6`/`dnsType`/`customDoH`. Резолвер
+  `mtproto/details/mtproto_domain_resolver.{h,cpp}` при `dnsType == 1`
+  добавляет первой попытку `Type::System` (`QHostInfo::lookupHost`, TTL 5
+  минут), а непустой customDoH — попытку с URL из конфига перед встроенными
+  хостами (встроенный путь остаётся fallback'ом); диалект по хосту:
+  cloudflare → JSON `/dns-query`, иначе Google `/resolve`, явный путь в URL
+  сохраняется. IPv6-флаг засевается в `Application::startLocalStorage`
+  через `settings().proxy().setTryIPv6()` после `Local::start()` — не в
+  конструкторе, потому что upstream-настройки читаются с диска позже.
+  В подсекции Network — тумблер «Try IPv6 connections», селектор «DNS
+  provider» (Built-in DoH/System) и поле «Custom DoH URL», шесть lang-ключей;
+  CLI 4 режима (`network`, `network-set-ipv6`, `network-set-dns`,
+  `network-set-doh`, `-` очищает URL), `dnsType` клампится в `0..1`;
+  `check_network` — 17 проверок (счётчик 943, backup 103, плагины 32 и 213
+  без изменений); `.extera` — 138 ключей (133 + 3 + 2, сверено с
+  legacy-кортежем `run_checks`); `kKeysCount` 11232 (`kTagsCount` 185);
+  sha256 патча `da3b860a…`, `nix flake check` PASS. Сборке нужен `exteraless`
+  в `PRIVATE`-зависимостях `td_mtproto`
+  (`Telegram/cmake/td_mtproto.cmake`). Ограничения: IPv6 реально работает
+  только в сетях с IPv6; смоук «подключение через DoH» переписан — DC задан
+  IP, DoH виден только на прокси с hostname; customDoH идёт NoProxy; конфиг
+  форка — single source of truth, поэтому тумблер upstream Proxies
+  перезатирается при рестарте; Xvfb-смоук не выполнялся.
 - Regex-фильтры сообщений (NB-22): движок `exteraless/regex_filters.{h,cpp}`
   (`Filter{regex, caseInsensitive, reversed, enabled}`, `CompileFilters` с
   `optimize()`, `MatchesText` — совпадение `find()` инвертируется флагом

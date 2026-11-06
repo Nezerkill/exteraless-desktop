@@ -958,6 +958,11 @@ void Application::badMtprotoConfigurationError() {
 void Application::startLocalStorage() {
 	Ui::GL::DetectLastCheckCrash();
 	Local::start();
+	// WHY: the fork keeps the network preferences in its own config, while
+	// mtproto reads only the proxy settings, so seed them here, after the core
+	// settings have been read from disk and before any session is created.
+	settings().proxy().setTryIPv6(
+		Exteraless::Config::Instance().networkUseIPv6());
 	_saveSettingsTimer.emplace([=] { saveSettings(); });
 	settings().saveDelayedRequests() | rpl::on_next([=] {
 		saveSettingsDelayed();

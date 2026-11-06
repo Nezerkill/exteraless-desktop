@@ -9407,5 +9407,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_ai_key" = "API key";
 "lng_settings_exteraless_recognition_language" = "Speech recognition language";
 "lng_media_view_transcribe_offline_na" = "Offline model is not installed";
+"lng_settings_exteraless_network" = "Network";
+"lng_settings_exteraless_network_use_ipv6" = "Try IPv6 connections";
+"lng_settings_exteraless_network_dns" = "DNS provider";
+"lng_settings_exteraless_network_dns_builtin" = "Built-in DoH";
+"lng_settings_exteraless_network_dns_system" = "System";
+"lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
 
 // Keys finished
