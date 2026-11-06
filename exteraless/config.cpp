@@ -152,6 +152,7 @@ constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
+constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 
 [[nodiscard]] int SanitizeAudioBitrate(int value) {
 	switch (value) {
@@ -712,6 +713,15 @@ int Config::defaultVideoQuality() const {
 
 void Config::setDefaultVideoQuality(int value) {
 	setValue(kGeneralDefaultVideoQuality, std::clamp(value, 0, 2));
+}
+
+int Config::autoUpdateChannel() const {
+	// 0 = off, 1 = release, 2 = beta.
+	return std::clamp(intValue(kGeneralAutoUpdateChannel, 1), 0, 2);
+}
+
+void Config::setAutoUpdateChannel(int value) {
+	setValue(kGeneralAutoUpdateChannel, std::clamp(value, 0, 2));
 }
 
 bool Config::hardwareAcceleration() const {
@@ -1292,6 +1302,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGeneralHardwareAcceleration
 			|| key == kChatsTakeGifAsVideo
 			|| key == kGeneralCustomAudioBitrate
+			|| key == kGeneralAutoUpdateChannel
 			|| key == kGeneralBotPrivacyEnabled
 			|| key == kGeneralBotPrivacyAccount
 			|| key == kGeneralBotPrivacyAsk

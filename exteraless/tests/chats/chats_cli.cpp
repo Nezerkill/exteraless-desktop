@@ -15,6 +15,7 @@
 #include "exteraless/proxy_rules.h"
 #include "exteraless/save_path.h"
 #include "exteraless/subtitles.h"
+#include "exteraless/update_check.h"
 #include "exteraless/zalgo.h"
 
 #include <QByteArray>
@@ -162,6 +163,10 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli gif-as-video-set <0|1>\n"
 		<< "  exteraless-chats-cli audio-bitrate\n"
 		<< "  exteraless-chats-cli audio-bitrate-set <16|24|32|48>\n"
+		<< "  exteraless-chats-cli update-channel\n"
+		<< "  exteraless-chats-cli update-channel-set <0..2>\n"
+		<< "  exteraless-chats-cli update-check <json> <current> "
+		<< "<prerelease 0|1>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli edited-mark\n"
@@ -1472,6 +1477,51 @@ int main(int argc, char *argv[]) {
 		PrintJson(QJsonObject{
 			{ QStringLiteral("bitrate"),
 				Exteraless::Config::Instance().customAudioBitrate() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("update-channel")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("channel"),
+				Exteraless::Config::Instance().autoUpdateChannel() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("update-channel-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAutoUpdateChannel(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("channel"),
+				Exteraless::Config::Instance().autoUpdateChannel() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("update-check")) {
+		if (arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto withPrerelease = false;
+		if (!ReadFlag(arguments[4], &withPrerelease)) {
+			return PrintUsage();
+		}
+		const auto info = Exteraless::ParseReleasesJson(
+			arguments[2].toUtf8(),
+			arguments[3],
+			withPrerelease);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("available"), info.available },
+			{ QStringLiteral("version"), info.version },
+			{ QStringLiteral("url"), info.url },
 		});
 		return 0;
 	}

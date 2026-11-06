@@ -2,6 +2,27 @@
 
 ## 2026-11-06
 
+- General / Канал обновлений (NB-54): `OEGeneralAutoUpdateChannel` (int
+  `0..2`, default `1`; `0` — off, `1` — release, `2` — beta, значение
+  клампится) задаёт канал релизов, алиас `autoUpdateChannel`. Разбор списка
+  релизов — Qt-only модуль `exteraless/update_check.{h,cpp}`:
+  `Exteraless::ParseReleasesJson(data, current, includePrerelease)` берёт самый
+  новый подходящий тег (draft отбрасывается всегда, prerelease — только при
+  `includePrerelease`), `ReleasesApiUrl()` возвращает адрес API releases; сети
+  модуль не делает. В Exteraless General пункт «Update channel» с
+  `Ui::Radioenum` Off/Release/Beta и четыре lang-ключа
+  `lng_settings_exteraless_update_channel` (`_off`, `_release`, `_beta`).
+  `.extera` — 119 ключей (114 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`), CLI `update-channel`, `update-channel-set`, `update-check`
+  (разбор без сети), `check_update_channel` — 19 проверок (16 + 3 на неверный
+  вызов CLI); раннеры 796/32/213 PASS (backup 101), `kKeysCount` 11199
+  (`kTagsCount` 185), sha256 патча `a44a72bb…`, `nix flake check` PASS.
+  Ограничения: автозагрузки и установки нет — объём задачи ограничен
+  нотификатором (проверка версии и ссылка на страницу releases), но
+  потребителя в UI пока нет: парсер вызывается только из CLI, сетевых
+  запросов модуль не делает, релизов у форка пока 0, поэтому реальный ответ
+  API не проверялся; `ReleasesPage()` и `kReleasesApi` — константы, зеркала и
+  другие хосты не поддерживаются; Xvfb-смоук не выполнялся.
 - Text / Персидский календарь (NB-58): `OEGeneralUsePersianCalendar` и
   `OEGeneralPersianCalendarLatin` (обе bool, default `false`) переводят даты на
   Solar Hijri. Строку собирает

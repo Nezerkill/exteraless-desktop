@@ -618,7 +618,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 113,
+            len(section) == 114,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -639,7 +639,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 118,
+            sum(len(value) for value in exported.values()) == 119,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -659,7 +659,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 118,
+                data.get("applied") == 119,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -759,6 +759,7 @@ def check_backup(ledger, cli, work):
             "OEGeneralHardwareAcceleration": False,
             "OEChatsTakeGifAsVideo": True,
             "OEGeneralCustomAudioBitrate": 24,
+            "OEGeneralAutoUpdateChannel": 2,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
             "OEChatsSeekDuration": 15,
@@ -829,7 +830,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 118,
+            data.get("applied") == 119,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1031,6 +1032,10 @@ def check_backup(ledger, cli, work):
             and section.get("OEChatsUnreadCapsule") is True,
             section)
         ledger.check(
+            "backup full update channel",
+            section.get("OEGeneralAutoUpdateChannel") == 2,
+            section.get("OEGeneralAutoUpdateChannel"))
+        ledger.check(
             "backup full pill keys",
             sections["pillstackconfig"] == {
                 "OEPillStackEnabled": True,
@@ -1119,10 +1124,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 113",
+            "backup legacy eight completed to 114",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (113, 3, 2),
+             len(sections["mainconfig"])) == (114, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -5686,6 +5691,205 @@ def check_media_quality(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_update_channel(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "update-channel-defaults")
+    data = json_call(
+        ledger, cli, ["update-channel"], env, "update channel defaults")
+    if data is not None:
+        ledger.check(
+            "update channel default release",
+            data.get("channel") == 1,
+            data)
+
+    data = json_call(
+        ledger, cli, ["update-channel-set", "2"], env,
+        "update channel set beta")
+    if data is not None:
+        ledger.check(
+            "update channel set beta",
+            data.get("channel") == 2,
+            data)
+    reloaded = json_call(
+        ledger, cli, ["update-channel"], env, "update channel reload")
+    if reloaded is not None:
+        ledger.check(
+            "update channel persisted",
+            reloaded.get("channel") == 2,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["update-channel-set", "0"], env,
+        "update channel set off")
+    if data is not None:
+        ledger.check(
+            "update channel set off",
+            data.get("channel") == 0,
+            data)
+    data = json_call(
+        ledger, cli, ["update-channel-set", "9"], env,
+        "update channel clamp high")
+    if data is not None:
+        ledger.check(
+            "update channel clamped to beta",
+            data.get("channel") == 2,
+            data)
+    data = json_call(
+        ledger, cli, ["update-channel-set", "-3"], env,
+        "update channel clamp low")
+    if data is not None:
+        ledger.check(
+            "update channel clamped to off",
+            data.get("channel") == 0,
+            data)
+
+    env = make_env(work / "update-channel-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {"autoUpdateChannel": 2},
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "update channel alias")
+    if data is not None:
+        ledger.check(
+            "update channel alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["update-channel"], env, "update channel alias read")
+    if reloaded is not None:
+        ledger.check(
+            "update channel alias value",
+            reloaded.get("channel") == 2,
+            reloaded)
+
+    def release(tag, url="", prerelease=False, draft=False):
+        item = {
+            "tag_name": tag,
+            "prerelease": prerelease,
+            "draft": draft,
+        }
+        if url:
+            item["html_url"] = url
+        return item
+
+    data = json_call(
+        ledger, cli, [
+            "update-check",
+            json.dumps([release("v2.3.0", "https://example.invalid/new")]),
+            "2.2.0",
+            "0",
+        ], env, "update check newer")
+    if data is not None:
+        ledger.check(
+            "update check newer available",
+            data.get("available") is True
+            and data.get("version") == "v2.3.0"
+            and data.get("url") == "https://example.invalid/new",
+            data)
+
+    data = json_call(
+        ledger, cli, [
+            "update-check",
+            json.dumps([release("v2.1.0", "https://example.invalid/old")]),
+            "2.2.0",
+            "0",
+        ], env, "update check older")
+    if data is not None:
+        ledger.check(
+            "update check older unavailable",
+            data.get("available") is False and data.get("version") == "",
+            data)
+
+    data = json_call(
+        ledger, cli, ["update-check", "[]", "2.2.0", "0"], env,
+        "update check empty")
+    if data is not None:
+        ledger.check(
+            "update check empty unavailable",
+            data.get("available") is False and data.get("version") == "",
+            data)
+
+    data = json_call(
+        ledger, cli, ["update-check", "not json", "2.2.0", "0"], env,
+        "update check invalid json")
+    if data is not None:
+        ledger.check(
+            "update check invalid json unavailable",
+            data.get("available") is False,
+            data)
+
+    beta = json.dumps([
+        release("v3.0.0-beta.1", "https://example.invalid/beta",
+                prerelease=True),
+    ])
+    data = json_call(
+        ledger, cli, ["update-check", beta, "2.2.0", "0"], env,
+        "update check stable filter")
+    if data is not None:
+        ledger.check(
+            "update check skips prerelease",
+            data.get("available") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["update-check", beta, "2.2.0", "1"], env,
+        "update check prerelease allowed")
+    if data is not None:
+        ledger.check(
+            "update check accepts prerelease",
+            data.get("available") is True
+            and data.get("version") == "v3.0.0-beta.1",
+            data)
+
+    draft = json.dumps([
+        release("v9.9.9", "https://example.invalid/draft", draft=True),
+    ])
+    data = json_call(
+        ledger, cli, ["update-check", draft, "2.2.0", "1"], env,
+        "update check draft")
+    if data is not None:
+        ledger.check(
+            "update check skips draft",
+            data.get("available") is False,
+            data)
+
+    mixed = json.dumps([
+        release("v9.9.9", "https://example.invalid/draft", draft=True),
+        release("v3.0.0-beta.1", "https://example.invalid/beta",
+                prerelease=True),
+        release("v2.5.0", "https://example.invalid/stable"),
+    ])
+    data = json_call(
+        ledger, cli, ["update-check", mixed, "2.2.0", "0"], env,
+        "update check mixed")
+    if data is not None:
+        ledger.check(
+            "update check picks newest stable",
+            data.get("available") is True
+            and data.get("version") == "v2.5.0"
+            and data.get("url") == "https://example.invalid/stable",
+            data)
+
+    for name, arguments in [
+            ("update channel set without value", ["update-channel-set"]),
+            ("update channel set non numeric",
+             ["update-channel-set", "beta"]),
+            ("update check with wrong count",
+             ["update-check", "[]", "2.2.0"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -5747,6 +5951,7 @@ def main():
         chat_misc = check_chat_misc(ledger, cli, work)
         persian = check_persian(ledger, cli, work)
         media_quality = check_media_quality(ledger, cli, work)
+        update_channel = check_update_channel(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
@@ -5810,6 +6015,8 @@ def main():
     print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
     print(f"persian: {persian[0] - persian[1]} passed")
     print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
+    print(f"update-channel: "
+          f"{update_channel[0] - update_channel[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")

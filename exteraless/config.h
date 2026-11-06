@@ -156,6 +156,8 @@ public:
 
 	[[nodiscard]] int defaultVideoQuality() const;
 	void setDefaultVideoQuality(int value);
+	[[nodiscard]] int autoUpdateChannel() const;
+	void setAutoUpdateChannel(int value);
 	[[nodiscard]] bool hardwareAcceleration() const;
 	void setHardwareAcceleration(bool value);
 	[[nodiscard]] bool takeGifAsVideo() const;

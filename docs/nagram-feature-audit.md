@@ -172,6 +172,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Семейство | Android-источник | Объём | Desktop |
 |---|---|---|---|
 | Брендинг и ядро | `NaConfig`, `NekoXConfig`, `core/launcher.cpp` | 5–8 ключей | ✅ / ⛔ (иконки лаунчера, свои api_id) |
+| Апдейтер (канал релизов) | `app/exteraless/updater/*`, `NaConfig.autoUpdateChannel` | 1 ключ + селектор | ✅ NB-54, с оговоркой: `OEGeneralAutoUpdateChannel` (int `0..2`, default `1` — off/release/beta) и алиас `autoUpdateChannel` сохранены, селектор Off/Release/Beta в General, разбор GitHub releases — Qt-only `exteraless/update_check.{h,cpp}` (`ParseReleasesJson`, `ReleasesApiUrl`) без сети; автозагрузки/установки (self-update) нет, объём ограничен нотификатором — проверка версии и ссылка на страницу releases, потребителя в UI пока нет (парсер вызывается только из CLI), релизов у форка пока 0 |
 | Каркас настроек | `OpenExteraSettingsActivity`, `SettingsRegistry`, 8 экранов | 8 экранов, поиск | 🟡 одна страница с подсекциями |
 | Appearance | `AppearanceConfig` (74 `val`) + `NaConfig`/`NekoConfig` | 74 + ~20 | ❌ почти всё, ⛔ часть |
 | General / Other | `GeneralConfig` (10) + `NekoConfig`/`NaConfig` | ~40 | 🟡 3 реализовано |

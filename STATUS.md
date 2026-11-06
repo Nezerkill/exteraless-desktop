@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 776 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 796 проверок PASS
   (44 strip, 10 reactions, 59 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,8 +111,31 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  10 download-boost, 48 subtitles, 7 avatar-corners, 100 backup); плагины
-  без изменений — 32 и 213 проверок.
+  19 update-channel, 10 download-boost, 48 subtitles, 7 avatar-corners,
+  101 backup); плагины без изменений — 32 и 213 проверок.
+- Канал обновлений (NB-54): `OEGeneralAutoUpdateChannel` (int `0..2`, default
+  `1`; `0` — off, `1` — release, `2` — beta, значение клампится) задаёт канал
+  релизов, алиас `autoUpdateChannel`. Разбор списка релизов — Qt-only модуль
+  `exteraless/update_check.{h,cpp}`:
+  `Exteraless::ParseReleasesJson(data, current, includePrerelease)` берёт самый
+  новый подходящий тег (draft отбрасывается всегда, prerelease — только при
+  `includePrerelease`, тег не новее `current` пропускается, без `html_url`
+  остаётся страница releases), `ReleasesApiUrl()` возвращает адрес API
+  releases; сам модуль сети не делает — загрузку оставляет вызывающему.
+  В Exteraless General пункт «Update channel» с `Ui::Radioenum`
+  Off/Release/Beta и четыре lang-ключа
+  `lng_settings_exteraless_update_channel` (`_off`, `_release`, `_beta`).
+  `.extera` — 119 ключей (114 + 3 + 2, сверено с legacy-кортежем
+  `run_checks`), CLI `update-channel`, `update-channel-set`, `update-check`
+  (разбор без сети), `check_update_channel` — 19 проверок (16 + 3 на неверный
+  вызов CLI; счётчик выше 796, backup 101, плагины 32 и 213 без изменений);
+  `kKeysCount` 11199 (`kTagsCount` 185), sha256 патча `a44a72bb…`,
+  `nix flake check` PASS. Ограничения: автозагрузки и установки нет — объём
+  ограничен нотификатором (проверка версии и ссылка на страницу releases),
+  но потребителя в UI пока нет: парсер вызывается только из CLI, сети в
+  модуле нет, релизов у форка пока 0, поэтому живой ответ API не проверялся;
+  `ReleasesPage()`/`kReleasesApi` — константы, другие хосты и зеркала не
+  поддерживаются; Xvfb-смоук не выполнялся.
 - Persian calendar (NB-58): `OEGeneralUsePersianCalendar` и
   `OEGeneralPersianCalendarLatin` (обе bool, default `false`) переводят даты на
   Solar Hijri. Строку собирает

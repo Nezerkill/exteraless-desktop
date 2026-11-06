@@ -134,6 +134,56 @@ const auto kMeta = Builder::BuildHelper({
 		.title = tr::lng_settings_exteraless_general(),
 	});
 
+	const auto updateChannelLabel = [](int value) {
+		switch (value) {
+		case 0:
+			return tr::lng_settings_exteraless_update_channel_off(tr::now);
+		case 2:
+			return tr::lng_settings_exteraless_update_channel_beta(tr::now);
+		}
+		return tr::lng_settings_exteraless_update_channel_release(tr::now);
+	};
+	const auto updateChannel = std::make_shared<rpl::variable<QString>>(
+		updateChannelLabel(
+			Exteraless::Config::Instance().autoUpdateChannel()));
+	builder.addButton({
+		.id = u"exteraless/update-channel"_q,
+		.title = tr::lng_settings_exteraless_update_channel(),
+		.st = &st::settingsButtonNoIcon,
+		.label = updateChannel->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().autoUpdateChannel());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_update_channel());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							updateChannelLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance().setAutoUpdateChannel(
+						value);
+					updateChannel->force_assign(updateChannelLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"update"_q, u"channel"_q, u"beta"_q },
+	});
+
 	const auto relativeLastSeen = builder.addButton({
 		.id = u"exteraless/relative-last-seen"_q,
 		.title = tr::lng_settings_exteraless_relative_last_seen(),

@@ -141,6 +141,7 @@ constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
+constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
@@ -151,6 +152,7 @@ constexpr auto kDefaultHlsVideoQualityAlias = "defaultHlsVideoQuality";
 constexpr auto kPlayerDecoderAlias = "playerDecoder";
 constexpr auto kTakeGifAsVideoAlias = "takeGIFasVideo";
 constexpr auto kCustomAudioBitrateAlias = "customAudioBitrate";
+constexpr auto kAutoUpdateChannelAlias = "autoUpdateChannel";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
 constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -397,6 +399,7 @@ QString BuildBackup() {
 	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
 	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
 	extera[kGeneralCustomAudioBitrate] = config.customAudioBitrate();
+	extera[kGeneralAutoUpdateChannel] = config.autoUpdateChannel();
 	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
 	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
 	extera[kGeneralBotPrivacyAsk] = config.botPrivacyAlwaysAsk();
@@ -626,6 +629,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kCustomAudioBitrateAlias)
 			&& value.isDouble()) {
 			config.setCustomAudioBitrate(value.toInt());
+		} else if ((key == kGeneralAutoUpdateChannel
+			|| key == kAutoUpdateChannelAlias)
+			&& IntegralInRange(value, 0, 2)) {
+			config.setAutoUpdateChannel(value.toInt());
 		} else if ((key == kGeneralBotPrivacyEnabled
 			|| key == kBotPrivacyEnabledAlias)
 			&& value.isBool()) {

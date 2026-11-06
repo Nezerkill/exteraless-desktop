@@ -36,6 +36,8 @@ add_library(exteraless STATIC
     save_path.h
     subtitles.cpp
     subtitles.h
+    update_check.cpp
+    update_check.h
     zalgo.cpp
     zalgo.h
 )
