@@ -2,6 +2,36 @@
 
 ## 2026-11-06
 
+- Media / Качество и форматы (NB-88): `OEGeneralDefaultVideoQuality` (int
+  `0..2`, default `0`) задаёт стартовое HLS-качество — `0` оставляет upstream
+  480p, `1` — 720p, `2` — 1080p (`initialPlaybackVideoQuality` в
+  `media/view/media_view_overlay_widget.cpp`, `Settings::videoQuality()` в
+  `core/core_settings.cpp`). `OEGeneralHardwareAcceleration` (bool, default
+  `true`) работает как алиас поверх upstream-настройки: воспроизведение требует
+  `hardwareAcceleratedVideo() && hardwareAcceleration()` в `restartAtSeekPosition`
+  оверлея и PiP, а тумблер в настройках пишет оба значения.
+  `OEChatsTakeGifAsVideo` (bool, default `false`) отменяет конверсию GIF в
+  `video/mp4` в `FileLoadTask::process` (`storage/localimageloader.cpp`).
+  `OEGeneralCustomAudioBitrate` (int `16/24/32/48`, default `32`, остальное
+  сводится к `32`) задаёт `bit_rate` записи Opus в `InitializeFFmpeg`
+  (`media/audio/media_audio_capture.cpp`); если `avcodec_open2` не принимает
+  выбранный битрейт, поток один раз переоткрывается на 32 kbps. Алиасы
+  `defaultHlsVideoQuality`, `playerDecoder`, `takeGIFasVideo` и
+  `customAudioBitrate`. В Exteraless — подсекция «Media»: селектор качества
+  Auto/720p/1080p, тумблер Hardware video decoding, тумблер Send GIFs as video
+  и селектор 16/24/32/48 kbps; шесть lang-ключей
+  `lng_settings_exteraless_media*`. `.extera` — 116 ключей (111 + 3 + 2,
+  сверено с legacy-кортежем `run_checks`), CLI четыре группы
+  (`media-quality`, `hw-accel`, `gif-as-video`, `audio-bitrate`),
+  `check_media_quality` — 19 проверок; раннеры 761/32/213 PASS (backup 100),
+  `kKeysCount` 11193 (`kTagsCount` 185), sha256 патча `c647f76d…`,
+  `nix flake check` PASS. Ограничения: ручной тир (1/2) отключает адаптивное
+  переключение — на слабой сети это может ухудшить просмотр; повышенный
+  битрейт может упасть на `avcodec_open2`, тогда запись идёт на 32 kbps без
+  сообщения; GIF-как-видео теряет no-sound-спойлер и уходит обычной отправкой
+  видео; MP4-как-видео не делалось — это уже дефолт upstream, а
+  `enhancedVideoBitrate`, `alwaysSendInHD` и `preferredOriginalQuality` —
+  отдельные ключи; Xvfb-смоук и сетевой замер не выполнялись.
 - Chats / Скругления аватарок (NB-61): `OEChatsAvatarRadius` (int `-1..32`,
   default `-1`; `-1` — круг как в upstream, `0` — квадрат, `N` — радиус в px)
   задаёт форму загруженного и пустого юзерпика. Выбор маски — в

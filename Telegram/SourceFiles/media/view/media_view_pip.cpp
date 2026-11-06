@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_account.h"
 #include "main/main_session.h"
 #include "core/application.h"
+#include "exteraless/config.h"
 #include "base/platform/base_platform_info.h"
 #include "base/power_save_blocker.h"
 #include "ui/platform/ui_platform_utility.h"
@@ -1758,7 +1759,8 @@ void Pip::restartAtSeekPosition(crl::time position) {
 
 	auto options = Streaming::PlaybackOptions();
 	options.position = position;
-	options.hwAllowed = Core::App().settings().hardwareAcceleratedVideo();
+	options.hwAllowed = Core::App().settings().hardwareAcceleratedVideo()
+		&& Exteraless::Config::Instance().hardwareAcceleration();
 	options.audioId = _instance->player().prepareLegacyState().id;
 	options.speed = _delegate->pipPlaybackSpeed();
 

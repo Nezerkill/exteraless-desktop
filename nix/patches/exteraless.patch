@@ -87,7 +87,7 @@ index 811707d..9218496 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..5586dd8 100644
+index ffc8ec9..6c4d51a 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -99,7 +99,7 @@ index ffc8ec9..5586dd8 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,189 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9184,195 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -127,6 +127,12 @@ index ffc8ec9..5586dd8 100644
 +"lng_settings_exteraless_bot_privacy_account" = "Bot account";
 +"lng_settings_exteraless_bot_privacy_account_off" = "Off";
 +"lng_settings_exteraless_bot_privacy_always_ask" = "Always ask which account to use";
++"lng_settings_exteraless_media" = "Media";
++"lng_settings_exteraless_media_quality" = "Default video quality";
++"lng_settings_exteraless_media_quality_auto" = "Auto";
++"lng_settings_exteraless_media_hw_accel" = "Hardware video decoding";
++"lng_settings_exteraless_media_gif_as_video" = "Send GIFs as video";
++"lng_settings_exteraless_media_audio_bitrate" = "Audio bitrate";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 +"lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -355,7 +361,7 @@ index 6e6ac4d..252bb45 100644
  				const MTPmessages_MessageViews &result,
  				mtpRequestId requestId) {
 diff --git a/Telegram/SourceFiles/apiwrap.cpp b/Telegram/SourceFiles/apiwrap.cpp
-index 23afed5..0847a1f 100644
+index 23afed5..30f61b9 100644
 --- a/Telegram/SourceFiles/apiwrap.cpp
 +++ b/Telegram/SourceFiles/apiwrap.cpp
 @@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -404,6 +410,27 @@ index 23afed5..0847a1f 100644
  		if (topic) {
  			topic->readTillEnd();
  		} else if (sublist && sublist->parentChat()) {
+@@ -4351,9 +4362,6 @@ void ApiWrap::sendFiles(
+ 		album = nullptr;
+ 	}
+ 	const auto to = FileLoadTaskOptions(action);
+-	const auto animationAsGif = !Data::RestrictionError(
+-		action.history->peer,
+-		ChatRestriction::SendGifs);
+ 	if (album) {
+ 		album->options = to.options;
+ 	}
+@@ -4402,7 +4410,9 @@ void ApiWrap::sendFiles(
+ 			.forceFile = forceFile,
+ 			.sendLargePhotos = file.sendLargePhotos,
+ 			.animationJob = file.animationJob,
+-			.animationAsGif = animationAsGif,
++			.animationAsGif = !Data::RestrictionError(
++				action.history->peer,
++				ChatRestriction::SendGifs),
+ 			.archive = file.archive,
+ 			.idOverride = 0,
+ 			.displayName = file.displayName,
 diff --git a/Telegram/SourceFiles/boxes/about_box.cpp b/Telegram/SourceFiles/boxes/about_box.cpp
 index 31c60aa..7f7abc1 100644
 --- a/Telegram/SourceFiles/boxes/about_box.cpp
@@ -823,6 +850,39 @@ index 7a309ac..c6235fe 100644
  }
  
  void Application::checkSystemDarkMode() {
+diff --git a/Telegram/SourceFiles/core/core_settings.cpp b/Telegram/SourceFiles/core/core_settings.cpp
+index 6ef88cd..95f09f5 100644
+--- a/Telegram/SourceFiles/core/core_settings.cpp
++++ b/Telegram/SourceFiles/core/core_settings.cpp
+@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ #include "base/platform/base_platform_info.h"
+ #include "calls/group/calls_group_common.h"
++#include "exteraless/config.h"
+ #include "history/view/history_view_quick_action.h"
+ #include "lang/lang_keys.h"
+ #include "platform/platform_notifications_manager.h"
+@@ -27,6 +28,11 @@ constexpr auto kInitialVideoQuality = 480; // Start with SD.
+ constexpr auto kMinIvZoom = 25;
+ constexpr auto kMaxIvZoom = 400;
+ 
++[[nodiscard]] int ExteralessVideoQuality() {
++	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
++	return (tier <= 0) ? kInitialVideoQuality : (tier == 1 ? 720 : 1080);
++}
++
+ [[nodiscard]] int DefaultIvZoom() {
+ 	const auto exact = cScale() * 100 / cScreenScale();
+ 	const auto snap10 = ((exact + 5) / 10) * 10;
+@@ -160,7 +166,7 @@ Settings::Settings()
+ , _floatPlayerCorner(RectPart::TopRight)
+ , _dialogsWithChatWidthRatio(DefaultDialogsWidthRatio())
+ , _dialogsNoChatWidthRatio(DefaultDialogsWidthRatio())
+-, _videoQuality({ .height = kInitialVideoQuality }) {
++, _videoQuality({ .height = uint32(ExteralessVideoQuality()) }) {
+ }
+ 
+ Settings::~Settings() = default;
 diff --git a/Telegram/SourceFiles/core/launcher.cpp b/Telegram/SourceFiles/core/launcher.cpp
 index b3b76e0..69e17e0 100644
 --- a/Telegram/SourceFiles/core/launcher.cpp
@@ -6629,6 +6689,58 @@ index 2721c7a..6bfa900 100644
  	const auto writingKeys = _mtp->lifetime().make_state<bool>(false);
  	_mtp->writeKeysRequests(
  	) | rpl::filter([=] {
+diff --git a/Telegram/SourceFiles/media/audio/media_audio_capture.cpp b/Telegram/SourceFiles/media/audio/media_audio_capture.cpp
+index c816566..b5842ae 100644
+--- a/Telegram/SourceFiles/media/audio/media_audio_capture.cpp
++++ b/Telegram/SourceFiles/media/audio/media_audio_capture.cpp
+@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "media/audio/media_audio_ffmpeg_loader.h"
+ #include "media/audio/media_audio_track.h"
+ #include "ffmpeg/ffmpeg_utility.h"
++#include "exteraless/config.h"
+ #include "base/timer.h"
+ 
+ #include <al.h>
+@@ -23,6 +24,12 @@ namespace Capture {
+ namespace {
+ 
+ constexpr auto kCaptureFrequency = Player::kDefaultFrequency;
++constexpr auto kDefaultCaptureBitrate = 32000;
++
++[[nodiscard]] int ExteralessCaptureBitrate() {
++	return Exteraless::Config::Instance().customAudioBitrate() * 1000;
++}
++
+ constexpr auto kCaptureSkipDuration = crl::time(400);
+ constexpr auto kCaptureFadeInDuration = crl::time(300);
+ constexpr auto kCaptureBufferSlice = 256 * 1024;
+@@ -399,7 +406,8 @@ bool Instance::Inner::initializeFFmpeg() {
+ 	av_opt_set_int(d->codecContext, "refcounted_frames", 1, 0);
+ 
+ 	d->codecContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
+-	d->codecContext->bit_rate = 32000;
++	const auto bitrate = ExteralessCaptureBitrate();
++	d->codecContext->bit_rate = bitrate;
+ 	d->codecContext->ch_layout = AV_CHANNEL_LAYOUT_MONO;
+ 	d->channels = d->codecContext->ch_layout.nb_channels;
+ 	d->codecContext->sample_rate = kCaptureFrequency;
+@@ -410,8 +418,14 @@ bool Instance::Inner::initializeFFmpeg() {
+ 
+ 	// Open audio stream
+ 	if ((res = avcodec_open2(d->codecContext, d->codec, nullptr)) < 0) {
+-		LOG(("Audio Error: Unable to avcodec_open2 for capture, error %1, %2").arg(res).arg(av_make_error_string(err, sizeof(err), res)));
+-		return false;
++		if (bitrate != kDefaultCaptureBitrate) {
++			d->codecContext->bit_rate = kDefaultCaptureBitrate;
++			res = avcodec_open2(d->codecContext, d->codec, nullptr);
++		}
++		if (res < 0) {
++			LOG(("Audio Error: Unable to avcodec_open2 for capture, error %1, %2").arg(res).arg(av_make_error_string(err, sizeof(err), res)));
++			return false;
++		}
+ 	}
+ 
+ 	// Alloc source samples
 diff --git a/Telegram/SourceFiles/media/view/media_view.style b/Telegram/SourceFiles/media/view/media_view.style
 index 8e69f8d..6913998 100644
 --- a/Telegram/SourceFiles/media/view/media_view.style
@@ -6789,7 +6901,7 @@ index 059d22f..bd2e53e 100644
  	void paintRoundedCorners(int radius) override;
  	void paintStoriesSiblingPart(
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..4121a66 100644
+index 2acbe80..80420ad 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 @@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -6801,7 +6913,20 @@ index 2acbe80..4121a66 100644
  #include "core/click_handler_types.h"
  #include "core/core_screenshot_protection.h"
  #include "core/file_utilities.h"
-@@ -205,8 +207,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
+@@ -139,6 +141,12 @@ namespace Media {
+ namespace View {
+ namespace {
+ 
++[[nodiscard]] Media::VideoQuality ExteralessVideoQuality() {
++	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
++	const auto height = (tier <= 0) ? 480 : (tier == 1 ? 720 : 1080);
++	return { .height = uint32(height) };
++}
++
+ struct RecognitionId {
+ 	uint64 sessionUniqueId = 0;
+ 	PhotoId photoId = 0;
+@@ -205,8 +213,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
  constexpr auto kZoomToScreenLevel = 1024;
  constexpr auto kPinchZoomStep = 0.25;
  constexpr auto kOverlayLoaderPriority = 2;
@@ -6817,7 +6942,7 @@ index 2acbe80..4121a66 100644
  constexpr auto kFrameStepFallbackFps = 30.;
  constexpr auto kFrameStepThrottleMs = crl::time(150);
  
-@@ -2296,15 +2303,20 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2296,15 +2309,20 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { copyRecognitionSelection(); },
  			&st::mediaMenuIconCopy);
  	}
@@ -6847,7 +6972,7 @@ index 2acbe80..4121a66 100644
  	}
  	if ((_photo && _photo->hasAttachedStickers())
  		|| (_document && _document->hasAttachedStickers())) {
-@@ -2313,7 +2325,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2313,7 +2331,9 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { showAttachedStickers(); },
  			&st::mediaMenuIconStickers);
  	}
@@ -6858,7 +6983,7 @@ index 2acbe80..4121a66 100644
  		addAction(
  			tr::lng_mediaview_forward(tr::now),
  			[=] { forwardMedia(); },
-@@ -2344,11 +2358,26 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2344,11 +2364,26 @@ void OverlayWidget::fillContextMenuActions(
  			}, state->lifetime);
  		}
  	}
@@ -6886,7 +7011,7 @@ index 2acbe80..4121a66 100644
  	const auto canDelete = [&] {
  		if (story && story->canDelete()) {
  			return true;
-@@ -2416,6 +2445,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2416,6 +2451,9 @@ void OverlayWidget::fillContextMenuActions(
  		} else {
  			return;
  		}
@@ -6896,7 +7021,16 @@ index 2acbe80..4121a66 100644
  		const auto photo = _photo;
  		const auto peer = _peer;
  		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
-@@ -3445,6 +3477,79 @@ void OverlayWidget::shareAtTime() {
+@@ -3025,7 +3063,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
+ 		_streamedQualityChangeFinished = false;
+ 		if ((_document = document)) {
+ 			_quality = _document->initialPlaybackVideoQuality(
+-				Core::App().settings().videoQuality());
++				ExteralessVideoQuality());
+ 			_chosenQuality = _document->chooseQuality(_message, _quality);
+ 			_documentMedia = _document->createMediaView();
+ 			_videoCover = LookupVideoCover(_document, _message);
+@@ -3445,6 +3483,79 @@ void OverlayWidget::shareAtTime() {
  	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
  }
  
@@ -6976,7 +7110,7 @@ index 2acbe80..4121a66 100644
  void OverlayWidget::downloadMedia() {
  	if (!_photo && !_document) {
  		return;
-@@ -5284,6 +5389,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
+@@ -5284,6 +5395,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
  		Core::App().updateNonIdle();
  		updatePlaybackState();
  		_streamedPosition = update.position;
@@ -6984,7 +7118,17 @@ index 2acbe80..4121a66 100644
  	}, [&](PreloadedAudio) {
  		updatePlaybackState();
  	}, [&](UpdateAudio) {
-@@ -6046,6 +6152,7 @@ void OverlayWidget::playbackPauseMusic() {
+@@ -5597,7 +5709,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
+ 			&& _document->hasDuration())
+ 			? _document->duration()
+ 			: crl::time(0)),
+-		.hwAllowed = Core::App().settings().hardwareAcceleratedVideo(),
++		.hwAllowed = Core::App().settings().hardwareAcceleratedVideo()
++			&& Exteraless::Config::Instance().hardwareAcceleration(),
+ 		.seekable = !_stories,
+ 	};
+ 	if (!_streamed->withSound) {
+@@ -6046,6 +6159,7 @@ void OverlayWidget::playbackPauseMusic() {
  void OverlayWidget::updatePlaybackState() {
  	Expects(_streamed != nullptr);
  
@@ -6992,7 +7136,7 @@ index 2acbe80..4121a66 100644
  	refreshSystemMediaControls();
  	if (!_streamed->controls && !_stories) {
  		return;
-@@ -6063,6 +6170,7 @@ void OverlayWidget::updatePlaybackState() {
+@@ -6063,6 +6177,7 @@ void OverlayWidget::updatePlaybackState() {
  			_stories->updatePlayback(state);
  		}
  	}
@@ -7000,7 +7144,7 @@ index 2acbe80..4121a66 100644
  }
  
  void OverlayWidget::setSystemMediaControls(
-@@ -6487,6 +6595,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
+@@ -6487,6 +6602,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
  				opacity);
  		}
  	}
@@ -7011,7 +7155,7 @@ index 2acbe80..4121a66 100644
  	checkGroupThumbsAnimation();
  	if (const auto radius = _window->manualRoundingRadius()) {
  		renderer->paintRoundedCorners(radius);
-@@ -7279,6 +7391,67 @@ QRect OverlayWidget::captionGeometry() const {
+@@ -7279,6 +7398,67 @@ QRect OverlayWidget::captionGeometry() const {
  		_stories ? _stories->repostCaptionPadding() : QMargins());
  }
  
@@ -7079,7 +7223,7 @@ index 2acbe80..4121a66 100644
  void OverlayWidget::paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -7328,11 +7501,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7328,11 +7508,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -7093,7 +7237,7 @@ index 2acbe80..4121a66 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7557,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7564,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -7158,6 +7302,28 @@ index 40d67d4..aa92ef8 100644
  	SystemMediaControlsVideoSink *_smtcSink = nullptr;
  	DocumentData *_smtcDocument = nullptr;
  	bool _smtcThumbnailSet = false;
+diff --git a/Telegram/SourceFiles/media/view/media_view_pip.cpp b/Telegram/SourceFiles/media/view/media_view_pip.cpp
+index 1a1f2bd..15602bf 100644
+--- a/Telegram/SourceFiles/media/view/media_view_pip.cpp
++++ b/Telegram/SourceFiles/media/view/media_view_pip.cpp
+@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "main/main_account.h"
+ #include "main/main_session.h"
+ #include "core/application.h"
++#include "exteraless/config.h"
+ #include "base/platform/base_platform_info.h"
+ #include "base/power_save_blocker.h"
+ #include "ui/platform/ui_platform_utility.h"
+@@ -1758,7 +1759,8 @@ void Pip::restartAtSeekPosition(crl::time position) {
+ 
+ 	auto options = Streaming::PlaybackOptions();
+ 	options.position = position;
+-	options.hwAllowed = Core::App().settings().hardwareAcceleratedVideo();
++	options.hwAllowed = Core::App().settings().hardwareAcceleratedVideo()
++		&& Exteraless::Config::Instance().hardwareAcceleration();
+ 	options.audioId = _instance->player().prepareLegacyState().id;
+ 	options.speed = _delegate->pipPlaybackSpeed();
+ 
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 index d25fe3b..59d169d 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
@@ -7386,10 +7552,10 @@ index 62b01e3..d51fd07 100644
  	void updateAuthKey();
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..e5db9f3
+index 0000000..3dc6c8d
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2162 @@
+@@ -0,0 +1,2299 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -7402,6 +7568,7 @@ index 0000000..e5db9f3
 +#include "base/openssl_help.h"
 +#include "base/options.h"
 +#include "core/application.h"
++#include "core/core_settings.h"
 +#include "core/file_utilities.h"
 +#include "main/main_account.h"
 +#include "main/main_domain.h"
@@ -7854,6 +8021,142 @@ index 0000000..e5db9f3
 +			Exteraless::Config::Instance().setBotPrivacyAlwaysAsk(value);
 +		}, botPrivacyAlwaysAsk->lifetime());
 +	}
++
++	builder.addSubsectionTitle({
++		.id = u"exteraless/media"_q,
++		.title = tr::lng_settings_exteraless_media(),
++	});
++
++	const auto qualityLabel = [](int value) {
++		switch (value) {
++		case 1: return u"720p"_q;
++		case 2: return u"1080p"_q;
++		}
++		return tr::lng_settings_exteraless_media_quality_auto(tr::now);
++	};
++	const auto mediaQuality = std::make_shared<rpl::variable<QString>>(
++		qualityLabel(Exteraless::Config::Instance().defaultVideoQuality()));
++	builder.addButton({
++		.id = u"exteraless/media/quality"_q,
++		.title = tr::lng_settings_exteraless_media_quality(),
++		.st = &st::settingsButtonNoIcon,
++		.label = mediaQuality->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().defaultVideoQuality());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(tr::lng_settings_exteraless_media_quality());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto value = 0; value != 3; ++value) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							qualityLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance()
++						.setDefaultVideoQuality(value);
++					mediaQuality->force_assign(qualityLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"video"_q, u"quality"_q, u"hls"_q },
++	});
++
++	// WHY: the toggle aliases the upstream core setting that playback reads,
++	// while the Exteraless key keeps backups and the CLI in sync with it.
++	const auto mediaHwAccel = builder.addButton({
++		.id = u"exteraless/media/hw-accel"_q,
++		.title = tr::lng_settings_exteraless_media_hw_accel(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Core::App().settings().hardwareAcceleratedVideo()),
++		.keywords = { u"hardware"_q, u"acceleration"_q, u"decoder"_q },
++	});
++	if (mediaHwAccel) {
++		mediaHwAccel->toggledChanges(
++		) | rpl::filter([](bool value) {
++			return (value
++				!= Core::App().settings().hardwareAcceleratedVideo());
++		}) | rpl::on_next([=](bool value) {
++			Core::App().settings().setHardwareAcceleratedVideo(value);
++			Core::App().saveSettingsDelayed();
++			Exteraless::Config::Instance().setHardwareAcceleration(value);
++		}, mediaHwAccel->lifetime());
++	}
++
++	const auto mediaGifAsVideo = builder.addButton({
++		.id = u"exteraless/media/gif-as-video"_q,
++		.title = tr::lng_settings_exteraless_media_gif_as_video(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().takeGifAsVideo()),
++		.keywords = { u"gif"_q, u"video"_q, u"mp4"_q },
++	});
++	if (mediaGifAsVideo) {
++		mediaGifAsVideo->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().takeGifAsVideo());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setTakeGifAsVideo(value);
++		}, mediaGifAsVideo->lifetime());
++	}
++
++	const auto bitrateLabel = [](int value) {
++		return u"%1 kbps"_q.arg(value);
++	};
++	const auto mediaAudioBitrate = std::make_shared<rpl::variable<QString>>(
++		bitrateLabel(Exteraless::Config::Instance().customAudioBitrate()));
++	builder.addButton({
++		.id = u"exteraless/media/audio-bitrate"_q,
++		.title = tr::lng_settings_exteraless_media_audio_bitrate(),
++		.st = &st::settingsButtonNoIcon,
++		.label = mediaAudioBitrate->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				Exteraless::Config::Instance().customAudioBitrate());
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_media_audio_bitrate());
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (const auto value : { 16, 24, 32, 48 }) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							value,
++							bitrateLabel(value),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int value) {
++					Exteraless::Config::Instance()
++						.setCustomAudioBitrate(value);
++					mediaAudioBitrate->force_assign(bitrateLabel(value));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"audio"_q, u"bitrate"_q, u"opus"_q },
++	});
 +
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/ghost"_q,
@@ -10011,6 +10314,29 @@ index a19470a..07c777e 100644
  }
  
  bool Uploader::Entry::setPartSize(int partSize) {
+diff --git a/Telegram/SourceFiles/storage/localimageloader.cpp b/Telegram/SourceFiles/storage/localimageloader.cpp
+index 641f3ef..a739a60 100644
+--- a/Telegram/SourceFiles/storage/localimageloader.cpp
++++ b/Telegram/SourceFiles/storage/localimageloader.cpp
+@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_user.h"
+ #include "core/application.h"
+ #include "core/core_settings.h"
++#include "exteraless/config.h"
+ #include "core/file_utilities.h"
+ #include "core/mime_type.h"
+ #include "base/unixtime.h"
+@@ -757,7 +758,9 @@ void FileLoadTask::process(ProcessArgs &&args) {
+ 					Qt::IgnoreAspectRatio,
+ 					Qt::SmoothTransformation);
+ 			}
+-			const auto gif = _animationAsGif && still->music.empty();
++			const auto gif = _animationAsGif
++				&& !Exteraless::Config::Instance().takeGifAsVideo()
++				&& still->music.empty();
+ 			auto information = std::make_unique<
+ 				Ui::PreparedFileInformation>();
+ 			information->filemime = "video/mp4";
 diff --git a/Telegram/SourceFiles/ui/chat/chat.style b/Telegram/SourceFiles/ui/chat/chat.style
 index 3f7770b..2a47f9f 100644
 --- a/Telegram/SourceFiles/ui/chat/chat.style
@@ -10900,10 +11226,10 @@ index 0000000..5dc5319
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..63a9d71
+index 0000000..e933445
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1022 @@
+@@ -0,0 +1,1049 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -11039,12 +11365,20 @@ index 0000000..63a9d71
 +constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 +constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 +constexpr auto kHidePhone = "OEGeneralHidePhone";
++constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
++constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
++constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
++constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
 +constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 +constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 +constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 +constexpr auto kBotPrivacyEnabledAlias = "botPrivacyEnabled";
 +constexpr auto kBotPrivacyUserIdAlias = "botPrivacyUserId";
 +constexpr auto kBotPrivacyAlwaysAskAlias = "alwaysAsk";
++constexpr auto kDefaultHlsVideoQualityAlias = "defaultHlsVideoQuality";
++constexpr auto kPlayerDecoderAlias = "playerDecoder";
++constexpr auto kTakeGifAsVideoAlias = "takeGIFasVideo";
++constexpr auto kCustomAudioBitrateAlias = "customAudioBitrate";
 +constexpr auto kDoNotUseProxy = "doNotUseProxy";
 +constexpr auto kRemoveMessageTail = "removeMessageTail";
 +constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -11285,6 +11619,10 @@ index 0000000..63a9d71
 +	extera[kFormatTimeWithSeconds] = config.showSeconds();
 +	extera[kShowIdAndDc] = config.showIdDc();
 +	extera[kHidePhoneNumber] = config.hidePhone();
++	extera[kGeneralDefaultVideoQuality] = config.defaultVideoQuality();
++	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
++	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
++	extera[kGeneralCustomAudioBitrate] = config.customAudioBitrate();
 +	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
 +	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
 +	extera[kGeneralBotPrivacyAsk] = config.botPrivacyAlwaysAsk();
@@ -11491,6 +11829,21 @@ index 0000000..63a9d71
 +		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 +			&& value.isBool()) {
 +			config.setHidePhone(value.toBool());
++		} else if ((key == kGeneralDefaultVideoQuality
++			|| key == kDefaultHlsVideoQualityAlias)
++			&& IntegralInRange(value, 0, 2)) {
++			config.setDefaultVideoQuality(value.toInt());
++		} else if ((key == kGeneralHardwareAcceleration
++			|| key == kPlayerDecoderAlias)
++			&& value.isBool()) {
++			config.setHardwareAcceleration(value.toBool());
++		} else if ((key == kChatsTakeGifAsVideo || key == kTakeGifAsVideoAlias)
++			&& value.isBool()) {
++			config.setTakeGifAsVideo(value.toBool());
++		} else if ((key == kGeneralCustomAudioBitrate
++			|| key == kCustomAudioBitrateAlias)
++			&& value.isDouble()) {
++			config.setCustomAudioBitrate(value.toInt());
 +		} else if ((key == kGeneralBotPrivacyEnabled
 +			|| key == kBotPrivacyEnabledAlias)
 +			&& value.isBool()) {
@@ -12050,10 +12403,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..c2cf951
+index 0000000..e43197b
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1461 @@
+@@ -0,0 +1,1511 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -12202,6 +12555,19 @@ index 0000000..c2cf951
 +	= "OEChatsDisableAutoDownloadingArchive";
 +constexpr auto kChatsBlockWin32ExecutableFiles
 +	= "OEChatsBlockWin32ExecutableFiles";
++constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
++constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
++constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
++constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
++
++[[nodiscard]] int SanitizeAudioBitrate(int value) {
++	switch (value) {
++	case 16:
++	case 24:
++	case 48: return value;
++	}
++	return 32;
++}
 +
 +const auto kDefaultMainMenuOrder = QStringLiteral(
 +	"exteraless,ghost,pillstack,proxy,storage");
@@ -12728,6 +13094,39 @@ index 0000000..c2cf951
 +
 +void Config::setHidePhone(bool value) {
 +	setValue(kHidePhone, value);
++}
++
++int Config::defaultVideoQuality() const {
++	// 0 = Auto, higher values request a fixed HLS tier.
++	return std::clamp(intValue(kGeneralDefaultVideoQuality, 0), 0, 2);
++}
++
++void Config::setDefaultVideoQuality(int value) {
++	setValue(kGeneralDefaultVideoQuality, std::clamp(value, 0, 2));
++}
++
++bool Config::hardwareAcceleration() const {
++	return boolValue(kGeneralHardwareAcceleration, true);
++}
++
++void Config::setHardwareAcceleration(bool value) {
++	setValue(kGeneralHardwareAcceleration, value);
++}
++
++bool Config::takeGifAsVideo() const {
++	return boolValue(kChatsTakeGifAsVideo, false);
++}
++
++void Config::setTakeGifAsVideo(bool value) {
++	setValue(kChatsTakeGifAsVideo, value);
++}
++
++int Config::customAudioBitrate() const {
++	return SanitizeAudioBitrate(intValue(kGeneralCustomAudioBitrate, 32));
++}
++
++void Config::setCustomAudioBitrate(int value) {
++	setValue(kGeneralCustomAudioBitrate, SanitizeAudioBitrate(value));
 +}
 +
 +bool Config::botPrivacyEnabled() const {
@@ -13278,6 +13677,10 @@ index 0000000..c2cf951
 +			|| key == kCustomDeletedMark
 +			|| key == kDeletedMarkColor
 +			|| key == kHidePhone
++			|| key == kGeneralDefaultVideoQuality
++			|| key == kGeneralHardwareAcceleration
++			|| key == kChatsTakeGifAsVideo
++			|| key == kGeneralCustomAudioBitrate
 +			|| key == kGeneralBotPrivacyEnabled
 +			|| key == kGeneralBotPrivacyAccount
 +			|| key == kGeneralBotPrivacyAsk
@@ -13517,10 +13920,10 @@ index 0000000..c2cf951
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..ef78312
+index 0000000..2a65147
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,303 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -13671,6 +14074,15 @@ index 0000000..ef78312
 +
 +	[[nodiscard]] bool hidePhone() const;
 +	void setHidePhone(bool value);
++
++	[[nodiscard]] int defaultVideoQuality() const;
++	void setDefaultVideoQuality(int value);
++	[[nodiscard]] bool hardwareAcceleration() const;
++	void setHardwareAcceleration(bool value);
++	[[nodiscard]] bool takeGifAsVideo() const;
++	void setTakeGifAsVideo(bool value);
++	[[nodiscard]] int customAudioBitrate() const;
++	void setCustomAudioBitrate(int value);
 +
 +	[[nodiscard]] bool botPrivacyEnabled() const;
 +	void setBotPrivacyEnabled(bool value);
@@ -16651,10 +17063,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..893d5db
+index 0000000..f2795a6
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,2294 @@
+@@ -0,0 +1,2404 @@
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -16806,6 +17218,14 @@ index 0000000..893d5db
 +		<< "  exteraless-chats-cli media-menu\n"
 +		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
 +		<< "<copyPhoto> <setProfile>\n"
++		<< "  exteraless-chats-cli media-quality\n"
++		<< "  exteraless-chats-cli media-quality-set <0..2>\n"
++		<< "  exteraless-chats-cli hw-accel\n"
++		<< "  exteraless-chats-cli hw-accel-set <0|1>\n"
++		<< "  exteraless-chats-cli gif-as-video\n"
++		<< "  exteraless-chats-cli gif-as-video-set <0|1>\n"
++		<< "  exteraless-chats-cli audio-bitrate\n"
++		<< "  exteraless-chats-cli audio-bitrate-set <16|24|32|48>\n"
 +		<< "  exteraless-chats-cli forward-date\n"
 +		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 +		<< "  exteraless-chats-cli edited-mark\n"
@@ -17961,6 +18381,108 @@ index 0000000..893d5db
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("media-quality")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("quality"),
++				Exteraless::Config::Instance().defaultVideoQuality() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("media-quality-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setDefaultVideoQuality(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("quality"),
++				Exteraless::Config::Instance().defaultVideoQuality() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("hw-accel")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().hardwareAcceleration() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("hw-accel-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setHardwareAcceleration(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().hardwareAcceleration() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("gif-as-video")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().takeGifAsVideo() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("gif-as-video-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setTakeGifAsVideo(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("enabled"),
++				Exteraless::Config::Instance().takeGifAsVideo() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("audio-bitrate")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("bitrate"),
++				Exteraless::Config::Instance().customAudioBitrate() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("audio-bitrate-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto value = arguments[2].toInt(&ok);
++		if (!ok) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setCustomAudioBitrate(value);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("bitrate"),
++				Exteraless::Config::Instance().customAudioBitrate() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("forward-date")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -19110,10 +19632,10 @@ index 0000000..5c9da70
 +
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..c6bf62b
+index 0000000..1694076
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,5567 @@
+@@ -0,0 +1,5750 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -19734,7 +20256,7 @@ index 0000000..c6bf62b
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 107,
++            len(section) == 111,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -19755,7 +20277,7 @@ index 0000000..c6bf62b
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 112,
++            sum(len(value) for value in exported.values()) == 116,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -19775,7 +20297,7 @@ index 0000000..c6bf62b
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 112,
++                data.get("applied") == 116,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -19871,6 +20393,10 @@ index 0000000..c6bf62b
 +            "OEChatsHideCallButton": True,
 +            "OEChatsHideChannelSearchButton": True,
 +            "OEChatsInlineMathResult": True,
++            "OEGeneralDefaultVideoQuality": 1,
++            "OEGeneralHardwareAcceleration": False,
++            "OEChatsTakeGifAsVideo": True,
++            "OEGeneralCustomAudioBitrate": 24,
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
 +            "OEChatsSeekDuration": 15,
@@ -19939,7 +20465,7 @@ index 0000000..c6bf62b
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 112,
++            data.get("applied") == 116,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -20229,10 +20755,10 @@ index 0000000..c6bf62b
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 107",
++            "backup legacy eight completed to 111",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (107, 3, 2),
++             len(sections["mainconfig"])) == (111, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -24547,6 +25073,183 @@ index 0000000..c6bf62b
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_media_quality(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "media-quality-defaults")
++    data = json_call(
++        ledger, cli, ["media-quality"], env,
++        "media quality defaults")
++    if data is not None:
++        ledger.check(
++            "media quality default auto",
++            data.get("quality") == 0,
++            data)
++    data = json_call(
++        ledger, cli, ["hw-accel"], env,
++        "hw accel defaults")
++    if data is not None:
++        ledger.check(
++            "hw accel default on",
++            data.get("enabled") is True,
++            data)
++    data = json_call(
++        ledger, cli, ["gif-as-video"], env,
++        "gif as video defaults")
++    if data is not None:
++        ledger.check(
++            "gif as video default off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["audio-bitrate"], env,
++        "audio bitrate defaults")
++    if data is not None:
++        ledger.check(
++            "audio bitrate default 32",
++            data.get("bitrate") == 32,
++            data)
++
++    data = json_call(
++        ledger, cli, ["media-quality-set", "2"], env,
++        "media quality set")
++    if data is not None:
++        ledger.check(
++            "media quality set 1080p",
++            data.get("quality") == 2,
++            data)
++    data = json_call(
++        ledger, cli, ["hw-accel-set", "0"], env,
++        "hw accel set")
++    if data is not None:
++        ledger.check(
++            "hw accel set off",
++            data.get("enabled") is False,
++            data)
++    data = json_call(
++        ledger, cli, ["gif-as-video-set", "1"], env,
++        "gif as video set")
++    if data is not None:
++        ledger.check(
++            "gif as video set on",
++            data.get("enabled") is True,
++            data)
++    data = json_call(
++        ledger, cli, ["audio-bitrate-set", "24"], env,
++        "audio bitrate set")
++    if data is not None:
++        ledger.check(
++            "audio bitrate set 24",
++            data.get("bitrate") == 24,
++            data)
++
++    reloaded = json_call(
++        ledger, cli, ["media-quality"], env,
++        "media quality reload")
++    if reloaded is not None:
++        ledger.check(
++            "media quality persisted",
++            reloaded.get("quality") == 2,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["hw-accel"], env,
++        "hw accel reload")
++    if reloaded is not None:
++        ledger.check(
++            "hw accel persisted",
++            reloaded.get("enabled") is False,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["gif-as-video"], env,
++        "gif as video reload")
++    if reloaded is not None:
++        ledger.check(
++            "gif as video persisted",
++            reloaded.get("enabled") is True,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["audio-bitrate"], env,
++        "audio bitrate reload")
++    if reloaded is not None:
++        ledger.check(
++            "audio bitrate persisted",
++            reloaded.get("bitrate") == 24,
++            reloaded)
++
++    data = json_call(
++        ledger, cli, ["media-quality-set", "9"], env,
++        "media quality clamp")
++    if data is not None:
++        ledger.check(
++            "media quality clamped to 1080p",
++            data.get("quality") == 2,
++            data)
++    data = json_call(
++        ledger, cli, ["audio-bitrate-set", "99"], env,
++        "audio bitrate clamp")
++    if data is not None:
++        ledger.check(
++            "audio bitrate sanitized to 32",
++            data.get("bitrate") == 32,
++            data)
++
++    env = make_env(work / "media-quality-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "defaultHlsVideoQuality": 1,
++            "playerDecoder": False,
++            "takeGIFasVideo": True,
++            "customAudioBitrate": 48,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "media quality alias")
++    if data is not None:
++        ledger.check(
++            "media quality alias applied",
++            data.get("applied") == 4 and data.get("unknown") == [],
++            data)
++    reloaded = json_call(
++        ledger, cli, ["media-quality"], env,
++        "media quality alias read")
++    if reloaded is not None:
++        ledger.check(
++            "media quality alias value",
++            reloaded.get("quality") == 1,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["hw-accel"], env,
++        "hw accel alias read")
++    if reloaded is not None:
++        ledger.check(
++            "hw accel alias value",
++            reloaded.get("enabled") is False,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["gif-as-video"], env,
++        "gif as video alias read")
++    if reloaded is not None:
++        ledger.check(
++            "gif as video alias value",
++            reloaded.get("enabled") is True,
++            reloaded)
++    reloaded = json_call(
++        ledger, cli, ["audio-bitrate"], env,
++        "audio bitrate alias read")
++    if reloaded is not None:
++        ledger.check(
++            "audio bitrate alias value",
++            reloaded.get("bitrate") == 48,
++            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -24606,6 +25309,7 @@ index 0000000..c6bf62b
 +        shortcuts = check_shortcuts(ledger, cli, work)
 +        menu_style = check_message_menu_style(ledger, cli, work)
 +        chat_misc = check_chat_misc(ledger, cli, work)
++        media_quality = check_media_quality(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
@@ -24667,6 +25371,7 @@ index 0000000..c6bf62b
 +    print(f"message-menu-style: "
 +          f"{menu_style[0] - menu_style[1]} passed")
 +    print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
++    print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")

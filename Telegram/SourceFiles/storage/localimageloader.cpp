@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_user.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "exteraless/config.h"
 #include "core/file_utilities.h"
 #include "core/mime_type.h"
 #include "base/unixtime.h"
@@ -757,7 +758,9 @@ void FileLoadTask::process(ProcessArgs &&args) {
 					Qt::IgnoreAspectRatio,
 					Qt::SmoothTransformation);
 			}
-			const auto gif = _animationAsGif && still->music.empty();
+			const auto gif = _animationAsGif
+				&& !Exteraless::Config::Instance().takeGifAsVideo()
+				&& still->music.empty();
 			auto information = std::make_unique<
 				Ui::PreparedFileInformation>();
 			information->filemime = "video/mp4";

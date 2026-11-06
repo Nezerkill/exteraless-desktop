@@ -149,6 +149,15 @@ public:
 	[[nodiscard]] bool hidePhone() const;
 	void setHidePhone(bool value);
 
+	[[nodiscard]] int defaultVideoQuality() const;
+	void setDefaultVideoQuality(int value);
+	[[nodiscard]] bool hardwareAcceleration() const;
+	void setHardwareAcceleration(bool value);
+	[[nodiscard]] bool takeGifAsVideo() const;
+	void setTakeGifAsVideo(bool value);
+	[[nodiscard]] int customAudioBitrate() const;
+	void setCustomAudioBitrate(int value);
+
 	[[nodiscard]] bool botPrivacyEnabled() const;
 	void setBotPrivacyEnabled(bool value);
 	[[nodiscard]] int botPrivacyAccount() const;

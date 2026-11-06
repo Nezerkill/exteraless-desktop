@@ -618,7 +618,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 107,
+            len(section) == 111,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -639,7 +639,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 112,
+            sum(len(value) for value in exported.values()) == 116,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -659,7 +659,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 112,
+                data.get("applied") == 116,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -755,6 +755,10 @@ def check_backup(ledger, cli, work):
             "OEChatsHideCallButton": True,
             "OEChatsHideChannelSearchButton": True,
             "OEChatsInlineMathResult": True,
+            "OEGeneralDefaultVideoQuality": 1,
+            "OEGeneralHardwareAcceleration": False,
+            "OEChatsTakeGifAsVideo": True,
+            "OEGeneralCustomAudioBitrate": 24,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
             "OEChatsSeekDuration": 15,
@@ -823,7 +827,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 112,
+            data.get("applied") == 116,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1113,10 +1117,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 107",
+            "backup legacy eight completed to 111",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (107, 3, 2),
+             len(sections["mainconfig"])) == (111, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -5431,6 +5435,183 @@ def check_download_boost(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_media_quality(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "media-quality-defaults")
+    data = json_call(
+        ledger, cli, ["media-quality"], env,
+        "media quality defaults")
+    if data is not None:
+        ledger.check(
+            "media quality default auto",
+            data.get("quality") == 0,
+            data)
+    data = json_call(
+        ledger, cli, ["hw-accel"], env,
+        "hw accel defaults")
+    if data is not None:
+        ledger.check(
+            "hw accel default on",
+            data.get("enabled") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["gif-as-video"], env,
+        "gif as video defaults")
+    if data is not None:
+        ledger.check(
+            "gif as video default off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["audio-bitrate"], env,
+        "audio bitrate defaults")
+    if data is not None:
+        ledger.check(
+            "audio bitrate default 32",
+            data.get("bitrate") == 32,
+            data)
+
+    data = json_call(
+        ledger, cli, ["media-quality-set", "2"], env,
+        "media quality set")
+    if data is not None:
+        ledger.check(
+            "media quality set 1080p",
+            data.get("quality") == 2,
+            data)
+    data = json_call(
+        ledger, cli, ["hw-accel-set", "0"], env,
+        "hw accel set")
+    if data is not None:
+        ledger.check(
+            "hw accel set off",
+            data.get("enabled") is False,
+            data)
+    data = json_call(
+        ledger, cli, ["gif-as-video-set", "1"], env,
+        "gif as video set")
+    if data is not None:
+        ledger.check(
+            "gif as video set on",
+            data.get("enabled") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["audio-bitrate-set", "24"], env,
+        "audio bitrate set")
+    if data is not None:
+        ledger.check(
+            "audio bitrate set 24",
+            data.get("bitrate") == 24,
+            data)
+
+    reloaded = json_call(
+        ledger, cli, ["media-quality"], env,
+        "media quality reload")
+    if reloaded is not None:
+        ledger.check(
+            "media quality persisted",
+            reloaded.get("quality") == 2,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["hw-accel"], env,
+        "hw accel reload")
+    if reloaded is not None:
+        ledger.check(
+            "hw accel persisted",
+            reloaded.get("enabled") is False,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["gif-as-video"], env,
+        "gif as video reload")
+    if reloaded is not None:
+        ledger.check(
+            "gif as video persisted",
+            reloaded.get("enabled") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["audio-bitrate"], env,
+        "audio bitrate reload")
+    if reloaded is not None:
+        ledger.check(
+            "audio bitrate persisted",
+            reloaded.get("bitrate") == 24,
+            reloaded)
+
+    data = json_call(
+        ledger, cli, ["media-quality-set", "9"], env,
+        "media quality clamp")
+    if data is not None:
+        ledger.check(
+            "media quality clamped to 1080p",
+            data.get("quality") == 2,
+            data)
+    data = json_call(
+        ledger, cli, ["audio-bitrate-set", "99"], env,
+        "audio bitrate clamp")
+    if data is not None:
+        ledger.check(
+            "audio bitrate sanitized to 32",
+            data.get("bitrate") == 32,
+            data)
+
+    env = make_env(work / "media-quality-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "defaultHlsVideoQuality": 1,
+            "playerDecoder": False,
+            "takeGIFasVideo": True,
+            "customAudioBitrate": 48,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "media quality alias")
+    if data is not None:
+        ledger.check(
+            "media quality alias applied",
+            data.get("applied") == 4 and data.get("unknown") == [],
+            data)
+    reloaded = json_call(
+        ledger, cli, ["media-quality"], env,
+        "media quality alias read")
+    if reloaded is not None:
+        ledger.check(
+            "media quality alias value",
+            reloaded.get("quality") == 1,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["hw-accel"], env,
+        "hw accel alias read")
+    if reloaded is not None:
+        ledger.check(
+            "hw accel alias value",
+            reloaded.get("enabled") is False,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["gif-as-video"], env,
+        "gif as video alias read")
+    if reloaded is not None:
+        ledger.check(
+            "gif as video alias value",
+            reloaded.get("enabled") is True,
+            reloaded)
+    reloaded = json_call(
+        ledger, cli, ["audio-bitrate"], env,
+        "audio bitrate alias read")
+    if reloaded is not None:
+        ledger.check(
+            "audio bitrate alias value",
+            reloaded.get("bitrate") == 48,
+            reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -5490,6 +5671,7 @@ def main():
         shortcuts = check_shortcuts(ledger, cli, work)
         menu_style = check_message_menu_style(ledger, cli, work)
         chat_misc = check_chat_misc(ledger, cli, work)
+        media_quality = check_media_quality(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
@@ -5551,6 +5733,7 @@ def main():
     print(f"message-menu-style: "
           f"{menu_style[0] - menu_style[1]} passed")
     print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
+    print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")

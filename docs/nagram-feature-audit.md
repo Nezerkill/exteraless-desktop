@@ -258,9 +258,9 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Опросы | `showResultsBeforeVoting` | ✅ `OEChatsShowResultsBeforeVoting` (NB-71) показывает результаты до голосования: `Poll::showResultsBeforeVote()` исключает admin-режим, MediaEditor, уже отданный голос, `Closed`, `HideResultsUntilClose`, `MultiChoice` и опросы без голосов, голосование сохранено; multi-choice вне объёма |
 | Inline-математика | `inlineMathResult`, `inlineMathCurrency` | ❌ (`chat_helpers/message_field.cpp`, `field_autocomplete.cpp`) |
 | Скрытие кнопок профиля/шапки | `hideGiftButtonInChannel`, `hideMoneyButton`, `hideCallButton`, `hideShareButtonInChannel`, `hideChannelSearchButton`, `hideSendAsPeer`, `hideCameraTile` | ❌ (`info/profile/*`, `history_view_top_bar_widget.cpp`, `compose_controls`) |
-| Медиа и качество | `alwaysSendInHD`, `preferOriginalQuality`, `hdrPhotos`, `doubleTapSeekDuration`, `swipeToPip`, `zoomSlider`, `staticZoom`, `enhancedVideoBitrate`, `defaultHlsVideoQuality`, `playerDecoder` | ❌/➖ (`media/view/*`, `media/streaming/*`; в upstream есть булев hwaccel) |
+| Медиа и качество | `alwaysSendInHD`, `preferOriginalQuality`, `hdrPhotos`, `doubleTapSeekDuration`, `swipeToPip`, `zoomSlider`, `staticZoom`, `enhancedVideoBitrate`, `defaultHlsVideoQuality`, `playerDecoder` | ✅/❌ по NB-88: `OEGeneralDefaultVideoQuality` (int `0..2`, default `0`) — стартовое качество Auto/720p/1080p (`initialPlaybackVideoQuality` в `media/view/media_view_overlay_widget.cpp`, `Settings::videoQuality()` в `core/core_settings.cpp`), алиас `defaultHlsVideoQuality`; `OEGeneralHardwareAcceleration` (bool, default `true`) — алиас поверх upstream-настройки, воспроизведение требует `hardwareAcceleratedVideo() && hardwareAcceleration()` в оверлее и PiP, алиас `playerDecoder`. `alwaysSendInHD`, `preferOriginalQuality`, `enhancedVideoBitrate`, `hdrPhotos`, `swipeToPip`, `zoomSlider` и `staticZoom` не переносились — отдельные ключи; `doubleTapSeekDuration` закрыт в NB-72 |
 | Автопауза и звук | `pauseVoice`, `pauseRound`, `autoPauseVideo`, `unmuteWithVolumeButtons`, `noiseSuppressAndVoiceEnhance`, `dontAutoPlayNextVoice` | ❌/⛔ (`media/audio/*`, `calls/*`) |
-| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ✅/N/A по NB-86: `OEChatsHideGreetingSticker`/`OEChatsHidePanelsOnScroll` (default `false`) — гейт в `GenerateChatIntro` и `hidePanelsAnimated` в `onScroll`, алиасы `disableGreetingSticker` и `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`; `OEChatsChannelBottomButton` (0/1/2, default 1) — hide/mute/Discuss, режим 2 показывает кнопку Discuss с навигацией по `discussionLink`, алиасы `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `keepAttachButton`/`quickTransition*` — N/A, кнопки и жеста в desktop нет; остальные ключи строки в этом переносе не участвовали |
+| Прочее | `keepAttachButton`, `bottomButton`, `rememberAllBackMessages`, `hideKeyboardOnChatScroll`, `disableGlobalSearch`, `confirmAllLinks`, `fixLinkPreview`, `disableLinkPreviewByDefault`, `silentMessageByDefault`, `deleteChatForBothSides`, `replyToDeletedAsQuote`, `sendMp4DocumentAsVideo`, `takeGIFasVideo`, `customAudioBitrate` | ✅/N/A по NB-86: `OEChatsHideGreetingSticker`/`OEChatsHidePanelsOnScroll` (default `false`) — гейт в `GenerateChatIntro` и `hidePanelsAnimated` в `onScroll`, алиасы `disableGreetingSticker` и `hideKeyboardOnScroll`/`HideKeyboardOnChatScroll`; `OEChatsChannelBottomButton` (0/1/2, default 1) — hide/mute/Discuss, режим 2 показывает кнопку Discuss с навигацией по `discussionLink`, алиасы `bottomButton`/`BottomButton`, legacy `DisableChannelMuteButton` (true → 0); `keepAttachButton`/`quickTransition*` — N/A, кнопки и жеста в desktop нет; по NB-88: `takeGIFasVideo` — ✅ `OEChatsTakeGifAsVideo` (bool, default `false`) отменяет конверсию GIF в `video/mp4` в `FileLoadTask::process`; `customAudioBitrate` — ✅ `OEGeneralCustomAudioBitrate` (int `16/24/32/48`, default `32`) задаёт `bit_rate` записи Opus, при отказе `avcodec_open2` — retry на 32 kbps; `sendMp4DocumentAsVideo` — N/A, MP4-документ в desktop и так уходит видео; остальные ключи строки не участвовали |
 | Камера кружков | `cameraType`, `cameraMirrorMode`, `cameraStabilization`, `extendedFps`, `alwaysSendInHD`, `hideCameraTile` | ⛔ CameraX и драйверы |
 
 ### 6.5 Ghost, удалённые и изменённые сообщения
@@ -435,7 +435,16 @@ HLS-качество по умолчанию, улучшенный битрей�
 автоскачивания архивов и `.exe`. Desktop: внешние субтитры — ✅ NB-32 (SRT и
 WebVTT, выбор файла и отключение из меню медиавьюера, пер-видео память в
 `OESubtitlesFiles`, рендер в raster/OpenGL/RHI), `.ass` не читается;
-HLS-качество, битрейт, декодер и GIF-как-видео отсутствуют; правила
+HLS-качество, битрейт, декодер и GIF-как-видео — ✅ NB-88:
+`OEGeneralDefaultVideoQuality` (int `0..2`, default `0` → Auto/720p/1080p),
+`OEGeneralHardwareAcceleration` (алиас поверх upstream-настройки, default
+`true`), `OEChatsTakeGifAsVideo` (GIF уходит видео, default `false`) и
+`OEGeneralCustomAudioBitrate` (16/24/32/48 kbps, при отказе `avcodec_open2` —
+retry на 32 kbps), алиасы `defaultHlsVideoQuality`/`playerDecoder`/
+`takeGIFasVideo`/`customAudioBitrate`, подсекция «Media» в Exteraless, CLI 4
+группы, `check_media_quality` — 19 проверок; `sendMp4DocumentAsVideo` — N/A
+(MP4-документ и так уходит видео), `enhancedVideoBitrate`, `alwaysSendInHD` и
+`preferredOriginalQuality` не переносились; правила
 автоскачивания по типам есть в
 `settings/sections/settings_local_storage.cpp`, а правила для архивов и `.exe`
 — ✅ NB-60: `OEChatsDisableAutoDownloadingArchive` (bool, default `false`) и

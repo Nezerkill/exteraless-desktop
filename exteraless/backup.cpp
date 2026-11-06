@@ -133,12 +133,20 @@ constexpr auto kCustomDeletedMarkAlias = "CustomDeletedMark";
 constexpr auto kDeletedMarkColorAlias = "DeletedMarkColor";
 constexpr auto kHidePhoneNumber = "hidePhoneNumber";
 constexpr auto kHidePhone = "OEGeneralHidePhone";
+constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
+constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
+constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
+constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
 constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
 constexpr auto kGeneralBotPrivacyAsk = "OEGeneralBotPrivacyAlwaysAsk";
 constexpr auto kBotPrivacyEnabledAlias = "botPrivacyEnabled";
 constexpr auto kBotPrivacyUserIdAlias = "botPrivacyUserId";
 constexpr auto kBotPrivacyAlwaysAskAlias = "alwaysAsk";
+constexpr auto kDefaultHlsVideoQualityAlias = "defaultHlsVideoQuality";
+constexpr auto kPlayerDecoderAlias = "playerDecoder";
+constexpr auto kTakeGifAsVideoAlias = "takeGIFasVideo";
+constexpr auto kCustomAudioBitrateAlias = "customAudioBitrate";
 constexpr auto kDoNotUseProxy = "doNotUseProxy";
 constexpr auto kRemoveMessageTail = "removeMessageTail";
 constexpr auto kHideReactionsInChannels = "hideReactionsInChannels";
@@ -379,6 +387,10 @@ QString BuildBackup() {
 	extera[kFormatTimeWithSeconds] = config.showSeconds();
 	extera[kShowIdAndDc] = config.showIdDc();
 	extera[kHidePhoneNumber] = config.hidePhone();
+	extera[kGeneralDefaultVideoQuality] = config.defaultVideoQuality();
+	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
+	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
+	extera[kGeneralCustomAudioBitrate] = config.customAudioBitrate();
 	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
 	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
 	extera[kGeneralBotPrivacyAsk] = config.botPrivacyAlwaysAsk();
@@ -585,6 +597,21 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kHidePhoneNumber || key == kHidePhone || key == QStringLiteral("hidePhone"))
 			&& value.isBool()) {
 			config.setHidePhone(value.toBool());
+		} else if ((key == kGeneralDefaultVideoQuality
+			|| key == kDefaultHlsVideoQualityAlias)
+			&& IntegralInRange(value, 0, 2)) {
+			config.setDefaultVideoQuality(value.toInt());
+		} else if ((key == kGeneralHardwareAcceleration
+			|| key == kPlayerDecoderAlias)
+			&& value.isBool()) {
+			config.setHardwareAcceleration(value.toBool());
+		} else if ((key == kChatsTakeGifAsVideo || key == kTakeGifAsVideoAlias)
+			&& value.isBool()) {
+			config.setTakeGifAsVideo(value.toBool());
+		} else if ((key == kGeneralCustomAudioBitrate
+			|| key == kCustomAudioBitrateAlias)
+			&& value.isDouble()) {
+			config.setCustomAudioBitrate(value.toInt());
 		} else if ((key == kGeneralBotPrivacyEnabled
 			|| key == kBotPrivacyEnabledAlias)
 			&& value.isBool()) {

@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "media/audio/media_audio_ffmpeg_loader.h"
 #include "media/audio/media_audio_track.h"
 #include "ffmpeg/ffmpeg_utility.h"
+#include "exteraless/config.h"
 #include "base/timer.h"
 
 #include <al.h>
@@ -23,6 +24,12 @@ namespace Capture {
 namespace {
 
 constexpr auto kCaptureFrequency = Player::kDefaultFrequency;
+constexpr auto kDefaultCaptureBitrate = 32000;
+
+[[nodiscard]] int ExteralessCaptureBitrate() {
+	return Exteraless::Config::Instance().customAudioBitrate() * 1000;
+}
+
 constexpr auto kCaptureSkipDuration = crl::time(400);
 constexpr auto kCaptureFadeInDuration = crl::time(300);
 constexpr auto kCaptureBufferSlice = 256 * 1024;
@@ -399,7 +406,8 @@ bool Instance::Inner::initializeFFmpeg() {
 	av_opt_set_int(d->codecContext, "refcounted_frames", 1, 0);
 
 	d->codecContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
-	d->codecContext->bit_rate = 32000;
+	const auto bitrate = ExteralessCaptureBitrate();
+	d->codecContext->bit_rate = bitrate;
 	d->codecContext->ch_layout = AV_CHANNEL_LAYOUT_MONO;
 	d->channels = d->codecContext->ch_layout.nb_channels;
 	d->codecContext->sample_rate = kCaptureFrequency;
@@ -410,8 +418,14 @@ bool Instance::Inner::initializeFFmpeg() {
 
 	// Open audio stream
 	if ((res = avcodec_open2(d->codecContext, d->codec, nullptr)) < 0) {
-		LOG(("Audio Error: Unable to avcodec_open2 for capture, error %1, %2").arg(res).arg(av_make_error_string(err, sizeof(err), res)));
-		return false;
+		if (bitrate != kDefaultCaptureBitrate) {
+			d->codecContext->bit_rate = kDefaultCaptureBitrate;
+			res = avcodec_open2(d->codecContext, d->codec, nullptr);
+		}
+		if (res < 0) {
+			LOG(("Audio Error: Unable to avcodec_open2 for capture, error %1, %2").arg(res).arg(av_make_error_string(err, sizeof(err), res)));
+			return false;
+		}
 	}
 
 	// Alloc source samples

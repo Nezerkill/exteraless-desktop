@@ -9208,6 +9208,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_bot_privacy_account" = "Bot account";
 "lng_settings_exteraless_bot_privacy_account_off" = "Off";
 "lng_settings_exteraless_bot_privacy_always_ask" = "Always ask which account to use";
+"lng_settings_exteraless_media" = "Media";
+"lng_settings_exteraless_media_quality" = "Default video quality";
+"lng_settings_exteraless_media_quality_auto" = "Auto";
+"lng_settings_exteraless_media_hw_accel" = "Hardware video decoding";
+"lng_settings_exteraless_media_gif_as_video" = "Send GIFs as video";
+"lng_settings_exteraless_media_audio_bitrate" = "Audio bitrate";
 "lng_settings_exteraless_ghost" = "Ghost Mode";
 "lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 "lng_settings_exteraless_ghost_stories" = "Don't send story views";

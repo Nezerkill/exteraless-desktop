@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 742 проверки PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 761 проверка PASS
   (44 strip, 10 reactions, 58 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -110,9 +110,38 @@
   5 disable-link-preview, 5 hide-all-chats, 13 hide-archive-sort,
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
-  5 wide-posts, 15 chat-misc, 9 autodownload-rules, 10 download-boost,
-  48 subtitles, 7 avatar-corners, 100 backup); плагины без изменений — 32 и
-  213 проверок.
+  5 wide-posts, 15 chat-misc, 9 autodownload-rules, 19 media-quality,
+  10 download-boost, 48 subtitles, 7 avatar-corners, 100 backup); плагины
+  без изменений — 32 и 213 проверок.
+- Media quality and formats (NB-88): `OEGeneralDefaultVideoQuality` (int
+  `0..2`, default `0`) — стартовое HLS-качество: `0` оставляет upstream 480p,
+  `1` — 720p, `2` — 1080p (`initialPlaybackVideoQuality` в
+  `media/view/media_view_overlay_widget.cpp`, `Settings::videoQuality()` в
+  `core/core_settings.cpp`); `OEGeneralHardwareAcceleration` (bool, default
+  `true`) — алиас поверх upstream-настройки: включённое декодирование требует
+  `hardwareAcceleratedVideo() && hardwareAcceleration()` в
+  `restartAtSeekPosition` оверлея и PiP, а тумблер пишет оба значения;
+  `OEChatsTakeGifAsVideo` (bool, default `false`) отменяет конверсию GIF в
+  `video/mp4` в `FileLoadTask::process`
+  (`storage/localimageloader.cpp`); `OEGeneralCustomAudioBitrate` (int
+  `16/24/32/48`, default `32`, иное сводится к `32`) задаёт `bit_rate` записи
+  Opus в `InitializeFFmpeg` (`media/audio/media_audio_capture.cpp`), при отказе
+  `avcodec_open2` поток один раз переоткрывается на 32 kbps. Алиасы
+  `defaultHlsVideoQuality`, `playerDecoder`, `takeGIFasVideo`,
+  `customAudioBitrate`. В Exteraless подсекция «Media»: селектор качества
+  Auto/720p/1080p, тумблер Hardware video decoding, тумблер Send GIFs as video
+  и селектор 16/24/32/48 kbps; шесть lang-ключей
+  `lng_settings_exteraless_media*`. `.extera` — 116 ключей (111 + 3 + 2,
+  сверено с legacy-кортежем `run_checks`), CLI четыре группы
+  (`media-quality`, `hw-accel`, `gif-as-video`, `audio-bitrate`),
+  `check_media_quality` — 19 проверок (счётчик выше 761, плагины 32 и 213 без
+  изменений); `kKeysCount` 11193 (`kTagsCount` 185), sha256 патча `c647f76d…`,
+  `nix flake check` PASS. Ограничения: ручной тир отключает адаптивное
+  переключение — на слабой сети просмотр может ухудшиться; повышенный битрейт
+  может упасть на `avcodec_open2`, тогда запись идёт на 32 kbps без сообщения;
+  GIF-как-видео теряет no-sound-спойлер; MP4-как-видео не делалось — уже дефолт
+  upstream, `enhancedVideoBitrate`/`alwaysSendInHD`/`preferredOriginalQuality`
+  — отдельные ключи; Xvfb-смоук и сетевой замер не выполнялись.
 - Avatar corners (NB-61): `OEChatsAvatarRadius` (int `-1..32`, default `-1`;
   `-1` — круг как в upstream, `0` — квадрат, `N` — радиус в px) задаёт форму
   загруженного и пустого юзерпика. Маска выбирается в `Ui::ValidateUserpicCache`

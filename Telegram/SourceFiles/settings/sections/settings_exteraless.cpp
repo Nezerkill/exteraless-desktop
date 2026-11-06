@@ -10,6 +10,7 @@
 #include "base/openssl_help.h"
 #include "base/options.h"
 #include "core/application.h"
+#include "core/core_settings.h"
 #include "core/file_utilities.h"
 #include "main/main_account.h"
 #include "main/main_domain.h"
@@ -462,6 +463,142 @@ const auto kMeta = Builder::BuildHelper({
 			Exteraless::Config::Instance().setBotPrivacyAlwaysAsk(value);
 		}, botPrivacyAlwaysAsk->lifetime());
 	}
+
+	builder.addSubsectionTitle({
+		.id = u"exteraless/media"_q,
+		.title = tr::lng_settings_exteraless_media(),
+	});
+
+	const auto qualityLabel = [](int value) {
+		switch (value) {
+		case 1: return u"720p"_q;
+		case 2: return u"1080p"_q;
+		}
+		return tr::lng_settings_exteraless_media_quality_auto(tr::now);
+	};
+	const auto mediaQuality = std::make_shared<rpl::variable<QString>>(
+		qualityLabel(Exteraless::Config::Instance().defaultVideoQuality()));
+	builder.addButton({
+		.id = u"exteraless/media/quality"_q,
+		.title = tr::lng_settings_exteraless_media_quality(),
+		.st = &st::settingsButtonNoIcon,
+		.label = mediaQuality->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().defaultVideoQuality());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(tr::lng_settings_exteraless_media_quality());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto value = 0; value != 3; ++value) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							qualityLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setDefaultVideoQuality(value);
+					mediaQuality->force_assign(qualityLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"video"_q, u"quality"_q, u"hls"_q },
+	});
+
+	// WHY: the toggle aliases the upstream core setting that playback reads,
+	// while the Exteraless key keeps backups and the CLI in sync with it.
+	const auto mediaHwAccel = builder.addButton({
+		.id = u"exteraless/media/hw-accel"_q,
+		.title = tr::lng_settings_exteraless_media_hw_accel(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Core::App().settings().hardwareAcceleratedVideo()),
+		.keywords = { u"hardware"_q, u"acceleration"_q, u"decoder"_q },
+	});
+	if (mediaHwAccel) {
+		mediaHwAccel->toggledChanges(
+		) | rpl::filter([](bool value) {
+			return (value
+				!= Core::App().settings().hardwareAcceleratedVideo());
+		}) | rpl::on_next([=](bool value) {
+			Core::App().settings().setHardwareAcceleratedVideo(value);
+			Core::App().saveSettingsDelayed();
+			Exteraless::Config::Instance().setHardwareAcceleration(value);
+		}, mediaHwAccel->lifetime());
+	}
+
+	const auto mediaGifAsVideo = builder.addButton({
+		.id = u"exteraless/media/gif-as-video"_q,
+		.title = tr::lng_settings_exteraless_media_gif_as_video(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().takeGifAsVideo()),
+		.keywords = { u"gif"_q, u"video"_q, u"mp4"_q },
+	});
+	if (mediaGifAsVideo) {
+		mediaGifAsVideo->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().takeGifAsVideo());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setTakeGifAsVideo(value);
+		}, mediaGifAsVideo->lifetime());
+	}
+
+	const auto bitrateLabel = [](int value) {
+		return u"%1 kbps"_q.arg(value);
+	};
+	const auto mediaAudioBitrate = std::make_shared<rpl::variable<QString>>(
+		bitrateLabel(Exteraless::Config::Instance().customAudioBitrate()));
+	builder.addButton({
+		.id = u"exteraless/media/audio-bitrate"_q,
+		.title = tr::lng_settings_exteraless_media_audio_bitrate(),
+		.st = &st::settingsButtonNoIcon,
+		.label = mediaAudioBitrate->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				Exteraless::Config::Instance().customAudioBitrate());
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_media_audio_bitrate());
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (const auto value : { 16, 24, 32, 48 }) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							value,
+							bitrateLabel(value),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int value) {
+					Exteraless::Config::Instance()
+						.setCustomAudioBitrate(value);
+					mediaAudioBitrate->force_assign(bitrateLabel(value));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"audio"_q, u"bitrate"_q, u"opus"_q },
+	});
 
 	builder.addSubsectionTitle({
 		.id = u"exteraless/ghost"_q,

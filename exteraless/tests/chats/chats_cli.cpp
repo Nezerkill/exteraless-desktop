@@ -149,6 +149,14 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli media-menu\n"
 		<< "  exteraless-chats-cli media-menu-set <forward> <copyFrame> "
 		<< "<copyPhoto> <setProfile>\n"
+		<< "  exteraless-chats-cli media-quality\n"
+		<< "  exteraless-chats-cli media-quality-set <0..2>\n"
+		<< "  exteraless-chats-cli hw-accel\n"
+		<< "  exteraless-chats-cli hw-accel-set <0|1>\n"
+		<< "  exteraless-chats-cli gif-as-video\n"
+		<< "  exteraless-chats-cli gif-as-video-set <0|1>\n"
+		<< "  exteraless-chats-cli audio-bitrate\n"
+		<< "  exteraless-chats-cli audio-bitrate-set <16|24|32|48>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli edited-mark\n"
@@ -1301,6 +1309,108 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("copyPhoto"), config.mediaViewerMenuCopyPhoto() },
 			{ QStringLiteral("setProfile"),
 				config.mediaViewerMenuSetProfile() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("media-quality")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("quality"),
+				Exteraless::Config::Instance().defaultVideoQuality() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("media-quality-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setDefaultVideoQuality(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("quality"),
+				Exteraless::Config::Instance().defaultVideoQuality() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("hw-accel")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().hardwareAcceleration() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("hw-accel-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setHardwareAcceleration(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().hardwareAcceleration() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("gif-as-video")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().takeGifAsVideo() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("gif-as-video-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setTakeGifAsVideo(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("enabled"),
+				Exteraless::Config::Instance().takeGifAsVideo() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("audio-bitrate")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("bitrate"),
+				Exteraless::Config::Instance().customAudioBitrate() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("audio-bitrate-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto value = arguments[2].toInt(&ok);
+		if (!ok) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setCustomAudioBitrate(value);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("bitrate"),
+				Exteraless::Config::Instance().customAudioBitrate() },
 		});
 		return 0;
 	}

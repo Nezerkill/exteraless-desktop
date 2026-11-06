@@ -146,6 +146,19 @@ constexpr auto kChatsDisableAutoDownloadingArchive
 	= "OEChatsDisableAutoDownloadingArchive";
 constexpr auto kChatsBlockWin32ExecutableFiles
 	= "OEChatsBlockWin32ExecutableFiles";
+constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
+constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
+constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
+constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
+
+[[nodiscard]] int SanitizeAudioBitrate(int value) {
+	switch (value) {
+	case 16:
+	case 24:
+	case 48: return value;
+	}
+	return 32;
+}
 
 const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
@@ -672,6 +685,39 @@ bool Config::hidePhone() const {
 
 void Config::setHidePhone(bool value) {
 	setValue(kHidePhone, value);
+}
+
+int Config::defaultVideoQuality() const {
+	// 0 = Auto, higher values request a fixed HLS tier.
+	return std::clamp(intValue(kGeneralDefaultVideoQuality, 0), 0, 2);
+}
+
+void Config::setDefaultVideoQuality(int value) {
+	setValue(kGeneralDefaultVideoQuality, std::clamp(value, 0, 2));
+}
+
+bool Config::hardwareAcceleration() const {
+	return boolValue(kGeneralHardwareAcceleration, true);
+}
+
+void Config::setHardwareAcceleration(bool value) {
+	setValue(kGeneralHardwareAcceleration, value);
+}
+
+bool Config::takeGifAsVideo() const {
+	return boolValue(kChatsTakeGifAsVideo, false);
+}
+
+void Config::setTakeGifAsVideo(bool value) {
+	setValue(kChatsTakeGifAsVideo, value);
+}
+
+int Config::customAudioBitrate() const {
+	return SanitizeAudioBitrate(intValue(kGeneralCustomAudioBitrate, 32));
+}
+
+void Config::setCustomAudioBitrate(int value) {
+	setValue(kGeneralCustomAudioBitrate, SanitizeAudioBitrate(value));
 }
 
 bool Config::botPrivacyEnabled() const {
@@ -1222,6 +1268,10 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kCustomDeletedMark
 			|| key == kDeletedMarkColor
 			|| key == kHidePhone
+			|| key == kGeneralDefaultVideoQuality
+			|| key == kGeneralHardwareAcceleration
+			|| key == kChatsTakeGifAsVideo
+			|| key == kGeneralCustomAudioBitrate
 			|| key == kGeneralBotPrivacyEnabled
 			|| key == kGeneralBotPrivacyAccount
 			|| key == kGeneralBotPrivacyAsk

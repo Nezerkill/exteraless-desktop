@@ -141,6 +141,12 @@ namespace Media {
 namespace View {
 namespace {
 
+[[nodiscard]] Media::VideoQuality ExteralessVideoQuality() {
+	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
+	const auto height = (tier <= 0) ? 480 : (tier == 1 ? 720 : 1080);
+	return { .height = uint32(height) };
+}
+
 struct RecognitionId {
 	uint64 sessionUniqueId = 0;
 	PhotoId photoId = 0;
@@ -3057,7 +3063,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
 		_streamedQualityChangeFinished = false;
 		if ((_document = document)) {
 			_quality = _document->initialPlaybackVideoQuality(
-				Core::App().settings().videoQuality());
+				ExteralessVideoQuality());
 			_chosenQuality = _document->chooseQuality(_message, _quality);
 			_documentMedia = _document->createMediaView();
 			_videoCover = LookupVideoCover(_document, _message);
@@ -5703,7 +5709,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
 			&& _document->hasDuration())
 			? _document->duration()
 			: crl::time(0)),
-		.hwAllowed = Core::App().settings().hardwareAcceleratedVideo(),
+		.hwAllowed = Core::App().settings().hardwareAcceleratedVideo()
+			&& Exteraless::Config::Instance().hardwareAcceleration(),
 		.seekable = !_stories,
 	};
 	if (!_streamed->withSound) {

@@ -4362,9 +4362,6 @@ void ApiWrap::sendFiles(
 		album = nullptr;
 	}
 	const auto to = FileLoadTaskOptions(action);
-	const auto animationAsGif = !Data::RestrictionError(
-		action.history->peer,
-		ChatRestriction::SendGifs);
 	if (album) {
 		album->options = to.options;
 	}
@@ -4413,7 +4410,9 @@ void ApiWrap::sendFiles(
 			.forceFile = forceFile,
 			.sendLargePhotos = file.sendLargePhotos,
 			.animationJob = file.animationJob,
-			.animationAsGif = animationAsGif,
+			.animationAsGif = !Data::RestrictionError(
+				action.history->peer,
+				ChatRestriction::SendGifs),
 			.archive = file.archive,
 			.idOverride = 0,
 			.displayName = file.displayName,

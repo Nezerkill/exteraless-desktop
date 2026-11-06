@@ -9,6 +9,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "base/platform/base_platform_info.h"
 #include "calls/group/calls_group_common.h"
+#include "exteraless/config.h"
 #include "history/view/history_view_quick_action.h"
 #include "lang/lang_keys.h"
 #include "platform/platform_notifications_manager.h"
@@ -26,6 +27,11 @@ namespace {
 constexpr auto kInitialVideoQuality = 480; // Start with SD.
 constexpr auto kMinIvZoom = 25;
 constexpr auto kMaxIvZoom = 400;
+
+[[nodiscard]] int ExteralessVideoQuality() {
+	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
+	return (tier <= 0) ? kInitialVideoQuality : (tier == 1 ? 720 : 1080);
+}
 
 [[nodiscard]] int DefaultIvZoom() {
 	const auto exact = cScale() * 100 / cScreenScale();
@@ -160,7 +166,7 @@ Settings::Settings()
 , _floatPlayerCorner(RectPart::TopRight)
 , _dialogsWithChatWidthRatio(DefaultDialogsWidthRatio())
 , _dialogsNoChatWidthRatio(DefaultDialogsWidthRatio())
-, _videoQuality({ .height = kInitialVideoQuality }) {
+, _videoQuality({ .height = uint32(ExteralessVideoQuality()) }) {
 }
 
 Settings::~Settings() = default;
