@@ -11,10 +11,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "menu/menu_check_item.h"
 #include "menu/menu_mark_as_read.h"
 #include "boxes/about_box.h"
+#include "boxes/ai_request_box.h"
 #include "boxes/share_box.h"
 #include "boxes/star_gift_box.h"
 #include "chat_helpers/compose/compose_show.h"
 #include "chat_helpers/message_field.h"
+#include "exteraless/ai_summary.h"
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
 #include "boxes/deleted_messages_box.h"
@@ -338,6 +340,7 @@ private:
 	void addToggleTopicClosed();
 	void addExportChat();
 	void addTranslate();
+	void addSummarize();
 	void addReport();
 	void addNewContact();
 	void addShareContact();
@@ -1193,6 +1196,29 @@ void Filler::addTranslate() {
 	_addAction(tr::lng_context_translate(tr::now), [=] {
 		history->peer->saveTranslationDisabled(false);
 	}, &st::menuIconTranslate);
+}
+
+void Filler::addSummarize() {
+	const auto peer = _peer;
+	if (!peer->isChat() && !peer->isChannel()) {
+		return;
+	}
+	const auto history = peer->owner().historyLoaded(peer);
+	if (!history || history->isEmpty()) {
+		return;
+	}
+	const auto navigation = _controller;
+	_addAction(tr::lng_context_summarize_chat(tr::now), [=] {
+		const auto text = Exteraless::AiSummary::CollectChatText(history);
+		if (text.isEmpty()) {
+			navigation->showToast(tr::lng_forum_no_messages(tr::now));
+			return;
+		}
+		navigation->show(Box(
+			Ui::AiRequestBox,
+			Exteraless::AiSummary::WrapForSummary(text),
+			Exteraless::AiSummary::SystemPrompt()));
+	}, &st::menuIconArticle);
 }
 
 void Filler::addReport() {
@@ -2054,6 +2080,7 @@ void Filler::fillHistoryActions() {
 	addDirectMessages();
 	addExportChat();
 	addTranslate();
+	addSummarize();
 	addReport();
 	addDeletedMessages();
 	addGhostModeExclusions();

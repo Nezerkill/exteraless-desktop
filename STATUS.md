@@ -117,6 +117,9 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Саммари чата (NB-48, follow-up): `ai_summary.*` (сбор 30/6000, промпт
+  с injection-guard), пункт в меню пира, system-override в боксе;
+  раннеры 1156/32/252 PASS (без изменений); `kKeysCount` 11244 (+1).
 - Лента каналов (NB-47, v3 — live-update, действия строк, достижимость):
   `Feed::Changes` (`rpl::event_stream`, канал дёргает `Invalidate`), подписка
   `MainList` на `chatsListChanges` плюс `Feed::Changes`, дельта-rebuild без

@@ -81,7 +81,10 @@ void SetActiveRole(const QString &value) {
 
 namespace Ui {
 
-void AiRequestBox(not_null<GenericBox*> box, QString text) {
+void AiRequestBox(
+		not_null<GenericBox*> box,
+		QString text,
+		QString systemOverride) {
 	box->setWidth(st::boxWideWidth);
 	box->setTitle(u"Ask AI"_q);
 
@@ -119,7 +122,7 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 
 	const auto roles = AvailableRoles();
 	const auto activeRole = ActiveRole();
-	if (!roles.empty()) {
+	if (!roles.empty() && systemOverride.isEmpty()) {
 		auto initial = int(roles.size());
 		for (auto i = 0; i != int(roles.size()); ++i) {
 			if (RoleTitle(roles[i]) == activeRole) {
@@ -192,14 +195,16 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		}
 
 		auto messages = QJsonArray();
-		const auto system = ActiveRoleSystem(AvailableRoles(), ActiveRole());
+		const auto system = !systemOverride.isEmpty()
+			? systemOverride
+			: ActiveRoleSystem(AvailableRoles(), ActiveRole());
 		if (!system.isEmpty()) {
 			messages.append(QJsonObject{
 				{ u"role"_q, u"system"_q },
 				{ u"content"_q, system },
 			});
 		}
-		if (HistoryEnabled()) {
+		if (systemOverride.isEmpty() && HistoryEnabled()) {
 			for (const auto &turn : state->turns) {
 				messages.append(QJsonObject{
 					{ u"role"_q, u"user"_q },
@@ -265,7 +270,7 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 			}
 			if (!state->answer.isEmpty() && (done || !networkError)) {
 				state->response = state->answer;
-				if (HistoryEnabled()) {
+				if (systemOverride.isEmpty() && HistoryEnabled()) {
 					state->turns.append({ prompt, state->answer });
 					while (state->turns.size() > kMaxTurns) {
 						state->turns.removeFirst();

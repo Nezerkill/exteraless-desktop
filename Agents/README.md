@@ -78,7 +78,7 @@ sibling-чекаутом: `../exteraless`.
     с `stream: true`, abort по `[DONE]`, отмена при закрытии, fallback
     `ParseResponse`, Send/Copy/Close), ключ `OEAiApiKey` читается при каждой
     отправке; роли `OEAiRoles`/`OEAiActiveRole` (`ParseAiRoles`) с
-    радиоселектором в боксе и in-memory историей turns (cap 20, `OEAiHistory`).
+    радиоселектором в боксе и in-memory историей turns (cap 20, `OEAiHistory`); саммари — `exteraless/ai_summary.*` (сбор 30/6000, `<chat>`-guard) + пункт в меню пира + system-override бокса.
   - `extra_pills.*` — погода, курсы и золото для Pill Stack (`Weather`,
     `Btc`, `Eth`, `Usd`, `Eur`, `Gold`): URL-билдеры `WeatherApiUrl`
     (Open-Meteo, координаты Москвы захардкожены), `CoinbaseSpotUrl`,

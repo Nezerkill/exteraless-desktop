@@ -2,6 +2,15 @@
 
 ## 2026-11-07
 
+- Саммари чата (NB-48, follow-up): `exteraless/ai_summary.{h,cpp}` —
+  `CollectChatText` (30 сообщений / 6000 символов, `Author: text`),
+  `SystemPrompt` с injection-guard (`<chat>`), `WrapForSummary`;
+  пункт «Summarize chat» в меню пира (группы/супергруппы/каналы);
+  бокс принимает system-override на один запрос (без turns, роль не
+  трогается); текст подставляется в поле, отправка по Send; 1 lang-ключ;
+  раннеры 1156/32/252 PASS (без изменений);
+  `kKeysCount` 11244 (+1); патч `9061fc17…`, flake PASS. Ограничения:
+  Xvfb-смоук не выполнялся.
 - Лента каналов (NB-47, v3 — live-update, действия строк, достижимость):
   `Feed::Changes` (`rpl::event_stream` в `dialogs/dialogs_feed.cpp`, канал
   дёргает `Invalidate`); `MainList` подписан на

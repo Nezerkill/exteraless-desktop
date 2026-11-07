@@ -15,6 +15,9 @@ namespace Ui {
 
 class GenericBox;
 
-void AiRequestBox(not_null<GenericBox*> box, QString text);
+void AiRequestBox(
+	not_null<GenericBox*> box,
+	QString text,
+	QString systemOverride = QString());
 
 } // namespace Ui

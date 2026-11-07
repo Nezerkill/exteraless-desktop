@@ -2112,7 +2112,8 @@ void FillContextMenuItems(
 				result->addAction(u"Ask AI"_q, [=] {
 					list->controller()->show(Box(
 						Ui::AiRequestBox,
-						prompt));
+						prompt,
+						QString()));
 				}, &st::menuIconSearch);
 			}
 		}
