@@ -116,6 +116,25 @@
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 104 backup);
   плагины без изменений — 32 и 213 проверок.
+- Inline-показ удалённых (NB-92, продолжение NB-20):
+  `History::addLocalMessageInPlace` (`history/history.cpp`) вставляет запись
+  sidecar в историю на её место — порядок по паре `(date, entry.msgId)` — и
+  регистрирует элемент через `registerClientSideMessage`; реестр
+  `FullMsgId → MsgId` в `DeletedMessages` (`_inserted`/`_placeholders`)
+  различает вставки (`isPlaceholder`) и снимает их
+  (`insertFor`/`removeFrom`/`refresh`). Вставка идёт только при
+  `loadedAtTop()` и `loadedAtBottom()`; метка дописывается текстом (🗑 из
+  `OEChatsUseDeletedIcon` или `OEChatsCustomDeletedMark`), прозрачность 0.6
+  рисует `Message::draw` при `OEChatsTranslucentDeleted`; тумблеры save и
+  translucent вызывают `refresh()`, Reply и Delete плейсхолдера закрыты
+  guard'ом в контекстном меню. Chats-раннер — 978 проверок, без изменений
+  (новых ключей и CLI у NB-92 нет), плагины 32 и host-раннер 252 без
+  изменений; `kKeysCount` 11232, `.extera` не тронут; sha256 патча
+  `8246f873…`, `nix flake check` PASS. Не сделано: inline-медиа и реакции,
+  цветная метка — подходящего `EntityType` нет, `kMaxEntityType` не менялся
+  (реальный максимум 27 покрывают текущие 28). Ограничения: вставки
+  появляются после перестройки истории; удаление плейсхолдера снимает только
+  регистрацию — запись sidecar остаётся; Xvfb-смоук не выполнялся.
 - MD3-плеер, фаза 1 — LRC и тексты (NB-50): Qt-only парсер
   `exteraless/lyrics.{h,cpp}` (`ParseLyrics`/`ActiveIndex`) читает один LRC
   (SRT не принимается): `[offset:±ms]` сдвигает таймстемпы, мультитаймстемпы
@@ -868,7 +887,8 @@
   не покрыты, preload/streaming остались 128K, CLI и раннеры проверяют
   только парсер — проверки меню и пер-видео памяти нет, Xvfb-смоук не
   выполнялся, `nix flake check` не запускался в docs-задаче.
-- Отложены: NB-21 (нужен SQLite), NB-33 (ждёт NB-92), NB-43 (peer в MTP-фильтре).
+- Отложены: NB-21 (нужен SQLite), NB-33 (item виден, нужна sidecar-цитата),
+  NB-43 (peer в MTP-фильтре).
 - Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
   активном online-ghost отправляет новые текстовые сообщения как отложенные
   на 12 секунд (`SendOptions.scheduled`), исключая self, ботов и секретные

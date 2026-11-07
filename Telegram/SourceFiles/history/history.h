@@ -184,6 +184,11 @@ public:
 		not_null<GameData*> game);
 	not_null<HistoryItem*> addNewLocalMessage(not_null<HistoryItem*> item);
 
+	not_null<HistoryItem*> addLocalMessageInPlace(
+		HistoryItemCommonFields &&fields,
+		const TextWithEntities &text,
+		MsgId sortKey);
+
 	not_null<HistoryItem*> addSponsoredMessage(
 		MsgId id,
 		Data::SponsoredFrom from,

@@ -254,9 +254,10 @@ history is cleared. UI: a per-peer list from the chat context menu showing
 reactions and reply/forward markers. The rows can be marked with the deleted
 icon (`OEChatsUseDeletedIcon`, default `true`) or a custom mark
 (`OEChatsCustomDeletedMark`), made translucent (`OEChatsTranslucentDeleted`,
-default `true`) and colored (`OEChatsDeletedMarkColor`). A true inline
-insertion of deleted messages into the chat history is not implemented yet
-(NB-92). Import of the old Android database is not part of MVP2.
+default `true`) and colored (`OEChatsDeletedMarkColor`). Deleted messages are
+ also inserted inline into the chat history as translucent placeholders with
+ the mark appended to the text (NB-92). Import of the old Android database
+ is not part of MVP2.
 
 ### Pill Stack
 

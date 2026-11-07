@@ -132,7 +132,23 @@ sibling-чекаутом: `../exteraless`.
 - `Telegram/SourceFiles/boxes/deleted_messages_box.cpp` — бокс удалённых
   сообщений, показывает реакции и метки reply/forward/edited, а также
   значок/кастомную метку, прозрачность и цвет (NB-20); inline-показ в чате —
-  NB-92.
+  NB-92, вставка в историю через `DeletedMessages::insertFor`.
+- Inline-показ удалённых (NB-92, продолжение NB-20):
+  `History::addLocalMessageInPlace` (`history/history.cpp`) вставляет запись
+  sidecar в историю на её место — порядок по паре `(date, entry.msgId)` — и
+  регистрирует элемент через `registerClientSideMessage`; реестр
+  `FullMsgId → MsgId` (`_inserted`/`_placeholders`) в `DeletedMessages`
+  различает вставки (`isPlaceholder`) и снимает их
+  (`insertFor`/`removeFrom`/`refresh`). Вставка идёт только при
+  `loadedAtTop()` и `loadedAtBottom()`; метка — текстом (🗑 из
+  `OEChatsUseDeletedIcon` или `OEChatsCustomDeletedMark`), прозрачность 0.6
+  в `Message::draw` при `OEChatsTranslucentDeleted`; тумблеры save и
+  translucent вызывают `refresh()`, Reply и Delete плейсхолдера закрыты
+  guard'ом в контекстном меню. Не сделано: inline-медиа и реакции, цветная
+  метка (подходящего `EntityType` нет, `kMaxEntityType` не менялся —
+  реальный максимум 27 покрывают текущие 28). Ограничения: вставки
+  появляются после перестройки истории; удаление плейсхолдера снимает только
+  регистрацию — запись sidecar остаётся; Xvfb-смоук не выполнялся.
 - `nix/upstream-base` — закреплённая база патча: локальный коммит, tree-хеш и
   upstream-коммит; `nix/update-patch.sh --check` проверяет применимость.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.

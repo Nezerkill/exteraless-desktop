@@ -56,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_updates.h"
 #include "data/data_poll.h"
 #include "data/data_todo_list.h"
+#include "exteraless/deleted_messages.h"
 #include "lang/lang_keys.h"
 #include "apiwrap.h"
 #include "api/api_chat_participants.h"
@@ -965,6 +966,46 @@ not_null<HistoryItem*> History::addNewLocalMessage(
 	Expects(item->isLocal());
 
 	return addNewItem(item, true);
+}
+
+not_null<HistoryItem*> History::addLocalMessageInPlace(
+		HistoryItemCommonFields &&fields,
+		const TextWithEntities &text,
+		MsgId sortKey) {
+	const auto item = makeMessage(
+		WithLocalFlag(std::move(fields)),
+		text,
+		MTP_messageMediaEmpty());
+	registerClientSideMessage(item);
+	if (isEmpty()) {
+		addNewToBack(item, false);
+		return item;
+	}
+	const auto itemDate = item->date();
+	const auto earlier = [&](not_null<HistoryItem*> other) {
+		const auto date = other->date();
+		return (date < itemDate)
+			|| (date == itemDate && other->id < sortKey);
+	};
+	for (auto blockIndex = int(blocks.size()); blockIndex > 0;) {
+		const auto &block = blocks[--blockIndex];
+		for (auto itemIndex = int(block->messages.size()); itemIndex > 0;) {
+			if (earlier(block->messages[--itemIndex]->data())) {
+				++itemIndex;
+				addNewInTheMiddle(item, blockIndex, itemIndex);
+				const auto lastDate = chatListTimeId();
+				if (!lastDate || itemDate >= lastDate) {
+					setLastMessage(item);
+					owner().notifyHistoryChangeDelayed(this);
+				}
+				return item;
+			}
+		}
+	}
+	startBuildingFrontBlock();
+	addItemToBlock(item);
+	finishBuildingFrontBlock();
+	return item;
 }
 
 not_null<HistoryItem*> History::addSponsoredMessage(
@@ -4278,6 +4319,7 @@ void History::checkLocalMessages() {
 	} else {
 		checkNewPeerMessages();
 	}
+	Exteraless::DeletedMessages::Instance().insertFor(this);
 }
 
 HistoryStreamedDrafts &History::streamedDrafts() {

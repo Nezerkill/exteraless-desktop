@@ -2,6 +2,25 @@
 
 ## 2026-11-07
 
+- Inline-показ удалённых сообщений в чате (NB-92, продолжение NB-20):
+  `History::addLocalMessageInPlace` вставляет запись sidecar в историю на её
+  настоящее место — порядок по паре `(date, entry.msgId)` — и регистрирует
+  элемент через `registerClientSideMessage`; реестр `FullMsgId → MsgId`
+  (`_inserted`/`_placeholders`) даёт `isPlaceholder` и снятие вставок
+  (`insertFor`/`removeFrom`/`refresh`). Вставка идёт только когда история
+  догружена с обеих сторон (`loadedAtTop`/`loadedAtBottom`), метка
+  дописывается текстом (🗑 из `OEChatsUseDeletedIcon` или
+  `OEChatsCustomDeletedMark`), прозрачность 0.6 рисует `Message::draw` при
+  `OEChatsTranslucentDeleted`; тумблеры «Save deleted messages» и
+  «Translucent deleted messages» вызывают `refresh()`, а Reply и Delete для
+  плейсхолдера закрыты guard'ом в контекстном меню. Раннеры 978/32/252 PASS —
+  chats без изменений (новых ключей и CLI у NB-92 нет), `kKeysCount` 11232,
+  `.extera` не тронут; sha256 патча `8246f873…`, `nix flake check` PASS.
+  Не сделано: inline-медиа и реакции, цветная метка — подходящего
+  `EntityType` нет, `kMaxEntityType` не менялся (реальный максимум 27
+  покрывают текущие 28). Ограничения: вставки появляются после перестройки
+  истории; удаление плейсхолдера снимает только регистрацию — запись sidecar
+  остаётся; Xvfb-смоук не выполнялся.
 - MD3-плеер, фаза 1 — LRC и тексты в аудио-экране (NB-50): Qt-only модуль
   `exteraless/lyrics.{h,cpp}` — `ParseLyrics` и `ActiveIndex` для одного LRC
   (SRT не принимается): `[offset:±ms]` сдвигает все таймстемпы, строка с

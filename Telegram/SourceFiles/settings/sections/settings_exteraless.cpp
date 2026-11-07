@@ -4,6 +4,7 @@
 
 #include "exteraless/backup.h"
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages.h"
 #include "exteraless/doubletap.h"
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
@@ -1456,6 +1457,7 @@ const auto kMeta = Builder::BuildHelper({
 		Exteraless::Config::Instance().saveDeletedMessages(),
 		[](bool value) {
 			Exteraless::Config::Instance().setSaveDeletedMessages(value);
+			Exteraless::DeletedMessages::Instance().refresh();
 		});
 	addChatsToggle(
 		u"exteraless/chats/translucent-deleted"_q,
@@ -1465,6 +1467,7 @@ const auto kMeta = Builder::BuildHelper({
 		[](bool value) {
 			Exteraless::Config::Instance()
 				.setTranslucentDeletedMessages(value);
+			Exteraless::DeletedMessages::Instance().refresh();
 		});
 	addChatsToggle(
 		u"exteraless/chats/use-deleted-icon"_q,

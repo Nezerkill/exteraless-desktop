@@ -5643,6 +5643,89 @@ index 0000000..e93ade8
 +void ShowPluginsBox(not_null<Window::SessionController*> controller);
 +
 +} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/history/history.cpp b/Telegram/SourceFiles/history/history.cpp
+index 0f5468f..acd58f0 100644
+--- a/Telegram/SourceFiles/history/history.cpp
++++ b/Telegram/SourceFiles/history/history.cpp
+@@ -56,6 +56,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "api/api_updates.h"
+ #include "data/data_poll.h"
+ #include "data/data_todo_list.h"
++#include "exteraless/deleted_messages.h"
+ #include "lang/lang_keys.h"
+ #include "apiwrap.h"
+ #include "api/api_chat_participants.h"
+@@ -967,6 +968,46 @@ not_null<HistoryItem*> History::addNewLocalMessage(
+ 	return addNewItem(item, true);
+ }
+ 
++not_null<HistoryItem*> History::addLocalMessageInPlace(
++		HistoryItemCommonFields &&fields,
++		const TextWithEntities &text,
++		MsgId sortKey) {
++	const auto item = makeMessage(
++		WithLocalFlag(std::move(fields)),
++		text,
++		MTP_messageMediaEmpty());
++	registerClientSideMessage(item);
++	if (isEmpty()) {
++		addNewToBack(item, false);
++		return item;
++	}
++	const auto itemDate = item->date();
++	const auto earlier = [&](not_null<HistoryItem*> other) {
++		const auto date = other->date();
++		return (date < itemDate)
++			|| (date == itemDate && other->id < sortKey);
++	};
++	for (auto blockIndex = int(blocks.size()); blockIndex > 0;) {
++		const auto &block = blocks[--blockIndex];
++		for (auto itemIndex = int(block->messages.size()); itemIndex > 0;) {
++			if (earlier(block->messages[--itemIndex]->data())) {
++				++itemIndex;
++				addNewInTheMiddle(item, blockIndex, itemIndex);
++				const auto lastDate = chatListTimeId();
++				if (!lastDate || itemDate >= lastDate) {
++					setLastMessage(item);
++					owner().notifyHistoryChangeDelayed(this);
++				}
++				return item;
++			}
++		}
++	}
++	startBuildingFrontBlock();
++	addItemToBlock(item);
++	finishBuildingFrontBlock();
++	return item;
++}
++
+ not_null<HistoryItem*> History::addSponsoredMessage(
+ 		MsgId id,
+ 		Data::SponsoredFrom from,
+@@ -4278,6 +4319,7 @@ void History::checkLocalMessages() {
+ 	} else {
+ 		checkNewPeerMessages();
+ 	}
++	Exteraless::DeletedMessages::Instance().insertFor(this);
+ }
+ 
+ HistoryStreamedDrafts &History::streamedDrafts() {
+diff --git a/Telegram/SourceFiles/history/history.h b/Telegram/SourceFiles/history/history.h
+index 0c94623..7704dbe 100644
+--- a/Telegram/SourceFiles/history/history.h
++++ b/Telegram/SourceFiles/history/history.h
+@@ -184,6 +184,11 @@ public:
+ 		not_null<GameData*> game);
+ 	not_null<HistoryItem*> addNewLocalMessage(not_null<HistoryItem*> item);
+ 
++	not_null<HistoryItem*> addLocalMessageInPlace(
++		HistoryItemCommonFields &&fields,
++		const TextWithEntities &text,
++		MsgId sortKey);
++
+ 	not_null<HistoryItem*> addSponsoredMessage(
+ 		MsgId id,
+ 		Data::SponsoredFrom from,
 diff --git a/Telegram/SourceFiles/history/history_inner_widget.cpp b/Telegram/SourceFiles/history/history_inner_widget.cpp
 index 391e1d3..6daabfc 100644
 --- a/Telegram/SourceFiles/history/history_inner_widget.cpp
@@ -6803,20 +6886,21 @@ index 28e423b..bf0736c 100644
  	updateInnerVisibleArea();
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-index 3e25a13..6392fb0 100644
+index 3e25a13..cb037bd 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-@@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_context_menu.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages.h"
 +#include "exteraless/plugin_runtime.h"
 +
  #include "api/api_attached_stickers.h"
  #include "api/api_editing.h"
  #include "api/api_global_privacy.h"
-@@ -70,6 +73,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -70,6 +74,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "ui/boxes/show_or_premium_box.h"
  #include "ui/widgets/fields/input_field.h"
  #include "ui/power_saving.h"
@@ -6824,7 +6908,7 @@ index 3e25a13..6392fb0 100644
  #include "boxes/delete_messages_box.h"
  #include "boxes/moderate_messages_box.h"
  #include "boxes/report_messages_box.h"
-@@ -121,6 +125,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -121,6 +126,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include <QtGui/QGuiApplication>
  #include <QtGui/QClipboard>
  
@@ -6833,7 +6917,7 @@ index 3e25a13..6392fb0 100644
  namespace HistoryView {
  namespace {
  
-@@ -376,12 +382,14 @@ void AddPhotoActions(
+@@ -376,12 +383,14 @@ void AddPhotoActions(
  				&photo->session(),
  				[=] { SavePhotoToFile(photo); }),
  			&st::menuIconSaveImage);
@@ -6854,7 +6938,7 @@ index 3e25a13..6392fb0 100644
  	}
  	if (photo->hasAttachedStickers()) {
  		const auto controller = list->controller();
-@@ -520,6 +528,11 @@ void AddDocumentActions(
+@@ -520,6 +529,11 @@ void AddDocumentActions(
  				Menu::RateTranscribeCallbackFactory(item)));
  		}
  	}
@@ -6866,7 +6950,7 @@ index 3e25a13..6392fb0 100644
  	AddSaveDocumentAction(menu, item, document, list);
  	AddCopyFilename(
  		menu,
-@@ -530,6 +543,9 @@ void AddDocumentActions(
+@@ -530,6 +544,9 @@ void AddDocumentActions(
  void AddPostLinkAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request) {
@@ -6876,7 +6960,7 @@ index 3e25a13..6392fb0 100644
  	const auto item = request.item;
  	if (!item
  		|| !item->hasDirectLink()
-@@ -625,6 +641,9 @@ void AddForwardAction(
+@@ -625,6 +642,9 @@ void AddForwardAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6886,7 +6970,7 @@ index 3e25a13..6392fb0 100644
  	AddForwardSelectedAction(menu, request, list);
  	AddForwardMessageAction(menu, request, list);
  }
-@@ -827,6 +846,9 @@ bool AddReplyToMessageAction(
+@@ -827,6 +847,9 @@ bool AddReplyToMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6896,7 +6980,15 @@ index 3e25a13..6392fb0 100644
  	const auto context = list->elementContext();
  	const auto item = request.quote.item
  		? request.quote.item
-@@ -945,6 +967,9 @@ bool AddEditMessageAction(
+@@ -835,6 +858,7 @@ bool AddReplyToMessageAction(
+ 	const auto peer = item ? item->history()->peer.get() : nullptr;
+ 	if (!item
+ 		|| (!item->isRegular() && !CanReplyToEphemeral(item))
++		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)
+ 		|| IsAnchoredEphemeral(item)
+ 		|| (context != Context::History
+ 			&& context != Context::Replies
+@@ -945,6 +969,9 @@ bool AddEditMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6906,7 +6998,7 @@ index 3e25a13..6392fb0 100644
  	if (!HasEditMessageAction(request, list)) {
  		return false;
  	}
-@@ -1010,6 +1035,9 @@ bool AddPinMessageAction(
+@@ -1010,6 +1037,9 @@ bool AddPinMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6916,7 +7008,18 @@ index 3e25a13..6392fb0 100644
  	const auto context = list->elementContext();
  	const auto item = request.item;
  	if (!item || !item->isRegular()) {
-@@ -1206,6 +1234,9 @@ void AddDeleteAction(
+@@ -1134,7 +1164,9 @@ bool AddDeleteMessageAction(
+ 	const auto item = request.item;
+ 	if (!request.selectedItems.empty()) {
+ 		return false;
+-	} else if (!item || !item->canDelete()) {
++	} else if (!item
++		|| !item->canDelete()
++		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)) {
+ 		return false;
+ 	}
+ 	const auto owner = &item->history()->owner();
+@@ -1206,6 +1238,9 @@ void AddDeleteAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6926,7 +7029,7 @@ index 3e25a13..6392fb0 100644
  	if (!AddDeleteSelectedAction(menu, request, list)) {
  		AddDeleteMessageAction(menu, request, list);
  	}
-@@ -1245,6 +1276,9 @@ void AddReportAction(
+@@ -1245,6 +1280,9 @@ void AddReportAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6936,7 +7039,7 @@ index 3e25a13..6392fb0 100644
  	const auto item = request.item;
  	if (!request.selectedItems.empty()) {
  		return;
-@@ -1314,6 +1348,9 @@ bool AddSelectMessageAction(
+@@ -1314,6 +1352,9 @@ bool AddSelectMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6946,7 +7049,7 @@ index 3e25a13..6392fb0 100644
  	const auto item = request.item;
  	if (request.overSelection && !request.selectedItems.empty()) {
  		return false;
-@@ -1402,11 +1439,14 @@ void AddMessageActions(
+@@ -1402,11 +1443,14 @@ void AddMessageActions(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6962,7 +7065,7 @@ index 3e25a13..6392fb0 100644
  	AddDownloadFilesAction(menu, request, list);
  	AddSaveRichHtmlAction(menu, request, list);
  	AddReportAction(menu, request, list);
-@@ -1422,6 +1462,65 @@ void AddMessageActions(
+@@ -1422,6 +1466,65 @@ void AddMessageActions(
  		AddEphemeralAboutAction(menu, request.item);
  	}
  	AddRescheduleAction(menu, request, list);
@@ -7028,7 +7131,7 @@ index 3e25a13..6392fb0 100644
  }
  
  void AddCopyLinkAction(
-@@ -1812,7 +1911,8 @@ void FillContextMenuItems(
+@@ -1812,7 +1915,8 @@ void FillContextMenuItems(
  
  	if (request.overSelection
  		&& !list->hasCopyRestrictionForSelected()
@@ -7038,7 +7141,7 @@ index 3e25a13..6392fb0 100644
  		const auto text = request.selectedItems.empty()
  			? tr::lng_context_copy_selected(tr::now)
  			: tr::lng_context_copy_selected_items(tr::now);
-@@ -1822,7 +1922,8 @@ void FillContextMenuItems(
+@@ -1822,7 +1926,8 @@ void FillContextMenuItems(
  	}
  	if (request.overSelection
  		&& view
@@ -7048,7 +7151,7 @@ index 3e25a13..6392fb0 100644
  		const auto owner = &view->history()->owner();
  		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
  			if (const auto item = owner->message(itemId)) {
-@@ -1878,7 +1979,8 @@ void FillContextMenuItems(
+@@ -1878,7 +1983,8 @@ void FillContextMenuItems(
  			AddDocumentActions(result, document, view->data(), list);
  		}
  		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
@@ -7058,7 +7161,7 @@ index 3e25a13..6392fb0 100644
  				const auto asGroup = (request.pointState != PointState::GroupPart);
  				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
-@@ -1905,7 +2007,8 @@ void FillContextMenuItems(
+@@ -1905,7 +2011,8 @@ void FillContextMenuItems(
  				: item->originalText();
  			if ((!item->translation() || !item->history()->translatedTo())
  				&& !translate.text.isEmpty()
@@ -7068,7 +7171,7 @@ index 3e25a13..6392fb0 100644
  				result->addAction(tr::lng_context_translate(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
  						list->controller()->show(Box(
-@@ -1919,6 +2022,14 @@ void FillContextMenuItems(
+@@ -1919,6 +2026,14 @@ void FillContextMenuItems(
  					}
  				}, &st::menuIconTranslate);
  			}
@@ -7083,7 +7186,7 @@ index 3e25a13..6392fb0 100644
  		}
  	}
  
-@@ -1947,6 +2058,7 @@ void FillContextMenuItems(
+@@ -1947,6 +2062,7 @@ void FillContextMenuItems(
  				list->controller());
  		}
  	}
@@ -7091,7 +7194,7 @@ index 3e25a13..6392fb0 100644
  }
  
  base::unique_qptr<Ui::PopupMenu> FillContextMenu(
-@@ -2367,7 +2479,8 @@ void AddPollActions(
+@@ -2367,7 +2483,8 @@ void AddPollActions(
  		for (const auto &answer : poll->answers) {
  			text.append('\n').append(radio).append(answer.text);
  		}
@@ -7505,19 +7608,34 @@ index fdbce14..8251a8f 100644
  	}
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
-index 5152d85..d55b7a7 100644
+index 5152d85..806354d 100644
 --- a/Telegram/SourceFiles/history/view/history_view_message.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_message.cpp
-@@ -55,6 +55,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -55,6 +55,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "data/data_channel.h"
  #include "data/data_forum_topic.h"
  #include "data/data_message_reactions.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages.h"
  #include "lang/lang_keys.h"
  #include "mainwidget.h"
  #include "main/main_session.h"
-@@ -5302,6 +5304,13 @@ Reactions::ButtonParameters Message::reactionButtonParameters(
+@@ -1841,6 +1844,13 @@ void Message::draw(Painter &p, const PaintContext &context) const {
+ 		return;
+ 	}
+ 
++	const auto translucentDeleted
++		= Exteraless::DeletedMessages::Instance().isPlaceholder(item)
++		&& Exteraless::Config::Instance().translucentDeletedMessages();
++	[[maybe_unused]] const auto scopedOpacity = ScopedPainterOpacity(
++		p,
++		translucentDeleted ? 0.6 : p.opacity());
++
+ 	const auto entry = logEntryOriginal();
+ 	const auto check = factcheckBlock();
+ 	auto mediaDisplayed = media && media->isDisplayed();
+@@ -5302,6 +5312,13 @@ Reactions::ButtonParameters Message::reactionButtonParameters(
  		QPoint position,
  		const TextState &reactionState) const {
  	using namespace Reactions;
@@ -7531,7 +7649,7 @@ index 5152d85..d55b7a7 100644
  	auto result = ButtonParameters{ .context = data()->fullId() };
  	const auto outsideBubble = (!_comments && !embedReactionsInBubble());
  	const auto geometry = countGeometry();
-@@ -5466,6 +5475,50 @@ TextState Message::bottomInfoTextState(
+@@ -5466,6 +5483,50 @@ TextState Message::bottomInfoTextState(
  		point - QPoint{ infoLeft, infoTop });
  }
  
@@ -7582,7 +7700,7 @@ index 5152d85..d55b7a7 100644
  int Message::infoWidth() const {
  	return hidesBottomInfo() ? 0 : _bottomInfo.maxWidth();
  }
-@@ -6611,7 +6664,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
+@@ -6611,7 +6672,9 @@ Ui::BubbleRounding Message::countMessageRounding() const {
  			&& !edges.infoBelow
  			&& (rich->article.edgeBlocks().bottom == Block::VisualMedia);
  	};
@@ -7593,7 +7711,7 @@ index 5152d85..d55b7a7 100644
  		|| (media && media->skipBubbleTail())
  		|| (rich && richMediaAtBottom())
  		|| (keyboard != nullptr)
-@@ -6695,7 +6750,10 @@ int Message::resizeContentGetHeight(int newWidth) {
+@@ -6695,7 +6758,10 @@ int Message::resizeContentGetHeight(int newWidth) {
  		}
  	}
  	accumulate_min(contentWidth, maxWidth());
@@ -10540,16 +10658,17 @@ index ceae87b..ce8ddf6 100644
  		- st::overviewSmallCheck.size;
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..d98bec4
+index 0000000..6edaea8
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2975 @@
+@@ -0,0 +1,2978 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
 +
 +#include "exteraless/backup.h"
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages.h"
 +#include "exteraless/doubletap.h"
 +#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
@@ -12002,6 +12121,7 @@ index 0000000..d98bec4
 +		Exteraless::Config::Instance().saveDeletedMessages(),
 +		[](bool value) {
 +			Exteraless::Config::Instance().setSaveDeletedMessages(value);
++			Exteraless::DeletedMessages::Instance().refresh();
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/translucent-deleted"_q,
@@ -12011,6 +12131,7 @@ index 0000000..d98bec4
 +		[](bool value) {
 +			Exteraless::Config::Instance()
 +				.setTranslucentDeletedMessages(value);
++			Exteraless::DeletedMessages::Instance().refresh();
 +		});
 +	addChatsToggle(
 +		u"exteraless/chats/use-deleted-icon"_q,
@@ -19159,15 +19280,16 @@ index 0000000..82d1a5c
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.cpp b/exteraless/deleted_messages.cpp
 new file mode 100644
-index 0000000..a3ae829
+index 0000000..e93b9ca
 --- /dev/null
 +++ b/exteraless/deleted_messages.cpp
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,393 @@
 +#include "exteraless/deleted_messages.h"
 +
 +#include "exteraless/config.h"
 +#include "exteraless/deleted_messages_trim.h"
 +
++#include "base/flat_set.h"
 +#include "data/data_message_reaction_id.h"
 +#include "data/data_peer.h"
 +#include "data/data_session.h"
@@ -19236,12 +19358,16 @@ index 0000000..a3ae829
 +		session->local().cachePath()).absolutePath()
 +		+ u"/exteraless/deleted_messages.json"_q;
 +	if (_path == path) {
++		_session = session;
 +		return;
 +	}
 +
 +	save();
 +	_path = path;
++	_session = session;
 +	_entries.clear();
++	_inserted.clear();
++	_placeholders.clear();
 +	load();
 +
 +	session->data().itemsAboutToBeDestroyed(
@@ -19279,81 +19405,218 @@ index 0000000..a3ae829
 +	std::erase_if(_entries, [&](const Entry &entry) {
 +		return IdString(entry.peerId) == key;
 +	});
++	if (const auto history = _session
++		? _session->data().historyLoaded(peerId)
++		: nullptr) {
++		removeFrom(history);
++	}
 +	save();
++}
++
++void DeletedMessages::insertFor(not_null<History*> history) {
++	if (!_session || (&history->peer->session() != _session)) {
++		return;
++	}
++	if (!Config::Instance().saveDeletedMessages()
++		|| !history->loadedAtTop()
++		|| !history->loadedAtBottom()) {
++		return;
++	}
++	auto &data = _session->data();
++	const auto peerId = history->peer->id;
++	const auto entries = list(peerId);
++	if (entries.empty()) {
++		return;
++	}
++	const auto &config = Config::Instance();
++	const auto customMark = config.customDeletedMark();
++	const auto mark = config.useDeletedIcon()
++		? (customMark.isEmpty() ? u"🗑"_q : customMark)
++		: customMark;
++	auto inserted = false;
++	for (const auto &entry : entries) {
++		const auto msgId = MsgId(entry.msgId);
++		const auto original = FullMsgId(peerId, msgId);
++		if (!entry.date || _inserted.contains(original)) {
++			continue;
++		}
++		auto text = TextWithEntities{ .text = entry.text };
++		for (const auto &entity : entry.entities) {
++			text.entities.push_back(EntityInText(
++				EntityType(entity.type),
++				entity.offset,
++				entity.length,
++				entity.data));
++		}
++		if (!mark.isEmpty()) {
++			text.text = text.text.isEmpty()
++				? mark
++				: text.text + u"\n\n"_q + mark;
++		}
++		auto fields = HistoryItemCommonFields{
++			.id = data.nextLocalMessageId(),
++			.flags = MessageFlag::Local,
++			.date = TimeId(entry.date),
++		};
++		if (const auto from = entry.fromId
++			? data.peerLoaded(PeerId(BareId(entry.fromId)))
++			: nullptr) {
++			fields.from = from->id;
++			fields.flags |= MessageFlag::HasFromId;
++		}
++		if (entry.out) {
++			fields.flags |= MessageFlag::Outgoing;
++		}
++		const auto item = history->addLocalMessageInPlace(
++			std::move(fields),
++			text,
++			msgId);
++		_inserted.emplace(original, item->id);
++		_placeholders.emplace(item->fullId(), msgId);
++		inserted = true;
++	}
++	if (inserted) {
++		data.notifyHistoryChangeDelayed(history);
++	}
++}
++
++void DeletedMessages::removeFrom(not_null<History*> history) {
++	if (!_session) {
++		return;
++	}
++	const auto &data = _session->data();
++	const auto peerId = history->peer->id;
++	auto items = std::vector<not_null<HistoryItem*>>();
++	for (const auto &entry : _placeholders) {
++		const auto &fullId = entry.first;
++		if (fullId.peer != peerId) {
++			continue;
++		}
++		if (const auto item = data.message(fullId)) {
++			items.push_back(item);
++		}
++	}
++	for (const auto &item : items) {
++		history->destroyMessage(item);
++	}
++	for (auto i = _placeholders.begin(); i != _placeholders.end();) {
++		if (i->first.peer == peerId) {
++			i = _placeholders.erase(i);
++		} else {
++			++i;
++		}
++	}
++	for (auto i = _inserted.begin(); i != _inserted.end();) {
++		if (i->first.peer == peerId) {
++			i = _inserted.erase(i);
++		} else {
++			++i;
++		}
++	}
++}
++
++void DeletedMessages::refresh() {
++	if (!_session) {
++		return;
++	}
++	auto peers = base::flat_set<PeerId>();
++	for (const auto &entry : _inserted) {
++		peers.emplace(entry.first.peer);
++	}
++	for (const auto &entry : _entries) {
++		peers.emplace(PeerId(BareId(entry.peerId)));
++	}
++	for (const auto &peerId : peers) {
++		if (const auto history = _session->data().historyLoaded(peerId)) {
++			removeFrom(history);
++			insertFor(history);
++		}
++	}
++}
++
++bool DeletedMessages::isPlaceholder(not_null<HistoryItem*> item) const {
++	return _placeholders.contains(item->fullId());
 +}
 +
 +void DeletedMessages::onItemsDestroyed(
 +		const std::vector<not_null<HistoryItem*>> &items) {
-+	if (!Config::Instance().saveDeletedMessages()) {
-+		return;
-+	}
-+	auto changed = false;
-+	for (const auto &item : items) {
-+		if (!ShouldSave(item)) {
-+			continue;
-+		}
-+		const auto fullId = item->fullId();
-+		const auto peerId = qint64(fullId.peer.value);
-+		const auto msgId = qint64(fullId.msg.bare);
-+		const auto duplicate = std::any_of(
-+			_entries.begin(),
-+			_entries.end(),
-+			[&](const Entry &entry) {
-+				return entry.peerId == peerId && entry.msgId == msgId;
-+			});
-+		if (duplicate) {
-+			continue;
-+		}
++	if (Config::Instance().saveDeletedMessages()) {
++		auto changed = false;
++		for (const auto &item : items) {
++			if (isPlaceholder(item) || !ShouldSave(item)) {
++				continue;
++			}
++			const auto fullId = item->fullId();
++			const auto peerId = qint64(fullId.peer.value);
++			const auto msgId = qint64(fullId.msg.bare);
++			const auto duplicate = std::any_of(
++				_entries.begin(),
++				_entries.end(),
++				[&](const Entry &entry) {
++					return entry.peerId == peerId && entry.msgId == msgId;
++				});
++			if (duplicate) {
++				continue;
++			}
 +
-+		auto entry = Entry();
-+		entry.peerId = peerId;
-+		entry.peerName = item->history()->peer->name();
-+		entry.msgId = msgId;
-+		entry.fromId = item->from()
-+			? qint64(item->from()->id.value)
-+			: 0;
-+		entry.fromName = item->from() ? item->from()->name() : QString();
-+		entry.date = item->date();
-+		entry.text = item->originalText().text;
-+		if (const auto edited = item->Get<HistoryMessageEdited>()) {
-+			entry.editedDate = edited->date;
-+		}
-+		if (const auto reply = item->Get<HistoryMessageReply>()) {
-+			entry.replyToMsgId = qint64(reply->fields().messageId.bare);
-+			entry.replyToText = reply->fields().quote.text;
-+		}
-+		if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
-+			if (forwarded->originalSender) {
-+				entry.forwardedFrom = forwarded->originalSender->name();
-+			} else if (forwarded->originalHiddenSenderInfo) {
-+				entry.forwardedFrom = forwarded->originalHiddenSenderInfo->name;
++			auto entry = Entry();
++			entry.peerId = peerId;
++			entry.peerName = item->history()->peer->name();
++			entry.msgId = msgId;
++			entry.fromId = item->from()
++				? qint64(item->from()->id.value)
++				: 0;
++			entry.fromName = item->from() ? item->from()->name() : QString();
++			entry.date = item->date();
++			entry.text = item->originalText().text;
++			if (const auto edited = item->Get<HistoryMessageEdited>()) {
++				entry.editedDate = edited->date;
 +			}
-+			entry.forwardedDate = forwarded->originalDate;
-+		}
-+		for (const auto &reaction : item->reactions()) {
-+			if (const auto text = ReactionText(reaction.id); !text.isEmpty()) {
-+				entry.reactions.push_back(text);
++			if (const auto reply = item->Get<HistoryMessageReply>()) {
++				entry.replyToMsgId = qint64(reply->fields().messageId.bare);
++				entry.replyToText = reply->fields().quote.text;
 +			}
++			if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
++				if (forwarded->originalSender) {
++					entry.forwardedFrom = forwarded->originalSender->name();
++				} else if (forwarded->originalHiddenSenderInfo) {
++					entry.forwardedFrom
++						= forwarded->originalHiddenSenderInfo->name;
++				}
++				entry.forwardedDate = forwarded->originalDate;
++			}
++			for (const auto &reaction : item->reactions()) {
++				if (const auto text = ReactionText(reaction.id);
++					!text.isEmpty()) {
++					entry.reactions.push_back(text);
++				}
++			}
++			for (const auto &entity : item->originalText().entities) {
++				entry.entities.push_back({
++					.type = int(entity.type()),
++					.offset = entity.offset(),
++					.length = entity.length(),
++					.data = entity.data(),
++				});
++			}
++			entry.media = item->media() ? u"media"_q : QString();
++			entry.out = item->out();
++			entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
++			_entries.push_back(std::move(entry));
++			changed = true;
 +		}
-+		for (const auto &entity : item->originalText().entities) {
-+			entry.entities.push_back({
-+				.type = int(entity.type()),
-+				.offset = entity.offset(),
-+				.length = entity.length(),
-+				.data = entity.data(),
-+			});
++		if (changed) {
++			TrimDeletedEntries(
++				&_entries,
++				[](const Entry &entry) { return entry.peerId; });
++			save();
 +		}
-+		entry.media = item->media() ? u"media"_q : QString();
-+		entry.out = item->out();
-+		entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
-+		_entries.push_back(std::move(entry));
-+		changed = true;
 +	}
-+	if (changed) {
-+		TrimDeletedEntries(
-+			&_entries,
-+			[](const Entry &entry) { return entry.peerId; });
-+		save();
++	for (const auto &item : items) {
++		const auto fullId = item->fullId();
++		if (const auto original = _placeholders.take(fullId)) {
++			_inserted.remove(FullMsgId(fullId.peer, *original));
++		}
 +	}
 +}
 +
@@ -19416,19 +19679,22 @@ index 0000000..a3ae829
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.h b/exteraless/deleted_messages.h
 new file mode 100644
-index 0000000..f642144
+index 0000000..51b3c59
 --- /dev/null
 +++ b/exteraless/deleted_messages.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,53 @@
 +#pragma once
 +
 +#include "base/basic_types.h"
++#include "base/flat_map.h"
++#include "data/data_msg_id.h"
 +#include "data/data_peer_id.h"
 +#include "exteraless/deleted_entry.h"
 +
 +#include <QString>
 +#include <vector>
 +
++class History;
 +class HistoryItem;
 +
 +namespace Main {
@@ -19450,6 +19716,11 @@ index 0000000..f642144
 +	[[nodiscard]] std::vector<Entry> list(PeerId peerId) const;
 +	void clear(PeerId peerId);
 +
++	void insertFor(not_null<History*> history);
++	void removeFrom(not_null<History*> history);
++	void refresh();
++	[[nodiscard]] bool isPlaceholder(not_null<HistoryItem*> item) const;
++
 +private:
 +	DeletedMessages() = default;
 +
@@ -19457,8 +19728,11 @@ index 0000000..f642144
 +	void load();
 +	void save();
 +
++	Main::Session *_session = nullptr;
 +	QString _path;
 +	std::vector<Entry> _entries;
++	base::flat_map<FullMsgId, MsgId> _inserted;
++	base::flat_map<FullMsgId, MsgId> _placeholders;
 +};
 +
 +} // namespace Exteraless

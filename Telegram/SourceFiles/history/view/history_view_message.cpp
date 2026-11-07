@@ -57,6 +57,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_message_reactions.h"
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages.h"
 #include "lang/lang_keys.h"
 #include "mainwidget.h"
 #include "main/main_session.h"
@@ -1842,6 +1843,13 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	if (isHidden()) {
 		return;
 	}
+
+	const auto translucentDeleted
+		= Exteraless::DeletedMessages::Instance().isPlaceholder(item)
+		&& Exteraless::Config::Instance().translucentDeletedMessages();
+	[[maybe_unused]] const auto scopedOpacity = ScopedPainterOpacity(
+		p,
+		translucentDeleted ? 0.6 : p.opacity());
 
 	const auto entry = logEntryOriginal();
 	const auto check = factcheckBlock();

@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_context_menu.h"
 
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages.h"
 #include "exteraless/plugin_runtime.h"
 
 #include "api/api_attached_stickers.h"
@@ -857,6 +858,7 @@ bool AddReplyToMessageAction(
 	const auto peer = item ? item->history()->peer.get() : nullptr;
 	if (!item
 		|| (!item->isRegular() && !CanReplyToEphemeral(item))
+		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)
 		|| IsAnchoredEphemeral(item)
 		|| (context != Context::History
 			&& context != Context::Replies
@@ -1162,7 +1164,9 @@ bool AddDeleteMessageAction(
 	const auto item = request.item;
 	if (!request.selectedItems.empty()) {
 		return false;
-	} else if (!item || !item->canDelete()) {
+	} else if (!item
+		|| !item->canDelete()
+		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)) {
 		return false;
 	}
 	const auto owner = &item->history()->owner();

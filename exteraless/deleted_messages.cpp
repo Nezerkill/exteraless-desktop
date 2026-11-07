@@ -3,6 +3,7 @@
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages_trim.h"
 
+#include "base/flat_set.h"
 #include "data/data_message_reaction_id.h"
 #include "data/data_peer.h"
 #include "data/data_session.h"
@@ -71,12 +72,16 @@ void DeletedMessages::attach(Main::Session *session) {
 		session->local().cachePath()).absolutePath()
 		+ u"/exteraless/deleted_messages.json"_q;
 	if (_path == path) {
+		_session = session;
 		return;
 	}
 
 	save();
 	_path = path;
+	_session = session;
 	_entries.clear();
+	_inserted.clear();
+	_placeholders.clear();
 	load();
 
 	session->data().itemsAboutToBeDestroyed(
@@ -114,81 +119,218 @@ void DeletedMessages::clear(PeerId peerId) {
 	std::erase_if(_entries, [&](const Entry &entry) {
 		return IdString(entry.peerId) == key;
 	});
+	if (const auto history = _session
+		? _session->data().historyLoaded(peerId)
+		: nullptr) {
+		removeFrom(history);
+	}
 	save();
+}
+
+void DeletedMessages::insertFor(not_null<History*> history) {
+	if (!_session || (&history->peer->session() != _session)) {
+		return;
+	}
+	if (!Config::Instance().saveDeletedMessages()
+		|| !history->loadedAtTop()
+		|| !history->loadedAtBottom()) {
+		return;
+	}
+	auto &data = _session->data();
+	const auto peerId = history->peer->id;
+	const auto entries = list(peerId);
+	if (entries.empty()) {
+		return;
+	}
+	const auto &config = Config::Instance();
+	const auto customMark = config.customDeletedMark();
+	const auto mark = config.useDeletedIcon()
+		? (customMark.isEmpty() ? u"🗑"_q : customMark)
+		: customMark;
+	auto inserted = false;
+	for (const auto &entry : entries) {
+		const auto msgId = MsgId(entry.msgId);
+		const auto original = FullMsgId(peerId, msgId);
+		if (!entry.date || _inserted.contains(original)) {
+			continue;
+		}
+		auto text = TextWithEntities{ .text = entry.text };
+		for (const auto &entity : entry.entities) {
+			text.entities.push_back(EntityInText(
+				EntityType(entity.type),
+				entity.offset,
+				entity.length,
+				entity.data));
+		}
+		if (!mark.isEmpty()) {
+			text.text = text.text.isEmpty()
+				? mark
+				: text.text + u"\n\n"_q + mark;
+		}
+		auto fields = HistoryItemCommonFields{
+			.id = data.nextLocalMessageId(),
+			.flags = MessageFlag::Local,
+			.date = TimeId(entry.date),
+		};
+		if (const auto from = entry.fromId
+			? data.peerLoaded(PeerId(BareId(entry.fromId)))
+			: nullptr) {
+			fields.from = from->id;
+			fields.flags |= MessageFlag::HasFromId;
+		}
+		if (entry.out) {
+			fields.flags |= MessageFlag::Outgoing;
+		}
+		const auto item = history->addLocalMessageInPlace(
+			std::move(fields),
+			text,
+			msgId);
+		_inserted.emplace(original, item->id);
+		_placeholders.emplace(item->fullId(), msgId);
+		inserted = true;
+	}
+	if (inserted) {
+		data.notifyHistoryChangeDelayed(history);
+	}
+}
+
+void DeletedMessages::removeFrom(not_null<History*> history) {
+	if (!_session) {
+		return;
+	}
+	const auto &data = _session->data();
+	const auto peerId = history->peer->id;
+	auto items = std::vector<not_null<HistoryItem*>>();
+	for (const auto &entry : _placeholders) {
+		const auto &fullId = entry.first;
+		if (fullId.peer != peerId) {
+			continue;
+		}
+		if (const auto item = data.message(fullId)) {
+			items.push_back(item);
+		}
+	}
+	for (const auto &item : items) {
+		history->destroyMessage(item);
+	}
+	for (auto i = _placeholders.begin(); i != _placeholders.end();) {
+		if (i->first.peer == peerId) {
+			i = _placeholders.erase(i);
+		} else {
+			++i;
+		}
+	}
+	for (auto i = _inserted.begin(); i != _inserted.end();) {
+		if (i->first.peer == peerId) {
+			i = _inserted.erase(i);
+		} else {
+			++i;
+		}
+	}
+}
+
+void DeletedMessages::refresh() {
+	if (!_session) {
+		return;
+	}
+	auto peers = base::flat_set<PeerId>();
+	for (const auto &entry : _inserted) {
+		peers.emplace(entry.first.peer);
+	}
+	for (const auto &entry : _entries) {
+		peers.emplace(PeerId(BareId(entry.peerId)));
+	}
+	for (const auto &peerId : peers) {
+		if (const auto history = _session->data().historyLoaded(peerId)) {
+			removeFrom(history);
+			insertFor(history);
+		}
+	}
+}
+
+bool DeletedMessages::isPlaceholder(not_null<HistoryItem*> item) const {
+	return _placeholders.contains(item->fullId());
 }
 
 void DeletedMessages::onItemsDestroyed(
 		const std::vector<not_null<HistoryItem*>> &items) {
-	if (!Config::Instance().saveDeletedMessages()) {
-		return;
-	}
-	auto changed = false;
-	for (const auto &item : items) {
-		if (!ShouldSave(item)) {
-			continue;
-		}
-		const auto fullId = item->fullId();
-		const auto peerId = qint64(fullId.peer.value);
-		const auto msgId = qint64(fullId.msg.bare);
-		const auto duplicate = std::any_of(
-			_entries.begin(),
-			_entries.end(),
-			[&](const Entry &entry) {
-				return entry.peerId == peerId && entry.msgId == msgId;
-			});
-		if (duplicate) {
-			continue;
-		}
+	if (Config::Instance().saveDeletedMessages()) {
+		auto changed = false;
+		for (const auto &item : items) {
+			if (isPlaceholder(item) || !ShouldSave(item)) {
+				continue;
+			}
+			const auto fullId = item->fullId();
+			const auto peerId = qint64(fullId.peer.value);
+			const auto msgId = qint64(fullId.msg.bare);
+			const auto duplicate = std::any_of(
+				_entries.begin(),
+				_entries.end(),
+				[&](const Entry &entry) {
+					return entry.peerId == peerId && entry.msgId == msgId;
+				});
+			if (duplicate) {
+				continue;
+			}
 
-		auto entry = Entry();
-		entry.peerId = peerId;
-		entry.peerName = item->history()->peer->name();
-		entry.msgId = msgId;
-		entry.fromId = item->from()
-			? qint64(item->from()->id.value)
-			: 0;
-		entry.fromName = item->from() ? item->from()->name() : QString();
-		entry.date = item->date();
-		entry.text = item->originalText().text;
-		if (const auto edited = item->Get<HistoryMessageEdited>()) {
-			entry.editedDate = edited->date;
-		}
-		if (const auto reply = item->Get<HistoryMessageReply>()) {
-			entry.replyToMsgId = qint64(reply->fields().messageId.bare);
-			entry.replyToText = reply->fields().quote.text;
-		}
-		if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
-			if (forwarded->originalSender) {
-				entry.forwardedFrom = forwarded->originalSender->name();
-			} else if (forwarded->originalHiddenSenderInfo) {
-				entry.forwardedFrom = forwarded->originalHiddenSenderInfo->name;
+			auto entry = Entry();
+			entry.peerId = peerId;
+			entry.peerName = item->history()->peer->name();
+			entry.msgId = msgId;
+			entry.fromId = item->from()
+				? qint64(item->from()->id.value)
+				: 0;
+			entry.fromName = item->from() ? item->from()->name() : QString();
+			entry.date = item->date();
+			entry.text = item->originalText().text;
+			if (const auto edited = item->Get<HistoryMessageEdited>()) {
+				entry.editedDate = edited->date;
 			}
-			entry.forwardedDate = forwarded->originalDate;
-		}
-		for (const auto &reaction : item->reactions()) {
-			if (const auto text = ReactionText(reaction.id); !text.isEmpty()) {
-				entry.reactions.push_back(text);
+			if (const auto reply = item->Get<HistoryMessageReply>()) {
+				entry.replyToMsgId = qint64(reply->fields().messageId.bare);
+				entry.replyToText = reply->fields().quote.text;
 			}
+			if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
+				if (forwarded->originalSender) {
+					entry.forwardedFrom = forwarded->originalSender->name();
+				} else if (forwarded->originalHiddenSenderInfo) {
+					entry.forwardedFrom
+						= forwarded->originalHiddenSenderInfo->name;
+				}
+				entry.forwardedDate = forwarded->originalDate;
+			}
+			for (const auto &reaction : item->reactions()) {
+				if (const auto text = ReactionText(reaction.id);
+					!text.isEmpty()) {
+					entry.reactions.push_back(text);
+				}
+			}
+			for (const auto &entity : item->originalText().entities) {
+				entry.entities.push_back({
+					.type = int(entity.type()),
+					.offset = entity.offset(),
+					.length = entity.length(),
+					.data = entity.data(),
+				});
+			}
+			entry.media = item->media() ? u"media"_q : QString();
+			entry.out = item->out();
+			entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
+			_entries.push_back(std::move(entry));
+			changed = true;
 		}
-		for (const auto &entity : item->originalText().entities) {
-			entry.entities.push_back({
-				.type = int(entity.type()),
-				.offset = entity.offset(),
-				.length = entity.length(),
-				.data = entity.data(),
-			});
+		if (changed) {
+			TrimDeletedEntries(
+				&_entries,
+				[](const Entry &entry) { return entry.peerId; });
+			save();
 		}
-		entry.media = item->media() ? u"media"_q : QString();
-		entry.out = item->out();
-		entry.read = !item->isUnreadMention() && !item->isUnreadMedia();
-		_entries.push_back(std::move(entry));
-		changed = true;
 	}
-	if (changed) {
-		TrimDeletedEntries(
-			&_entries,
-			[](const Entry &entry) { return entry.peerId; });
-		save();
+	for (const auto &item : items) {
+		const auto fullId = item->fullId();
+		if (const auto original = _placeholders.take(fullId)) {
+			_inserted.remove(FullMsgId(fullId.peer, *original));
+		}
 	}
 }
 
