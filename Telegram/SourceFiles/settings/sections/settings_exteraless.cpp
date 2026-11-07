@@ -867,6 +867,29 @@ const auto kMeta = Builder::BuildHelper({
 		}, mediaGifAsVideo->lifetime());
 	}
 
+	const auto mediaLyricsOnline = builder.addButton({
+		.id = u"exteraless/media/lyrics-online"_q,
+		.title = tr::lng_settings_exteraless_media_lyrics_online(),
+		.st = &st::settingsButtonNoIcon,
+		.toggled = rpl::single(
+			Exteraless::Config::Instance().lyricsAllowNetwork()),
+		.keywords = {
+			u"lyrics"_q,
+			u"lrclib"_q,
+			u"online"_q,
+			u"network"_q,
+		},
+	});
+	if (mediaLyricsOnline) {
+		mediaLyricsOnline->toggledChanges(
+		) | rpl::filter([=](bool value) {
+			return (value
+				!= Exteraless::Config::Instance().lyricsAllowNetwork());
+		}) | rpl::on_next([=](bool value) {
+			Exteraless::Config::Instance().setLyricsAllowNetwork(value);
+		}, mediaLyricsOnline->lifetime());
+	}
+
 	const auto bitrateLabel = [](int value) {
 		return u"%1 kbps"_q.arg(value);
 	};

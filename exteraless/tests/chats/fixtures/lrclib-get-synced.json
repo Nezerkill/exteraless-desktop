@@ -1,0 +1,10 @@
+{
+  "id": 3396226,
+  "trackName": "Bohemian Rhapsody",
+  "artistName": "Queen",
+  "albumName": "A Night at the Opera",
+  "duration": 354,
+  "instrumental": false,
+  "plainLyrics": "First plain line\nSecond plain line",
+  "syncedLyrics": "[00:01.00] First synced line\n[00:05.00] Second synced line"
+}

@@ -55,6 +55,8 @@ constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 constexpr auto kLyricsFiles = "OELyricsFiles";
 constexpr auto kLyricsFilesAlias = "lyricsFiles";
+constexpr auto kLyricsAllowNetwork = "OELyricsAllowNetwork";
+constexpr auto kLyricsAllowNetworkAlias = "lyricsAllowNetwork";
 constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -510,6 +512,7 @@ QString BuildBackup() {
 		config.subtitlesFiles().toUtf8()).object();
 	extera[kLyricsFiles] = QJsonDocument::fromJson(
 		config.lyricsFiles().toUtf8()).object();
+	extera[kLyricsAllowNetwork] = config.lyricsAllowNetwork();
 	extera[kChatMenuBoost] = config.chatMenuBoost();
 	extera[kChatMenuLinked] = config.chatMenuLinked();
 	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
@@ -890,6 +893,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setLyricsFiles(QString::fromUtf8(
 				QJsonDocument(SanitizeFileEntries(value))
 					.toJson(QJsonDocument::Compact)));
+		} else if ((key == kLyricsAllowNetwork
+			|| key == kLyricsAllowNetworkAlias)
+			&& value.isBool()) {
+			config.setLyricsAllowNetwork(value.toBool());
 		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
 			&& value.isBool()) {
 			config.setChatMenuBoost(value.toBool());

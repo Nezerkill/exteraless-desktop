@@ -846,7 +846,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 134,
+            len(section) == 135,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -867,7 +867,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 139,
+            sum(len(value) for value in exported.values()) == 140,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -887,7 +887,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 139,
+                data.get("applied") == 140,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -1030,6 +1030,7 @@ def check_backup(ledger, cli, work):
             "OELyricsFiles": {
                 "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
             },
+            "OELyricsAllowNetwork": True,
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
@@ -1080,7 +1081,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 139,
+            data.get("applied") == 140,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1130,6 +1131,10 @@ def check_backup(ledger, cli, work):
                 "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
             },
             section.get("OELyricsFiles"))
+        ledger.check(
+            "backup full lyrics network",
+            section.get("OELyricsAllowNetwork") is True,
+            section.get("OELyricsAllowNetwork"))
         ledger.check(
             "backup full save deleted",
             section.get("OESaveDeletedMessages") is True,
@@ -1399,10 +1404,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 134",
+            "backup legacy eight completed to 135",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (134, 3, 2),
+             len(sections["mainconfig"])) == (135, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6221,6 +6226,171 @@ def check_lyrics(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_lrclib(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    def parse_search(name):
+        result = run(cli, ["lyrics-search-parse", str(FIXTURES / name)])
+        if result.returncode != 0:
+            ledger.check(
+                f"lrclib search parse {name}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(
+                f"lrclib search parse {name}", False, f"json: {error}")
+            return None
+        results = payload.get("results")
+        if not isinstance(results, list):
+            ledger.check(f"lrclib search parse {name}", False, payload)
+            return None
+        for item in results:
+            if (not isinstance(item, dict)
+                    or not isinstance(item.get("id"), int)
+                    or not isinstance(item.get("track"), str)
+                    or not isinstance(item.get("artist"), str)
+                    or not isinstance(item.get("hasSynced"), bool)):
+                ledger.check(f"lrclib search parse {name}", False, item)
+                return None
+        ledger.check(f"lrclib search parse {name}", True)
+        return results
+
+    def parse_get(name):
+        result = run(cli, ["lyrics-get-parse", str(FIXTURES / name)])
+        if result.returncode != 0:
+            ledger.check(
+                f"lrclib get parse {name}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(f"lrclib get parse {name}", False, f"json: {error}")
+            return None
+        if (not isinstance(payload.get("ok"), bool)
+                or not isinstance(payload.get("synced"), bool)
+                or not isinstance(payload.get("text"), str)):
+            ledger.check(f"lrclib get parse {name}", False, payload)
+            return None
+        ledger.check(f"lrclib get parse {name}", True)
+        return payload
+
+    search = parse_search("lrclib-search.json")
+    if search is not None:
+        ledger.check(
+            "lrclib search result count", len(search) == 2, len(search))
+        first = search[0] if search else {}
+        ledger.check(
+            "lrclib search first id", first.get("id") == 3396226, first)
+        ledger.check(
+            "lrclib search first track",
+            first.get("track") == "Bohemian Rhapsody",
+            first)
+        ledger.check(
+            "lrclib search first artist",
+            first.get("artist") == "Queen",
+            first)
+        ledger.check(
+            "lrclib search first has synced",
+            first.get("hasSynced") is True,
+            first)
+        second = search[1] if len(search) > 1 else {}
+        ledger.check(
+            "lrclib search second lacks synced",
+            second.get("hasSynced") is False,
+            second)
+
+    lyrics = parse_get("lrclib-get-synced.json")
+    if lyrics is not None:
+        ledger.check("lrclib get synced ok", lyrics["ok"] is True, lyrics)
+        ledger.check(
+            "lrclib get synced flag", lyrics["synced"] is True, lyrics)
+        ledger.check(
+            "lrclib get prefers synced lyrics",
+            lyrics["text"]
+            == "[00:01.00] First synced line\n[00:05.00] Second synced line",
+            lyrics["text"])
+
+    lyrics = parse_get("lrclib-get-plain.json")
+    if lyrics is not None:
+        ledger.check("lrclib get plain ok", lyrics["ok"] is True, lyrics)
+        ledger.check(
+            "lrclib get plain not synced",
+            lyrics["synced"] is False,
+            lyrics)
+        ledger.check(
+            "lrclib get plain text",
+            lyrics["text"] == "First plain line\nSecond plain line",
+            lyrics["text"])
+
+    lyrics = parse_get("lrclib-get-instrumental.json")
+    if lyrics is not None:
+        ledger.check(
+            "lrclib get instrumental not ok",
+            lyrics["ok"] is False,
+            lyrics)
+        ledger.check(
+            "lrclib get instrumental empty text",
+            lyrics["text"] == "",
+            lyrics["text"])
+
+    lyrics = parse_get("lrclib-broken.json")
+    if lyrics is not None:
+        ledger.check(
+            "lrclib get broken not ok", lyrics["ok"] is False, lyrics)
+        ledger.check(
+            "lrclib get broken empty",
+            lyrics["synced"] is False and lyrics["text"] == "",
+            lyrics)
+
+    search = parse_search("lrclib-broken.json")
+    if search is not None:
+        ledger.check("lrclib search broken empty", search == [], search)
+
+    result = run(
+        cli, ["lyrics-get-parse", str(FIXTURES / "missing-lrclib.json")])
+    ledger.check(
+        "lrclib get missing file",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    env = make_env(work / "lrclib-consent")
+    data = json_call(
+        ledger, cli,
+        ["config-fromjson", json.dumps({
+            "version": 1,
+            "exteraconfig": {"OELyricsAllowNetwork": True},
+        })],
+        env, "lrclib consent fromJson")
+    if data is not None:
+        ledger.check(
+            "lrclib consent accepted",
+            data.get("accepted") is True,
+            data.get("accepted"))
+        ledger.check(
+            "lrclib consent unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    raw = json_call(ledger, cli, ["config-raw"], env, "lrclib consent raw")
+    if raw is not None:
+        values = raw.get("exteraconfig") or {}
+        ledger.check(
+            "lrclib consent stored",
+            values.get("OELyricsAllowNetwork") is True,
+            values.get("OELyricsAllowNetwork"))
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_download_boost(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -7372,6 +7542,7 @@ def main():
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         lyrics = check_lyrics(ledger, cli, work)
+        lrclib = check_lrclib(ledger, cli, work)
         regex_filters = check_regex_filters(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
@@ -7452,6 +7623,7 @@ def main():
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
+    print(f"lrclib: {lrclib[0] - lrclib[1]} passed")
     print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:

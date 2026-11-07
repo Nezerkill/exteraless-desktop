@@ -109,6 +109,8 @@ public:
 	void setSubtitlesFiles(const QString &value);
 	[[nodiscard]] QString lyricsFiles() const;
 	void setLyricsFiles(const QString &value);
+	[[nodiscard]] bool lyricsAllowNetwork() const;
+	void setLyricsAllowNetwork(bool value);
 	[[nodiscard]] bool chatMenuBoost() const;
 	void setChatMenuBoost(bool value);
 	[[nodiscard]] bool chatMenuLinked() const;

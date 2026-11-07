@@ -49,6 +49,7 @@ constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 constexpr auto kLyricsFiles = "OELyricsFiles";
+constexpr auto kLyricsAllowNetwork = "OELyricsAllowNetwork";
 constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -657,6 +658,14 @@ void Config::setLyricsFiles(const QString &value) {
 		return;
 	}
 	setValue(kLyricsFiles, value);
+}
+
+bool Config::lyricsAllowNetwork() const {
+	return boolValue(kLyricsAllowNetwork, false);
+}
+
+void Config::setLyricsAllowNetwork(bool value) {
+	setValue(kLyricsAllowNetwork, value);
 }
 
 bool Config::chatMenuBoost() const {
@@ -1605,6 +1614,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kMediaViewerMenuSubtitles
 			|| key == kSubtitlesFiles
 			|| key == kLyricsFiles
+			|| key == kLyricsAllowNetwork
 			|| key == kChatMenuBoost
 			|| key == kChatMenuLinked
 			|| key == kChatMenuViewDeleted

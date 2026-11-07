@@ -343,6 +343,7 @@ private:
 	[[nodiscard]] bool canShowLyrics() const;
 	[[nodiscard]] bool hasChosenLyrics();
 	void chooseLyrics();
+	void findLyricsOnline();
 	void disableLyrics();
 
 	void showSaveMsgToast(const QString &path, auto phrase);

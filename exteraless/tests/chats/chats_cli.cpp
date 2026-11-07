@@ -9,6 +9,7 @@
 #include "exteraless/ghost_schedule.h"
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
+#include "exteraless/lrclib.h"
 #include "exteraless/lyrics.h"
 #include "exteraless/math.h"
 #include "exteraless/network.h"
@@ -248,6 +249,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli subtitles-key <docId>\n"
 		<< "  exteraless-chats-cli lyrics-parse <file>\n"
 		<< "  exteraless-chats-cli lyrics-active <file> <posMs>\n"
+		<< "  exteraless-chats-cli lyrics-search-parse <file>\n"
+		<< "  exteraless-chats-cli lyrics-get-parse <file>\n"
 		<< "  exteraless-chats-cli network\n"
 		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
@@ -3062,6 +3065,44 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("index"), index },
 			{ QStringLiteral("text"),
 				(index >= 0) ? lyrics.lines[index].text : QString() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("lyrics-search-parse")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		auto results = QJsonArray();
+		for (const auto &result : Exteraless::ParseSearch(bytes)) {
+			results.append(QJsonObject{
+				{ QStringLiteral("id"), result.id },
+				{ QStringLiteral("track"), result.track },
+				{ QStringLiteral("artist"), result.artist },
+				{ QStringLiteral("hasSynced"), result.hasSynced },
+			});
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("results"), results },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("lyrics-get-parse")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		const auto lyrics = Exteraless::ParseGet(bytes);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("ok"), lyrics.ok },
+			{ QStringLiteral("synced"), lyrics.synced },
+			{ QStringLiteral("text"), lyrics.text },
 		});
 		return 0;
 	}

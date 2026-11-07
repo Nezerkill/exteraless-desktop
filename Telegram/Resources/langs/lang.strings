@@ -6173,6 +6173,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_mediaview_copy_frame" = "Copy Frame";
 "lng_mediaview_subtitles_choose" = "Choose Subtitles File";
 "lng_mediaview_subtitles_disable" = "Disable Subtitles";
+"lng_mediaview_lyrics_find_online" = "Find Lyrics Online";
+"lng_mediaview_lyrics_online_failed" = "Lyrics not found online";
 "lng_mediaview_forward" = "Forward";
 "lng_mediaview_share_at_time" = "Share at {time}";
 "lng_mediaview_delete" = "Delete";
@@ -9220,6 +9222,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_media_hw_accel" = "Hardware video decoding";
 "lng_settings_exteraless_media_gif_as_video" = "Send GIFs as video";
 "lng_settings_exteraless_media_audio_bitrate" = "Audio bitrate";
+"lng_settings_exteraless_media_lyrics_online" = "Allow online lyrics search (lrclib.net)";
 "lng_settings_exteraless_ghost" = "Ghost Mode";
 "lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 "lng_settings_exteraless_ghost_stories" = "Don't send story views";

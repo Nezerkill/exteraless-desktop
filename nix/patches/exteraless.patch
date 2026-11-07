@@ -109,19 +109,21 @@ index 811707d..fd1cdaa 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..4a3c12a 100644
+index ffc8ec9..37b0d47 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
-@@ -6171,6 +6171,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -6171,6 +6171,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_mediaview_save_as" = "Save As...";
  "lng_mediaview_copy" = "Copy";
  "lng_mediaview_copy_frame" = "Copy Frame";
 +"lng_mediaview_subtitles_choose" = "Choose Subtitles File";
 +"lng_mediaview_subtitles_disable" = "Disable Subtitles";
++"lng_mediaview_lyrics_find_online" = "Find Lyrics Online";
++"lng_mediaview_lyrics_online_failed" = "Lyrics not found online";
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9184,234 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9186,235 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -161,6 +163,7 @@ index ffc8ec9..4a3c12a 100644
 +"lng_settings_exteraless_media_hw_accel" = "Hardware video decoding";
 +"lng_settings_exteraless_media_gif_as_video" = "Send GIFs as video";
 +"lng_settings_exteraless_media_audio_bitrate" = "Audio bitrate";
++"lng_settings_exteraless_media_lyrics_online" = "Allow online lyrics search (lrclib.net)";
 +"lng_settings_exteraless_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_ghost_read" = "Don't send read receipts";
 +"lng_settings_exteraless_ghost_stories" = "Don't send story views";
@@ -1902,20 +1905,29 @@ index 2bdf47a..e66bf76 100644
  	return result;
 diff --git a/Telegram/SourceFiles/exteraless/media_lyrics.cpp b/Telegram/SourceFiles/exteraless/media_lyrics.cpp
 new file mode 100644
-index 0000000..86fb19c
+index 0000000..d1f7092
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/media_lyrics.cpp
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,362 @@
 +#include "exteraless/media_lyrics.h"
 +
 +#include "exteraless/config.h"
++#include "exteraless/lrclib.h"
 +#include "exteraless/subtitles.h"
++#include "settings.h"
 +
++#include <QCoreApplication>
++#include <QDateTime>
++#include <QDir>
 +#include <QFile>
 +#include <QFileInfo>
 +#include <QJsonDocument>
 +#include <QJsonObject>
 +#include <QJsonParseError>
++#include <QNetworkAccessManager>
++#include <QNetworkReply>
++#include <QNetworkRequest>
++#include <QUrl>
 +
 +#include <optional>
 +
@@ -1923,6 +1935,78 @@ index 0000000..86fb19c
 +namespace {
 +
 +constexpr auto kMaxStoredDocs = 128;
++constexpr auto kOnlineCacheTtlMs = qint64(30) * 24 * 60 * 60 * 1000;
++
++[[nodiscard]] QString OnlineCacheDirectory() {
++	return cWorkingDir() + u"tdata/lrclib"_q;
++}
++
++[[nodiscard]] QString OnlineCachePath(qint64 docId) {
++	return OnlineCacheDirectory() + u"/%1.json"_q.arg(docId);
++}
++
++[[nodiscard]] bool IsOnlinePath(const QString &path) {
++	return path.startsWith(u"lrclib:"_q);
++}
++
++[[nodiscard]] QString OnlinePath(qint64 docId) {
++	return u"lrclib:%1"_q.arg(docId);
++}
++
++[[nodiscard]] qint64 OnlineDocId(const QString &path) {
++	auto ok = false;
++	const auto docId = path.mid(u"lrclib:"_q.size()).toLongLong(&ok);
++	return (ok && docId > 0) ? docId : 0;
++}
++
++[[nodiscard]] std::optional<Lyrics> OnlineLyrics(const QByteArray &data) {
++	const auto parsed = ParseGet(data);
++	if (!parsed.ok || parsed.instrumental || parsed.text.isEmpty()) {
++		return std::nullopt;
++	}
++	if (parsed.synced) {
++		auto lyrics = ParseLyrics(parsed.text.toUtf8());
++		if (lyrics.instrumental || lyrics.lines.isEmpty()) {
++			return std::nullopt;
++		}
++		return lyrics;
++	}
++	return Lyrics{ .lines = { Line{ 0, parsed.text } } };
++}
++
++[[nodiscard]] std::optional<Lyrics> ReadOnlineCache(qint64 docId) {
++	auto file = QFile(OnlineCachePath(docId));
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	return OnlineLyrics(file.readAll());
++}
++
++[[nodiscard]] bool OnlineCacheFresh(qint64 docId) {
++	const auto info = QFileInfo(OnlineCachePath(docId));
++	if (!info.isFile()) {
++		return false;
++	}
++	const auto age = info.lastModified().msecsTo(QDateTime::currentDateTime());
++	return age >= 0 && age < kOnlineCacheTtlMs;
++}
++
++bool WriteOnlineCache(qint64 docId, const QByteArray &data) {
++	if (!QDir().mkpath(OnlineCacheDirectory())) {
++		return false;
++	}
++	auto file = QFile(OnlineCachePath(docId));
++	if (!file.open(QIODevice::WriteOnly)) {
++		return false;
++	}
++	return (file.write(data) == data.size());
++}
++
++[[nodiscard]] QNetworkAccessManager &NetworkManager() {
++	static const auto manager = new QNetworkAccessManager(
++		QCoreApplication::instance());
++	return *manager;
++}
 +
 +[[nodiscard]] QJsonObject ReadStore() {
 +	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
@@ -1947,11 +2031,29 @@ index 0000000..86fb19c
 +	}
 +	const auto path = store.value(key).toObject().value(
 +		u"path"_q).toString();
++	if (IsOnlinePath(path)) {
++		return path;
++	}
 +	return QFileInfo(path).isFile() ? path : QString();
 +}
 +
 +[[nodiscard]] std::optional<MediaLyrics::State> ReadState(
 +		const QString &path) {
++	if (IsOnlinePath(path)) {
++		const auto docId = OnlineDocId(path);
++		if (!docId) {
++			return std::nullopt;
++		}
++		auto lyrics = ReadOnlineCache(docId);
++		if (!lyrics || lyrics->lines.isEmpty()) {
++			return std::nullopt;
++		}
++		return MediaLyrics::State{
++			.path = path,
++			.label = u"lrclib.net"_q,
++			.lyrics = std::move(*lyrics),
++		};
++	}
 +	auto file = QFile(path);
 +	if (!file.open(QIODevice::ReadOnly)) {
 +		return std::nullopt;
@@ -2019,8 +2121,111 @@ index 0000000..86fb19c
 +}
 +
 +void MediaLyrics::disable(qint64 docId) {
++	abortPending(docId);
 +	_states.erase(docId);
 +	persist(docId);
++}
++
++void MediaLyrics::fetchOnline(
++		qint64 docId,
++		const QString &artist,
++		const QString &title,
++		int durationSeconds,
++		Fn<void(FetchResult)> done) {
++	const auto finish = [done = std::move(done)](FetchResult result) {
++		if (done) {
++			done(std::move(result));
++		}
++	};
++	if (!Config::Instance().lyricsAllowNetwork()) {
++		finish({ .error = u"disabled"_q });
++		return;
++	}
++	if (docId <= 0) {
++		finish({ .error = u"invalid"_q });
++		return;
++	}
++	if (OnlineCacheFresh(docId)) {
++		if (auto cached = ReadOnlineCache(docId)) {
++			if (installOnline(docId, std::move(*cached))) {
++				finish({ .ok = true });
++				return;
++			}
++		}
++	}
++	const auto track = title.trimmed();
++	if (track.isEmpty()) {
++		finish({ .error = u"notfound"_q });
++		return;
++	}
++	const auto performer = artist.trimmed();
++	const auto url = QUrl(BuildGetUrl(
++		performer,
++		track,
++		QString(),
++		durationSeconds));
++
++	abortPending(docId);
++	auto request = QNetworkRequest(url);
++	request.setHeader(
++		QNetworkRequest::UserAgentHeader,
++		u"exteraless-desktop"_q);
++	const auto reply = NetworkManager().get(request);
++	_pending[docId] = reply;
++	QObject::connect(reply, &QObject::destroyed, [=] {
++		const auto i = _pending.find(docId);
++		if (i != _pending.end() && i->second == reply) {
++			_pending.erase(i);
++		}
++	});
++	QObject::connect(reply, &QNetworkReply::finished, reply, [=] {
++		reply->deleteLater();
++		const auto i = _pending.find(docId);
++		if (i != _pending.end() && i->second == reply) {
++			_pending.erase(i);
++		}
++		const auto error = reply->error();
++		if (error == QNetworkReply::OperationCanceledError) {
++			return;
++		} else if (error != QNetworkReply::NoError) {
++			finish({ .error = u"network"_q });
++			return;
++		}
++		const auto data = reply->readAll();
++		auto lyrics = OnlineLyrics(data);
++		if (!lyrics || !installOnline(docId, std::move(*lyrics))) {
++			finish({ .error = u"notfound"_q });
++			return;
++		}
++		WriteOnlineCache(docId, data);
++		finish({ .ok = true });
++	});
++}
++
++bool MediaLyrics::installOnline(qint64 docId, Lyrics lyrics) {
++	if (docId <= 0 || lyrics.instrumental || lyrics.lines.isEmpty()) {
++		return false;
++	}
++	while (!_states.empty() && _states.size() >= kMaxStoredDocs) {
++		_states.erase(_states.begin());
++	}
++	_states[docId] = State{
++		.path = OnlinePath(docId),
++		.label = u"lrclib.net"_q,
++		.lyrics = std::move(lyrics),
++	};
++	persist(docId);
++	return true;
++}
++
++void MediaLyrics::abortPending(qint64 docId) {
++	const auto i = _pending.find(docId);
++	if (i == _pending.end()) {
++		return;
++	}
++	const auto reply = i->second;
++	_pending.erase(i);
++	reply->abort();
 +}
 +
 +int MediaLyrics::activeIndex(qint64 docId, qint64 positionMs) const {
@@ -2068,17 +2273,21 @@ index 0000000..86fb19c
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/media_lyrics.h b/Telegram/SourceFiles/exteraless/media_lyrics.h
 new file mode 100644
-index 0000000..c432cc9
+index 0000000..6079fad
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/media_lyrics.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,56 @@
 +#pragma once
 +
 +#include "exteraless/lyrics.h"
 +
++#include "base/basic_types.h"
++
 +#include <QString>
 +
 +#include <map>
++
++class QNetworkReply;
 +
 +namespace Exteraless {
 +
@@ -2090,6 +2299,11 @@ index 0000000..c432cc9
 +		Lyrics lyrics;
 +	};
 +
++	struct FetchResult {
++		bool ok = false;
++		QString error;
++	};
++
 +	[[nodiscard]] static MediaLyrics &Instance();
 +
 +	[[nodiscard]] static bool ValidVideoKey(const QString &key);
@@ -2098,13 +2312,23 @@ index 0000000..c432cc9
 +	[[nodiscard]] bool load(qint64 docId, const QString &path);
 +	void disable(qint64 docId);
 +
++	void fetchOnline(
++		qint64 docId,
++		const QString &artist,
++		const QString &title,
++		int durationSeconds,
++		Fn<void(FetchResult)> done);
++
 +	[[nodiscard]] int activeIndex(qint64 docId, qint64 positionMs) const;
 +	[[nodiscard]] QString activeText(qint64 docId, qint64 positionMs) const;
 +
 +private:
++	[[nodiscard]] bool installOnline(qint64 docId, Lyrics lyrics);
++	void abortPending(qint64 docId);
 +	void persist(qint64 docId) const;
 +
 +	std::map<qint64, State> _states;
++	std::map<qint64, QNetworkReply*> _pending;
 +
 +};
 +
@@ -9691,7 +9915,7 @@ index 059d22f..bd2e53e 100644
  	void paintRoundedCorners(int radius) override;
  	void paintStoriesSiblingPart(
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..b019eaa 100644
+index 2acbe80..81a05df 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 @@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -9774,7 +9998,7 @@ index 2acbe80..b019eaa 100644
  		addAction(
  			tr::lng_mediaview_forward(tr::now),
  			[=] { forwardMedia(); },
-@@ -2344,11 +2365,38 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2344,11 +2365,44 @@ void OverlayWidget::fillContextMenuActions(
  			}, state->lifetime);
  		}
  	}
@@ -9804,6 +10028,12 @@ index 2acbe80..b019eaa 100644
 +			u"Choose Lyrics File…"_q,
 +			[=] { chooseLyrics(); },
 +			&st::mediaMenuIconShowInFolder);
++		if (Exteraless::Config::Instance().lyricsAllowNetwork()) {
++			addAction(
++				tr::lng_mediaview_lyrics_find_online(tr::now),
++				[=] { findLyricsOnline(); },
++				&st::mediaMenuIconDownload);
++		}
 +		if (hasChosenLyrics()) {
 +			addAction(
 +				u"Disable Lyrics"_q,
@@ -9814,7 +10044,7 @@ index 2acbe80..b019eaa 100644
  	const auto canDelete = [&] {
  		if (story && story->canDelete()) {
  			return true;
-@@ -2416,6 +2464,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2416,6 +2470,9 @@ void OverlayWidget::fillContextMenuActions(
  		} else {
  			return;
  		}
@@ -9824,7 +10054,7 @@ index 2acbe80..b019eaa 100644
  		const auto photo = _photo;
  		const auto peer = _peer;
  		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
-@@ -3025,7 +3076,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
+@@ -3025,7 +3082,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
  		_streamedQualityChangeFinished = false;
  		if ((_document = document)) {
  			_quality = _document->initialPlaybackVideoQuality(
@@ -9833,7 +10063,7 @@ index 2acbe80..b019eaa 100644
  			_chosenQuality = _document->chooseQuality(_message, _quality);
  			_documentMedia = _document->createMediaView();
  			_videoCover = LookupVideoCover(_document, _message);
-@@ -3445,6 +3496,124 @@ void OverlayWidget::shareAtTime() {
+@@ -3445,6 +3502,149 @@ void OverlayWidget::shareAtTime() {
  	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
  }
  
@@ -9946,6 +10176,31 @@ index 2acbe80..b019eaa 100644
 +		}));
 +}
 +
++void OverlayWidget::findLyricsOnline() {
++	if (!canShowLyrics()) {
++		return;
++	}
++	const auto song = _document->song();
++	if (!song) {
++		return;
++	}
++	const auto documentId = static_cast<qint64>(_document->id);
++	const auto duration = int(_document->duration() / 1000);
++	Exteraless::MediaLyrics::Instance().fetchOnline(
++		documentId,
++		song->performer,
++		song->title,
++		duration,
++		crl::guard(_window, [=](Exteraless::MediaLyrics::FetchResult result) {
++			if (result.ok) {
++				update();
++			} else {
++				uiShow()->showToast(
++					tr::lng_mediaview_lyrics_online_failed(tr::now));
++			}
++		}));
++}
++
 +void OverlayWidget::disableLyrics() {
 +	if (!canShowLyrics()) {
 +		return;
@@ -9958,7 +10213,7 @@ index 2acbe80..b019eaa 100644
  void OverlayWidget::downloadMedia() {
  	if (!_photo && !_document) {
  		return;
-@@ -5284,6 +5453,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
+@@ -5284,6 +5484,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
  		Core::App().updateNonIdle();
  		updatePlaybackState();
  		_streamedPosition = update.position;
@@ -9966,7 +10221,7 @@ index 2acbe80..b019eaa 100644
  	}, [&](PreloadedAudio) {
  		updatePlaybackState();
  	}, [&](UpdateAudio) {
-@@ -5597,7 +5767,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
+@@ -5597,7 +5798,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
  			&& _document->hasDuration())
  			? _document->duration()
  			: crl::time(0)),
@@ -9976,7 +10231,7 @@ index 2acbe80..b019eaa 100644
  		.seekable = !_stories,
  	};
  	if (!_streamed->withSound) {
-@@ -6046,6 +6217,7 @@ void OverlayWidget::playbackPauseMusic() {
+@@ -6046,6 +6248,7 @@ void OverlayWidget::playbackPauseMusic() {
  void OverlayWidget::updatePlaybackState() {
  	Expects(_streamed != nullptr);
  
@@ -9984,7 +10239,7 @@ index 2acbe80..b019eaa 100644
  	refreshSystemMediaControls();
  	if (!_streamed->controls && !_stories) {
  		return;
-@@ -6063,6 +6235,7 @@ void OverlayWidget::updatePlaybackState() {
+@@ -6063,6 +6266,7 @@ void OverlayWidget::updatePlaybackState() {
  			_stories->updatePlayback(state);
  		}
  	}
@@ -9992,7 +10247,7 @@ index 2acbe80..b019eaa 100644
  }
  
  void OverlayWidget::setSystemMediaControls(
-@@ -6487,6 +6660,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
+@@ -6487,6 +6691,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
  				opacity);
  		}
  	}
@@ -10003,7 +10258,7 @@ index 2acbe80..b019eaa 100644
  	checkGroupThumbsAnimation();
  	if (const auto radius = _window->manualRoundingRadius()) {
  		renderer->paintRoundedCorners(radius);
-@@ -7279,6 +7456,67 @@ QRect OverlayWidget::captionGeometry() const {
+@@ -7279,6 +7487,67 @@ QRect OverlayWidget::captionGeometry() const {
  		_stories ? _stories->repostCaptionPadding() : QMargins());
  }
  
@@ -10071,7 +10326,7 @@ index 2acbe80..b019eaa 100644
  void OverlayWidget::paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -7328,11 +7566,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7328,11 +7597,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -10085,7 +10340,7 @@ index 2acbe80..b019eaa 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7622,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7653,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -10099,7 +10354,7 @@ index 2acbe80..b019eaa 100644
  			return;
  		}
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
-index 40d67d4..6d2e781 100644
+index 40d67d4..3375eb0 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
 @@ -42,6 +42,10 @@ class DocumentMedia;
@@ -10113,7 +10368,7 @@ index 40d67d4..6d2e781 100644
  namespace Ui {
  class DropdownMenu;
  class PopupMenu;
-@@ -329,6 +333,18 @@ private:
+@@ -329,6 +333,19 @@ private:
  	[[nodiscard]] TimeId shareAtVideoTimestamp() const;
  	void shareAtTime();
  
@@ -10127,12 +10382,13 @@ index 40d67d4..6d2e781 100644
 +	[[nodiscard]] bool canShowLyrics() const;
 +	[[nodiscard]] bool hasChosenLyrics();
 +	void chooseLyrics();
++	void findLyricsOnline();
 +	void disableLyrics();
 +
  	void showSaveMsgToast(const QString &path, auto phrase);
  	void showSaveMsgToastWith(
  		const QString &path,
-@@ -552,6 +568,12 @@ private:
+@@ -552,6 +569,12 @@ private:
  		QRect clip,
  		float64 opacity);
  	[[nodiscard]] QRect captionGeometry() const;
@@ -10145,7 +10401,7 @@ index 40d67d4..6d2e781 100644
  	void paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -735,6 +757,9 @@ private:
+@@ -735,6 +758,9 @@ private:
  	std::unique_ptr<PipWrap> _pip;
  	QImage _streamedQualityChangeFrame;
  	crl::time _streamedPosition = 0;
@@ -10764,10 +11020,10 @@ index ceae87b..ce8ddf6 100644
  		- st::overviewSmallCheck.size;
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..6edaea8
+index 0000000..bac4a76
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,2978 @@
+@@ -0,0 +1,3001 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -11635,6 +11891,29 @@ index 0000000..6edaea8
 +		}) | rpl::on_next([=](bool value) {
 +			Exteraless::Config::Instance().setTakeGifAsVideo(value);
 +		}, mediaGifAsVideo->lifetime());
++	}
++
++	const auto mediaLyricsOnline = builder.addButton({
++		.id = u"exteraless/media/lyrics-online"_q,
++		.title = tr::lng_settings_exteraless_media_lyrics_online(),
++		.st = &st::settingsButtonNoIcon,
++		.toggled = rpl::single(
++			Exteraless::Config::Instance().lyricsAllowNetwork()),
++		.keywords = {
++			u"lyrics"_q,
++			u"lrclib"_q,
++			u"online"_q,
++			u"network"_q,
++		},
++	});
++	if (mediaLyricsOnline) {
++		mediaLyricsOnline->toggledChanges(
++		) | rpl::filter([=](bool value) {
++			return (value
++				!= Exteraless::Config::Instance().lyricsAllowNetwork());
++		}) | rpl::on_next([=](bool value) {
++			Exteraless::Config::Instance().setLyricsAllowNetwork(value);
++		}, mediaLyricsOnline->lifetime());
 +	}
 +
 +	const auto bitrateLabel = [](int value) {
@@ -15361,10 +15640,10 @@ index 79a0a3c..87a5eaa 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..155599f
+index 0000000..6595145
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,66 @@
 +add_library(exteraless STATIC
 +    ai_client.cpp
 +    ai_client.h
@@ -15388,6 +15667,8 @@ index 0000000..155599f
 +    ghost_status.h
 +    links.cpp
 +    links.h
++    lrclib.cpp
++    lrclib.h
 +    lyrics.cpp
 +    lyrics.h
 +    math.cpp
@@ -15579,10 +15860,10 @@ index 0000000..eb180ae
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..ac29e58
+index 0000000..fa94f26
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1253 @@
+@@ -0,0 +1,1260 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -15640,6 +15921,8 @@ index 0000000..ac29e58
 +constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 +constexpr auto kLyricsFiles = "OELyricsFiles";
 +constexpr auto kLyricsFilesAlias = "lyricsFiles";
++constexpr auto kLyricsAllowNetwork = "OELyricsAllowNetwork";
++constexpr auto kLyricsAllowNetworkAlias = "lyricsAllowNetwork";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -16095,6 +16378,7 @@ index 0000000..ac29e58
 +		config.subtitlesFiles().toUtf8()).object();
 +	extera[kLyricsFiles] = QJsonDocument::fromJson(
 +		config.lyricsFiles().toUtf8()).object();
++	extera[kLyricsAllowNetwork] = config.lyricsAllowNetwork();
 +	extera[kChatMenuBoost] = config.chatMenuBoost();
 +	extera[kChatMenuLinked] = config.chatMenuLinked();
 +	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
@@ -16475,6 +16759,10 @@ index 0000000..ac29e58
 +			config.setLyricsFiles(QString::fromUtf8(
 +				QJsonDocument(SanitizeFileEntries(value))
 +					.toJson(QJsonDocument::Compact)));
++		} else if ((key == kLyricsAllowNetwork
++			|| key == kLyricsAllowNetworkAlias)
++			&& value.isBool()) {
++			config.setLyricsAllowNetwork(value.toBool());
 +		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
 +			&& value.isBool()) {
 +			config.setChatMenuBoost(value.toBool());
@@ -16960,10 +17248,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..70f2780
+index 0000000..29d7822
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1894 @@
+@@ -0,0 +1,1904 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -17015,6 +17303,7 @@ index 0000000..70f2780
 +constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 +constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
 +constexpr auto kLyricsFiles = "OELyricsFiles";
++constexpr auto kLyricsAllowNetwork = "OELyricsAllowNetwork";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -17623,6 +17912,14 @@ index 0000000..70f2780
 +		return;
 +	}
 +	setValue(kLyricsFiles, value);
++}
++
++bool Config::lyricsAllowNetwork() const {
++	return boolValue(kLyricsAllowNetwork, false);
++}
++
++void Config::setLyricsAllowNetwork(bool value) {
++	setValue(kLyricsAllowNetwork, value);
 +}
 +
 +bool Config::chatMenuBoost() const {
@@ -18571,6 +18868,7 @@ index 0000000..70f2780
 +			|| key == kMediaViewerMenuSubtitles
 +			|| key == kSubtitlesFiles
 +			|| key == kLyricsFiles
++			|| key == kLyricsAllowNetwork
 +			|| key == kChatMenuBoost
 +			|| key == kChatMenuLinked
 +			|| key == kChatMenuViewDeleted
@@ -18860,10 +19158,10 @@ index 0000000..70f2780
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..bbea3f2
+index 0000000..3d65b8e
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,362 @@
+@@ -0,0 +1,364 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -18975,6 +19273,8 @@ index 0000000..bbea3f2
 +	void setSubtitlesFiles(const QString &value);
 +	[[nodiscard]] QString lyricsFiles() const;
 +	void setLyricsFiles(const QString &value);
++	[[nodiscard]] bool lyricsAllowNetwork() const;
++	void setLyricsAllowNetwork(bool value);
 +	[[nodiscard]] bool chatMenuBoost() const;
 +	void setChatMenuBoost(bool value);
 +	[[nodiscard]] bool chatMenuLinked() const;
@@ -20753,6 +21053,172 @@ index 0000000..d1191dd
 +[[nodiscard]] QString StripTracking(const QString &url);
 +[[nodiscard]] QString StripTrackingInText(const QString &text);
 +[[nodiscard]] bool IsWin32Executable(const QString &filepath);
++
++} // namespace Exteraless
+diff --git a/exteraless/lrclib.cpp b/exteraless/lrclib.cpp
+new file mode 100644
+index 0000000..5a47d3d
+--- /dev/null
++++ b/exteraless/lrclib.cpp
+@@ -0,0 +1,122 @@
++#include "exteraless/lrclib.h"
++
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QJsonValue>
++#include <QStringList>
++#include <QUrl>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kApiUrl = "https://lrclib.net/api/";
++
++[[nodiscard]] QString QueryParam(const QString &name, const QString &value) {
++	return name
++		+ QLatin1Char('=')
++		+ QString::fromLatin1(QUrl::toPercentEncoding(value));
++}
++
++[[nodiscard]] QString StringField(
++		const QJsonObject &object,
++		const QString &key) {
++	const auto value = object.value(key);
++	return value.isString() ? value.toString() : QString();
++}
++
++[[nodiscard]] bool ParseObject(
++		const QByteArray &data,
++		QJsonObject *object) {
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(data, &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return false;
++	}
++	*object = document.object();
++	return true;
++}
++
++} // namespace
++
++QString BuildSearchUrl(const QString &query) {
++	return QString::fromLatin1(kApiUrl)
++		+ QStringLiteral("search?")
++		+ QueryParam(QStringLiteral("q"), query);
++}
++
++QString BuildGetUrl(
++		const QString &artist,
++		const QString &track,
++		const QString &album,
++		int duration) {
++	auto params = QStringList();
++	params.append(QueryParam(QStringLiteral("artist_name"), artist));
++	params.append(QueryParam(QStringLiteral("track_name"), track));
++	if (!album.isEmpty()) {
++		params.append(QueryParam(QStringLiteral("album_name"), album));
++	}
++	if (duration > 0) {
++		params.append(
++			QueryParam(
++				QStringLiteral("duration"),
++				QString::number(duration)));
++	}
++	return QString::fromLatin1(kApiUrl)
++		+ QStringLiteral("get?")
++		+ params.join(QLatin1Char('&'));
++}
++
++QList<LrclibResult> ParseSearch(const QByteArray &data) {
++	auto result = QList<LrclibResult>();
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(data, &error);
++	if (error.error != QJsonParseError::NoError || !document.isArray()) {
++		return result;
++	}
++	for (const auto &entry : document.array()) {
++		if (!entry.isObject()) {
++			continue;
++		}
++		const auto object = entry.toObject();
++		auto item = LrclibResult();
++		item.id = object.value(QStringLiteral("id"))
++			.toVariant()
++			.toLongLong();
++		item.track = StringField(object, QStringLiteral("trackName"));
++		item.artist = StringField(object, QStringLiteral("artistName"));
++		item.hasSynced = !StringField(
++			object,
++			QStringLiteral("syncedLyrics")).isEmpty();
++		result.append(item);
++	}
++	return result;
++}
++
++LrclibLyrics ParseGet(const QByteArray &data) {
++	auto result = LrclibLyrics();
++	auto object = QJsonObject();
++	if (!ParseObject(data, &object)) {
++		return result;
++	}
++	if (object.value(QStringLiteral("instrumental")).toBool()) {
++		result.instrumental = true;
++		return result;
++	}
++	const auto synced = StringField(object, QStringLiteral("syncedLyrics"));
++	if (!synced.isEmpty()) {
++		result.ok = true;
++		result.synced = true;
++		result.text = synced;
++		return result;
++	}
++	const auto plain = StringField(object, QStringLiteral("plainLyrics"));
++	if (!plain.isEmpty()) {
++		result.ok = true;
++		result.text = plain;
++	}
++	return result;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/lrclib.h b/exteraless/lrclib.h
+new file mode 100644
+index 0000000..728865f
+--- /dev/null
++++ b/exteraless/lrclib.h
+@@ -0,0 +1,32 @@
++#pragma once
++
++#include <QByteArray>
++#include <QList>
++#include <QString>
++
++namespace Exteraless {
++
++struct LrclibResult {
++	qint64 id = 0;
++	QString track;
++	QString artist;
++	bool hasSynced = false;
++};
++
++struct LrclibLyrics {
++	bool ok = false;
++	bool synced = false;
++	bool instrumental = false;
++	QString text;
++};
++
++[[nodiscard]] QString BuildSearchUrl(const QString &query);
++[[nodiscard]] QString BuildGetUrl(
++	const QString &artist,
++	const QString &track,
++	const QString &album,
++	int duration);
++[[nodiscard]] QList<LrclibResult> ParseSearch(const QByteArray &data);
++[[nodiscard]] LrclibLyrics ParseGet(const QByteArray &data);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/lyrics.cpp b/exteraless/lyrics.cpp
@@ -22789,10 +23255,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..da60daa
+index 0000000..c686a58
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3069 @@
+@@ -0,0 +1,3110 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -22804,6 +23270,7 @@ index 0000000..da60daa
 +#include "exteraless/ghost_schedule.h"
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
++#include "exteraless/lrclib.h"
 +#include "exteraless/lyrics.h"
 +#include "exteraless/math.h"
 +#include "exteraless/network.h"
@@ -23043,6 +23510,8 @@ index 0000000..da60daa
 +		<< "  exteraless-chats-cli subtitles-key <docId>\n"
 +		<< "  exteraless-chats-cli lyrics-parse <file>\n"
 +		<< "  exteraless-chats-cli lyrics-active <file> <posMs>\n"
++		<< "  exteraless-chats-cli lyrics-search-parse <file>\n"
++		<< "  exteraless-chats-cli lyrics-get-parse <file>\n"
 +		<< "  exteraless-chats-cli network\n"
 +		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 +		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
@@ -25860,6 +26329,44 @@ index 0000000..da60daa
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("lyrics-search-parse")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		auto results = QJsonArray();
++		for (const auto &result : Exteraless::ParseSearch(bytes)) {
++			results.append(QJsonObject{
++				{ QStringLiteral("id"), result.id },
++				{ QStringLiteral("track"), result.track },
++				{ QStringLiteral("artist"), result.artist },
++				{ QStringLiteral("hasSynced"), result.hasSynced },
++			});
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("results"), results },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("lyrics-get-parse")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		const auto lyrics = Exteraless::ParseGet(bytes);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("ok"), lyrics.ok },
++			{ QStringLiteral("synced"), lyrics.synced },
++			{ QStringLiteral("text"), lyrics.text },
++		});
++		return 0;
++	}
 +	return PrintUsage();
 +}
 diff --git a/exteraless/tests/chats/fixtures/basic.lrc b/exteraless/tests/chats/fixtures/basic.lrc
@@ -25968,6 +26475,89 @@ index 0000000..64dc265
 +00:00:07,000 --> 00:00:08,000
 +No trailing blank line
 \ No newline at end of file
+diff --git a/exteraless/tests/chats/fixtures/lrclib-broken.json b/exteraless/tests/chats/fixtures/lrclib-broken.json
+new file mode 100644
+index 0000000..c424619
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/lrclib-broken.json
+@@ -0,0 +1 @@
++{"id": 1, "trackName": "Broken", "artistName": "Nobody",
+diff --git a/exteraless/tests/chats/fixtures/lrclib-get-instrumental.json b/exteraless/tests/chats/fixtures/lrclib-get-instrumental.json
+new file mode 100644
+index 0000000..b1eacbf
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/lrclib-get-instrumental.json
+@@ -0,0 +1,10 @@
++{
++  "id": 777,
++  "trackName": "Quiet Piece",
++  "artistName": "Quiet Artist",
++  "albumName": "Quiet Album",
++  "duration": 180,
++  "instrumental": true,
++  "plainLyrics": null,
++  "syncedLyrics": null
++}
+diff --git a/exteraless/tests/chats/fixtures/lrclib-get-plain.json b/exteraless/tests/chats/fixtures/lrclib-get-plain.json
+new file mode 100644
+index 0000000..4daaa01
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/lrclib-get-plain.json
+@@ -0,0 +1,10 @@
++{
++  "id": 4242,
++  "trackName": "Plain Only",
++  "artistName": "Plain Artist",
++  "albumName": "Plain Album",
++  "duration": 241,
++  "instrumental": false,
++  "plainLyrics": "First plain line\nSecond plain line",
++  "syncedLyrics": null
++}
+diff --git a/exteraless/tests/chats/fixtures/lrclib-get-synced.json b/exteraless/tests/chats/fixtures/lrclib-get-synced.json
+new file mode 100644
+index 0000000..83b8ee4
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/lrclib-get-synced.json
+@@ -0,0 +1,10 @@
++{
++  "id": 3396226,
++  "trackName": "Bohemian Rhapsody",
++  "artistName": "Queen",
++  "albumName": "A Night at the Opera",
++  "duration": 354,
++  "instrumental": false,
++  "plainLyrics": "First plain line\nSecond plain line",
++  "syncedLyrics": "[00:01.00] First synced line\n[00:05.00] Second synced line"
++}
+diff --git a/exteraless/tests/chats/fixtures/lrclib-search.json b/exteraless/tests/chats/fixtures/lrclib-search.json
+new file mode 100644
+index 0000000..e3b9a32
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/lrclib-search.json
+@@ -0,0 +1,22 @@
++[
++  {
++    "id": 3396226,
++    "trackName": "Bohemian Rhapsody",
++    "artistName": "Queen",
++    "albumName": "A Night at the Opera",
++    "duration": 354,
++    "instrumental": false,
++    "plainLyrics": "Is this the real life?\nIs this just fantasy?",
++    "syncedLyrics": "[00:00.00] Is this the real life?\n[00:05.00] Is this just fantasy?"
++  },
++  {
++    "id": 1024,
++    "trackName": "Untitled Instrumental",
++    "artistName": "Some Artist",
++    "albumName": "Some Album",
++    "duration": 200,
++    "instrumental": true,
++    "plainLyrics": null,
++    "syncedLyrics": null
++  }
++]
 diff --git a/exteraless/tests/chats/fixtures/overlap.srt b/exteraless/tests/chats/fixtures/overlap.srt
 new file mode 100644
 index 0000000..ab8b113
@@ -26078,10 +26668,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..867318f
+index 0000000..ac81b6a
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7467 @@
+@@ -0,0 +1,7639 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -26930,7 +27520,7 @@ index 0000000..867318f
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 134,
++            len(section) == 135,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -26951,7 +27541,7 @@ index 0000000..867318f
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 139,
++            sum(len(value) for value in exported.values()) == 140,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -26971,7 +27561,7 @@ index 0000000..867318f
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 139,
++                data.get("applied") == 140,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -27114,6 +27704,7 @@ index 0000000..867318f
 +            "OELyricsFiles": {
 +                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
 +            },
++            "OELyricsAllowNetwork": True,
 +            "OEChatsAlwaysShowDownloadIcon": True,
 +            "OEPrivacyFalseBottom": True,
 +            "OEAppearanceChatDecoration": 1,
@@ -27164,7 +27755,7 @@ index 0000000..867318f
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 139,
++            data.get("applied") == 140,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -27214,6 +27805,10 @@ index 0000000..867318f
 +                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
 +            },
 +            section.get("OELyricsFiles"))
++        ledger.check(
++            "backup full lyrics network",
++            section.get("OELyricsAllowNetwork") is True,
++            section.get("OELyricsAllowNetwork"))
 +        ledger.check(
 +            "backup full save deleted",
 +            section.get("OESaveDeletedMessages") is True,
@@ -27483,10 +28078,10 @@ index 0000000..867318f
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 134",
++            "backup legacy eight completed to 135",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (134, 3, 2),
++             len(sections["mainconfig"])) == (135, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -32305,6 +32900,171 @@ index 0000000..867318f
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_lrclib(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    def parse_search(name):
++        result = run(cli, ["lyrics-search-parse", str(FIXTURES / name)])
++        if result.returncode != 0:
++            ledger.check(
++                f"lrclib search parse {name}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(
++                f"lrclib search parse {name}", False, f"json: {error}")
++            return None
++        results = payload.get("results")
++        if not isinstance(results, list):
++            ledger.check(f"lrclib search parse {name}", False, payload)
++            return None
++        for item in results:
++            if (not isinstance(item, dict)
++                    or not isinstance(item.get("id"), int)
++                    or not isinstance(item.get("track"), str)
++                    or not isinstance(item.get("artist"), str)
++                    or not isinstance(item.get("hasSynced"), bool)):
++                ledger.check(f"lrclib search parse {name}", False, item)
++                return None
++        ledger.check(f"lrclib search parse {name}", True)
++        return results
++
++    def parse_get(name):
++        result = run(cli, ["lyrics-get-parse", str(FIXTURES / name)])
++        if result.returncode != 0:
++            ledger.check(
++                f"lrclib get parse {name}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(f"lrclib get parse {name}", False, f"json: {error}")
++            return None
++        if (not isinstance(payload.get("ok"), bool)
++                or not isinstance(payload.get("synced"), bool)
++                or not isinstance(payload.get("text"), str)):
++            ledger.check(f"lrclib get parse {name}", False, payload)
++            return None
++        ledger.check(f"lrclib get parse {name}", True)
++        return payload
++
++    search = parse_search("lrclib-search.json")
++    if search is not None:
++        ledger.check(
++            "lrclib search result count", len(search) == 2, len(search))
++        first = search[0] if search else {}
++        ledger.check(
++            "lrclib search first id", first.get("id") == 3396226, first)
++        ledger.check(
++            "lrclib search first track",
++            first.get("track") == "Bohemian Rhapsody",
++            first)
++        ledger.check(
++            "lrclib search first artist",
++            first.get("artist") == "Queen",
++            first)
++        ledger.check(
++            "lrclib search first has synced",
++            first.get("hasSynced") is True,
++            first)
++        second = search[1] if len(search) > 1 else {}
++        ledger.check(
++            "lrclib search second lacks synced",
++            second.get("hasSynced") is False,
++            second)
++
++    lyrics = parse_get("lrclib-get-synced.json")
++    if lyrics is not None:
++        ledger.check("lrclib get synced ok", lyrics["ok"] is True, lyrics)
++        ledger.check(
++            "lrclib get synced flag", lyrics["synced"] is True, lyrics)
++        ledger.check(
++            "lrclib get prefers synced lyrics",
++            lyrics["text"]
++            == "[00:01.00] First synced line\n[00:05.00] Second synced line",
++            lyrics["text"])
++
++    lyrics = parse_get("lrclib-get-plain.json")
++    if lyrics is not None:
++        ledger.check("lrclib get plain ok", lyrics["ok"] is True, lyrics)
++        ledger.check(
++            "lrclib get plain not synced",
++            lyrics["synced"] is False,
++            lyrics)
++        ledger.check(
++            "lrclib get plain text",
++            lyrics["text"] == "First plain line\nSecond plain line",
++            lyrics["text"])
++
++    lyrics = parse_get("lrclib-get-instrumental.json")
++    if lyrics is not None:
++        ledger.check(
++            "lrclib get instrumental not ok",
++            lyrics["ok"] is False,
++            lyrics)
++        ledger.check(
++            "lrclib get instrumental empty text",
++            lyrics["text"] == "",
++            lyrics["text"])
++
++    lyrics = parse_get("lrclib-broken.json")
++    if lyrics is not None:
++        ledger.check(
++            "lrclib get broken not ok", lyrics["ok"] is False, lyrics)
++        ledger.check(
++            "lrclib get broken empty",
++            lyrics["synced"] is False and lyrics["text"] == "",
++            lyrics)
++
++    search = parse_search("lrclib-broken.json")
++    if search is not None:
++        ledger.check("lrclib search broken empty", search == [], search)
++
++    result = run(
++        cli, ["lyrics-get-parse", str(FIXTURES / "missing-lrclib.json")])
++    ledger.check(
++        "lrclib get missing file",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    env = make_env(work / "lrclib-consent")
++    data = json_call(
++        ledger, cli,
++        ["config-fromjson", json.dumps({
++            "version": 1,
++            "exteraconfig": {"OELyricsAllowNetwork": True},
++        })],
++        env, "lrclib consent fromJson")
++    if data is not None:
++        ledger.check(
++            "lrclib consent accepted",
++            data.get("accepted") is True,
++            data.get("accepted"))
++        ledger.check(
++            "lrclib consent unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    raw = json_call(ledger, cli, ["config-raw"], env, "lrclib consent raw")
++    if raw is not None:
++        values = raw.get("exteraconfig") or {}
++        ledger.check(
++            "lrclib consent stored",
++            values.get("OELyricsAllowNetwork") is True,
++            values.get("OELyricsAllowNetwork"))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_download_boost(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -33456,6 +34216,7 @@ index 0000000..867318f
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        lyrics = check_lyrics(ledger, cli, work)
++        lrclib = check_lrclib(ledger, cli, work)
 +        regex_filters = check_regex_filters(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
@@ -33536,6 +34297,7 @@ index 0000000..867318f
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
++    print(f"lrclib: {lrclib[0] - lrclib[1]} passed")
 +    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:

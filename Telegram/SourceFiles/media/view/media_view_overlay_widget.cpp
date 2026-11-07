@@ -2390,6 +2390,12 @@ void OverlayWidget::fillContextMenuActions(
 			u"Choose Lyrics File…"_q,
 			[=] { chooseLyrics(); },
 			&st::mediaMenuIconShowInFolder);
+		if (Exteraless::Config::Instance().lyricsAllowNetwork()) {
+			addAction(
+				tr::lng_mediaview_lyrics_find_online(tr::now),
+				[=] { findLyricsOnline(); },
+				&st::mediaMenuIconDownload);
+		}
 		if (hasChosenLyrics()) {
 			addAction(
 				u"Disable Lyrics"_q,
@@ -3601,6 +3607,31 @@ void OverlayWidget::chooseLyrics() {
 					documentId,
 					result.paths.front())) {
 				update();
+			}
+		}));
+}
+
+void OverlayWidget::findLyricsOnline() {
+	if (!canShowLyrics()) {
+		return;
+	}
+	const auto song = _document->song();
+	if (!song) {
+		return;
+	}
+	const auto documentId = static_cast<qint64>(_document->id);
+	const auto duration = int(_document->duration() / 1000);
+	Exteraless::MediaLyrics::Instance().fetchOnline(
+		documentId,
+		song->performer,
+		song->title,
+		duration,
+		crl::guard(_window, [=](Exteraless::MediaLyrics::FetchResult result) {
+			if (result.ok) {
+				update();
+			} else {
+				uiShow()->showToast(
+					tr::lng_mediaview_lyrics_online_failed(tr::now));
 			}
 		}));
 }

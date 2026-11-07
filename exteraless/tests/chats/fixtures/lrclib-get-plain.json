@@ -1,0 +1,10 @@
+{
+  "id": 4242,
+  "trackName": "Plain Only",
+  "artistName": "Plain Artist",
+  "albumName": "Plain Album",
+  "duration": 241,
+  "instrumental": false,
+  "plainLyrics": "First plain line\nSecond plain line",
+  "syncedLyrics": null
+}

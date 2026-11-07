@@ -2,6 +2,28 @@
 
 ## 2026-11-07
 
+- MD3-плеер, фаза 2 — онлайн-тексты lrclib.net (NB-50): Qt-only модуль
+  `exteraless/lrclib.{h,cpp}` — `BuildSearchUrl`/`BuildGetUrl` (поиск по
+  `artist`/`track`/`album`/`duration`) и разбор ответов
+  `ParseSearch`/`ParseGet`; у выдачи id, track, artist и `hasSynced`, у
+  текста `ok`/`synced`/`instrumental`/`text`, битый JSON и пустая выдача
+  дают `ok: false`. Оверлей текста
+  `Telegram/SourceFiles/exteraless/media_lyrics.cpp` получил
+  `fetchOnline`: гейт `OELyricsAllowNetwork` (bool, default `false`, алиас
+  `lyricsAllowNetwork`), один `QNetworkAccessManager` на процесс,
+  диск-кэш `tdata/lrclib/<docId>.json` на 30 дней, псевдо-путь
+  `lrclib:<docId>` в `OELyricsFiles` с подписью `lrclib.net`,
+  `abortPending` при disable и повторном поиске. В меню медиавьюера
+  «Find Lyrics Online» виден только при включённом гейте; в настройках
+  тумблер «Allow online lyrics search (lrclib.net)», ещё 3 lang-ключа.
+  CLI `lyrics-search-parse`/`lyrics-get-parse` (четыре режима `lyrics-*`
+  вместе с фазой 1), пять фикстур, `check_lrclib` — 27 проверок;
+  chats-раннер 1006 (= 978 + 27 lrclib + 1 backup), backup 105, плагины 32
+  и host-раннер 252 без изменений; `kKeysCount` 11235 (+3), sha256 патча
+  `cb95c305…`, `nix flake check` PASS. Не сделано (follow-up): MD3-ребилд
+  плеера, мини-плеер, очередь и drag, auto-fetch по совпадению, server-side
+  транскрипция (= NB-51). Ограничения: только ручной поиск; Xvfb-смоук не
+  выполнялся.
 - Ответ на удалённое сообщение цитатой (NB-33, закрывает split NB-20): пункт
   Reply у плейсхолдера удалённого идёт в новую ветку —
   `ListWidget::quoteDeletedMessageRequested()` и

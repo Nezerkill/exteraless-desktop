@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 978 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1006 проверок PASS
   (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -114,8 +114,28 @@
   19 update-channel, 32 translation, 23 ai, 6 recognition, 17 network,
   10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 32 lyrics, 104 backup);
+  27 regex-filters, 32 lyrics, 27 lrclib, 105 backup);
   плагины без изменений — 32 и 213 проверок.
+- MD3-плеер, фаза 2 — онлайн-тексты lrclib.net (NB-50): Qt-only
+  `exteraless/lrclib.{h,cpp}` — `BuildSearchUrl`/`BuildGetUrl` и разбор
+  `ParseSearch`/`ParseGet` (id, track, artist, `hasSynced`; у текста
+  `ok`/`synced`/`instrumental`/`text`, битый JSON и пустая выдача дают
+  `ok: false`). Оверлей текста `exteraless/media_lyrics.cpp` получил
+  `fetchOnline`: гейт `OELyricsAllowNetwork` (bool, default `false`, алиас
+  `lyricsAllowNetwork`), один `QNetworkAccessManager` на процесс,
+  диск-кэш `tdata/lrclib/<docId>.json` на 30 дней, псевдо-путь
+  `lrclib:<docId>` в `OELyricsFiles` с подписью `lrclib.net`,
+  `abortPending` при disable и повторном поиске. В меню медиавьюера
+  «Find Lyrics Online» только при включённом гейте; в настройках тумблер
+  «Allow online lyrics search (lrclib.net)», 3 новых lang-ключа. CLI
+  `lyrics-search-parse`/`lyrics-get-parse` (всего четыре режима
+  `lyrics-*` с фазой 1), пять фикстур, `check_lrclib` — 27 проверок;
+  chats-раннер 1006 (= 978 + 27 lrclib + 1 backup), backup 105, плагины 32
+  и host-раннер 252 без изменений; `kKeysCount` 11235 (+3), sha256 патча
+  `cb95c305…`, `nix flake check` PASS. Не сделано (follow-up): MD3-ребилд
+  плеера, мини-плеер, очередь и drag, auto-fetch по совпадению, server-side
+  транскрипция (= NB-51). Ограничения: только ручной поиск; Xvfb-смоук не
+  выполнялся.
 - Ответ на удалённое цитатой (NB-33, закрывает split NB-20): пункт Reply у
   плейсхолдера удалённого (`AddReplyToMessageAction`,
   `history/view/history_view_context_menu.cpp`) идёт через
