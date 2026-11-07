@@ -2,6 +2,20 @@
 
 ## 2026-11-07
 
+- Список tracking-параметров (NB-78, решение пользователя — вшитый список,
+  без сети): в `IsTrackingKey` (`exteraless/links.cpp`) десять новых ключей —
+  `fb_action_ids`, `gclsrc`, `ysclid`, `pk_campaign`, `pk_kwd`,
+  `piwik_campaign`, `piwik_kwd`, `s_kwcid`, `sc_campaign`, `sc_channel`;
+  префикс `utm_*` не менялся. `matomo_*` и `at_*` сознательно не вырезаются —
+  фикстура `strip.tsv` фиксирует, что их значения остаются в URL. Случаев в
+  `strip.tsv` стало 51 вместо 38: десять положительных строк и три
+  false-positive (percent-encoded имя параметра, «голые»
+  `kw`/`campaign`/`channel`, а также `pk`/`sc`/`piwik` без сегмента),
+  `MIN_STRIP_CASES=51`. `check` через `strip.tsv`: strip 57 passed, раннеры
+  1120/32/252 PASS (backup 105, backup-redacted 11); `kKeysCount` 11241 без
+  изменений (новых lang-ключей нет); sha256 патча `75c31630…`,
+  `nix flake check` PASS. Не сделано: обновление списка с сервера (отклонено
+  пользователем). Ограничения: Xvfb-смоук не выполнялся.
 - Полный JSON-бэкап (NB-57, решение пользователя — whitelist + redaction):
   `BuildBackup(bool redactSecrets = false)` (`exteraless/backup.{h,cpp}`)
   экспортирует полный набор ключей по whitelist; GUI-путь (`BuildBackup()`

@@ -99,8 +99,8 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1107 проверок PASS
-  (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
+- Chats: `exteraless/tests/chats/run_checks.py` — 1120 проверок PASS
+  (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
@@ -117,6 +117,19 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 26 ai-roles,
   105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Список tracking-параметров (NB-78, решение пользователя — вшитый список,
+  без сети): `IsTrackingKey` (`exteraless/links.cpp`) получил десять новых
+  ключей (`fb_action_ids`, `gclsrc`, `ysclid`, `pk_campaign`, `pk_kwd`,
+  `piwik_campaign`, `piwik_kwd`, `s_kwcid`, `sc_campaign`, `sc_channel`),
+  префикс `utm_*` не менялся, а `matomo_*`/`at_*` сознательно не вырезаются —
+  это фиксирует фикстура `strip.tsv`. Случаев в `strip.tsv` стало 51 вместо
+  38: десять положительных строк и три false-positive (percent-encoded имя
+  параметра, «голые» `kw`/`campaign`/`channel`, а также `pk`/`sc`/`piwik` без
+  сегмента), `MIN_STRIP_CASES=51`; strip 57 passed, раннеры 1120/32/252 PASS
+  (backup 105, backup-redacted 11); `kKeysCount` 11241 без изменений,
+  sha256 патча `75c31630…`, `nix flake check` PASS. Не сделано: загрузка
+  списка с сервера (отклонено пользователем). Ограничения: Xvfb-смоук не
+  выполнялся.
 - Полный JSON-бэкап (NB-57, решение пользователя — whitelist + redaction):
   `BuildBackup(bool redactSecrets = false)` (`exteraless/backup.{h,cpp}`)
   экспортирует полный набор ключей по whitelist; GUI-путь (`BuildBackup()`

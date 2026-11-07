@@ -26,7 +26,7 @@ https://example.com/a?gbraid=abc&wbraid=def&keep=1	https://example.com/a?keep=1
 https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1	https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1
 https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5	https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5
 https://example.com/a?spm=1&scm=2&sc_cid=3	https://example.com/a?spm=1&scm=2&sc_cid=3
-https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6	https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6
+https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6	https://example.com/a?matomo_campaign=4&at_medium=5&at_campaign=6
 https://example.com/a?s_cid=1&sc_cid=2&keep=3	https://example.com/a?sc_cid=2&keep=3
 https://example.com/a?FBCLID=UPPER&ref=keep	https://example.com/a?ref=keep
 https://example.com/a?=x&utm_source=y	https://example.com/a?=x
@@ -37,3 +37,16 @@ http://	http://
 //example.com/?utm_source=x	//example.com/?utm_source=x
 https://example.com/a?	https://example.com/a?
 https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
+https://example.com/a?ysclid=abc&id=7	https://example.com/a?id=7
+https://example.com/a?gclsrc=aw.ds&id=7	https://example.com/a?id=7
+https://example.com/a?s_kwcid=AL!1234!5678&id=7	https://example.com/a?id=7
+https://example.com/a?fb_action_ids=1%2C2&id=7	https://example.com/a?id=7
+https://example.com/a?pk_campaign=spring&id=7	https://example.com/a?id=7
+https://example.com/a?pk_kwd=phone&id=7	https://example.com/a?id=7
+https://example.com/a?piwik_campaign=spring&id=7	https://example.com/a?id=7
+https://example.com/a?piwik_kwd=phone&id=7	https://example.com/a?id=7
+https://example.com/a?sc_campaign=spring&id=7	https://example.com/a?id=7
+https://example.com/a?sc_channel=email&id=7	https://example.com/a?id=7
+https://example.com/a?url=https%3A%2F%2Fexample.org%2F%3Fysclid%3Dabc&id=7	https://example.com/a?url=https%3A%2F%2Fexample.org%2F%3Fysclid%3Dabc&id=7
+https://example.com/a?kw=phone&campaign=spring&channel=email&id=7	https://example.com/a?kw=phone&campaign=spring&channel=email&id=7
+https://example.com/a?pk=1&sc=2&piwik=3&matomo=4&id=7	https://example.com/a?pk=1&sc=2&piwik=3&matomo=4&id=7

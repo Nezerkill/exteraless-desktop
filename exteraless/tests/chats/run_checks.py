@@ -14,7 +14,7 @@ DEFAULT_CLI = (
     / "exteraless-chats-cli")
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 RUN_TIMEOUT = 30
-MIN_STRIP_CASES = 38
+MIN_STRIP_CASES = 51
 MIN_REACTION_CASES = 10
 EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
 

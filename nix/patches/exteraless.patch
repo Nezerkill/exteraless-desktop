@@ -22023,10 +22023,10 @@ index 0000000..a9b564b
 +} // namespace Exteraless
 diff --git a/exteraless/links.cpp b/exteraless/links.cpp
 new file mode 100644
-index 0000000..eb82543
+index 0000000..0ad8215
 --- /dev/null
 +++ b/exteraless/links.cpp
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,178 @@
 +#include "exteraless/links.h"
 +
 +#include <QRegularExpression>
@@ -22042,12 +22042,15 @@ index 0000000..eb82543
 +	}
 +	static const auto keys = QStringList{
 +		QStringLiteral("fbclid"),
++		QStringLiteral("fb_action_ids"),
 +		QStringLiteral("gclid"),
++		QStringLiteral("gclsrc"),
 +		QStringLiteral("dclid"),
 +		QStringLiteral("gbraid"),
 +		QStringLiteral("wbraid"),
 +		QStringLiteral("msclkid"),
 +		QStringLiteral("yclid"),
++		QStringLiteral("ysclid"),
 +		QStringLiteral("twclid"),
 +		QStringLiteral("ttclid"),
 +		QStringLiteral("igshid"),
@@ -22057,6 +22060,13 @@ index 0000000..eb82543
 +		QStringLiteral("_hsenc"),
 +		QStringLiteral("_hsmi"),
 +		QStringLiteral("mkt_tok"),
++		QStringLiteral("pk_campaign"),
++		QStringLiteral("pk_kwd"),
++		QStringLiteral("piwik_campaign"),
++		QStringLiteral("piwik_kwd"),
++		QStringLiteral("s_kwcid"),
++		QStringLiteral("sc_campaign"),
++		QStringLiteral("sc_channel"),
 +		QStringLiteral("rb_clickid"),
 +		QStringLiteral("s_cid"),
 +		QStringLiteral("vero_id"),
@@ -28077,10 +28087,10 @@ index 0000000..7c64c57
 +1	1	1	0	1	0	hidden
 diff --git a/exteraless/tests/chats/fixtures/strip.tsv b/exteraless/tests/chats/fixtures/strip.tsv
 new file mode 100644
-index 0000000..0b46db4
+index 0000000..7f6a6d7
 --- /dev/null
 +++ b/exteraless/tests/chats/fixtures/strip.tsv
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,52 @@
 +# input	expected
 +https://example.com/a?utm_source=x	https://example.com/a
 +https://example.com/a?utm_source=x&id=7#frag	https://example.com/a?id=7#frag
@@ -28109,7 +28119,7 @@ index 0000000..0b46db4
 +https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1	https://example.com/a?ns_campaign=x&ns_mchannel=y&keep=1
 +https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5	https://example.com/a?trk=1&trkCampaign=2&trackingId=3&tracking_id=4&WT.mc_id=5
 +https://example.com/a?spm=1&scm=2&sc_cid=3	https://example.com/a?spm=1&scm=2&sc_cid=3
-+https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6	https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6
++https://example.com/a?pk_campaign=1&pk_kwd=2&piwik_campaign=3&matomo_campaign=4&at_medium=5&at_campaign=6	https://example.com/a?matomo_campaign=4&at_medium=5&at_campaign=6
 +https://example.com/a?s_cid=1&sc_cid=2&keep=3	https://example.com/a?sc_cid=2&keep=3
 +https://example.com/a?FBCLID=UPPER&ref=keep	https://example.com/a?ref=keep
 +https://example.com/a?=x&utm_source=y	https://example.com/a?=x
@@ -28120,6 +28130,19 @@ index 0000000..0b46db4
 +//example.com/?utm_source=x	//example.com/?utm_source=x
 +https://example.com/a?	https://example.com/a?
 +https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1	https://example.com/a?start=1&feature=share&si=abc&ref=nav&source=web&s=1
++https://example.com/a?ysclid=abc&id=7	https://example.com/a?id=7
++https://example.com/a?gclsrc=aw.ds&id=7	https://example.com/a?id=7
++https://example.com/a?s_kwcid=AL!1234!5678&id=7	https://example.com/a?id=7
++https://example.com/a?fb_action_ids=1%2C2&id=7	https://example.com/a?id=7
++https://example.com/a?pk_campaign=spring&id=7	https://example.com/a?id=7
++https://example.com/a?pk_kwd=phone&id=7	https://example.com/a?id=7
++https://example.com/a?piwik_campaign=spring&id=7	https://example.com/a?id=7
++https://example.com/a?piwik_kwd=phone&id=7	https://example.com/a?id=7
++https://example.com/a?sc_campaign=spring&id=7	https://example.com/a?id=7
++https://example.com/a?sc_channel=email&id=7	https://example.com/a?id=7
++https://example.com/a?url=https%3A%2F%2Fexample.org%2F%3Fysclid%3Dabc&id=7	https://example.com/a?url=https%3A%2F%2Fexample.org%2F%3Fysclid%3Dabc&id=7
++https://example.com/a?kw=phone&campaign=spring&channel=email&id=7	https://example.com/a?kw=phone&campaign=spring&channel=email&id=7
++https://example.com/a?pk=1&sc=2&piwik=3&matomo=4&id=7	https://example.com/a?pk=1&sc=2&piwik=3&matomo=4&id=7
 diff --git a/exteraless/tests/chats/fixtures/tags.srt b/exteraless/tests/chats/fixtures/tags.srt
 new file mode 100644
 index 0000000..5c9da70
@@ -28154,7 +28177,7 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..8d7fcb3
+index 0000000..33e0540
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
 @@ -0,0 +1,8328 @@
@@ -28174,7 +28197,7 @@ index 0000000..8d7fcb3
 +    / "exteraless-chats-cli")
 +FIXTURES = Path(__file__).resolve().parent / "fixtures"
 +RUN_TIMEOUT = 30
-+MIN_STRIP_CASES = 38
++MIN_STRIP_CASES = 51
 +MIN_REACTION_CASES = 10
 +EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
 +
