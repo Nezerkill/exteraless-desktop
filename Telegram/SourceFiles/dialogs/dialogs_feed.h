@@ -10,6 +10,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/basic_types.h"
 #include "data/data_peer_id.h"
 
+#include <rpl/producer.h>
+
 #include <vector>
 
 class PeerData;
@@ -28,5 +30,6 @@ namespace Dialogs::Feed {
 void SetExcluded(PeerId peerId, bool excluded);
 void Invalidate();
 [[nodiscard]] uint64 Generation();
+[[nodiscard]] rpl::producer<> Changes();
 
 } // namespace Dialogs::Feed

@@ -154,6 +154,10 @@ constexpr auto kPreviewPostsLimit = 3;
 	return result;
 }
 
+[[nodiscard]] FilterId RowActionFilterId(FilterId filterId) {
+	return (filterId == kFeedFilterId) ? FilterId() : filterId;
+}
+
 [[nodiscard]] UserData *MaybeBotWithApp(Row *row) {
 	if (row) {
 		if (const auto history = row->key().history()) {
@@ -2644,7 +2648,10 @@ bool InnerWidget::addQuickActionRipple(
 	if (!history) {
 		return false;
 	}
-	const auto type = ResolveQuickDialogLabel(history, action, _filterId);
+	const auto type = ResolveQuickDialogLabel(
+		history,
+		action,
+		RowActionFilterId(_filterId));
 	if (type == Dialogs::Ui::QuickDialogActionLabel::Disabled) {
 		return false;
 	}
@@ -2688,7 +2695,7 @@ bool InnerWidget::addQuickActionRipple(
 							ResolveQuickDialogLabel(
 								history,
 								action,
-								_filterId));
+								RowActionFilterId(_filterId)));
 					}),
 				std::move(updateCallback));
 		}
@@ -3060,7 +3067,7 @@ void InnerWidget::mousePressReleased(
 					_controller,
 					history->peer,
 					raw->action,
-					_filterId);
+					RowActionFilterId(_filterId));
 			}
 			deactivateQuickAction();
 		}
@@ -4021,7 +4028,7 @@ void InnerWidget::contextMenuEvent(QContextMenuEvent *e) {
 			Dialogs::EntryState{
 				.key = row.key,
 				.section = Dialogs::EntryState::Section::ContextMenu,
-				.filterId = _filterId,
+				.filterId = RowActionFilterId(_filterId),
 			},
 			addAction);
 	}
@@ -5672,7 +5679,7 @@ void InnerWidget::switchToFilter(FilterId filterId) {
 		? ranges::find(list, filterId, &Data::ChatFilter::id)
 		: end(list);
 	const auto found = (filterIt != end(list));
-	if (!found) {
+	if (!found && filterId != Dialogs::kFeedFilterId) {
 		filterId = 0;
 	}
 	if (_filterId == filterId) {

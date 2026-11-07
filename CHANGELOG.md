@@ -2,6 +2,22 @@
 
 ## 2026-11-07
 
+- Лента каналов (NB-47, v3 — live-update, действия строк, достижимость):
+  `Feed::Changes` (`rpl::event_stream` в `dialogs/dialogs_feed.cpp`, канал
+  дёргает `Invalidate`); `MainList` подписан на
+  `chatsListChanges() | rpl::to_empty` плюс `Feed::Changes()`, дельта-rebuild
+  `rebuildFeed` (stale удаляются, новые добавляются, скролл не сбрасывается),
+  debounce 1 с и trailing-flush через `base::Timer`,
+  `chatsListChanged(nullptr)` под guard'ом от рекурсии; действия строк в
+  ленте — клик открывает чат по общему пути без правок, а quick actions и
+  контекстное меню идут через `RowActionFilterId` (`kFeedFilterId` →
+  `FilterId()`) в `dialogs/dialogs_inner_widget.cpp` (4 места), mute, archive
+  и folder работают, «Edit Folder» отсечён ещё в v1/v2;
+  достижимость — `switchToFilter` больше не сбрасывает `_filterId` в 0 для
+  синтетического id, иначе лента не показывалась; раннеры 1156/32/252 PASS
+  (без изменений); `kKeysCount` 11243 без изменений (новых lang нет); патч
+  `7080e04f…`, flake PASS. Ограничения: бейдж — снимок (не живой);
+  share/peer-меню тоже показывают таб; Xvfb-смоук не выполнялся.
 - Строка Feed в полосе фильтров (NB-47, v2): секция последней после папок
   (`lng_filters_feed`, иконка канала); маппинг индексов (`applyIndex`),
   активная секция в обе стороны, unread-подписка, pinned-интервал

@@ -117,6 +117,16 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Лента каналов (NB-47, v3 — live-update, действия строк, достижимость):
+  `Feed::Changes` (`rpl::event_stream`, канал дёргает `Invalidate`), подписка
+  `MainList` на `chatsListChanges` плюс `Feed::Changes`, дельта-rebuild без
+  сброса скролла, debounce 1 с с trailing-flush, `chatsListChanged(nullptr)`
+  под guard'ом; действия строк идут через `RowActionFilterId` (4 места),
+  клик открывает чат без правок; `switchToFilter` не сбрасывает
+  синтетический `_filterId` в 0, иначе лента не показывалась. Счётчик
+  проверок без изменений — 1156; `kKeysCount` 11243 без изменений (новых
+  lang нет); патч `7080e04f…`, flake PASS. Ограничения: бейдж — снимок;
+  share/peer-меню тоже показывают таб; Xvfb-смоук не выполнялся.
 - Строка Feed в полосе (NB-47, v2): секция последней, маппинг индексов, unread, guard reorder/drag; раннеры 1156/32/252 PASS (без изменений).
 - Disk-кэш пилюль (NB-56, follow-up): `tdata/extra-pills-cache.json`,
   загрузка при первом `Instance()`, TTL 30 мин, протухшее — fallback;

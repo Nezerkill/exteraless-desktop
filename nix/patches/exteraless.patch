@@ -1827,10 +1827,10 @@ index 5b15fcf..093a805 100644
  dialogsUnreadMediaDotEmoji: IconEmoji {
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_feed.cpp b/Telegram/SourceFiles/dialogs/dialogs_feed.cpp
 new file mode 100644
-index 0000000..f4ef337
+index 0000000..05a0d63
 --- /dev/null
 +++ b/Telegram/SourceFiles/dialogs/dialogs_feed.cpp
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,118 @@
 +/*
 +This file is part of Telegram Desktop,
 +the official desktop application for the Telegram messaging service.
@@ -1849,6 +1849,8 @@ index 0000000..f4ef337
 +#include "history/history.h"
 +#include "main/main_session.h"
 +
++#include <rpl/event_stream.h>
++
 +namespace Dialogs::Feed {
 +namespace {
 +
@@ -1856,6 +1858,7 @@ index 0000000..f4ef337
 +
 +struct Storage {
 +	base::flat_set<PeerId> excluded;
++	rpl::event_stream<> changes;
 +	bool loaded = false;
 +	uint64 generation = 0;
 +};
@@ -1932,20 +1935,26 @@ index 0000000..f4ef337
 +}
 +
 +void Invalidate() {
-+	++Global().generation;
++	auto &global = Global();
++	++global.generation;
++	global.changes.fire({});
 +}
 +
 +uint64 Generation() {
 +	return Global().generation;
 +}
 +
++rpl::producer<> Changes() {
++	return Global().changes.events();
++}
++
 +} // namespace Dialogs::Feed
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_feed.h b/Telegram/SourceFiles/dialogs/dialogs_feed.h
 new file mode 100644
-index 0000000..dfad56a
+index 0000000..f1a97f8
 --- /dev/null
 +++ b/Telegram/SourceFiles/dialogs/dialogs_feed.h
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,35 @@
 +/*
 +This file is part of Telegram Desktop,
 +the official desktop application for the Telegram messaging service.
@@ -1957,6 +1966,8 @@ index 0000000..dfad56a
 +
 +#include "base/basic_types.h"
 +#include "data/data_peer_id.h"
++
++#include <rpl/producer.h>
 +
 +#include <vector>
 +
@@ -1976,6 +1987,7 @@ index 0000000..dfad56a
 +void SetExcluded(PeerId peerId, bool excluded);
 +void Invalidate();
 +[[nodiscard]] uint64 Generation();
++[[nodiscard]] rpl::producer<> Changes();
 +
 +} // namespace Dialogs::Feed
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_filters.h b/Telegram/SourceFiles/dialogs/dialogs_filters.h
@@ -2001,7 +2013,7 @@ index 0000000..5818908
 +
 +} // namespace Dialogs
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
-index 2f0a620..71feb39 100644
+index 2f0a620..4d19258 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
 +++ b/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
 @@ -14,12 +14,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -2019,7 +2031,18 @@ index 2f0a620..71feb39 100644
  #include "history/view/history_view_context_menu.h"
  #include "history/view/history_view_subsection_tabs.h"
  #include "history/history.h"
-@@ -664,7 +666,12 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
+@@ -152,6 +154,10 @@ constexpr auto kPreviewPostsLimit = 3;
+ 	return result;
+ }
+ 
++[[nodiscard]] FilterId RowActionFilterId(FilterId filterId) {
++	return (filterId == kFeedFilterId) ? FilterId() : filterId;
++}
++
+ [[nodiscard]] UserData *MaybeBotWithApp(Row *row) {
+ 	if (row) {
+ 		if (const auto history = row->key().history()) {
+@@ -664,7 +670,12 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
  		? _shownList->begin()->get()->folder()
  		: nullptr;
  	const auto inMainMenu = session().settings().archiveInMainMenu();
@@ -2033,7 +2056,7 @@ index 2f0a620..71feb39 100644
  		if (_selected && _selected->folder() == archive) {
  			_selected = nullptr;
  		}
-@@ -672,7 +679,7 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
+@@ -672,7 +683,7 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
  			clearPressed();
  		}
  		_skipTopDialog = true;
@@ -2042,7 +2065,46 @@ index 2f0a620..71feb39 100644
  			_collapsedRows.push_back(
  				std::make_unique<CollapsedRow>(archive));
  		}
-@@ -4874,8 +4881,10 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
+@@ -2637,7 +2648,10 @@ bool InnerWidget::addQuickActionRipple(
+ 	if (!history) {
+ 		return false;
+ 	}
+-	const auto type = ResolveQuickDialogLabel(history, action, _filterId);
++	const auto type = ResolveQuickDialogLabel(
++		history,
++		action,
++		RowActionFilterId(_filterId));
+ 	if (type == Dialogs::Ui::QuickDialogActionLabel::Disabled) {
+ 		return false;
+ 	}
+@@ -2681,7 +2695,7 @@ bool InnerWidget::addQuickActionRipple(
+ 							ResolveQuickDialogLabel(
+ 								history,
+ 								action,
+-								_filterId));
++								RowActionFilterId(_filterId)));
+ 					}),
+ 				std::move(updateCallback));
+ 		}
+@@ -3053,7 +3067,7 @@ void InnerWidget::mousePressReleased(
+ 					_controller,
+ 					history->peer,
+ 					raw->action,
+-					_filterId);
++					RowActionFilterId(_filterId));
+ 			}
+ 			deactivateQuickAction();
+ 		}
+@@ -4014,7 +4028,7 @@ void InnerWidget::contextMenuEvent(QContextMenuEvent *e) {
+ 			Dialogs::EntryState{
+ 				.key = row.key,
+ 				.section = Dialogs::EntryState::Section::ContextMenu,
+-				.filterId = _filterId,
++				.filterId = RowActionFilterId(_filterId),
+ 			},
+ 			addAction);
+ 	}
+@@ -4874,8 +4888,10 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
  		&& (_collapsedRows.back()->folder != nullptr);
  	const auto archiveIsCollapsed = (archive != nullptr)
  		&& session().settings().archiveCollapsed();
@@ -2054,7 +2116,7 @@ index 2f0a620..71feb39 100644
  	return archiveIsInMainMenu
  		? (collapsedHasArchive || !_skipTopDialog)
  		: archiveIsCollapsed
-@@ -4884,7 +4893,7 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
+@@ -4884,7 +4900,7 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
  }
  
  void InnerWidget::editOpenedFilter() {
@@ -2063,24 +2125,39 @@ index 2f0a620..71feb39 100644
  		EditExistingFilter(_controller, _filterId);
  	}
  }
+@@ -5663,7 +5679,7 @@ void InnerWidget::switchToFilter(FilterId filterId) {
+ 		? ranges::find(list, filterId, &Data::ChatFilter::id)
+ 		: end(list);
+ 	const auto found = (filterIt != end(list));
+-	if (!found) {
++	if (!found && filterId != Dialogs::kFeedFilterId) {
+ 		filterId = 0;
+ 	}
+ 	if (_filterId == filterId) {
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp b/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
-index cd8aff9..e72e968 100644
+index cd8aff9..13687c9 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
 +++ b/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
-@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,20 +7,38 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "dialogs/dialogs_main_list.h"
  
 +#include "dialogs/dialogs_feed.h"
 +#include "dialogs/dialogs_filters.h"
  #include "data/data_changes.h"
++#include "data/data_peer.h"
  #include "data/data_session.h"
  #include "data/data_chat_filters.h"
-@@ -15,6 +17,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "main/main_session.h"
+ #include "history/history_unread_things.h"
  #include "history/history.h"
  
++#include "base/flat_set.h"
++
  namespace Dialogs {
 +namespace {
++
++constexpr auto kFeedRefreshDelay = crl::time(1000);
 +
 +void FillFeed(MainList &list, not_null<Main::Session*> session) {
 +	for (const auto &history : Feed::Collect(session)) {
@@ -2093,17 +2170,128 @@ index cd8aff9..e72e968 100644
  
  MainList::MainList(
  	not_null<Main::Session*> session,
-@@ -35,6 +47,10 @@ MainList::MainList(
+ 	FilterId filterId,
+ 	rpl::producer<int> pinnedLimit)
+-: _filterId(filterId)
++: _session(session)
++, _filterId(filterId)
+ , _all(SortMode::Date, filterId)
+ , _pinned(filterId, 1) {
+ 	_unreadState.known = true;
+@@ -35,6 +53,72 @@ MainList::MainList(
  	) | rpl::on_next([=](const Data::NameUpdate &update) {
  		_all.peerNameChanged(_filterId, update.peer, update.oldFirstLetters);
  	}, _lifetime);
 +
 +	if (_filterId == kFeedFilterId) {
++		_feedRefreshTimer = std::make_unique<base::Timer>([=] {
++			rebuildFeed();
++		});
 +		FillFeed(*this, session);
++		std::move(
++			rpl::merge(
++				session->data().chatsListChanges() | rpl::to_empty,
++				Feed::Changes()
++			)
++		) | rpl::on_next([=] {
++			feedChanged();
++		}, _lifetime);
 +	}
++}
++
++void MainList::feedChanged() {
++	if (_feedRefreshing || !_feedRefreshTimer) {
++		return;
++	}
++	const auto sinceLastRefresh = _feedRefreshElapsed.isValid()
++		? crl::time(_feedRefreshElapsed.elapsed())
++		: kFeedRefreshDelay;
++	if (sinceLastRefresh >= kFeedRefreshDelay) {
++		rebuildFeed();
++	} else if (!_feedRefreshTimer->isActive()) {
++		_feedRefreshTimer->callOnce(kFeedRefreshDelay - sinceLastRefresh);
++	}
++}
++
++void MainList::rebuildFeed() {
++	_feedRefreshElapsed.start();
++
++	const auto desired = Feed::Collect(_session);
++	auto keep = base::flat_set<PeerId>();
++	for (const auto &history : desired) {
++		keep.emplace(history->peer->id);
++	}
++
++	auto stale = std::vector<Key>();
++	for (const auto &row : _all) {
++		const auto history = row->history();
++		if (!history || !keep.contains(history->peer->id)) {
++			stale.push_back(row->key());
++		}
++	}
++	auto changed = !stale.empty();
++	for (const auto &key : stale) {
++		removeEntry(key);
++	}
++	for (const auto &history : desired) {
++		const auto key = Key(history);
++		if (!_all.contains(key)) {
++			addEntry(key);
++			changed = true;
++		}
++	}
++	if (!changed) {
++		return;
++	}
++	_feedRefreshing = true;
++	const auto guard = gsl::finally([&] {
++		_feedRefreshing = false;
++	});
++	_session->data().chatsListChanged(nullptr);
  }
  
  bool MainList::empty() const {
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_main_list.h b/Telegram/SourceFiles/dialogs/dialogs_main_list.h
+index 1a5f86c..db5f945 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs_main_list.h
++++ b/Telegram/SourceFiles/dialogs/dialogs_main_list.h
+@@ -11,6 +11,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "dialogs/dialogs_indexed_list.h"
+ #include "dialogs/dialogs_pinned_list.h"
+ 
++#include "base/timer.h"
++
++#include <QtCore/QElapsedTimer>
++
++#include <memory>
++
+ namespace Main {
+ class Session;
+ } // namespace Main
+@@ -57,9 +63,12 @@ public:
+ private:
+ 	void finalizeCloudUnread();
+ 	void recomputeFullListSize();
++	void feedChanged();
++	void rebuildFeed();
+ 
+ 	inline auto unreadStateChangeNotifier(bool notify);
+ 
++	not_null<Main::Session*> _session;
+ 	FilterId _filterId = 0;
+ 	IndexedList _all;
+ 	PinnedList _pinned;
+@@ -69,6 +78,10 @@ private:
+ 	rpl::variable<int> _fullListSize = 0;
+ 	int _cloudListSize = 0;
+ 
++	std::unique_ptr<base::Timer> _feedRefreshTimer;
++	QElapsedTimer _feedRefreshElapsed;
++	bool _feedRefreshing = false;
++
+ 	bool _loaded = false;
+ 	bool _allAreMuted = false;
+ 
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_row.h b/Telegram/SourceFiles/dialogs/dialogs_row.h
 index a2ac2e4..ac722c5 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_row.h

@@ -16,6 +16,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 #include "main/main_session.h"
 
+#include <rpl/event_stream.h>
+
 namespace Dialogs::Feed {
 namespace {
 
@@ -23,6 +25,7 @@ constexpr auto kExcludedKey = "feed_excluded";
 
 struct Storage {
 	base::flat_set<PeerId> excluded;
+	rpl::event_stream<> changes;
 	bool loaded = false;
 	uint64 generation = 0;
 };
@@ -99,11 +102,17 @@ void SetExcluded(PeerId peerId, bool excluded) {
 }
 
 void Invalidate() {
-	++Global().generation;
+	auto &global = Global();
+	++global.generation;
+	global.changes.fire({});
 }
 
 uint64 Generation() {
 	return Global().generation;
+}
+
+rpl::producer<> Changes() {
+	return Global().changes.events();
 }
 
 } // namespace Dialogs::Feed

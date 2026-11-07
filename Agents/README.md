@@ -198,7 +198,7 @@ sibling-чекаутом: `../exteraless`.
   (`FilterId(1000)`, `dialogs/dialogs_filters.h`) наполняет `FillFeed` в
   конструкторе `MainList`, а открывает пункт «Feed» главного меню. Список
   строится заново при пересоздании — live-update, strip-строка вкладки и
-  действия над элементами остаются follow-up'ом (v2). v2: секция Feed последней в полосе фильтров (`chat_filters_tabs_strip.cpp`: маппинг индексов, unread-подписка, pinned-интервал, guard reorder/drag/dnd, keyboard-switch; бейдж — снимок).
+  действия над элементами остаются follow-up'ом (v2). v2: секция Feed последней в полосе фильтров (`chat_filters_tabs_strip.cpp`: маппинг индексов, unread-подписка, pinned-интервал, guard reorder/drag/dnd, keyboard-switch; бейдж — снимок). v3: live-update (`Feed::Changes` плюс `chatsListChanges`, дельта-rebuild с debounce 1 с и без сброса скролла), действия строк в ленте (`RowActionFilterId` в quick actions и контекстном меню) и guard `switchToFilter`, без которого лента не открывалась.
 - Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты
   `.plugin`/`.py`, `.elyx`/`.eaf` показываются как unsupported. Сканер
   читает метаданные через AST и не исполняет код плагина.

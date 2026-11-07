@@ -11,6 +11,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_indexed_list.h"
 #include "dialogs/dialogs_pinned_list.h"
 
+#include "base/timer.h"
+
+#include <QtCore/QElapsedTimer>
+
+#include <memory>
+
 namespace Main {
 class Session;
 } // namespace Main
@@ -57,9 +63,12 @@ public:
 private:
 	void finalizeCloudUnread();
 	void recomputeFullListSize();
+	void feedChanged();
+	void rebuildFeed();
 
 	inline auto unreadStateChangeNotifier(bool notify);
 
+	not_null<Main::Session*> _session;
 	FilterId _filterId = 0;
 	IndexedList _all;
 	PinnedList _pinned;
@@ -68,6 +77,10 @@ private:
 	rpl::event_stream<UnreadState> _unreadStateChanges;
 	rpl::variable<int> _fullListSize = 0;
 	int _cloudListSize = 0;
+
+	std::unique_ptr<base::Timer> _feedRefreshTimer;
+	QElapsedTimer _feedRefreshElapsed;
+	bool _feedRefreshing = false;
 
 	bool _loaded = false;
 	bool _allAreMuted = false;

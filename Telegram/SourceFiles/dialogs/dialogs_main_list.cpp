@@ -10,14 +10,19 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/dialogs_feed.h"
 #include "dialogs/dialogs_filters.h"
 #include "data/data_changes.h"
+#include "data/data_peer.h"
 #include "data/data_session.h"
 #include "data/data_chat_filters.h"
 #include "main/main_session.h"
 #include "history/history_unread_things.h"
 #include "history/history.h"
 
+#include "base/flat_set.h"
+
 namespace Dialogs {
 namespace {
+
+constexpr auto kFeedRefreshDelay = crl::time(1000);
 
 void FillFeed(MainList &list, not_null<Main::Session*> session) {
 	for (const auto &history : Feed::Collect(session)) {
@@ -32,7 +37,8 @@ MainList::MainList(
 	not_null<Main::Session*> session,
 	FilterId filterId,
 	rpl::producer<int> pinnedLimit)
-: _filterId(filterId)
+: _session(session)
+, _filterId(filterId)
 , _all(SortMode::Date, filterId)
 , _pinned(filterId, 1) {
 	_unreadState.known = true;
@@ -49,8 +55,70 @@ MainList::MainList(
 	}, _lifetime);
 
 	if (_filterId == kFeedFilterId) {
+		_feedRefreshTimer = std::make_unique<base::Timer>([=] {
+			rebuildFeed();
+		});
 		FillFeed(*this, session);
+		std::move(
+			rpl::merge(
+				session->data().chatsListChanges() | rpl::to_empty,
+				Feed::Changes()
+			)
+		) | rpl::on_next([=] {
+			feedChanged();
+		}, _lifetime);
 	}
+}
+
+void MainList::feedChanged() {
+	if (_feedRefreshing || !_feedRefreshTimer) {
+		return;
+	}
+	const auto sinceLastRefresh = _feedRefreshElapsed.isValid()
+		? crl::time(_feedRefreshElapsed.elapsed())
+		: kFeedRefreshDelay;
+	if (sinceLastRefresh >= kFeedRefreshDelay) {
+		rebuildFeed();
+	} else if (!_feedRefreshTimer->isActive()) {
+		_feedRefreshTimer->callOnce(kFeedRefreshDelay - sinceLastRefresh);
+	}
+}
+
+void MainList::rebuildFeed() {
+	_feedRefreshElapsed.start();
+
+	const auto desired = Feed::Collect(_session);
+	auto keep = base::flat_set<PeerId>();
+	for (const auto &history : desired) {
+		keep.emplace(history->peer->id);
+	}
+
+	auto stale = std::vector<Key>();
+	for (const auto &row : _all) {
+		const auto history = row->history();
+		if (!history || !keep.contains(history->peer->id)) {
+			stale.push_back(row->key());
+		}
+	}
+	auto changed = !stale.empty();
+	for (const auto &key : stale) {
+		removeEntry(key);
+	}
+	for (const auto &history : desired) {
+		const auto key = Key(history);
+		if (!_all.contains(key)) {
+			addEntry(key);
+			changed = true;
+		}
+	}
+	if (!changed) {
+		return;
+	}
+	_feedRefreshing = true;
+	const auto guard = gsl::finally([&] {
+		_feedRefreshing = false;
+	});
+	_session->data().chatsListChanged(nullptr);
 }
 
 bool MainList::empty() const {
