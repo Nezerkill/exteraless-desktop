@@ -16,6 +16,7 @@
 
 namespace {
 
+using Exteraless::Plugins::IntentRecord;
 using Exteraless::Plugins::MenuRecord;
 using Exteraless::Plugins::Runtime;
 
@@ -184,6 +185,34 @@ struct RuntimeGuard {
 	return items;
 }
 
+[[nodiscard]] QJsonArray IntentItems(Runtime *runtime, const QString &id) {
+	if (id.isEmpty()) {
+		return QJsonArray();
+	}
+	auto records = runtime->intents(id);
+	std::stable_sort(
+		records.begin(),
+		records.end(),
+		[](const IntentRecord &a, const IntentRecord &b) {
+			return a.priority > b.priority;
+		});
+	auto items = QJsonArray();
+	for (const auto &record : records) {
+		auto schemes = QJsonArray();
+		for (const auto &scheme : record.schemes) {
+			schemes.append(scheme);
+		}
+		items.append(QJsonObject{
+			{ QStringLiteral("plugin"), record.pluginId },
+			{ QStringLiteral("item"), record.itemId },
+			{ QStringLiteral("phase"), record.phase },
+			{ QStringLiteral("schemes"), schemes },
+			{ QStringLiteral("priority"), record.priority },
+		});
+	}
+	return items;
+}
+
 [[nodiscard]] QJsonObject MultiOperation(
 		Runtime *runtime,
 		const QJsonObject &operation) {
@@ -235,6 +264,28 @@ struct RuntimeGuard {
 			const auto clicked = runtime->click(id, item, context);
 			result[QStringLiteral("ok")] = clicked.ok;
 			result[QStringLiteral("error")] = clicked.error;
+		}
+	} else if (op == QStringLiteral("intent-test")) {
+		const auto url = operation.value(QStringLiteral("url")).toString();
+		const auto fromIntent = operation.value(
+			QStringLiteral("fromIntent")).toBool();
+		if (url.isEmpty()) {
+			result[QStringLiteral("error")] =
+				QStringLiteral("Missing intent url.");
+		} else {
+			result[QStringLiteral("handled")] =
+				runtime->dispatchIntent(url, fromIntent);
+			result[QStringLiteral("ok")] = true;
+			result[QStringLiteral("error")] = QString();
+		}
+	} else if (op == QStringLiteral("intent-list")) {
+		if (id.isEmpty()) {
+			result[QStringLiteral("error")] =
+				QStringLiteral("Missing plugin id.");
+		} else {
+			result[QStringLiteral("items")] = IntentItems(runtime, id);
+			result[QStringLiteral("ok")] = true;
+			result[QStringLiteral("error")] = QString();
 		}
 	} else if (op == QStringLiteral("stop")) {
 		runtime->stop();
@@ -300,6 +351,32 @@ int main(int argc, char *argv[]) {
 			return Usage();
 		}
 		WriteJson(SettingsResult(rest[0]));
+		return 0;
+	}
+	if (command == QStringLiteral("plugin-level")) {
+		if (rest.size() != 1) {
+			return Usage();
+		}
+		WriteJson(QJsonObject{
+			{ QStringLiteral("level"),
+				Exteraless::Config::Instance().pluginTrustLevel(rest[0]) },
+		});
+		return 0;
+	}
+	if (command == QStringLiteral("plugin-level-set")) {
+		if (rest.size() != 2) {
+			return Usage();
+		}
+		auto ok = false;
+		const auto level = rest[1].toInt(&ok);
+		if (!ok || level < 0 || level > 2) {
+			return Usage();
+		}
+		Exteraless::Config::Instance().setPluginTrustLevel(rest[0], level);
+		WriteJson(QJsonObject{
+			{ QStringLiteral("level"),
+				Exteraless::Config::Instance().pluginTrustLevel(rest[0]) },
+		});
 		return 0;
 	}
 	if (command == QStringLiteral("settings-set")) {
@@ -383,6 +460,25 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("error"), clicked.error },
 			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
+		});
+		return 0;
+	}
+	if (command == QStringLiteral("intent-test")) {
+		if (rest.size() != 1 && rest.size() != 2) {
+			return Usage();
+		}
+		const auto fromIntent = (rest.size() == 2)
+			? rest[1] == QStringLiteral("after")
+			: false;
+		if (rest.size() == 2 && !fromIntent) {
+			return Usage();
+		}
+		const auto runtime = StartRuntime(pluginsRoot, auditLog);
+		const auto guard = RuntimeGuard();
+		WriteJson(QJsonObject{
+			{ QStringLiteral("handled"),
+				runtime->dispatchIntent(rest[0], fromIntent) },
+			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 		});
 		return 0;
 	}

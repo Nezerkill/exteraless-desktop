@@ -116,7 +116,27 @@
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
-  плагины без изменений — 32 и 252 проверок.
+  плагины без изменений — 32 и 279 проверок.
+- Плагины, этап 3c — intents и уровни доступа (NB-79.3c): `OEPluginTrustLevels`
+  — JSON `id → 0|1|2` с default `1` (Gated): отклонение от Android
+  (ISOLATED=0) сделано потому, что манифест уже декларирует `intents` при
+  установке; Isolated хранится явно, а Gated и Trusted пока различаются
+  только будущим гейтингом. Алиас `pluginTrustLevels`, ключ экспортируется
+  в `.extera` (не секрет). Снимок `intents` приходит в ответе `loaded`,
+  `cmd:intent` → `intent-result` с таймаутом 2 с и валидацией как у меню;
+  `Runtime::dispatchIntent(url, fromIntent)` — `false` это фаза before с
+  правом cancel, `true` — after/notify; хук `openLocalUrl` (after passcode),
+  при уровне ниже Gated плагин пропускается без вызова хоста. В боксе —
+  селектор Isolated/Gated/Trusted, четыре lang-ключа, CLI `plugin-level`/
+  `plugin-level-set`/`intent-test`, фикстура `valid-intents.plugin`;
+  `check_plugin_intents` — 27 проверок, host-раннер 279 (252 → 279), chats
+  1156 без изменений и плагины-сканер 32 без изменений; `kKeysCount` 11248
+  (+4); sha256 патча `fa58ebc7…`, `nix flake check` PASS. В том же батче:
+  `check_no_startup_host` исключает `dispatchIntent` (dispatch хост не
+  стартует), full-бэкап-фикстура и её счётчики (140/145/148) получили
+  `OEPluginTrustLevels`. Не сделано: hooks/TRUSTED-капабилити и after-фаза
+  вне notify. Ограничения: синхронные вызовы на UI-потоке (~2 с);
+  Xvfb-смоук не выполнялся.
 - Саммари чата (NB-48, follow-up): `ai_summary.*` (сбор 30/6000, промпт
   с injection-guard), пункт в меню пира, system-override в боксе;
   раннеры 1156/32/252 PASS (без изменений); `kKeysCount` 11244 (+1).

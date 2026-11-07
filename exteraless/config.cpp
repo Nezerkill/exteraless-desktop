@@ -118,6 +118,10 @@ constexpr auto kMainMenuOrder = "OEMainMenuOrder";
 constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 constexpr auto kPluginStates = "OEPluginStates";
 constexpr auto kPluginsSettings = "OEPluginSettings";
+constexpr auto kPluginTrustLevels = "OEPluginTrustLevels";
+constexpr auto kPluginTrustDefaultLevel = 1;
+constexpr auto kPluginTrustMinLevel = 0;
+constexpr auto kPluginTrustMaxLevel = 2;
 constexpr auto kMaxPluginSettingKeyLength = 64;
 constexpr auto kMaxPluginSettingKeys = 128;
 constexpr auto kMaxPluginSettingBytes = 64 * 1024;
@@ -361,6 +365,48 @@ const auto kPillStackOrderKeys = std::array<const char*, 14>{
 		}
 	}
 	return result;
+}
+
+[[nodiscard]] QJsonObject SanitizePluginTrustLevels(
+		const QJsonObject &levels) {
+	auto result = QJsonObject();
+	for (auto i = levels.begin(); i != levels.end(); ++i) {
+		if (!IsValidPluginId(i.key()) || !i.value().isDouble()) {
+			continue;
+		}
+		const auto raw = i.value().toDouble();
+		const auto level = int(raw);
+		if (raw != double(level)
+			|| level < kPluginTrustMinLevel
+			|| level > kPluginTrustMaxLevel) {
+			continue;
+		}
+		result.insert(i.key(), level);
+	}
+	return result;
+}
+
+[[nodiscard]] QJsonObject ParsePluginTrustLevels(const QJsonValue &value) {
+	if (value.isString()) {
+		auto error = QJsonParseError{0, QJsonParseError::NoError};
+		const auto document = QJsonDocument::fromJson(
+			value.toString().toUtf8(),
+			&error);
+		return (error.error == QJsonParseError::NoError
+			&& document.isObject())
+			? SanitizePluginTrustLevels(document.object())
+			: QJsonObject();
+	}
+	return value.isObject()
+		? SanitizePluginTrustLevels(value.toObject())
+		: QJsonObject();
+}
+
+[[nodiscard]] QString EncodePluginTrustLevels(const QJsonObject &levels) {
+	return levels.isEmpty()
+		? QStringLiteral("{}")
+		: QString::fromUtf8(
+			QJsonDocument(levels).toJson(QJsonDocument::Compact));
 }
 
 [[nodiscard]] QJsonObject SanitizeExclusions(const QJsonValue &value) {
@@ -1632,6 +1678,46 @@ void Config::setPluginsSettings(const QString &value) {
 			: QJsonValue(sanitized));
 }
 
+int Config::pluginTrustLevel(const QString &id) const {
+	if (!IsValidPluginId(id)) {
+		return kPluginTrustDefaultLevel;
+	}
+	const auto levels = ParsePluginTrustLevels(
+		QJsonValue(stringValue(kPluginTrustLevels, QString())));
+	return levels.contains(id)
+		? int(levels.value(id).toInt())
+		: kPluginTrustDefaultLevel;
+}
+
+void Config::setPluginTrustLevel(const QString &id, int level) {
+	if (!IsValidPluginId(id)) {
+		return;
+	}
+	auto levels = ParsePluginTrustLevels(
+		QJsonValue(stringValue(kPluginTrustLevels, QString())));
+	level = std::clamp(level, kPluginTrustMinLevel, kPluginTrustMaxLevel);
+	levels.insert(id, level);
+	setValue(
+		kPluginTrustLevels,
+		levels.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(EncodePluginTrustLevels(levels)));
+}
+
+QString Config::pluginTrustLevels() const {
+	return EncodePluginTrustLevels(ParsePluginTrustLevels(
+		QJsonValue(stringValue(kPluginTrustLevels, QString()))));
+}
+
+void Config::setPluginTrustLevels(const QString &value) {
+	const auto sanitized = ParsePluginTrustLevels(QJsonValue(value));
+	setValue(
+		kPluginTrustLevels,
+		sanitized.isEmpty()
+			? QJsonValue(QJsonValue::Undefined)
+			: QJsonValue(EncodePluginTrustLevels(sanitized)));
+}
+
 QJsonObject Config::toJson() const {
 	ensureLoaded();
 	auto root = QJsonObject();
@@ -1734,6 +1820,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kDrawerAccountsExpanded
 			|| key == kPluginStates
 			|| key == kPluginsSettings
+			|| key == kPluginTrustLevels
 			|| key == kChatsRemoveMessageTail
 			|| key == kChatsHideReactionsChannels
 			|| key == kChatsHideReactionsGroups
@@ -1807,6 +1894,15 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			accepted.remove(kPluginStates);
 		} else {
 			accepted[kPluginStates] = states;
+		}
+	}
+	if (accepted.contains(kPluginTrustLevels)) {
+		const auto levels = ParsePluginTrustLevels(
+			accepted.value(kPluginTrustLevels));
+		if (levels.isEmpty()) {
+			accepted.remove(kPluginTrustLevels);
+		} else {
+			accepted[kPluginTrustLevels] = EncodePluginTrustLevels(levels);
 		}
 	}
 	SanitizeExclusions(&accepted, kGhostReadExclusions);
@@ -1900,6 +1996,15 @@ void Config::ensureLoaded() const {
 			_values.remove(kPluginStates);
 		} else {
 			_values[kPluginStates] = states;
+		}
+	}
+	if (_values.contains(kPluginTrustLevels)) {
+		const auto levels = ParsePluginTrustLevels(
+			_values.value(kPluginTrustLevels));
+		if (levels.isEmpty()) {
+			_values.remove(kPluginTrustLevels);
+		} else {
+			_values[kPluginTrustLevels] = EncodePluginTrustLevels(levels);
 		}
 	}
 	SanitizeExclusions(&_values, kGhostReadExclusions);

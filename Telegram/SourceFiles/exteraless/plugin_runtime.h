@@ -33,6 +33,14 @@ struct MenuRecord {
 	QString type;
 };
 
+struct IntentRecord {
+	QString pluginId;
+	QString itemId;
+	QString phase;
+	std::vector<QString> schemes;
+	int priority = 0;
+};
+
 class Runtime final {
 public:
 	Runtime(QString pluginsDirectory, QString auditLogPath);
@@ -65,6 +73,8 @@ public:
 		const QString &id,
 		const QString &item,
 		const QString &context);
+	[[nodiscard]] std::vector<IntentRecord> intents(const QString &id) const;
+	[[nodiscard]] bool dispatchIntent(const QString &url, bool fromIntent);
 
 	[[nodiscard]] static PathCheck ValidatePath(
 		const QString &pluginsDirectory,
@@ -75,10 +85,17 @@ private:
 	[[nodiscard]] bool startHost(QString *error);
 	void protocolViolation(QString *error);
 	void parseMenuSnapshot(const QString &id, const QJsonValue &snapshot);
+	void parseIntentSnapshot(const QString &id, const QJsonValue &snapshot);
 	[[nodiscard]] Result clickMenu(
 		const QString &id,
 		const QString &item,
 		const QString &context);
+	[[nodiscard]] Result intentClick(
+		const QString &id,
+		const QString &item,
+		const QString &url,
+		const QString &context,
+		bool *cancel);
 	[[nodiscard]] bool sendRequest(
 		const QJsonObject &request,
 		QJsonObject *response,
@@ -102,6 +119,7 @@ private:
 	QHash<QString, QJsonObject> _settings;
 	QHash<QString, QJsonArray> _settingsUi;
 	QHash<QString, std::vector<MenuRecord>> _menus;
+	QHash<QString, std::vector<IntentRecord>> _intents;
 	bool _clicking = false;
 	int _seq = 0;
 	QString _pluginsDirectory;

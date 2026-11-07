@@ -2,6 +2,25 @@
 
 ## 2026-11-07
 
+- Плагины, этап 3c — intents и уровни доступа (NB-79.3c): `OEPluginTrustLevels`
+  (JSON `id → 0|1|2`, default `1` — Gated; намеренное отклонение от Android
+  с его ISOLATED=0, потому что манифест уже декларирует `intents` при
+  установке, Isolated хранится явно, а Gated и Trusted пока различаются
+  только будущим гейтингом), алиас `pluginTrustLevels`, ключ экспортируется
+  в `.extera` (не секрет); снимок `intents` приходит в ответе `loaded`,
+  `cmd:intent` → `intent-result` (таймаут 2 с, валидация как у меню);
+  `Runtime::dispatchIntent(url, fromIntent)` — `false` это фаза before с
+  правом cancel, `true` — after/notify; хук `openLocalUrl` (after passcode),
+  при уровне ниже Gated плагин пропускается без вызова хоста; селектор
+  Isolated/Gated/Trusted в боксе и 4 lang-ключа; CLI
+  `plugin-level`/`plugin-level-set`/`intent-test`, фикстура
+  `valid-intents.plugin`; `check_plugin_intents` — 27 проверок, раннеры
+  1156/32/279 PASS (host 252 → 279); `kKeysCount` 11248 (+4); патч
+  `fa58ebc7…`, flake PASS. В том же батче поправлены тесты:
+  `check_no_startup_host` делает исключение для `dispatchIntent` (dispatch
+  не стартует хост), full-бэкап-фикстура получила `OEPluginTrustLevels`.
+  Не сделано: hooks/TRUSTED-капабилити, after-фаза вне notify. Ограничения:
+  вызовы синхронные на UI-потоке (~2 с); Xvfb-смоук не выполнялся.
 - Саммари чата (NB-48, follow-up): `exteraless/ai_summary.{h,cpp}` —
   `CollectChatText` (30 сообщений / 6000 символов, `Author: text`),
   `SystemPrompt` с injection-guard (`<chat>`), `WrapForSummary`;

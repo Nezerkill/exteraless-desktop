@@ -1302,6 +1302,10 @@ bool Application::openLocalUrl(const QString &url, QVariant context) {
 	const auto protocol = u"tg://"_q;
 	if (urlTrimmed.startsWith(protocol, Qt::CaseInsensitive)
 		&& !passcodeLocked()) {
+		const auto runtime = Exteraless::Plugins::Runtime::Instance();
+		if (runtime && runtime->dispatchIntent(urlTrimmed, false)) {
+			return true;
+		}
 		const auto command = urlTrimmed.mid(protocol.size());
 		const auto my = context.value<ClickHandlerContext>();
 		const auto controller = my.sessionWindow.get()

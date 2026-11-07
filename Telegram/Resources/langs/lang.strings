@@ -9425,5 +9425,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_network_dns_system" = "System";
 "lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
 "lng_settings_exteraless_network_weather_city" = "Weather city";
+"lng_settings_exteraless_plugins_level" = "Plugin access level";
+"lng_settings_exteraless_plugins_level_isolated" = "Isolated";
+"lng_settings_exteraless_plugins_level_gated" = "Gated";
+"lng_settings_exteraless_plugins_level_trusted" = "Trusted";
 
 // Keys finished

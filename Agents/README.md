@@ -99,11 +99,11 @@ sibling-чекаутом: `../exteraless`.
   и удаление плагина.
 - `exteraless/tests/plugins/` — CLI `exteraless-plugins-scan` (stage 1),
   CLI `exteraless-plugin-host-cli` (stage 2), фикстуры, `run_checks.py`
-  (32 проверки) и `run_host_checks.py` (252 проверки) с фикстурами
+  (32 проверки) и `run_host_checks.py` (279 проверок) с фикстурами
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (1141 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, ai-stream, recognition, network, download-boost, subtitles, lyrics, lrclib, extra-pills, ai-roles, weather-city, stt, avatar-corners, section-radius, regex-filters, backup, backup-redacted);
+  (1156 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, ai-stream, recognition, network, download-boost, subtitles, lyrics, lrclib, extra-pills, ai-roles, weather-city, stt, avatar-corners, section-radius, regex-filters, backup, backup-redacted);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму
@@ -231,6 +231,20 @@ sibling-чекаутом: `../exteraless`.
   `VerticalLayout` в главном меню, `message` — в конце контекстного меню
   сообщения, счётчик — в боксе, CLI `menu-list`/`menu-click`, а
   `check_plugin_menu` — 24 проверки.
+- Плагины этапа 3c — intents и уровни доступа: `OEPluginTrustLevels` (JSON
+  `id → 0|1|2`, default `1` — Gated; намеренное отклонение от Android
+  ISOLATED=0, потому что манифест уже декларирует `intents` при установке,
+  Isolated хранится явно, а Gated и Trusted различаются только будущим
+  гейтингом) с алиасом `pluginTrustLevels` и экспортом в `.extera`; снимок
+  `intents` в ответе `loaded`, `cmd:intent` → `intent-result` (таймаут 2 с,
+  валидация как у меню); `Runtime::dispatchIntent(url, fromIntent)` — `false`
+  это фаза before с правом cancel, `true` — after/notify — вызывается из
+  хука `openLocalUrl` после passcode, а плагин уровня Isolated
+  пропускается без обращения к хосту; селектор Isolated/Gated/Trusted в
+  боксе, CLI `plugin-level`/`plugin-level-set`/`intent-test`, фикстура
+  `valid-intents.plugin`, `check_plugin_intents` — 27 проверок. Не сделано:
+  hooks/TRUSTED-капабилити и after-фаза вне notify; вызовы синхронные на
+  UI-потоке (~2 с).
 - Pill Stack выключен по умолчанию (`OEPillStackEnabled`), включается в
   настройках Exteraless или в главном меню. Состав пилюль — `OEPillStackPills`
   (битовая маска, по умолчанию все).

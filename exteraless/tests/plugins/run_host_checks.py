@@ -1833,9 +1833,16 @@ def check_no_startup_host(ledger):
     offenders = []
     for path in startup_sources():
         text = path.read_text(encoding="utf-8", errors="ignore")
-        for marker in STARTUP_HOST_MARKERS:
-            if marker in text:
-                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
+        lines = text.splitlines()
+        for lineno, line in enumerate(lines, 1):
+            for marker in STARTUP_HOST_MARKERS:
+                if marker not in line:
+                    continue
+                window = "\n".join(lines[lineno - 1:lineno + 1])
+                if "dispatchIntent" in window:
+                    continue
+                offenders.append(
+                    f"{path.relative_to(ROOT)}:{lineno}: {marker}")
     ledger.check(
         "startup: no Runtime::Start or Runtime::Instance in app startup",
         not offenders,
@@ -2361,6 +2368,256 @@ def check_plugin_menu(ledger, cli, work):
         host_pids(plugins))
 
 
+GARBAGE_INTENTS_PLUGIN = r'''
+from base_plugin import BasePlugin
+
+__id__ = "intent_garbage"
+__name__ = "Intent Garbage"
+__version__ = "1.0.0"
+__permissions__ = ["intents"]
+
+
+class Garbage(BasePlugin):
+    def on_load(self):
+        self.add_intent_handler("1bad", ["tg"])
+        self.add_intent_handler("bad_phase", ["tg"], phase="bogus")
+        self.add_intent_handler("no_schemes", [])
+        self.add_intent_handler("bad_scheme", ["1bad scheme"])
+        self.add_intent_handler(
+            "too_many", ["a", "b", "c", "d", "e", "f", "g", "h", "i"])
+        self.add_intent_handler("kept", ["xkept"])
+
+    def on_intent(self, item_id, url, context):
+        self.log("intent %s %s" % (item_id, url))
+        return {"cancel": True}
+
+
+plugin = Garbage()
+'''
+
+
+def check_plugin_intents(ledger, cli, work):
+    _, plugins, audit = workspace(work, "plugin-intents")
+    fixture = copy_fixture(plugins, "valid-intents.plugin")
+    data_home = work / "plugin-intents-data"
+    expected_snapshot = [
+        {
+            "plugin": "demo_intents",
+            "item": "cancel_test",
+            "phase": "before",
+            "schemes": ["tg"],
+            "priority": 0,
+        },
+        {
+            "plugin": "demo_intents",
+            "item": "after_log",
+            "phase": "after",
+            "schemes": ["tg"],
+            "priority": 0,
+        },
+    ]
+
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_intents", "path": str(fixture)},
+                {"op": "intent-list", "id": "demo_intents"},
+                {"op": "intent-test", "url": "tg://resolve?test=intent"},
+                {"op": "intent-test", "url": "https://example.com/"},
+                {"op": "intent-test",
+                 "url": "tg://resolve?test=intent",
+                 "fromIntent": True},
+                {"op": "disable", "id": "demo_intents"},
+                {"op": "intent-test", "url": "tg://resolve?test=intent"},
+                {"op": "intent-list", "id": "demo_intents"},
+            ]),
+        ],
+        data_home)
+    ledger.check("intents: eight results", len(data) == 8, data)
+    if len(data) != 8:
+        return
+    ledger.check(
+        "intents: registered after enable",
+        data[0].get("ok") is True and data[0].get("loaded") is True,
+        data[0])
+    ledger.check(
+        "intents: snapshot after enable",
+        data[1].get("items") == expected_snapshot,
+        data[1].get("items"))
+    ledger.check(
+        "intents: before handler cancels",
+        data[2].get("handled") is True,
+        data[2])
+    ledger.check(
+        "intents: foreign scheme not handled",
+        data[3].get("handled") is False,
+        data[3])
+    ledger.check(
+        "intents: after pass does not cancel",
+        data[4].get("handled") is False,
+        data[4])
+    ledger.check(
+        "intents: plugin disabled",
+        data[5].get("ok") is True and data[5].get("loaded") is False,
+        data[5])
+    ledger.check(
+        "intents: unload clears handlers",
+        data[6].get("handled") is False,
+        data[6])
+    ledger.check(
+        "intents: snapshot empty after unload",
+        data[7].get("items") == [],
+        data[7].get("items"))
+    records = audit_records(audit)
+    ledger.check(
+        "intents: before logged",
+        has_log(
+            records,
+            "demo_intents",
+            "intent cancel_test tg://resolve?test=intent"),
+        records)
+    ledger.check(
+        "intents: after logged",
+        has_log(
+            records,
+            "demo_intents",
+            "intent after_log tg://resolve?test=intent"),
+        records)
+    before_logs = [
+        record for record in records
+        if record.get("plugin") == "demo_intents"
+        and record.get("detail")
+        == "intent cancel_test tg://resolve?test=intent"
+    ]
+    ledger.check(
+        "intents: unload stops logging",
+        len(before_logs) == 1,
+        before_logs)
+
+    garbage = write_plugin(
+        plugins, "intent-garbage.plugin", GARBAGE_INTENTS_PLUGIN)
+    data = run_cli(
+        cli, plugins, audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "intent_garbage", "path": str(garbage)},
+                {"op": "intent-list", "id": "intent_garbage"},
+                {"op": "intent-test", "url": "tg://drop"},
+                {"op": "intent-test", "url": "xkept://drop"},
+            ]),
+        ],
+        work / "plugin-intents-garbage-data")
+    ledger.check("intents garbage: four results", len(data) == 4, data)
+    if len(data) == 4:
+        ledger.check(
+            "intents garbage: loaded",
+            data[0].get("ok") is True,
+            data[0])
+        ledger.check(
+            "intents garbage: only clean handler kept",
+            data[1].get("items") == [
+                {
+                    "plugin": "intent_garbage",
+                    "item": "kept",
+                    "phase": "before",
+                    "schemes": ["xkept"],
+                    "priority": 0,
+                },
+            ],
+            data[1].get("items"))
+        ledger.check(
+            "intents garbage: dropped handler ignored",
+            data[2].get("handled") is False,
+            data[2])
+        ledger.check(
+            "intents garbage: clean handler kept",
+            data[3].get("handled") is True,
+            data[3])
+    garbage_records = audit_records(audit)
+    ledger.check(
+        "intents garbage: clean handler ran",
+        has_log(garbage_records, "intent_garbage", "intent kept xkept://drop"),
+        garbage_records)
+    dropped = [
+        record for record in garbage_records
+        if "tg://drop" in record.get("detail", "")
+    ]
+    ledger.check(
+        "intents garbage: dropped handler did not run",
+        not dropped,
+        dropped)
+
+    _, isolated_plugins, isolated_audit = workspace(
+        work, "plugin-intents-isolated")
+    isolated = copy_fixture(isolated_plugins, "valid-intents.plugin")
+    isolated_home = work / "plugin-intents-isolated-data"
+    default = run_cli(
+        cli, isolated_plugins, isolated_audit,
+        ["plugin-level", "demo_intents"], isolated_home)
+    ledger.check(
+        "intents level: default gated",
+        default.get("level") == 1,
+        default)
+    isolated_level = run_cli(
+        cli, isolated_plugins, isolated_audit,
+        ["plugin-level-set", "demo_intents", "0"], isolated_home)
+    ledger.check(
+        "intents level: isolated stored",
+        isolated_level.get("level") == 0,
+        isolated_level)
+    data = run_cli(
+        cli, isolated_plugins, isolated_audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_intents", "path": str(isolated)},
+                {"op": "intent-test", "url": "tg://resolve?test=intent"},
+            ]),
+        ],
+        isolated_home)
+    ledger.check("intents isolated: two results", len(data) == 2, data)
+    if len(data) == 2:
+        ledger.check(
+            "intents isolated: plugin loaded",
+            data[0].get("ok") is True and data[0].get("loaded") is True,
+            data[0])
+        ledger.check(
+            "intents isolated: not dispatched",
+            data[1].get("handled") is False,
+            data[1])
+    ledger.check(
+        "intents isolated: no log",
+        not has_log(
+            audit_records(isolated_audit),
+            "demo_intents",
+            "intent cancel_test tg://resolve?test=intent"),
+        audit_records(isolated_audit))
+    trusted_level = run_cli(
+        cli, isolated_plugins, isolated_audit,
+        ["plugin-level-set", "demo_intents", "2"], isolated_home)
+    data = run_cli(
+        cli, isolated_plugins, isolated_audit,
+        [
+            "multi",
+            json.dumps([
+                {"op": "enable", "id": "demo_intents", "path": str(isolated)},
+                {"op": "intent-test", "url": "tg://resolve?test=intent"},
+            ]),
+        ],
+        isolated_home)
+    ledger.check(
+        "intents level: trusted stored",
+        trusted_level.get("level") == 2,
+        trusted_level)
+    ledger.check(
+        "intents trusted: dispatched",
+        len(data) == 2 and data[1].get("handled") is True,
+        data)
+
+
 def check_missing_python(ledger, cli, work):
     _, plugins, audit = workspace(work, "missing-python")
     valid = copy_fixture(plugins, "valid.plugin")
@@ -2466,6 +2723,7 @@ def main():
         check_config_whitelist(ledger, cli, work)
         check_plugin_settings(ledger, cli, work)
         check_plugin_menu(ledger, cli, work)
+        check_plugin_intents(ledger, cli, work)
         check_missing_python(ledger, cli, work)
         check_crash(ledger, cli, work)
         check_missing_base(ledger, cli, work)

@@ -1,0 +1,24 @@
+from base_plugin import BasePlugin
+
+__id__ = "demo_intents"
+__name__ = "Demo Intents"
+__description__ = "Cancels a tg:// test intent and logs both intent phases."
+__author__ = "Exteraless"
+__version__ = "1.0.0"
+__permissions__ = ["intents"]
+
+
+class Intents(BasePlugin):
+    def on_load(self):
+        self.add_intent_handler("cancel_test", ["tg"], phase="before")
+        self.add_intent_handler("after_log", ["tg"], phase="after")
+
+    def on_intent(self, item_id, url, context):
+        self.log("intent %s %s" % (item_id, url))
+        return {
+            "cancel": (item_id == "cancel_test"
+                       and url == "tg://resolve?test=intent"),
+        }
+
+
+plugin = Intents()

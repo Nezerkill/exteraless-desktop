@@ -121,7 +121,7 @@ index 811707d..4d8d276 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..02f4233 100644
+index ffc8ec9..e937909 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -5566,6 +5566,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -151,7 +151,7 @@ index ffc8ec9..02f4233 100644
  "lng_filters_setup" = "Edit";
  "lng_filters_title" = "Folders";
  "lng_filters_subtitle" = "My folders";
-@@ -9182,4 +9188,242 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9188,246 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -392,6 +392,10 @@ index ffc8ec9..02f4233 100644
 +"lng_settings_exteraless_network_dns_system" = "System";
 +"lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
 +"lng_settings_exteraless_network_weather_city" = "Weather city";
++"lng_settings_exteraless_plugins_level" = "Plugin access level";
++"lng_settings_exteraless_plugins_level_isolated" = "Isolated";
++"lng_settings_exteraless_plugins_level_gated" = "Gated";
++"lng_settings_exteraless_plugins_level_trusted" = "Trusted";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -1239,7 +1243,7 @@ index 401b0ab..7d99d8f 100644
  	};
  }
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..b585028 100644
+index 7a309ac..9260bac 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
 @@ -6,6 +6,11 @@ For license and copyright information please follow this link:
@@ -1314,6 +1318,17 @@ index 7a309ac..b585028 100644
  	_saveSettingsTimer.emplace([=] { saveSettings(); });
  	settings().saveDelayedRequests() | rpl::on_next([=] {
  		saveSettingsDelayed();
+@@ -1279,6 +1302,10 @@ bool Application::openLocalUrl(const QString &url, QVariant context) {
+ 	const auto protocol = u"tg://"_q;
+ 	if (urlTrimmed.startsWith(protocol, Qt::CaseInsensitive)
+ 		&& !passcodeLocked()) {
++		const auto runtime = Exteraless::Plugins::Runtime::Instance();
++		if (runtime && runtime->dispatchIntent(urlTrimmed, false)) {
++			return true;
++		}
+ 		const auto command = urlTrimmed.mid(protocol.size());
+ 		const auto my = context.value<ClickHandlerContext>();
+ 		const auto controller = my.sessionWindow.get()
 diff --git a/Telegram/SourceFiles/core/core_settings.cpp b/Telegram/SourceFiles/core/core_settings.cpp
 index 6ef88cd..95f09f5 100644
 --- a/Telegram/SourceFiles/core/core_settings.cpp
@@ -3995,10 +4010,10 @@ index 0000000..2b830fd
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.cpp b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
 new file mode 100644
-index 0000000..24ec57d
+index 0000000..ad563c0
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugin_runtime.cpp
-@@ -0,0 +1,1903 @@
+@@ -0,0 +1,2206 @@
 +#include "exteraless/plugin_runtime.h"
 +
 +#include "exteraless/config.h"
@@ -4035,6 +4050,11 @@ index 0000000..24ec57d
 +constexpr auto kMaxMenuItemsTotal = 256;
 +constexpr auto kMaxMenuTextLength = 128;
 +constexpr auto kMaxMenuPriority = 1000;
++constexpr auto kMaxIntentHandlers = 32;
++constexpr auto kMaxIntentHandlersTotal = 128;
++constexpr auto kMaxIntentSchemes = 8;
++constexpr auto kMaxIntentPriority = 1000;
++constexpr auto kIsolatedTrustLevel = 0;
 +
 +constexpr auto kSandboxUnavailable =
 +	"Plugin sandbox is unavailable.";
@@ -4095,6 +4115,7 @@ index 0000000..24ec57d
 +_PLUGINS = {}
 +_SETTINGS = {}
 +_MENUS = {}
++_INTENTS = {}
 +MAX_SETTING_KEYS = 256
 +MAX_SETTINGS_BYTES = 64 * 1024
 +MENU_CONTEXTS = ('main', 'message', 'chat')
@@ -4102,6 +4123,12 @@ index 0000000..24ec57d
 +MAX_MENU_ITEMS_TOTAL = 256
 +MAX_MENU_TEXT = 128
 +MAX_MENU_PRIORITY = 1000
++INTENT_PHASES = ('before', 'after')
++MAX_INTENT_HANDLERS = 32
++MAX_INTENT_HANDLERS_TOTAL = 128
++MAX_INTENT_SCHEMES = 8
++MAX_INTENT_PRIORITY = 1000
++SCHEME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]{0,31}$')
 +
 +
 +class _InvalidJson:
@@ -4221,6 +4248,9 @@ index 0000000..24ec57d
 +    def on_menu_item(self, item_id, context):
 +        pass
 +
++    def on_intent(self, item_id, url, context):
++        return {'cancel': False}
++
 +    def add_menu_item(self, item, context='main'):
 +        entry = _menu_entry(item, context)
 +        if entry is None:
@@ -4250,6 +4280,37 @@ index 0000000..24ec57d
 +        if len(kept) == len(entries):
 +            return False
 +        _MENUS[plugin_id] = kept
++        return True
++
++    def add_intent_handler(self, item_id, schemes, phase='before', priority=0):
++        entry = _intent_entry(item_id, schemes, phase, priority)
++        if entry is None:
++            return False
++        plugin_id = _CURRENT_ID[0]
++        entries = _INTENTS.get(plugin_id)
++        if not isinstance(entries, list):
++            entries = []
++            _INTENTS[plugin_id] = entries
++        for index, existing in enumerate(entries):
++            if existing['item_id'] == entry['item_id']:
++                entries[index] = entry
++                return True
++        total = sum(len(items) for items in _INTENTS.values())
++        if (len(entries) >= MAX_INTENT_HANDLERS
++                or total >= MAX_INTENT_HANDLERS_TOTAL):
++            return False
++        entries.append(entry)
++        return True
++
++    def remove_intent_handler(self, item_id):
++        plugin_id = _CURRENT_ID[0]
++        entries = _INTENTS.get(plugin_id)
++        if not isinstance(entries, list) or not isinstance(item_id, str):
++            return False
++        kept = [item for item in entries if item['item_id'] != item_id]
++        if len(kept) == len(entries):
++            return False
++        _INTENTS[plugin_id] = kept
 +        return True
 +
 +    def log(self, message):
@@ -4658,6 +4719,44 @@ index 0000000..24ec57d
 +    return result
 +
 +
++def _intent_entry(item_id, schemes, phase, priority):
++    if not isinstance(item_id, str) or not MENU_ITEM_RE.match(item_id):
++        return None
++    if not isinstance(phase, str) or phase not in INTENT_PHASES:
++        return None
++    if (isinstance(schemes, str)
++            or not isinstance(schemes, (list, tuple))
++            or not schemes
++            or len(schemes) > MAX_INTENT_SCHEMES):
++        return None
++    clean = []
++    for scheme in schemes:
++        if not isinstance(scheme, str) or not SCHEME_RE.match(scheme):
++            return None
++        clean.append(scheme.lower())
++    priority = (priority if isinstance(priority, int)
++                and not isinstance(priority, bool) else 0)
++    return {
++        'item_id': item_id,
++        'phase': phase,
++        'schemes': clean,
++        'priority': max(-MAX_INTENT_PRIORITY,
++                        min(MAX_INTENT_PRIORITY, priority)),
++    }
++
++
++def _intent_snapshot(plugin_id):
++    entries = _INTENTS.get(plugin_id)
++    if not isinstance(entries, list):
++        return []
++    return [{
++        'item_id': entry['item_id'],
++        'phase': entry['phase'],
++        'schemes': list(entry['schemes']),
++        'priority': entry['priority'],
++    } for entry in entries[:MAX_INTENT_HANDLERS]]
++
++
 +def _setting_field(item, name, fallback=None):
 +    if isinstance(item, dict):
 +        return item.get(name, fallback)
@@ -4846,6 +4945,7 @@ index 0000000..24ec57d
 +                'settings_ui': _settings_rows(
 +                    existing['instance'], plugin_id),
 +                'menu': _menu_snapshot(plugin_id),
++                'intents': _intent_snapshot(plugin_id),
 +            })
 +        else:
 +            _send({'seq': seq, 'type': 'error',
@@ -4855,6 +4955,7 @@ index 0000000..24ec57d
 +    previous_settings = _SETTINGS.get(plugin_id)
 +    _SETTINGS[plugin_id] = _sanitize_settings(message.get('settings'))
 +    _MENUS.pop(plugin_id, None)
++    _INTENTS.pop(plugin_id, None)
 +    module_name = 'exteraless_plugin_' + plugin_id
 +    before = set(sys.modules)
 +    _CURRENT_ID[0] = plugin_id
@@ -4921,6 +5022,7 @@ index 0000000..24ec57d
 +        'settings': _settings_snapshot(plugin_id),
 +        'settings_ui': _settings_rows(instance, plugin_id),
 +        'menu': _menu_snapshot(plugin_id),
++        'intents': _intent_snapshot(plugin_id),
 +    })
 +
 +
@@ -4942,6 +5044,7 @@ index 0000000..24ec57d
 +    _purge(record['modules'])
 +    _SETTINGS.pop(plugin_id, None)
 +    _MENUS.pop(plugin_id, None)
++    _INTENTS.pop(plugin_id, None)
 +    response = {'seq': seq, 'type': 'unloaded', 'ok': True}
 +    if warning:
 +        response['warning'] = warning
@@ -4962,6 +5065,7 @@ index 0000000..24ec57d
 +    _PLUGINS.clear()
 +    _SETTINGS.clear()
 +    _MENUS.clear()
++    _INTENTS.clear()
 +    _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
 +
 +
@@ -4995,6 +5099,41 @@ index 0000000..24ec57d
 +    _send({'seq': seq, 'type': 'clicked', 'ok': True})
 +
 +
++def _intent_click(message):
++    seq = _CURRENT_SEQ[0]
++    plugin_id = message.get('id')
++    record = _PLUGINS.get(plugin_id) if isinstance(plugin_id, str) else None
++    item_id = message.get('item')
++    url = message.get('url')
++    context = message.get('context')
++    if record is None:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Plugin is not loaded.'})
++        return
++    entries = _INTENTS.get(plugin_id)
++    entries = entries if isinstance(entries, list) else []
++    scheme = url.split(':', 1)[0].lower() if isinstance(
++        url, str) and ':' in url else ''
++    if (not isinstance(item_id, str) or not isinstance(url, str)
++            or not isinstance(context, str) or not scheme
++            or not any(entry['item_id'] == item_id
++                       and scheme in entry['schemes']
++                       for entry in entries)):
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Unknown intent handler.'})
++        return
++    handler = getattr(record['instance'], 'on_intent', None)
++    _CURRENT_ID[0] = plugin_id
++    try:
++        result = handler(item_id, url, context) if callable(handler) else None
++    except BaseException as error:
++        _send({'seq': seq, 'type': 'error',
++               'message': 'Intent action failed: %s' % error})
++        return
++    cancel = isinstance(result, dict) and result.get('cancel') is True
++    _send({'seq': seq, 'type': 'intent-result', 'ok': True, 'cancel': cancel})
++
++
 +def _handle(line):
 +    try:
 +        message = json.loads(line)
@@ -5016,6 +5155,8 @@ index 0000000..24ec57d
 +        _unload(message)
 +    elif command == 'menu':
 +        _menu_click(message)
++    elif command == 'intent':
++        _intent_click(message)
 +    else:
 +        _send({'seq': _CURRENT_SEQ[0], 'type': 'error',
 +               'message': 'Unknown command.'})
@@ -5282,6 +5423,24 @@ index 0000000..24ec57d
 +	return expression.match(itemId).hasMatch();
 +}
 +
++[[nodiscard]] bool IsIntentPhase(const QString &phase) {
++	return phase == QStringLiteral("before")
++		|| phase == QStringLiteral("after");
++}
++
++[[nodiscard]] bool IsIntentScheme(const QString &scheme) {
++	static const auto expression = QRegularExpression(
++		QStringLiteral("^[A-Za-z][A-Za-z0-9+.-]{0,31}$"));
++	return expression.match(scheme).hasMatch();
++}
++
++[[nodiscard]] QString UrlScheme(const QString &url) {
++	static const auto expression = QRegularExpression(
++		QStringLiteral("^([A-Za-z][A-Za-z0-9+.-]*):"));
++	const auto match = expression.match(url);
++	return match.hasMatch() ? match.captured(1).toLower() : QString();
++}
++
 +} // namespace
 +
 +Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
@@ -5412,6 +5571,10 @@ index 0000000..24ec57d
 +	return _menus.value(id);
 +}
 +
++std::vector<IntentRecord> Runtime::intents(const QString &id) const {
++	return _intents.value(id);
++}
++
 +void Runtime::saveSetting(
 +		const QString &id,
 +		const QString &key,
@@ -5490,6 +5653,9 @@ index 0000000..24ec57d
 +		_settingsUi[id] = response.value(
 +			QStringLiteral("settings_ui")).toArray();
 +		parseMenuSnapshot(id, response.value(QStringLiteral("menu")));
++		parseIntentSnapshot(
++			id,
++			response.value(QStringLiteral("intents")));
 +		_loaded[id] = canonical;
 +		return { true, QString() };
 +	}
@@ -5527,6 +5693,7 @@ index 0000000..24ec57d
 +		}
 +		_loaded.remove(id);
 +		_menus.remove(id);
++		_intents.remove(id);
 +		const auto warning = response.value(QStringLiteral("warning")).toString();
 +		if (!warning.isEmpty()) {
 +			writeAuditRecord(
@@ -5601,6 +5768,96 @@ index 0000000..24ec57d
 +	return { false, error };
 +}
 +
++bool Runtime::dispatchIntent(const QString &url, bool fromIntent) {
++	if (!isRunning()) {
++		return false;
++	}
++	const auto scheme = UrlScheme(url);
++	if (scheme.isEmpty()) {
++		return false;
++	}
++	const auto phase = fromIntent
++		? QStringLiteral("after")
++		: QStringLiteral("before");
++	auto matched = std::vector<IntentRecord>();
++	for (const auto &list : _intents) {
++		for (const auto &record : list) {
++			if (record.phase != phase
++				|| Config::Instance().pluginTrustLevel(record.pluginId)
++					== kIsolatedTrustLevel) {
++				continue;
++			}
++			if (std::find(
++					record.schemes.begin(),
++					record.schemes.end(),
++					scheme) == record.schemes.end()) {
++				continue;
++			}
++			matched.push_back(record);
++		}
++	}
++	std::stable_sort(
++		matched.begin(),
++		matched.end(),
++		[](const auto &a, const auto &b) {
++			return a.priority > b.priority;
++		});
++	const auto context = fromIntent
++		? QStringLiteral("intent")
++		: QStringLiteral("link");
++	// The after pass cannot veto an intent the app has already accepted.
++	for (const auto &record : matched) {
++		auto cancel = false;
++		const auto result = intentClick(
++			record.pluginId,
++			record.itemId,
++			url,
++			context,
++			&cancel);
++		if (!fromIntent && result.ok && cancel) {
++			return true;
++		}
++	}
++	return false;
++}
++
++Result Runtime::intentClick(
++		const QString &id,
++		const QString &item,
++		const QString &url,
++		const QString &context,
++		bool *cancel) {
++	auto request = QJsonObject{
++		{ QStringLiteral("seq"), ++_seq },
++		{ QStringLiteral("cmd"), QStringLiteral("intent") },
++		{ QStringLiteral("id"), id },
++		{ QStringLiteral("item"), item },
++		{ QStringLiteral("url"), url },
++		{ QStringLiteral("context"), context },
++	};
++	auto response = QJsonObject();
++	auto error = QString();
++	if (!sendRequest(request, &response, &error, kClickTimeout)) {
++		return { false, error };
++	}
++	const auto type = response.value(QStringLiteral("type")).toString();
++	if (type == QStringLiteral("intent-result")) {
++		const auto ok = response.value(QStringLiteral("ok"));
++		if (!ok.isBool() || !ok.toBool()) {
++			protocolViolation(&error);
++			return { false, error };
++		}
++		const auto value = response.value(QStringLiteral("cancel"));
++		*cancel = value.isBool() && value.toBool();
++		return { true, QString() };
++	}
++	if (type == QStringLiteral("error")) {
++		return { false, response.value(QStringLiteral("message")).toString() };
++	}
++	protocolViolation(&error);
++	return { false, error };
++}
++
 +void Runtime::parseMenuSnapshot(
 +		const QString &id,
 +		const QJsonValue &snapshot) {
@@ -5646,6 +5903,65 @@ index 0000000..24ec57d
 +	_menus[id] = std::move(records);
 +}
 +
++void Runtime::parseIntentSnapshot(
++		const QString &id,
++		const QJsonValue &snapshot) {
++	auto records = std::vector<IntentRecord>();
++	auto total = 0;
++	for (const auto &list : _intents) {
++		total += int(list.size());
++	}
++	const auto array = snapshot.toArray();
++	for (const auto &value : array) {
++		if (records.size() >= kMaxIntentHandlers
++			|| total >= kMaxIntentHandlersTotal) {
++			break;
++		}
++		const auto item = value.toObject();
++		const auto itemId = item.value(QStringLiteral("item_id")).toString();
++		const auto phase = item.value(QStringLiteral("phase")).toString();
++		const auto schemesValue = item.value(QStringLiteral("schemes"));
++		if (!IsMenuItemId(itemId)
++			|| !IsIntentPhase(phase)
++			|| !schemesValue.isArray()) {
++			continue;
++		}
++		const auto schemeList = schemesValue.toArray();
++		if (schemeList.isEmpty()
++			|| schemeList.size() > kMaxIntentSchemes) {
++			continue;
++		}
++		auto schemes = std::vector<QString>();
++		auto valid = true;
++		for (const auto &schemeValue : schemeList) {
++			if (!schemeValue.isString()
++				|| !IsIntentScheme(schemeValue.toString())) {
++				valid = false;
++				break;
++			}
++			schemes.push_back(schemeValue.toString().toLower());
++		}
++		if (!valid) {
++			continue;
++		}
++		auto record = IntentRecord();
++		record.pluginId = id;
++		record.itemId = itemId;
++		record.phase = phase;
++		record.schemes = std::move(schemes);
++		const auto priority = item.value(QStringLiteral("priority"));
++		if (priority.isDouble()) {
++			record.priority = std::clamp(
++				priority.toInt(),
++				-kMaxIntentPriority,
++				kMaxIntentPriority);
++		}
++		records.push_back(std::move(record));
++		++total;
++	}
++	_intents[id] = std::move(records);
++}
++
 +void Runtime::stop() {
 +	if (_process && _process->state() == QProcess::Running) {
 +		const auto request = QJsonObject{
@@ -5676,6 +5992,7 @@ index 0000000..24ec57d
 +	_settings.clear();
 +	_settingsUi.clear();
 +	_menus.clear();
++	_intents.clear();
 +	_seq = 0;
 +}
 +
@@ -5844,6 +6161,7 @@ index 0000000..24ec57d
 +				|| (type != QStringLiteral("loaded")
 +					&& type != QStringLiteral("unloaded")
 +					&& type != QStringLiteral("clicked")
++					&& type != QStringLiteral("intent-result")
 +					&& type != QStringLiteral("error"))) {
 +				protocolViolation(error);
 +				return false;
@@ -5904,10 +6222,10 @@ index 0000000..24ec57d
 +} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugin_runtime.h b/Telegram/SourceFiles/exteraless/plugin_runtime.h
 new file mode 100644
-index 0000000..2137883
+index 0000000..fc1f1ff
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugin_runtime.h
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,130 @@
 +#pragma once
 +
 +#include <QByteArray>
@@ -5943,6 +6261,14 @@ index 0000000..2137883
 +	QString type;
 +};
 +
++struct IntentRecord {
++	QString pluginId;
++	QString itemId;
++	QString phase;
++	std::vector<QString> schemes;
++	int priority = 0;
++};
++
 +class Runtime final {
 +public:
 +	Runtime(QString pluginsDirectory, QString auditLogPath);
@@ -5975,6 +6301,8 @@ index 0000000..2137883
 +		const QString &id,
 +		const QString &item,
 +		const QString &context);
++	[[nodiscard]] std::vector<IntentRecord> intents(const QString &id) const;
++	[[nodiscard]] bool dispatchIntent(const QString &url, bool fromIntent);
 +
 +	[[nodiscard]] static PathCheck ValidatePath(
 +		const QString &pluginsDirectory,
@@ -5985,10 +6313,17 @@ index 0000000..2137883
 +	[[nodiscard]] bool startHost(QString *error);
 +	void protocolViolation(QString *error);
 +	void parseMenuSnapshot(const QString &id, const QJsonValue &snapshot);
++	void parseIntentSnapshot(const QString &id, const QJsonValue &snapshot);
 +	[[nodiscard]] Result clickMenu(
 +		const QString &id,
 +		const QString &item,
 +		const QString &context);
++	[[nodiscard]] Result intentClick(
++		const QString &id,
++		const QString &item,
++		const QString &url,
++		const QString &context,
++		bool *cancel);
 +	[[nodiscard]] bool sendRequest(
 +		const QJsonObject &request,
 +		QJsonObject *response,
@@ -6012,6 +6347,7 @@ index 0000000..2137883
 +	QHash<QString, QJsonObject> _settings;
 +	QHash<QString, QJsonArray> _settingsUi;
 +	QHash<QString, std::vector<MenuRecord>> _menus;
++	QHash<QString, std::vector<IntentRecord>> _intents;
 +	bool _clicking = false;
 +	int _seq = 0;
 +	QString _pluginsDirectory;
@@ -6022,10 +6358,10 @@ index 0000000..2137883
 +} // namespace Exteraless::Plugins
 diff --git a/Telegram/SourceFiles/exteraless/plugins_box.cpp b/Telegram/SourceFiles/exteraless/plugins_box.cpp
 new file mode 100644
-index 0000000..7f0e10d
+index 0000000..4dd1605
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/plugins_box.cpp
-@@ -0,0 +1,618 @@
+@@ -0,0 +1,677 @@
 +#include "exteraless/plugins_box.h"
 +
 +#include "exteraless/config.h"
@@ -6051,6 +6387,7 @@ index 0000000..7f0e10d
 +#include <QDir>
 +#include <QFile>
 +#include <QFileInfo>
++#include <QPointer>
 +#include <QTextStream>
 +#include <rpl/rpl.h>
 +
@@ -6143,6 +6480,20 @@ index 0000000..7f0e10d
 +		: u"Plugin host: stopped"_q;
 +}
 +
++[[nodiscard]] QString LevelName(int level) {
++	return (level <= 0)
++		? tr::lng_settings_exteraless_plugins_level_isolated(tr::now)
++		: (level == 1)
++		? tr::lng_settings_exteraless_plugins_level_gated(tr::now)
++		: tr::lng_settings_exteraless_plugins_level_trusted(tr::now);
++}
++
++[[nodiscard]] QString LevelLinkText(int level) {
++	return tr::lng_settings_exteraless_plugins_level(tr::now)
++		+ u": "_q
++		+ LevelName(level);
++}
++
 +[[nodiscard]] int MenuItemsCount(
 +		const Plugins::Runtime *runtime,
 +		const QString &id) {
@@ -6224,12 +6575,21 @@ index 0000000..7f0e10d
 +		const QString &title,
 +		const QStringList &items,
 +		int selected,
-+		Fn<void(int)> chosen) {
++		Fn<void(int)> chosen,
++		const QString &note = QString()) {
 +	const auto group = std::make_shared<Ui::RadioenumGroup<int>>(selected);
 +	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 +		box->setTitle(title);
 +		const auto inner = box->addRow(
 +			object_ptr<Ui::VerticalLayout>(box));
++		if (!note.isEmpty()) {
++			inner->add(
++				object_ptr<Ui::FlatLabel>(
++					box,
++					rpl::single(note),
++					st::boxLabel),
++				st::boxRowPadding);
++		}
 +		for (auto i = 0; i != items.size(); ++i) {
 +			inner->add(
 +				object_ptr<Ui::Radioenum<int>>(
@@ -6246,6 +6606,31 @@ index 0000000..7f0e10d
 +		});
 +		box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
 +	}));
++}
++
++void ShowPluginLevelBox(
++		not_null<Window::SessionController*> controller,
++		const QString &pluginId,
++		not_null<Ui::LinkButton*> link) {
++	const auto items = QStringList{
++		LevelName(0),
++		LevelName(1),
++		LevelName(2),
++	};
++	const auto weak = QPointer<Ui::LinkButton>(link);
++	ShowSelectorBox(
++		controller,
++		tr::lng_settings_exteraless_plugins_level(tr::now),
++		items,
++		Config::Instance().pluginTrustLevel(pluginId),
++		[=](int level) {
++			Config::Instance().setPluginTrustLevel(pluginId, level);
++			if (weak) {
++				weak->setText(LevelLinkText(
++					Config::Instance().pluginTrustLevel(pluginId)));
++			}
++		},
++		u"Isolated blocks intents."_q);
 +}
 +
 +void ShowPluginSettingsBox(
@@ -6527,6 +6912,16 @@ index 0000000..7f0e10d
 +						MenuItemsCount(runtime, entry.id))),
 +					st::boxLabel),
 +				st::boxRowPadding);
++			const auto levelId = entry.id;
++			const auto levelLink = layout->add(
++				object_ptr<Ui::LinkButton>(
++					box,
++					LevelLinkText(
++						Config::Instance().pluginTrustLevel(levelId))),
++				st::boxRowPadding);
++			levelLink->setClickedCallback([=] {
++				ShowPluginLevelBox(controller, levelId, levelLink);
++			});
 +			row->settingsLink = layout->add(
 +				object_ptr<Ui::LinkButton>(box, u"Settings"_q),
 +				st::boxRowPadding);
@@ -7941,7 +8336,7 @@ index 28e423b..ff48f0a 100644
  	updateInnerVisibleArea();
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-index 3e25a13..eac3835 100644
+index 3e25a13..4ec8141 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 @@ -7,6 +7,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -8347,7 +8742,7 @@ index 3e25a13..eac3835 100644
  				result->addAction(tr::lng_context_translate(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
  						list->controller()->show(Box(
-@@ -1919,6 +2107,14 @@ void FillContextMenuItems(
+@@ -1919,6 +2107,15 @@ void FillContextMenuItems(
  					}
  				}, &st::menuIconTranslate);
  			}
@@ -8356,13 +8751,14 @@ index 3e25a13..eac3835 100644
 +				result->addAction(u"Ask AI"_q, [=] {
 +					list->controller()->show(Box(
 +						Ui::AiRequestBox,
-+						prompt));
++						prompt,
++						QString()));
 +				}, &st::menuIconSearch);
 +			}
  		}
  	}
  
-@@ -1947,6 +2143,7 @@ void FillContextMenuItems(
+@@ -1947,6 +2144,7 @@ void FillContextMenuItems(
  				list->controller());
  		}
  	}
@@ -8370,7 +8766,7 @@ index 3e25a13..eac3835 100644
  }
  
  base::unique_qptr<Ui::PopupMenu> FillContextMenu(
-@@ -2367,7 +2564,8 @@ void AddPollActions(
+@@ -2367,7 +2565,8 @@ void AddPollActions(
  		for (const auto &answer : poll->answers) {
  			text.append('\n').append(radio).append(answer.text);
  		}
@@ -17405,10 +17801,10 @@ index 0000000..81b95c1
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..1118289
+index 0000000..9b7ccc2
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1321 @@
+@@ -0,0 +1,1330 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/ai_client.h"
@@ -17608,6 +18004,8 @@ index 0000000..1118289
 +constexpr auto kPluginStates = "OEPluginStates";
 +constexpr auto kPluginsSettings = "OEPluginSettings";
 +constexpr auto kPluginsSettingsAlias = "pluginSettings";
++constexpr auto kPluginTrustLevels = "OEPluginTrustLevels";
++constexpr auto kPluginTrustLevelsAlias = "pluginTrustLevels";
 +constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 +constexpr auto kPillStackPills = "OEPillStackPills";
 +constexpr auto kPillStackOrder = "OEPillStackOrder";
@@ -17926,6 +18324,7 @@ index 0000000..1118289
 +	extera[kNetworkCustomDoH] = config.networkCustomDoH();
 +	extera[kNetworkWeatherCity] = config.networkWeatherCity();
 +	extera[kPluginStates] = config.pluginStates();
++	extera[kPluginTrustLevels] = config.pluginTrustLevels();
 +	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 +	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
@@ -18249,6 +18648,12 @@ index 0000000..1118289
 +			config.setNetworkWeatherCity(value.toString());
 +		} else if (key == kPluginStates && value.isObject()) {
 +			config.setPluginStates(value.toObject());
++		} else if ((key == kPluginTrustLevels || key == kPluginTrustLevelsAlias)
++			&& (value.isString() || value.isObject())) {
++			config.setPluginTrustLevels(value.isString()
++				? value.toString()
++				: QString::fromUtf8(QJsonDocument(value.toObject())
++					.toJson(QJsonDocument::Compact)));
 +		} else if ((key == kPluginsSettings || key == kPluginsSettingsAlias)
 +			&& (value.isString() || value.isObject())) {
 +			// WHY: plugin settings migrate from old backups but are never
@@ -18854,10 +19259,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..98022b3
+index 0000000..7b04be3
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1992 @@
+@@ -0,0 +1,2097 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/ai_client.h"
@@ -18978,6 +19383,10 @@ index 0000000..98022b3
 +constexpr auto kDrawerAccountsExpanded = "OEDrawerAccountsExpanded";
 +constexpr auto kPluginStates = "OEPluginStates";
 +constexpr auto kPluginsSettings = "OEPluginSettings";
++constexpr auto kPluginTrustLevels = "OEPluginTrustLevels";
++constexpr auto kPluginTrustDefaultLevel = 1;
++constexpr auto kPluginTrustMinLevel = 0;
++constexpr auto kPluginTrustMaxLevel = 2;
 +constexpr auto kMaxPluginSettingKeyLength = 64;
 +constexpr auto kMaxPluginSettingKeys = 128;
 +constexpr auto kMaxPluginSettingBytes = 64 * 1024;
@@ -19221,6 +19630,48 @@ index 0000000..98022b3
 +		}
 +	}
 +	return result;
++}
++
++[[nodiscard]] QJsonObject SanitizePluginTrustLevels(
++		const QJsonObject &levels) {
++	auto result = QJsonObject();
++	for (auto i = levels.begin(); i != levels.end(); ++i) {
++		if (!IsValidPluginId(i.key()) || !i.value().isDouble()) {
++			continue;
++		}
++		const auto raw = i.value().toDouble();
++		const auto level = int(raw);
++		if (raw != double(level)
++			|| level < kPluginTrustMinLevel
++			|| level > kPluginTrustMaxLevel) {
++			continue;
++		}
++		result.insert(i.key(), level);
++	}
++	return result;
++}
++
++[[nodiscard]] QJsonObject ParsePluginTrustLevels(const QJsonValue &value) {
++	if (value.isString()) {
++		auto error = QJsonParseError{0, QJsonParseError::NoError};
++		const auto document = QJsonDocument::fromJson(
++			value.toString().toUtf8(),
++			&error);
++		return (error.error == QJsonParseError::NoError
++			&& document.isObject())
++			? SanitizePluginTrustLevels(document.object())
++			: QJsonObject();
++	}
++	return value.isObject()
++		? SanitizePluginTrustLevels(value.toObject())
++		: QJsonObject();
++}
++
++[[nodiscard]] QString EncodePluginTrustLevels(const QJsonObject &levels) {
++	return levels.isEmpty()
++		? QStringLiteral("{}")
++		: QString::fromUtf8(
++			QJsonDocument(levels).toJson(QJsonDocument::Compact));
 +}
 +
 +[[nodiscard]] QJsonObject SanitizeExclusions(const QJsonValue &value) {
@@ -20492,6 +20943,46 @@ index 0000000..98022b3
 +			: QJsonValue(sanitized));
 +}
 +
++int Config::pluginTrustLevel(const QString &id) const {
++	if (!IsValidPluginId(id)) {
++		return kPluginTrustDefaultLevel;
++	}
++	const auto levels = ParsePluginTrustLevels(
++		QJsonValue(stringValue(kPluginTrustLevels, QString())));
++	return levels.contains(id)
++		? int(levels.value(id).toInt())
++		: kPluginTrustDefaultLevel;
++}
++
++void Config::setPluginTrustLevel(const QString &id, int level) {
++	if (!IsValidPluginId(id)) {
++		return;
++	}
++	auto levels = ParsePluginTrustLevels(
++		QJsonValue(stringValue(kPluginTrustLevels, QString())));
++	level = std::clamp(level, kPluginTrustMinLevel, kPluginTrustMaxLevel);
++	levels.insert(id, level);
++	setValue(
++		kPluginTrustLevels,
++		levels.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(EncodePluginTrustLevels(levels)));
++}
++
++QString Config::pluginTrustLevels() const {
++	return EncodePluginTrustLevels(ParsePluginTrustLevels(
++		QJsonValue(stringValue(kPluginTrustLevels, QString()))));
++}
++
++void Config::setPluginTrustLevels(const QString &value) {
++	const auto sanitized = ParsePluginTrustLevels(QJsonValue(value));
++	setValue(
++		kPluginTrustLevels,
++		sanitized.isEmpty()
++			? QJsonValue(QJsonValue::Undefined)
++			: QJsonValue(EncodePluginTrustLevels(sanitized)));
++}
++
 +QJsonObject Config::toJson() const {
 +	ensureLoaded();
 +	auto root = QJsonObject();
@@ -20594,6 +21085,7 @@ index 0000000..98022b3
 +			|| key == kDrawerAccountsExpanded
 +			|| key == kPluginStates
 +			|| key == kPluginsSettings
++			|| key == kPluginTrustLevels
 +			|| key == kChatsRemoveMessageTail
 +			|| key == kChatsHideReactionsChannels
 +			|| key == kChatsHideReactionsGroups
@@ -20667,6 +21159,15 @@ index 0000000..98022b3
 +			accepted.remove(kPluginStates);
 +		} else {
 +			accepted[kPluginStates] = states;
++		}
++	}
++	if (accepted.contains(kPluginTrustLevels)) {
++		const auto levels = ParsePluginTrustLevels(
++			accepted.value(kPluginTrustLevels));
++		if (levels.isEmpty()) {
++			accepted.remove(kPluginTrustLevels);
++		} else {
++			accepted[kPluginTrustLevels] = EncodePluginTrustLevels(levels);
 +		}
 +	}
 +	SanitizeExclusions(&accepted, kGhostReadExclusions);
@@ -20762,6 +21263,15 @@ index 0000000..98022b3
 +			_values[kPluginStates] = states;
 +		}
 +	}
++	if (_values.contains(kPluginTrustLevels)) {
++		const auto levels = ParsePluginTrustLevels(
++			_values.value(kPluginTrustLevels));
++		if (levels.isEmpty()) {
++			_values.remove(kPluginTrustLevels);
++		} else {
++			_values[kPluginTrustLevels] = EncodePluginTrustLevels(levels);
++		}
++	}
 +	SanitizeExclusions(&_values, kGhostReadExclusions);
 +	SanitizeExclusions(&_values, kGhostTypingExclusions);
 +	refreshChats();
@@ -20852,10 +21362,10 @@ index 0000000..98022b3
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..a56a6ef
+index 0000000..c2bab94
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,378 @@
+@@ -0,0 +1,382 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -21209,6 +21719,10 @@ index 0000000..a56a6ef
 +	void setPluginStates(const QJsonObject &states);
 +	[[nodiscard]] QString pluginsSettings() const;
 +	void setPluginsSettings(const QString &value);
++	[[nodiscard]] int pluginTrustLevel(const QString &id) const;
++	void setPluginTrustLevel(const QString &id, int level);
++	[[nodiscard]] QString pluginTrustLevels() const;
++	void setPluginTrustLevels(const QString &value);
 +
 +	[[nodiscard]] QJsonObject toJson() const;
 +	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);
@@ -30088,7 +30602,7 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..c1759bf
+index 0000000..5c4c249
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
 @@ -0,0 +1,8696 @@
@@ -30941,7 +31455,7 @@ index 0000000..c1759bf
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 139,
++            len(section) == 140,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -30962,7 +31476,7 @@ index 0000000..c1759bf
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 144,
++            sum(len(value) for value in exported.values()) == 145,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -30982,7 +31496,7 @@ index 0000000..c1759bf
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 144,
++                data.get("applied") == 145,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -31182,7 +31696,7 @@ index 0000000..c1759bf
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 144,
++            data.get("applied") == 145,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -31507,10 +32021,10 @@ index 0000000..c1759bf
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 139",
++            "backup legacy eight completed to 140",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (139, 3, 2),
++             len(sections["mainconfig"])) == (140, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -31822,8 +32336,8 @@ index 0000000..c1759bf
 +                "OETranslationProvider")})
 +        ledger.check(
 +            "backup redacted key counts",
-+            len(section) == 142
-+            and sum(len(value) for value in sections.values()) == 147,
++            len(section) == 143
++            and sum(len(value) for value in sections.values()) == 148,
 +            {name: len(value) for name, value in sections.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -31849,7 +32363,7 @@ index 0000000..c1759bf
 +                "backup redacted import applied",
 +                imported.get("ok") is True
 +                and imported.get("unknown") == []
-+                and imported.get("applied") == 147,
++                and imported.get("applied") == 148,
 +                imported)
 +        raw = json_call(
 +            ledger, cli, ["config-raw"], env, "backup redacted local config")
@@ -39292,6 +39806,36 @@ index 0000000..bb6846f
 +
 +
 +plugin = Observe()
+diff --git a/exteraless/tests/plugins/fixtures/runtime/valid-intents.plugin b/exteraless/tests/plugins/fixtures/runtime/valid-intents.plugin
+new file mode 100644
+index 0000000..af88724
+--- /dev/null
++++ b/exteraless/tests/plugins/fixtures/runtime/valid-intents.plugin
+@@ -0,0 +1,24 @@
++from base_plugin import BasePlugin
++
++__id__ = "demo_intents"
++__name__ = "Demo Intents"
++__description__ = "Cancels a tg:// test intent and logs both intent phases."
++__author__ = "Exteraless"
++__version__ = "1.0.0"
++__permissions__ = ["intents"]
++
++
++class Intents(BasePlugin):
++    def on_load(self):
++        self.add_intent_handler("cancel_test", ["tg"], phase="before")
++        self.add_intent_handler("after_log", ["tg"], phase="after")
++
++    def on_intent(self, item_id, url, context):
++        self.log("intent %s %s" % (item_id, url))
++        return {
++            "cancel": (item_id == "cancel_test"
++                       and url == "tg://resolve?test=intent"),
++        }
++
++
++plugin = Intents()
 diff --git a/exteraless/tests/plugins/fixtures/runtime/valid-menu.plugin b/exteraless/tests/plugins/fixtures/runtime/valid-menu.plugin
 new file mode 100644
 index 0000000..788265d
@@ -39448,10 +39992,10 @@ index 0000000..7bdb96b
 +    return "hello"
 diff --git a/exteraless/tests/plugins/plugin_host_cli.cpp b/exteraless/tests/plugins/plugin_host_cli.cpp
 new file mode 100644
-index 0000000..5bde1a5
+index 0000000..077054f
 --- /dev/null
 +++ b/exteraless/tests/plugins/plugin_host_cli.cpp
-@@ -0,0 +1,435 @@
+@@ -0,0 +1,531 @@
 +#include "exteraless/config.h"
 +#include "exteraless/exteraless.h"
 +#include "exteraless/plugin_runtime.h"
@@ -39470,6 +40014,7 @@ index 0000000..5bde1a5
 +
 +namespace {
 +
++using Exteraless::Plugins::IntentRecord;
 +using Exteraless::Plugins::MenuRecord;
 +using Exteraless::Plugins::Runtime;
 +
@@ -39638,6 +40183,34 @@ index 0000000..5bde1a5
 +	return items;
 +}
 +
++[[nodiscard]] QJsonArray IntentItems(Runtime *runtime, const QString &id) {
++	if (id.isEmpty()) {
++		return QJsonArray();
++	}
++	auto records = runtime->intents(id);
++	std::stable_sort(
++		records.begin(),
++		records.end(),
++		[](const IntentRecord &a, const IntentRecord &b) {
++			return a.priority > b.priority;
++		});
++	auto items = QJsonArray();
++	for (const auto &record : records) {
++		auto schemes = QJsonArray();
++		for (const auto &scheme : record.schemes) {
++			schemes.append(scheme);
++		}
++		items.append(QJsonObject{
++			{ QStringLiteral("plugin"), record.pluginId },
++			{ QStringLiteral("item"), record.itemId },
++			{ QStringLiteral("phase"), record.phase },
++			{ QStringLiteral("schemes"), schemes },
++			{ QStringLiteral("priority"), record.priority },
++		});
++	}
++	return items;
++}
++
 +[[nodiscard]] QJsonObject MultiOperation(
 +		Runtime *runtime,
 +		const QJsonObject &operation) {
@@ -39689,6 +40262,28 @@ index 0000000..5bde1a5
 +			const auto clicked = runtime->click(id, item, context);
 +			result[QStringLiteral("ok")] = clicked.ok;
 +			result[QStringLiteral("error")] = clicked.error;
++		}
++	} else if (op == QStringLiteral("intent-test")) {
++		const auto url = operation.value(QStringLiteral("url")).toString();
++		const auto fromIntent = operation.value(
++			QStringLiteral("fromIntent")).toBool();
++		if (url.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing intent url.");
++		} else {
++			result[QStringLiteral("handled")] =
++				runtime->dispatchIntent(url, fromIntent);
++			result[QStringLiteral("ok")] = true;
++			result[QStringLiteral("error")] = QString();
++		}
++	} else if (op == QStringLiteral("intent-list")) {
++		if (id.isEmpty()) {
++			result[QStringLiteral("error")] =
++				QStringLiteral("Missing plugin id.");
++		} else {
++			result[QStringLiteral("items")] = IntentItems(runtime, id);
++			result[QStringLiteral("ok")] = true;
++			result[QStringLiteral("error")] = QString();
 +		}
 +	} else if (op == QStringLiteral("stop")) {
 +		runtime->stop();
@@ -39754,6 +40349,32 @@ index 0000000..5bde1a5
 +			return Usage();
 +		}
 +		WriteJson(SettingsResult(rest[0]));
++		return 0;
++	}
++	if (command == QStringLiteral("plugin-level")) {
++		if (rest.size() != 1) {
++			return Usage();
++		}
++		WriteJson(QJsonObject{
++			{ QStringLiteral("level"),
++				Exteraless::Config::Instance().pluginTrustLevel(rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("plugin-level-set")) {
++		if (rest.size() != 2) {
++			return Usage();
++		}
++		auto ok = false;
++		const auto level = rest[1].toInt(&ok);
++		if (!ok || level < 0 || level > 2) {
++			return Usage();
++		}
++		Exteraless::Config::Instance().setPluginTrustLevel(rest[0], level);
++		WriteJson(QJsonObject{
++			{ QStringLiteral("level"),
++				Exteraless::Config::Instance().pluginTrustLevel(rest[0]) },
++		});
 +		return 0;
 +	}
 +	if (command == QStringLiteral("settings-set")) {
@@ -39837,6 +40458,25 @@ index 0000000..5bde1a5
 +			{ QStringLiteral("error"), clicked.error },
 +			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 +			{ QStringLiteral("loaded"), runtime->isLoaded(rest[0]) },
++		});
++		return 0;
++	}
++	if (command == QStringLiteral("intent-test")) {
++		if (rest.size() != 1 && rest.size() != 2) {
++			return Usage();
++		}
++		const auto fromIntent = (rest.size() == 2)
++			? rest[1] == QStringLiteral("after")
++			: false;
++		if (rest.size() == 2 && !fromIntent) {
++			return Usage();
++		}
++		const auto runtime = StartRuntime(pluginsRoot, auditLog);
++		const auto guard = RuntimeGuard();
++		WriteJson(QJsonObject{
++			{ QStringLiteral("handled"),
++				runtime->dispatchIntent(rest[0], fromIntent) },
++			{ QStringLiteral("pid"), double(runtime->hostPid()) },
 +		});
 +		return 0;
 +	}
@@ -40209,10 +40849,10 @@ index 0000000..159435e
 +    sys.exit(main())
 diff --git a/exteraless/tests/plugins/run_host_checks.py b/exteraless/tests/plugins/run_host_checks.py
 new file mode 100644
-index 0000000..1e613ea
+index 0000000..c6c537b
 --- /dev/null
 +++ b/exteraless/tests/plugins/run_host_checks.py
-@@ -0,0 +1,2489 @@
+@@ -0,0 +1,2740 @@
 +#!/usr/bin/env python3
 +"""Backend regression checks for the Exteraless Python plugin host."""
 +
@@ -42576,6 +43216,256 @@ index 0000000..1e613ea
 +        host_pids(plugins))
 +
 +
++GARBAGE_INTENTS_PLUGIN = r'''
++from base_plugin import BasePlugin
++
++__id__ = "intent_garbage"
++__name__ = "Intent Garbage"
++__version__ = "1.0.0"
++__permissions__ = ["intents"]
++
++
++class Garbage(BasePlugin):
++    def on_load(self):
++        self.add_intent_handler("1bad", ["tg"])
++        self.add_intent_handler("bad_phase", ["tg"], phase="bogus")
++        self.add_intent_handler("no_schemes", [])
++        self.add_intent_handler("bad_scheme", ["1bad scheme"])
++        self.add_intent_handler(
++            "too_many", ["a", "b", "c", "d", "e", "f", "g", "h", "i"])
++        self.add_intent_handler("kept", ["xkept"])
++
++    def on_intent(self, item_id, url, context):
++        self.log("intent %s %s" % (item_id, url))
++        return {"cancel": True}
++
++
++plugin = Garbage()
++'''
++
++
++def check_plugin_intents(ledger, cli, work):
++    _, plugins, audit = workspace(work, "plugin-intents")
++    fixture = copy_fixture(plugins, "valid-intents.plugin")
++    data_home = work / "plugin-intents-data"
++    expected_snapshot = [
++        {
++            "plugin": "demo_intents",
++            "item": "cancel_test",
++            "phase": "before",
++            "schemes": ["tg"],
++            "priority": 0,
++        },
++        {
++            "plugin": "demo_intents",
++            "item": "after_log",
++            "phase": "after",
++            "schemes": ["tg"],
++            "priority": 0,
++        },
++    ]
++
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_intents", "path": str(fixture)},
++                {"op": "intent-list", "id": "demo_intents"},
++                {"op": "intent-test", "url": "tg://resolve?test=intent"},
++                {"op": "intent-test", "url": "https://example.com/"},
++                {"op": "intent-test",
++                 "url": "tg://resolve?test=intent",
++                 "fromIntent": True},
++                {"op": "disable", "id": "demo_intents"},
++                {"op": "intent-test", "url": "tg://resolve?test=intent"},
++                {"op": "intent-list", "id": "demo_intents"},
++            ]),
++        ],
++        data_home)
++    ledger.check("intents: eight results", len(data) == 8, data)
++    if len(data) != 8:
++        return
++    ledger.check(
++        "intents: registered after enable",
++        data[0].get("ok") is True and data[0].get("loaded") is True,
++        data[0])
++    ledger.check(
++        "intents: snapshot after enable",
++        data[1].get("items") == expected_snapshot,
++        data[1].get("items"))
++    ledger.check(
++        "intents: before handler cancels",
++        data[2].get("handled") is True,
++        data[2])
++    ledger.check(
++        "intents: foreign scheme not handled",
++        data[3].get("handled") is False,
++        data[3])
++    ledger.check(
++        "intents: after pass does not cancel",
++        data[4].get("handled") is False,
++        data[4])
++    ledger.check(
++        "intents: plugin disabled",
++        data[5].get("ok") is True and data[5].get("loaded") is False,
++        data[5])
++    ledger.check(
++        "intents: unload clears handlers",
++        data[6].get("handled") is False,
++        data[6])
++    ledger.check(
++        "intents: snapshot empty after unload",
++        data[7].get("items") == [],
++        data[7].get("items"))
++    records = audit_records(audit)
++    ledger.check(
++        "intents: before logged",
++        has_log(
++            records,
++            "demo_intents",
++            "intent cancel_test tg://resolve?test=intent"),
++        records)
++    ledger.check(
++        "intents: after logged",
++        has_log(
++            records,
++            "demo_intents",
++            "intent after_log tg://resolve?test=intent"),
++        records)
++    before_logs = [
++        record for record in records
++        if record.get("plugin") == "demo_intents"
++        and record.get("detail")
++        == "intent cancel_test tg://resolve?test=intent"
++    ]
++    ledger.check(
++        "intents: unload stops logging",
++        len(before_logs) == 1,
++        before_logs)
++
++    garbage = write_plugin(
++        plugins, "intent-garbage.plugin", GARBAGE_INTENTS_PLUGIN)
++    data = run_cli(
++        cli, plugins, audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "intent_garbage", "path": str(garbage)},
++                {"op": "intent-list", "id": "intent_garbage"},
++                {"op": "intent-test", "url": "tg://drop"},
++                {"op": "intent-test", "url": "xkept://drop"},
++            ]),
++        ],
++        work / "plugin-intents-garbage-data")
++    ledger.check("intents garbage: four results", len(data) == 4, data)
++    if len(data) == 4:
++        ledger.check(
++            "intents garbage: loaded",
++            data[0].get("ok") is True,
++            data[0])
++        ledger.check(
++            "intents garbage: only clean handler kept",
++            data[1].get("items") == [
++                {
++                    "plugin": "intent_garbage",
++                    "item": "kept",
++                    "phase": "before",
++                    "schemes": ["xkept"],
++                    "priority": 0,
++                },
++            ],
++            data[1].get("items"))
++        ledger.check(
++            "intents garbage: dropped handler ignored",
++            data[2].get("handled") is False,
++            data[2])
++        ledger.check(
++            "intents garbage: clean handler kept",
++            data[3].get("handled") is True,
++            data[3])
++    garbage_records = audit_records(audit)
++    ledger.check(
++        "intents garbage: clean handler ran",
++        has_log(garbage_records, "intent_garbage", "intent kept xkept://drop"),
++        garbage_records)
++    dropped = [
++        record for record in garbage_records
++        if "tg://drop" in record.get("detail", "")
++    ]
++    ledger.check(
++        "intents garbage: dropped handler did not run",
++        not dropped,
++        dropped)
++
++    _, isolated_plugins, isolated_audit = workspace(
++        work, "plugin-intents-isolated")
++    isolated = copy_fixture(isolated_plugins, "valid-intents.plugin")
++    isolated_home = work / "plugin-intents-isolated-data"
++    default = run_cli(
++        cli, isolated_plugins, isolated_audit,
++        ["plugin-level", "demo_intents"], isolated_home)
++    ledger.check(
++        "intents level: default gated",
++        default.get("level") == 1,
++        default)
++    isolated_level = run_cli(
++        cli, isolated_plugins, isolated_audit,
++        ["plugin-level-set", "demo_intents", "0"], isolated_home)
++    ledger.check(
++        "intents level: isolated stored",
++        isolated_level.get("level") == 0,
++        isolated_level)
++    data = run_cli(
++        cli, isolated_plugins, isolated_audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_intents", "path": str(isolated)},
++                {"op": "intent-test", "url": "tg://resolve?test=intent"},
++            ]),
++        ],
++        isolated_home)
++    ledger.check("intents isolated: two results", len(data) == 2, data)
++    if len(data) == 2:
++        ledger.check(
++            "intents isolated: plugin loaded",
++            data[0].get("ok") is True and data[0].get("loaded") is True,
++            data[0])
++        ledger.check(
++            "intents isolated: not dispatched",
++            data[1].get("handled") is False,
++            data[1])
++    ledger.check(
++        "intents isolated: no log",
++        not has_log(
++            audit_records(isolated_audit),
++            "demo_intents",
++            "intent cancel_test tg://resolve?test=intent"),
++        audit_records(isolated_audit))
++    trusted_level = run_cli(
++        cli, isolated_plugins, isolated_audit,
++        ["plugin-level-set", "demo_intents", "2"], isolated_home)
++    data = run_cli(
++        cli, isolated_plugins, isolated_audit,
++        [
++            "multi",
++            json.dumps([
++                {"op": "enable", "id": "demo_intents", "path": str(isolated)},
++                {"op": "intent-test", "url": "tg://resolve?test=intent"},
++            ]),
++        ],
++        isolated_home)
++    ledger.check(
++        "intents level: trusted stored",
++        trusted_level.get("level") == 2,
++        trusted_level)
++    ledger.check(
++        "intents trusted: dispatched",
++        len(data) == 2 and data[1].get("handled") is True,
++        data)
++
++
 +def check_missing_python(ledger, cli, work):
 +    _, plugins, audit = workspace(work, "missing-python")
 +    valid = copy_fixture(plugins, "valid.plugin")
@@ -42681,6 +43571,7 @@ index 0000000..1e613ea
 +        check_config_whitelist(ledger, cli, work)
 +        check_plugin_settings(ledger, cli, work)
 +        check_plugin_menu(ledger, cli, work)
++        check_plugin_intents(ledger, cli, work)
 +        check_missing_python(ledger, cli, work)
 +        check_crash(ledger, cli, work)
 +        check_missing_base(ledger, cli, work)

@@ -351,6 +351,10 @@ public:
 	void setPluginStates(const QJsonObject &states);
 	[[nodiscard]] QString pluginsSettings() const;
 	void setPluginsSettings(const QString &value);
+	[[nodiscard]] int pluginTrustLevel(const QString &id) const;
+	void setPluginTrustLevel(const QString &id, int level);
+	[[nodiscard]] QString pluginTrustLevels() const;
+	void setPluginTrustLevels(const QString &value);
 
 	[[nodiscard]] QJsonObject toJson() const;
 	bool fromJson(const QJsonObject &root, QStringList *unknown = nullptr);

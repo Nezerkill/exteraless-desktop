@@ -847,7 +847,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 139,
+            len(section) == 140,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -868,7 +868,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 144,
+            sum(len(value) for value in exported.values()) == 145,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -888,7 +888,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 144,
+                data.get("applied") == 145,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -1067,6 +1067,7 @@ def check_backup(ledger, cli, work):
             "OENetworkDnsType": 1,
             "OENetworkCustomDoH": "https://full.test/dns-query",
             "OENetworkWeatherCity": "tokyo",
+            "OEPluginTrustLevels": json.dumps({"demo": 2}),
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -1088,7 +1089,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 144,
+            data.get("applied") == 145,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1413,10 +1414,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 139",
+            "backup legacy eight completed to 140",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (139, 3, 2),
+             len(sections["mainconfig"])) == (140, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1728,8 +1729,8 @@ def check_backup_redacted(ledger, cli, work):
                 "OETranslationProvider")})
         ledger.check(
             "backup redacted key counts",
-            len(section) == 142
-            and sum(len(value) for value in sections.values()) == 147,
+            len(section) == 143
+            and sum(len(value) for value in sections.values()) == 148,
             {name: len(value) for name, value in sections.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -1755,7 +1756,7 @@ def check_backup_redacted(ledger, cli, work):
                 "backup redacted import applied",
                 imported.get("ok") is True
                 and imported.get("unknown") == []
-                and imported.get("applied") == 147,
+                and imported.get("applied") == 148,
                 imported)
         raw = json_call(
             ledger, cli, ["config-raw"], env, "backup redacted local config")

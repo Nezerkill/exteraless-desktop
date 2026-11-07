@@ -34,6 +34,11 @@ constexpr auto kMaxMenuItems = 64;
 constexpr auto kMaxMenuItemsTotal = 256;
 constexpr auto kMaxMenuTextLength = 128;
 constexpr auto kMaxMenuPriority = 1000;
+constexpr auto kMaxIntentHandlers = 32;
+constexpr auto kMaxIntentHandlersTotal = 128;
+constexpr auto kMaxIntentSchemes = 8;
+constexpr auto kMaxIntentPriority = 1000;
+constexpr auto kIsolatedTrustLevel = 0;
 
 constexpr auto kSandboxUnavailable =
 	"Plugin sandbox is unavailable.";
@@ -94,6 +99,7 @@ _IN_AUDIT = [False]
 _PLUGINS = {}
 _SETTINGS = {}
 _MENUS = {}
+_INTENTS = {}
 MAX_SETTING_KEYS = 256
 MAX_SETTINGS_BYTES = 64 * 1024
 MENU_CONTEXTS = ('main', 'message', 'chat')
@@ -101,6 +107,12 @@ MAX_MENU_ITEMS = 64
 MAX_MENU_ITEMS_TOTAL = 256
 MAX_MENU_TEXT = 128
 MAX_MENU_PRIORITY = 1000
+INTENT_PHASES = ('before', 'after')
+MAX_INTENT_HANDLERS = 32
+MAX_INTENT_HANDLERS_TOTAL = 128
+MAX_INTENT_SCHEMES = 8
+MAX_INTENT_PRIORITY = 1000
+SCHEME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9+.-]{0,31}$')
 
 
 class _InvalidJson:
@@ -220,6 +232,9 @@ class BasePlugin:
     def on_menu_item(self, item_id, context):
         pass
 
+    def on_intent(self, item_id, url, context):
+        return {'cancel': False}
+
     def add_menu_item(self, item, context='main'):
         entry = _menu_entry(item, context)
         if entry is None:
@@ -249,6 +264,37 @@ class BasePlugin:
         if len(kept) == len(entries):
             return False
         _MENUS[plugin_id] = kept
+        return True
+
+    def add_intent_handler(self, item_id, schemes, phase='before', priority=0):
+        entry = _intent_entry(item_id, schemes, phase, priority)
+        if entry is None:
+            return False
+        plugin_id = _CURRENT_ID[0]
+        entries = _INTENTS.get(plugin_id)
+        if not isinstance(entries, list):
+            entries = []
+            _INTENTS[plugin_id] = entries
+        for index, existing in enumerate(entries):
+            if existing['item_id'] == entry['item_id']:
+                entries[index] = entry
+                return True
+        total = sum(len(items) for items in _INTENTS.values())
+        if (len(entries) >= MAX_INTENT_HANDLERS
+                or total >= MAX_INTENT_HANDLERS_TOTAL):
+            return False
+        entries.append(entry)
+        return True
+
+    def remove_intent_handler(self, item_id):
+        plugin_id = _CURRENT_ID[0]
+        entries = _INTENTS.get(plugin_id)
+        if not isinstance(entries, list) or not isinstance(item_id, str):
+            return False
+        kept = [item for item in entries if item['item_id'] != item_id]
+        if len(kept) == len(entries):
+            return False
+        _INTENTS[plugin_id] = kept
         return True
 
     def log(self, message):
@@ -657,6 +703,44 @@ def _menu_snapshot(plugin_id):
     return result
 
 
+def _intent_entry(item_id, schemes, phase, priority):
+    if not isinstance(item_id, str) or not MENU_ITEM_RE.match(item_id):
+        return None
+    if not isinstance(phase, str) or phase not in INTENT_PHASES:
+        return None
+    if (isinstance(schemes, str)
+            or not isinstance(schemes, (list, tuple))
+            or not schemes
+            or len(schemes) > MAX_INTENT_SCHEMES):
+        return None
+    clean = []
+    for scheme in schemes:
+        if not isinstance(scheme, str) or not SCHEME_RE.match(scheme):
+            return None
+        clean.append(scheme.lower())
+    priority = (priority if isinstance(priority, int)
+                and not isinstance(priority, bool) else 0)
+    return {
+        'item_id': item_id,
+        'phase': phase,
+        'schemes': clean,
+        'priority': max(-MAX_INTENT_PRIORITY,
+                        min(MAX_INTENT_PRIORITY, priority)),
+    }
+
+
+def _intent_snapshot(plugin_id):
+    entries = _INTENTS.get(plugin_id)
+    if not isinstance(entries, list):
+        return []
+    return [{
+        'item_id': entry['item_id'],
+        'phase': entry['phase'],
+        'schemes': list(entry['schemes']),
+        'priority': entry['priority'],
+    } for entry in entries[:MAX_INTENT_HANDLERS]]
+
+
 def _setting_field(item, name, fallback=None):
     if isinstance(item, dict):
         return item.get(name, fallback)
@@ -845,6 +929,7 @@ def _load(message):
                 'settings_ui': _settings_rows(
                     existing['instance'], plugin_id),
                 'menu': _menu_snapshot(plugin_id),
+                'intents': _intent_snapshot(plugin_id),
             })
         else:
             _send({'seq': seq, 'type': 'error',
@@ -854,6 +939,7 @@ def _load(message):
     previous_settings = _SETTINGS.get(plugin_id)
     _SETTINGS[plugin_id] = _sanitize_settings(message.get('settings'))
     _MENUS.pop(plugin_id, None)
+    _INTENTS.pop(plugin_id, None)
     module_name = 'exteraless_plugin_' + plugin_id
     before = set(sys.modules)
     _CURRENT_ID[0] = plugin_id
@@ -920,6 +1006,7 @@ def _load(message):
         'settings': _settings_snapshot(plugin_id),
         'settings_ui': _settings_rows(instance, plugin_id),
         'menu': _menu_snapshot(plugin_id),
+        'intents': _intent_snapshot(plugin_id),
     })
 
 
@@ -941,6 +1028,7 @@ def _unload(message):
     _purge(record['modules'])
     _SETTINGS.pop(plugin_id, None)
     _MENUS.pop(plugin_id, None)
+    _INTENTS.pop(plugin_id, None)
     response = {'seq': seq, 'type': 'unloaded', 'ok': True}
     if warning:
         response['warning'] = warning
@@ -961,6 +1049,7 @@ def _shutdown():
     _PLUGINS.clear()
     _SETTINGS.clear()
     _MENUS.clear()
+    _INTENTS.clear()
     _send({'seq': _CURRENT_SEQ[0], 'type': 'bye'})
 
 
@@ -994,6 +1083,41 @@ def _menu_click(message):
     _send({'seq': seq, 'type': 'clicked', 'ok': True})
 
 
+def _intent_click(message):
+    seq = _CURRENT_SEQ[0]
+    plugin_id = message.get('id')
+    record = _PLUGINS.get(plugin_id) if isinstance(plugin_id, str) else None
+    item_id = message.get('item')
+    url = message.get('url')
+    context = message.get('context')
+    if record is None:
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Plugin is not loaded.'})
+        return
+    entries = _INTENTS.get(plugin_id)
+    entries = entries if isinstance(entries, list) else []
+    scheme = url.split(':', 1)[0].lower() if isinstance(
+        url, str) and ':' in url else ''
+    if (not isinstance(item_id, str) or not isinstance(url, str)
+            or not isinstance(context, str) or not scheme
+            or not any(entry['item_id'] == item_id
+                       and scheme in entry['schemes']
+                       for entry in entries)):
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Unknown intent handler.'})
+        return
+    handler = getattr(record['instance'], 'on_intent', None)
+    _CURRENT_ID[0] = plugin_id
+    try:
+        result = handler(item_id, url, context) if callable(handler) else None
+    except BaseException as error:
+        _send({'seq': seq, 'type': 'error',
+               'message': 'Intent action failed: %s' % error})
+        return
+    cancel = isinstance(result, dict) and result.get('cancel') is True
+    _send({'seq': seq, 'type': 'intent-result', 'ok': True, 'cancel': cancel})
+
+
 def _handle(line):
     try:
         message = json.loads(line)
@@ -1015,6 +1139,8 @@ def _handle(line):
         _unload(message)
     elif command == 'menu':
         _menu_click(message)
+    elif command == 'intent':
+        _intent_click(message)
     else:
         _send({'seq': _CURRENT_SEQ[0], 'type': 'error',
                'message': 'Unknown command.'})
@@ -1281,6 +1407,24 @@ void PersistSettings(const QString &id, const QJsonObject &settings) {
 	return expression.match(itemId).hasMatch();
 }
 
+[[nodiscard]] bool IsIntentPhase(const QString &phase) {
+	return phase == QStringLiteral("before")
+		|| phase == QStringLiteral("after");
+}
+
+[[nodiscard]] bool IsIntentScheme(const QString &scheme) {
+	static const auto expression = QRegularExpression(
+		QStringLiteral("^[A-Za-z][A-Za-z0-9+.-]{0,31}$"));
+	return expression.match(scheme).hasMatch();
+}
+
+[[nodiscard]] QString UrlScheme(const QString &url) {
+	static const auto expression = QRegularExpression(
+		QStringLiteral("^([A-Za-z][A-Za-z0-9+.-]*):"));
+	const auto match = expression.match(url);
+	return match.hasMatch() ? match.captured(1).toLower() : QString();
+}
+
 } // namespace
 
 Runtime::Runtime(QString pluginsDirectory, QString auditLogPath)
@@ -1411,6 +1555,10 @@ std::vector<MenuRecord> Runtime::menus(const QString &id) const {
 	return _menus.value(id);
 }
 
+std::vector<IntentRecord> Runtime::intents(const QString &id) const {
+	return _intents.value(id);
+}
+
 void Runtime::saveSetting(
 		const QString &id,
 		const QString &key,
@@ -1489,6 +1637,9 @@ Result Runtime::enable(const QString &id, const QString &path) {
 		_settingsUi[id] = response.value(
 			QStringLiteral("settings_ui")).toArray();
 		parseMenuSnapshot(id, response.value(QStringLiteral("menu")));
+		parseIntentSnapshot(
+			id,
+			response.value(QStringLiteral("intents")));
 		_loaded[id] = canonical;
 		return { true, QString() };
 	}
@@ -1526,6 +1677,7 @@ Result Runtime::disable(const QString &id) {
 		}
 		_loaded.remove(id);
 		_menus.remove(id);
+		_intents.remove(id);
 		const auto warning = response.value(QStringLiteral("warning")).toString();
 		if (!warning.isEmpty()) {
 			writeAuditRecord(
@@ -1600,6 +1752,96 @@ Result Runtime::clickMenu(
 	return { false, error };
 }
 
+bool Runtime::dispatchIntent(const QString &url, bool fromIntent) {
+	if (!isRunning()) {
+		return false;
+	}
+	const auto scheme = UrlScheme(url);
+	if (scheme.isEmpty()) {
+		return false;
+	}
+	const auto phase = fromIntent
+		? QStringLiteral("after")
+		: QStringLiteral("before");
+	auto matched = std::vector<IntentRecord>();
+	for (const auto &list : _intents) {
+		for (const auto &record : list) {
+			if (record.phase != phase
+				|| Config::Instance().pluginTrustLevel(record.pluginId)
+					== kIsolatedTrustLevel) {
+				continue;
+			}
+			if (std::find(
+					record.schemes.begin(),
+					record.schemes.end(),
+					scheme) == record.schemes.end()) {
+				continue;
+			}
+			matched.push_back(record);
+		}
+	}
+	std::stable_sort(
+		matched.begin(),
+		matched.end(),
+		[](const auto &a, const auto &b) {
+			return a.priority > b.priority;
+		});
+	const auto context = fromIntent
+		? QStringLiteral("intent")
+		: QStringLiteral("link");
+	// The after pass cannot veto an intent the app has already accepted.
+	for (const auto &record : matched) {
+		auto cancel = false;
+		const auto result = intentClick(
+			record.pluginId,
+			record.itemId,
+			url,
+			context,
+			&cancel);
+		if (!fromIntent && result.ok && cancel) {
+			return true;
+		}
+	}
+	return false;
+}
+
+Result Runtime::intentClick(
+		const QString &id,
+		const QString &item,
+		const QString &url,
+		const QString &context,
+		bool *cancel) {
+	auto request = QJsonObject{
+		{ QStringLiteral("seq"), ++_seq },
+		{ QStringLiteral("cmd"), QStringLiteral("intent") },
+		{ QStringLiteral("id"), id },
+		{ QStringLiteral("item"), item },
+		{ QStringLiteral("url"), url },
+		{ QStringLiteral("context"), context },
+	};
+	auto response = QJsonObject();
+	auto error = QString();
+	if (!sendRequest(request, &response, &error, kClickTimeout)) {
+		return { false, error };
+	}
+	const auto type = response.value(QStringLiteral("type")).toString();
+	if (type == QStringLiteral("intent-result")) {
+		const auto ok = response.value(QStringLiteral("ok"));
+		if (!ok.isBool() || !ok.toBool()) {
+			protocolViolation(&error);
+			return { false, error };
+		}
+		const auto value = response.value(QStringLiteral("cancel"));
+		*cancel = value.isBool() && value.toBool();
+		return { true, QString() };
+	}
+	if (type == QStringLiteral("error")) {
+		return { false, response.value(QStringLiteral("message")).toString() };
+	}
+	protocolViolation(&error);
+	return { false, error };
+}
+
 void Runtime::parseMenuSnapshot(
 		const QString &id,
 		const QJsonValue &snapshot) {
@@ -1645,6 +1887,65 @@ void Runtime::parseMenuSnapshot(
 	_menus[id] = std::move(records);
 }
 
+void Runtime::parseIntentSnapshot(
+		const QString &id,
+		const QJsonValue &snapshot) {
+	auto records = std::vector<IntentRecord>();
+	auto total = 0;
+	for (const auto &list : _intents) {
+		total += int(list.size());
+	}
+	const auto array = snapshot.toArray();
+	for (const auto &value : array) {
+		if (records.size() >= kMaxIntentHandlers
+			|| total >= kMaxIntentHandlersTotal) {
+			break;
+		}
+		const auto item = value.toObject();
+		const auto itemId = item.value(QStringLiteral("item_id")).toString();
+		const auto phase = item.value(QStringLiteral("phase")).toString();
+		const auto schemesValue = item.value(QStringLiteral("schemes"));
+		if (!IsMenuItemId(itemId)
+			|| !IsIntentPhase(phase)
+			|| !schemesValue.isArray()) {
+			continue;
+		}
+		const auto schemeList = schemesValue.toArray();
+		if (schemeList.isEmpty()
+			|| schemeList.size() > kMaxIntentSchemes) {
+			continue;
+		}
+		auto schemes = std::vector<QString>();
+		auto valid = true;
+		for (const auto &schemeValue : schemeList) {
+			if (!schemeValue.isString()
+				|| !IsIntentScheme(schemeValue.toString())) {
+				valid = false;
+				break;
+			}
+			schemes.push_back(schemeValue.toString().toLower());
+		}
+		if (!valid) {
+			continue;
+		}
+		auto record = IntentRecord();
+		record.pluginId = id;
+		record.itemId = itemId;
+		record.phase = phase;
+		record.schemes = std::move(schemes);
+		const auto priority = item.value(QStringLiteral("priority"));
+		if (priority.isDouble()) {
+			record.priority = std::clamp(
+				priority.toInt(),
+				-kMaxIntentPriority,
+				kMaxIntentPriority);
+		}
+		records.push_back(std::move(record));
+		++total;
+	}
+	_intents[id] = std::move(records);
+}
+
 void Runtime::stop() {
 	if (_process && _process->state() == QProcess::Running) {
 		const auto request = QJsonObject{
@@ -1675,6 +1976,7 @@ void Runtime::clearHost() {
 	_settings.clear();
 	_settingsUi.clear();
 	_menus.clear();
+	_intents.clear();
 	_seq = 0;
 }
 
@@ -1843,6 +2145,7 @@ bool Runtime::readMessage(
 				|| (type != QStringLiteral("loaded")
 					&& type != QStringLiteral("unloaded")
 					&& type != QStringLiteral("clicked")
+					&& type != QStringLiteral("intent-result")
 					&& type != QStringLiteral("error"))) {
 				protocolViolation(error);
 				return false;

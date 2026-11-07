@@ -197,6 +197,8 @@ constexpr auto kNetworkWeatherCityAlias = "weatherCity";
 constexpr auto kPluginStates = "OEPluginStates";
 constexpr auto kPluginsSettings = "OEPluginSettings";
 constexpr auto kPluginsSettingsAlias = "pluginSettings";
+constexpr auto kPluginTrustLevels = "OEPluginTrustLevels";
+constexpr auto kPluginTrustLevelsAlias = "pluginTrustLevels";
 constexpr auto kPillStackEnabled = "OEPillStackEnabled";
 constexpr auto kPillStackPills = "OEPillStackPills";
 constexpr auto kPillStackOrder = "OEPillStackOrder";
@@ -515,6 +517,7 @@ QString BuildBackup(bool redactSecrets) {
 	extera[kNetworkCustomDoH] = config.networkCustomDoH();
 	extera[kNetworkWeatherCity] = config.networkWeatherCity();
 	extera[kPluginStates] = config.pluginStates();
+	extera[kPluginTrustLevels] = config.pluginTrustLevels();
 	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
 	extera[kChatsUnreadCapsule] = chats.unreadCapsule;
@@ -838,6 +841,12 @@ BackupImportResult ApplyBackup(const QString &text) {
 			config.setNetworkWeatherCity(value.toString());
 		} else if (key == kPluginStates && value.isObject()) {
 			config.setPluginStates(value.toObject());
+		} else if ((key == kPluginTrustLevels || key == kPluginTrustLevelsAlias)
+			&& (value.isString() || value.isObject())) {
+			config.setPluginTrustLevels(value.isString()
+				? value.toString()
+				: QString::fromUtf8(QJsonDocument(value.toObject())
+					.toJson(QJsonDocument::Compact)));
 		} else if ((key == kPluginsSettings || key == kPluginsSettingsAlias)
 			&& (value.isString() || value.isObject())) {
 			// WHY: plugin settings migrate from old backups but are never

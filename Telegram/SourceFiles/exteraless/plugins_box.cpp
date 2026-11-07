@@ -23,6 +23,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QPointer>
 #include <QTextStream>
 #include <rpl/rpl.h>
 
@@ -115,6 +116,20 @@ struct Row {
 		: u"Plugin host: stopped"_q;
 }
 
+[[nodiscard]] QString LevelName(int level) {
+	return (level <= 0)
+		? tr::lng_settings_exteraless_plugins_level_isolated(tr::now)
+		: (level == 1)
+		? tr::lng_settings_exteraless_plugins_level_gated(tr::now)
+		: tr::lng_settings_exteraless_plugins_level_trusted(tr::now);
+}
+
+[[nodiscard]] QString LevelLinkText(int level) {
+	return tr::lng_settings_exteraless_plugins_level(tr::now)
+		+ u": "_q
+		+ LevelName(level);
+}
+
 [[nodiscard]] int MenuItemsCount(
 		const Plugins::Runtime *runtime,
 		const QString &id) {
@@ -196,12 +211,21 @@ void ShowSelectorBox(
 		const QString &title,
 		const QStringList &items,
 		int selected,
-		Fn<void(int)> chosen) {
+		Fn<void(int)> chosen,
+		const QString &note = QString()) {
 	const auto group = std::make_shared<Ui::RadioenumGroup<int>>(selected);
 	controller->show(Box([=](not_null<Ui::GenericBox*> box) {
 		box->setTitle(title);
 		const auto inner = box->addRow(
 			object_ptr<Ui::VerticalLayout>(box));
+		if (!note.isEmpty()) {
+			inner->add(
+				object_ptr<Ui::FlatLabel>(
+					box,
+					rpl::single(note),
+					st::boxLabel),
+				st::boxRowPadding);
+		}
 		for (auto i = 0; i != items.size(); ++i) {
 			inner->add(
 				object_ptr<Ui::Radioenum<int>>(
@@ -218,6 +242,31 @@ void ShowSelectorBox(
 		});
 		box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
 	}));
+}
+
+void ShowPluginLevelBox(
+		not_null<Window::SessionController*> controller,
+		const QString &pluginId,
+		not_null<Ui::LinkButton*> link) {
+	const auto items = QStringList{
+		LevelName(0),
+		LevelName(1),
+		LevelName(2),
+	};
+	const auto weak = QPointer<Ui::LinkButton>(link);
+	ShowSelectorBox(
+		controller,
+		tr::lng_settings_exteraless_plugins_level(tr::now),
+		items,
+		Config::Instance().pluginTrustLevel(pluginId),
+		[=](int level) {
+			Config::Instance().setPluginTrustLevel(pluginId, level);
+			if (weak) {
+				weak->setText(LevelLinkText(
+					Config::Instance().pluginTrustLevel(pluginId)));
+			}
+		},
+		u"Isolated blocks intents."_q);
 }
 
 void ShowPluginSettingsBox(
@@ -499,6 +548,16 @@ void ShowPluginsBox(not_null<Window::SessionController*> controller) {
 						MenuItemsCount(runtime, entry.id))),
 					st::boxLabel),
 				st::boxRowPadding);
+			const auto levelId = entry.id;
+			const auto levelLink = layout->add(
+				object_ptr<Ui::LinkButton>(
+					box,
+					LevelLinkText(
+						Config::Instance().pluginTrustLevel(levelId))),
+				st::boxRowPadding);
+			levelLink->setClickedCallback([=] {
+				ShowPluginLevelBox(controller, levelId, levelLink);
+			});
 			row->settingsLink = layout->add(
 				object_ptr<Ui::LinkButton>(box, u"Settings"_q),
 				st::boxRowPadding);
