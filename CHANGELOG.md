@@ -2,6 +2,29 @@
 
 ## 2026-11-07
 
+- Стриминг AI-ассистента (NB-48, follow-up MVP): SSE-разбор вынесен в
+  Qt-only `exteraless/ai_client.{h,cpp}` — `SseParser::feed` копит чанки в
+  буфер и режет по `\n` (терпит `\r` и разрыв строки между чанками),
+  `isDone()` поднимает флаг на `data: [DONE]`, `reset()` начинает заново;
+  `ParseStreamEvent` берёт `delta.content` из `choices[]`, а не-`data:`
+  строки, битый JSON и `error`-события молча пропускает. В `Ui::AiRequestBox`
+  (`boxes/ai_request_box.cpp`) тело теперь собирается локально с
+  `stream: true` (без `BuildRequestJson`), ответ растёт по `readyRead`,
+  `[DONE]` обрывает запрос (`abort`) и финализирует набранный текст,
+  `ParseResponse` остаётся fallback'ом для нестримового ответа, а закрытие
+  бокса (Close, Esc, клик вне) через деструктор `State` делает `cancel()` и
+  гасит запрос. CLI — два новых режима `ai-stream-parse <file>` и
+  `ai-stream-chunk <file> <bytes>`, три фикстуры (`ai-stream-basic`,
+  `ai-stream-split`, `ai-stream-error`), `check_ai_stream` — 13 проверок;
+  chats-раннер 1058 (1045 + 13; ai 23, ai-stream 13, ai-editor 5), плагины 32
+  и host-раннер 252 без изменений, backup 105; `kKeysCount` 11241 без
+  изменений (новых lang-ключей нет), sha256 патча `0d45e9dc…`, `nix flake
+  check` PASS. Не сделано (follow-up): роли, история, замена редактора,
+  саммари, error-канал парсера и параметр `stream` в `BuildRequestJson`
+  (сейчас тело с `stream: true` собирается в боксе — дрейф). Ограничения:
+  runtime SSE на живом endpoint не проверялся (только синтаксис и CLI);
+  ошибка, присланная в середине потока, не видна — у парсера нет
+  error-канала; Xvfb-смоук не выполнялся.
 - Пилюли погоды, курсов и золота (NB-56): в `PillStack` шесть новых
   `PillStackPill` — `Weather` (256), `Btc` (512), `Eth` (1024), `Usd` (2048),
   `Eur` (4096) и `Gold` (8192), — поэтому `kPillStackAllPills` вырос с

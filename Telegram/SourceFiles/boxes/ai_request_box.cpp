@@ -11,12 +11,17 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "exteraless/config.h"
 #include "ui/layers/generic_box.h"
 #include "ui/vertical_list.h"
+#include "ui/widgets/buttons.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
 #include "styles/style_boxes.h"
 #include "styles/style_layers.h"
 
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
+#include <QtCore/QPointer>
 #include <QtCore/QUrl>
 #include <QtGui/QClipboard>
 #include <QtGui/QGuiApplication>
@@ -34,8 +39,29 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 
 	struct State {
 		QNetworkAccessManager network;
+		Exteraless::SseParser parser;
+		QPointer<RoundButton> sendButton;
+		QString answer;
+		QByteArray raw;
 		rpl::variable<QString> response;
+		QNetworkReply *reply = nullptr;
 		bool busy = false;
+		bool closing = false;
+
+		~State() {
+			cancel();
+		}
+
+		void cancel() {
+			closing = true;
+			parser.reset();
+			const auto pending = reply;
+			reply = nullptr;
+			if (pending) {
+				pending->abort();
+				pending->deleteLater();
+			}
+		}
 	};
 	const auto state = box->lifetime().make_state<State>();
 
@@ -75,7 +101,24 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 			return;
 		}
 		state->busy = true;
+		state->answer.clear();
+		state->raw.clear();
+		state->parser.reset();
 		state->response = u"Thinking..."_q;
+		if (const auto button = state->sendButton) {
+			button->setEnabled(false);
+		}
+
+		auto messages = QJsonArray();
+		messages.append(QJsonObject{
+			{ u"role"_q, u"user"_q },
+			{ u"content"_q, prompt },
+		});
+		const auto payload = QJsonDocument(QJsonObject{
+			{ u"model"_q, config.aiModel() },
+			{ u"messages"_q, messages },
+			{ u"stream"_q, true },
+		}).toJson(QJsonDocument::Compact);
 
 		auto networkRequest = QNetworkRequest(
 			QUrl(Exteraless::ChatCompletionsUrl(config.aiEndpoint())));
@@ -85,33 +128,60 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		networkRequest.setRawHeader(
 			"Authorization",
 			(u"Bearer " + key).toUtf8());
-		const auto reply = state->network.post(
-			networkRequest,
-			Exteraless::BuildRequestJson(
-				config.aiEndpoint(),
-				config.aiModel(),
-				Exteraless::AiRequest{ .prompt = prompt }));
-		QObject::connect(reply, &QNetworkReply::finished, [=] {
-			const auto body = reply->readAll();
+		const auto reply = state->network.post(networkRequest, payload);
+		state->reply = reply;
+		QObject::connect(reply, &QNetworkReply::readyRead, box, [=] {
+			if (state->closing) {
+				return;
+			}
+			const auto chunk = reply->readAll();
+			if (state->answer.isEmpty()) {
+				state->raw += chunk;
+			}
+			const auto delta = state->parser.feed(chunk);
+			if (!delta.isEmpty()) {
+				state->answer += delta;
+				state->response = state->answer;
+			}
+			if (state->parser.isDone()) {
+				reply->abort();
+			}
+		});
+		QObject::connect(reply, &QNetworkReply::finished, box, [=] {
+			if (state->closing) {
+				return;
+			}
 			const auto failure = reply->errorString();
 			const auto networkError
 				= (reply->error() != QNetworkReply::NoError);
+			const auto done = state->parser.isDone();
 			reply->deleteLater();
+			state->reply = nullptr;
 			state->busy = false;
-			auto result = Exteraless::ParseResponse(body);
-			if (result.ok) {
-				state->response = result.text;
+			state->parser.reset();
+			if (const auto button = state->sendButton) {
+				button->setEnabled(true);
+			}
+			if (!state->answer.isEmpty() && (done || !networkError)) {
+				state->response = state->answer;
+			} else if (!state->answer.isEmpty()) {
+				state->response = failure;
+			} else if (done) {
+				state->response = u"Empty response"_q;
 			} else {
-				state->response = result.error.isEmpty()
-					? (networkError
-						? failure
-						: u"Request failed"_q)
-					: result.error;
+				const auto result = Exteraless::ParseResponse(state->raw);
+				state->response = result.ok
+					? result.text
+					: (result.error.isEmpty()
+						? (networkError
+							? failure
+							: u"Request failed"_q)
+						: result.error);
 			}
 		});
 	};
 
-	box->addButton(rpl::single(u"Send"_q), send);
+	state->sendButton = box->addButton(rpl::single(u"Send"_q), send);
 	box->addLeftButton(rpl::single(u"Copy"_q), [=] {
 		const auto answer = state->response.current();
 		if (!answer.isEmpty()) {
@@ -119,6 +189,7 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		}
 	});
 	box->addLeftButton(rpl::single(u"Close"_q), [=] {
+		state->cancel();
 		box->closeBox();
 	});
 	box->setShowFinishedCallback([=] {

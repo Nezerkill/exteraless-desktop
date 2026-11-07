@@ -1,0 +1,9 @@
+data: {"choices":[{"delta":{"content":"\u041f\u0440\u0438\u0432\u0435\u0442"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":" \u043c\u0438\u0440"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"\n"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"line2"},"finish_reason":"stop"}]}
+
+data: [DONE]

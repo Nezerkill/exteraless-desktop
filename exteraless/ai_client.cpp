@@ -33,6 +33,39 @@ namespace {
 		: message;
 }
 
+const auto kDataPrefix = QByteArrayLiteral("data:");
+const auto kDoneMarker = QByteArrayLiteral("[DONE]");
+
+[[nodiscard]] QByteArray EventPayload(const QByteArray &line) {
+	auto trimmed = line.trimmed();
+	if (!trimmed.startsWith(kDataPrefix)) {
+		return QByteArray();
+	}
+	return trimmed.mid(kDataPrefix.size()).trimmed();
+}
+
+[[nodiscard]] QString DeltaContent(const QByteArray &payload) {
+	auto error = QJsonParseError();
+	const auto document = QJsonDocument::fromJson(payload, &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return QString();
+	}
+	const auto root = document.object();
+	if (!root.value(QStringLiteral("error")).isUndefined()) {
+		return QString();
+	}
+	for (const auto &choice : root.value(
+			QStringLiteral("choices")).toArray()) {
+		const auto delta = choice.toObject().value(
+			QStringLiteral("delta")).toObject();
+		const auto content = delta.value(QStringLiteral("content"));
+		if (!content.isUndefined() && !content.isNull()) {
+			return ContentText(content);
+		}
+	}
+	return QString();
+}
+
 } // namespace
 
 QString ChatCompletionsUrl(const QString &endpoint) {
@@ -103,6 +136,47 @@ AiResponse ParseResponse(const QByteArray &body) {
 		.ok = false,
 		.error = QStringLiteral("Empty response"),
 	};
+}
+
+QString ParseStreamEvent(const QByteArray &line) {
+	const auto payload = EventPayload(line);
+	if (payload.isEmpty() || payload == kDoneMarker) {
+		return QString();
+	}
+	return DeltaContent(payload);
+}
+
+QString SseParser::feed(const QByteArray &chunk) {
+	_buffer += chunk;
+	auto text = QString();
+	auto consumed = qsizetype(0);
+	while (true) {
+		const auto end = _buffer.indexOf('\n', consumed);
+		if (end < 0) {
+			break;
+		}
+		auto line = _buffer.mid(consumed, end - consumed);
+		consumed = end + 1;
+		if (line.endsWith('\r')) {
+			line.chop(1);
+		}
+		if (EventPayload(line) == kDoneMarker) {
+			_done = true;
+		} else {
+			text += ParseStreamEvent(line);
+		}
+	}
+	_buffer.remove(0, consumed);
+	return text;
+}
+
+bool SseParser::isDone() const {
+	return _done;
+}
+
+void SseParser::reset() {
+	_buffer.clear();
+	_done = false;
 }
 
 } // namespace Exteraless

@@ -199,6 +199,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
 		<< "  exteraless-chats-cli ai-config-set-key <key>\n"
 		<< "  exteraless-chats-cli ai-request-json <prompt>\n"
+		<< "  exteraless-chats-cli ai-stream-parse <file>\n"
+		<< "  exteraless-chats-cli ai-stream-chunk <file> <bytes>\n"
 		<< "  exteraless-chats-cli forward-date\n"
 		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 		<< "  exteraless-chats-cli sender-mini-avatars\n"
@@ -1852,6 +1854,48 @@ int main(int argc, char *argv[]) {
 			config.aiModel(),
 			Exteraless::AiRequest{ .prompt = arguments[2] });
 		PrintJson(QJsonDocument::fromJson(body).object());
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-stream-parse")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		auto parser = Exteraless::SseParser();
+		const auto text = parser.feed(bytes);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"), text },
+			{ QStringLiteral("done"), parser.isDone() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-stream-chunk")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto chunk = arguments[3].toLongLong(&ok);
+		if (!ok || chunk <= 0) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		const auto step = qsizetype(chunk);
+		auto parser = Exteraless::SseParser();
+		auto text = QString();
+		for (auto offset = qsizetype(0); offset < bytes.size();
+				offset += step) {
+			text += parser.feed(bytes.mid(offset, step));
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"), text },
+			{ QStringLiteral("done"), parser.isDone() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("network")) {

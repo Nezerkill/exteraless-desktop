@@ -25,4 +25,17 @@ struct AiResponse {
 
 [[nodiscard]] AiResponse ParseResponse(const QByteArray &body);
 
+class SseParser {
+public:
+	[[nodiscard]] QString feed(const QByteArray &chunk);
+	[[nodiscard]] bool isDone() const;
+	void reset();
+
+private:
+	QByteArray _buffer;
+	bool _done = false;
+};
+
+[[nodiscard]] QString ParseStreamEvent(const QByteArray &line);
+
 } // namespace Exteraless

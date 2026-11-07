@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1045 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1058 проверок PASS
   (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -111,8 +111,8 @@
   5 always-show-download, 7 show-results-before-voting, 5 false-bottom,
   5 decoration, 5 shortcuts, 5 message-menu-style, 7 reply-style,
   5 wide-posts, 15 chat-misc, 15 persian, 9 autodownload-rules, 19 media-quality,
-  19 update-channel, 32 translation, 23 ai, 6 recognition, 17 network,
-  10 download-boost, 48 subtitles, 7 avatar-corners,
+  19 update-channel, 32 translation, 23 ai, 13 ai-stream, 6 recognition,
+  17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 39 extra-pills, 105 backup);
   плагины без изменений — 32 и 252 проверок.
@@ -346,6 +346,25 @@
   мимо прокси Telegram (свой `QNetworkAccessManager`); Xvfb-смоук не
   выполнялся. Follow-up: стриминг, роли/промпты, локальная история, вставка
   ответа цитатой, замена редактора и саммари не сделаны.
+- Стриминг AI-ассистента (NB-48, follow-up MVP): разбор SSE живёт в Qt-only
+  `exteraless/ai_client.{h,cpp}` — `SseParser::feed` копит чанки в буфер и
+  режет по `\n` (терпит `\r` и разрыв строки между чанками), `isDone()`
+  ставит флаг на `data: [DONE]`, `reset()` очищает состояние;
+  `ParseStreamEvent` отдаёт `delta.content` из `choices[]`, а строки без
+  `data:`, битый JSON и `error`-события молча отбрасывает. В
+  `boxes/ai_request_box.cpp` тело собирается локально с `stream: true` (мимо
+  `BuildRequestJson`), ответ дописывается по `readyRead`, `[DONE]` обрывает
+  запрос и финализирует текст, `ParseResponse` работает fallback'ом для
+  нестримового ответа, а закрытие бокса (Close, Esc, клик вне) через
+  деструктор `State` делает `cancel()` и гасит запрос. CLI — два режима
+  (`ai-stream-parse`, `ai-stream-chunk`), три фикстуры, `check_ai_stream` —
+  13 проверок; chats-раннер 1058 (1045 + 13), плагины 32 и host-раннер 252
+  без изменений, backup 105; `kKeysCount` 11241 без изменений (новых
+  lang-ключей нет), sha256 патча `0d45e9dc…`, `nix flake check` PASS.
+  Ограничения: runtime SSE на живом endpoint не проверялся (только синтаксис
+  и CLI); ошибка в середине потока не видна — у парсера нет error-канала;
+  Xvfb-смоук не выполнялся. Follow-up: роли/промпты, локальная история,
+  замена редактора, саммари и параметр `stream` в `BuildRequestJson`.
 - Провайдеры перевода (NB-49): `OETranslationProvider` (int `0..3`, default
   `0`: `0` — auto/upstream, `1` — Google, `2` — DeepL, `3` зарезервирован под
   LLM из NB-48) выбирает провайдера, `OETranslationGoogleCloudKey` и

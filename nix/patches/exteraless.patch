@@ -516,10 +516,10 @@ index 31c60aa..7f7abc1 100644
  
 diff --git a/Telegram/SourceFiles/boxes/ai_request_box.cpp b/Telegram/SourceFiles/boxes/ai_request_box.cpp
 new file mode 100644
-index 0000000..762f77e
+index 0000000..c78bc0a
 --- /dev/null
 +++ b/Telegram/SourceFiles/boxes/ai_request_box.cpp
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,200 @@
 +/*
 +This file is part of Telegram Desktop,
 +the official desktop application for the Telegram messaging service.
@@ -533,12 +533,17 @@ index 0000000..762f77e
 +#include "exteraless/config.h"
 +#include "ui/layers/generic_box.h"
 +#include "ui/vertical_list.h"
++#include "ui/widgets/buttons.h"
 +#include "ui/widgets/fields/input_field.h"
 +#include "ui/widgets/labels.h"
 +#include "ui/wrap/vertical_layout.h"
 +#include "styles/style_boxes.h"
 +#include "styles/style_layers.h"
 +
++#include <QtCore/QJsonArray>
++#include <QtCore/QJsonDocument>
++#include <QtCore/QJsonObject>
++#include <QtCore/QPointer>
 +#include <QtCore/QUrl>
 +#include <QtGui/QClipboard>
 +#include <QtGui/QGuiApplication>
@@ -556,8 +561,29 @@ index 0000000..762f77e
 +
 +	struct State {
 +		QNetworkAccessManager network;
++		Exteraless::SseParser parser;
++		QPointer<RoundButton> sendButton;
++		QString answer;
++		QByteArray raw;
 +		rpl::variable<QString> response;
++		QNetworkReply *reply = nullptr;
 +		bool busy = false;
++		bool closing = false;
++
++		~State() {
++			cancel();
++		}
++
++		void cancel() {
++			closing = true;
++			parser.reset();
++			const auto pending = reply;
++			reply = nullptr;
++			if (pending) {
++				pending->abort();
++				pending->deleteLater();
++			}
++		}
 +	};
 +	const auto state = box->lifetime().make_state<State>();
 +
@@ -597,7 +623,24 @@ index 0000000..762f77e
 +			return;
 +		}
 +		state->busy = true;
++		state->answer.clear();
++		state->raw.clear();
++		state->parser.reset();
 +		state->response = u"Thinking..."_q;
++		if (const auto button = state->sendButton) {
++			button->setEnabled(false);
++		}
++
++		auto messages = QJsonArray();
++		messages.append(QJsonObject{
++			{ u"role"_q, u"user"_q },
++			{ u"content"_q, prompt },
++		});
++		const auto payload = QJsonDocument(QJsonObject{
++			{ u"model"_q, config.aiModel() },
++			{ u"messages"_q, messages },
++			{ u"stream"_q, true },
++		}).toJson(QJsonDocument::Compact);
 +
 +		auto networkRequest = QNetworkRequest(
 +			QUrl(Exteraless::ChatCompletionsUrl(config.aiEndpoint())));
@@ -607,33 +650,60 @@ index 0000000..762f77e
 +		networkRequest.setRawHeader(
 +			"Authorization",
 +			(u"Bearer " + key).toUtf8());
-+		const auto reply = state->network.post(
-+			networkRequest,
-+			Exteraless::BuildRequestJson(
-+				config.aiEndpoint(),
-+				config.aiModel(),
-+				Exteraless::AiRequest{ .prompt = prompt }));
-+		QObject::connect(reply, &QNetworkReply::finished, [=] {
-+			const auto body = reply->readAll();
++		const auto reply = state->network.post(networkRequest, payload);
++		state->reply = reply;
++		QObject::connect(reply, &QNetworkReply::readyRead, box, [=] {
++			if (state->closing) {
++				return;
++			}
++			const auto chunk = reply->readAll();
++			if (state->answer.isEmpty()) {
++				state->raw += chunk;
++			}
++			const auto delta = state->parser.feed(chunk);
++			if (!delta.isEmpty()) {
++				state->answer += delta;
++				state->response = state->answer;
++			}
++			if (state->parser.isDone()) {
++				reply->abort();
++			}
++		});
++		QObject::connect(reply, &QNetworkReply::finished, box, [=] {
++			if (state->closing) {
++				return;
++			}
 +			const auto failure = reply->errorString();
 +			const auto networkError
 +				= (reply->error() != QNetworkReply::NoError);
++			const auto done = state->parser.isDone();
 +			reply->deleteLater();
++			state->reply = nullptr;
 +			state->busy = false;
-+			auto result = Exteraless::ParseResponse(body);
-+			if (result.ok) {
-+				state->response = result.text;
++			state->parser.reset();
++			if (const auto button = state->sendButton) {
++				button->setEnabled(true);
++			}
++			if (!state->answer.isEmpty() && (done || !networkError)) {
++				state->response = state->answer;
++			} else if (!state->answer.isEmpty()) {
++				state->response = failure;
++			} else if (done) {
++				state->response = u"Empty response"_q;
 +			} else {
-+				state->response = result.error.isEmpty()
-+					? (networkError
-+						? failure
-+						: u"Request failed"_q)
-+					: result.error;
++				const auto result = Exteraless::ParseResponse(state->raw);
++				state->response = result.ok
++					? result.text
++					: (result.error.isEmpty()
++						? (networkError
++							? failure
++							: u"Request failed"_q)
++						: result.error);
 +			}
 +		});
 +	};
 +
-+	box->addButton(rpl::single(u"Send"_q), send);
++	state->sendButton = box->addButton(rpl::single(u"Send"_q), send);
 +	box->addLeftButton(rpl::single(u"Copy"_q), [=] {
 +		const auto answer = state->response.current();
 +		if (!answer.isEmpty()) {
@@ -641,6 +711,7 @@ index 0000000..762f77e
 +		}
 +	});
 +	box->addLeftButton(rpl::single(u"Close"_q), [=] {
++		state->cancel();
 +		box->closeBox();
 +	});
 +	box->setShowFinishedCallback([=] {
@@ -15789,10 +15860,10 @@ index 0000000..4a4dc51
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/ai_client.cpp b/exteraless/ai_client.cpp
 new file mode 100644
-index 0000000..7802411
+index 0000000..ccec65d
 --- /dev/null
 +++ b/exteraless/ai_client.cpp
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,182 @@
 +#include "exteraless/ai_client.h"
 +
 +#include <QJsonArray>
@@ -15826,6 +15897,39 @@ index 0000000..7802411
 +	return message.isEmpty()
 +		? object.value(QStringLiteral("type")).toString()
 +		: message;
++}
++
++const auto kDataPrefix = QByteArrayLiteral("data:");
++const auto kDoneMarker = QByteArrayLiteral("[DONE]");
++
++[[nodiscard]] QByteArray EventPayload(const QByteArray &line) {
++	auto trimmed = line.trimmed();
++	if (!trimmed.startsWith(kDataPrefix)) {
++		return QByteArray();
++	}
++	return trimmed.mid(kDataPrefix.size()).trimmed();
++}
++
++[[nodiscard]] QString DeltaContent(const QByteArray &payload) {
++	auto error = QJsonParseError();
++	const auto document = QJsonDocument::fromJson(payload, &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return QString();
++	}
++	const auto root = document.object();
++	if (!root.value(QStringLiteral("error")).isUndefined()) {
++		return QString();
++	}
++	for (const auto &choice : root.value(
++			QStringLiteral("choices")).toArray()) {
++		const auto delta = choice.toObject().value(
++			QStringLiteral("delta")).toObject();
++		const auto content = delta.value(QStringLiteral("content"));
++		if (!content.isUndefined() && !content.isNull()) {
++			return ContentText(content);
++		}
++	}
++	return QString();
 +}
 +
 +} // namespace
@@ -15900,13 +16004,54 @@ index 0000000..7802411
 +	};
 +}
 +
++QString ParseStreamEvent(const QByteArray &line) {
++	const auto payload = EventPayload(line);
++	if (payload.isEmpty() || payload == kDoneMarker) {
++		return QString();
++	}
++	return DeltaContent(payload);
++}
++
++QString SseParser::feed(const QByteArray &chunk) {
++	_buffer += chunk;
++	auto text = QString();
++	auto consumed = qsizetype(0);
++	while (true) {
++		const auto end = _buffer.indexOf('\n', consumed);
++		if (end < 0) {
++			break;
++		}
++		auto line = _buffer.mid(consumed, end - consumed);
++		consumed = end + 1;
++		if (line.endsWith('\r')) {
++			line.chop(1);
++		}
++		if (EventPayload(line) == kDoneMarker) {
++			_done = true;
++		} else {
++			text += ParseStreamEvent(line);
++		}
++	}
++	_buffer.remove(0, consumed);
++	return text;
++}
++
++bool SseParser::isDone() const {
++	return _done;
++}
++
++void SseParser::reset() {
++	_buffer.clear();
++	_done = false;
++}
++
 +} // namespace Exteraless
 diff --git a/exteraless/ai_client.h b/exteraless/ai_client.h
 new file mode 100644
-index 0000000..eb180ae
+index 0000000..aa3163d
 --- /dev/null
 +++ b/exteraless/ai_client.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,41 @@
 +#pragma once
 +
 +#include <QByteArray>
@@ -15933,6 +16078,19 @@ index 0000000..eb180ae
 +	const AiRequest &request);
 +
 +[[nodiscard]] AiResponse ParseResponse(const QByteArray &body);
++
++class SseParser {
++public:
++	[[nodiscard]] QString feed(const QByteArray &chunk);
++	[[nodiscard]] bool isDone() const;
++	void reset();
++
++private:
++	QByteArray _buffer;
++	bool _done = false;
++};
++
++[[nodiscard]] QString ParseStreamEvent(const QByteArray &line);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
@@ -17325,10 +17483,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..29d7822
+index 0000000..bd11ef5
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1904 @@
+@@ -0,0 +1,1917 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -17543,9 +17701,22 @@ index 0000000..29d7822
 +	"exteraless,ghost,pillstack,proxy,storage");
 +
 +const auto kDefaultPillStackOrder = QStringLiteral(
-+	"cpu,ram,net,dc,proxy,cache,ghost,lastseen");
-+const auto kPillStackOrderKeys = std::array<const char*, 8>{
-+	"cpu", "ram", "net", "dc", "proxy", "cache", "ghost", "lastseen" };
++	"cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold");
++const auto kPillStackOrderKeys = std::array<const char*, 14>{
++	"cpu",
++	"ram",
++	"net",
++	"dc",
++	"proxy",
++	"cache",
++	"ghost",
++	"lastseen",
++	"weather",
++	"btc",
++	"eth",
++	"usd",
++	"eur",
++	"gold" };
 +
 +[[nodiscard]] QString SanitizePillStackOrder(const QString &value) {
 +	auto accepted = QStringList();
@@ -23809,10 +23980,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..8f5b5b6
+index 0000000..797159f
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3144 @@
+@@ -0,0 +1,3188 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -24014,6 +24185,8 @@ index 0000000..8f5b5b6
 +		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
 +		<< "  exteraless-chats-cli ai-config-set-key <key>\n"
 +		<< "  exteraless-chats-cli ai-request-json <prompt>\n"
++		<< "  exteraless-chats-cli ai-stream-parse <file>\n"
++		<< "  exteraless-chats-cli ai-stream-chunk <file> <bytes>\n"
 +		<< "  exteraless-chats-cli forward-date\n"
 +		<< "  exteraless-chats-cli forward-date-set <0|1>\n"
 +		<< "  exteraless-chats-cli sender-mini-avatars\n"
@@ -25669,6 +25842,48 @@ index 0000000..8f5b5b6
 +		PrintJson(QJsonDocument::fromJson(body).object());
 +		return 0;
 +	}
++	if (mode == QStringLiteral("ai-stream-parse")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		auto parser = Exteraless::SseParser();
++		const auto text = parser.feed(bytes);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"), text },
++			{ QStringLiteral("done"), parser.isDone() },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-stream-chunk")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto chunk = arguments[3].toLongLong(&ok);
++		if (!ok || chunk <= 0) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		const auto step = qsizetype(chunk);
++		auto parser = Exteraless::SseParser();
++		auto text = QString();
++		for (auto offset = qsizetype(0); offset < bytes.size();
++				offset += step) {
++			text += parser.feed(bytes.mid(offset, step));
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"), text },
++			{ QStringLiteral("done"), parser.isDone() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("network")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -26957,6 +27172,46 @@ index 0000000..8f5b5b6
 +	}
 +	return PrintUsage();
 +}
+diff --git a/exteraless/tests/chats/fixtures/ai-stream-basic.txt b/exteraless/tests/chats/fixtures/ai-stream-basic.txt
+new file mode 100644
+index 0000000..6e940fe
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/ai-stream-basic.txt
+@@ -0,0 +1,7 @@
++data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}
++
++data: {"choices":[{"delta":{"content":", "},"finish_reason":null}]}
++
++data: {"choices":[{"delta":{"content":"world"},"finish_reason":"stop"}]}
++
++data: [DONE]
+diff --git a/exteraless/tests/chats/fixtures/ai-stream-error.txt b/exteraless/tests/chats/fixtures/ai-stream-error.txt
+new file mode 100644
+index 0000000..b872cd6
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/ai-stream-error.txt
+@@ -0,0 +1,6 @@
++data: {"error":{"message":"rate limit exceeded","type":"rate_limit_error"}}
++
++data: {"choices":[{"delta":{"content":
++
++data: not json at all
++
+diff --git a/exteraless/tests/chats/fixtures/ai-stream-split.txt b/exteraless/tests/chats/fixtures/ai-stream-split.txt
+new file mode 100644
+index 0000000..a6229cd
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/ai-stream-split.txt
+@@ -0,0 +1,9 @@
++data: {"choices":[{"delta":{"content":"\u041f\u0440\u0438\u0432\u0435\u0442"},"finish_reason":null}]}
++
++data: {"choices":[{"delta":{"content":" \u043c\u0438\u0440"},"finish_reason":null}]}
++
++data: {"choices":[{"delta":{"content":"\n"},"finish_reason":null}]}
++
++data: {"choices":[{"delta":{"content":"line2"},"finish_reason":"stop"}]}
++
++data: [DONE]
 diff --git a/exteraless/tests/chats/fixtures/basic.lrc b/exteraless/tests/chats/fixtures/basic.lrc
 new file mode 100644
 index 0000000..bb9e849
@@ -27305,10 +27560,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..eff0d22
+index 0000000..37f8ee4
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7855 @@
+@@ -0,0 +1,7958 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -28165,7 +28420,7 @@ index 0000000..eff0d22
 +                "OEPillStackEnabled": False,
 +                "OEPillStackPills": 0x3FFF,
 +                "OEPillStackOrder":
-+                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
++                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold",
 +            },
 +            exported["pillstackconfig"])
 +        ledger.check(
@@ -28375,7 +28630,7 @@ index 0000000..eff0d22
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
 +            "OEPillStackPills": 5,
-+            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
++            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen,weather,btc,eth,usd,eur,gold",
 +        },
 +        "mainconfig": {
 +            "OEMainMenuOrder": "ghost,exteraless",
@@ -28632,7 +28887,7 @@ index 0000000..eff0d22
 +                "OEPillStackEnabled": True,
 +                "OEPillStackPills": 5,
 +                "OEPillStackOrder":
-+                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
++                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen,weather,btc,eth,usd,eur,gold",
 +            },
 +            sections["pillstackconfig"])
 +        ledger.check(
@@ -29650,7 +29905,7 @@ index 0000000..eff0d22
 +    before_failures = len(ledger.failures)
 +
 +    default = ["cpu", "ram", "net", "dc", "proxy", "cache", "ghost",
-+               "lastseen"]
++               "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
 +
 +    env = make_env(work / "pillorder-defaults")
 +    data = json_call(ledger, cli, ["pillorder"], env, "pillorder defaults")
@@ -29666,7 +29921,7 @@ index 0000000..eff0d22
 +        ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
 +        env, "pillorder custom")
 +    custom = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
-+              "lastseen"]
++              "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
 +    if data is not None:
 +        ledger.check(
 +            "pillorder custom set",
@@ -29705,7 +29960,7 @@ index 0000000..eff0d22
 +        ledger, cli, ["pillorder-set", "GHOST,cpu,ghost,bogus"], env,
 +        "pillorder sanitize")
 +    sanitized = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
-+                 "lastseen"]
++                 "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
 +    if data is not None:
 +        ledger.check(
 +            "pillorder sanitized",
@@ -29732,7 +29987,8 @@ index 0000000..eff0d22
 +            "pillorder fromJson values",
 +            reloaded.get("order")
 +            == ["cache", "ghost", "cpu", "ram", "net", "dc", "proxy",
-+                "lastseen"],
++                "lastseen", "weather", "btc", "eth", "usd", "eur",
++                "gold"],
 +            reloaded)
 +
 +    env = make_env(work / "pillorder-backup")
@@ -29744,7 +30000,7 @@ index 0000000..eff0d22
 +        ledger.check(
 +            "pillorder backup default",
 +            pills.get("OEPillStackOrder")
-+            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
++            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold",
 +            pills)
 +    root = {
 +        "version": 1,
@@ -29765,7 +30021,7 @@ index 0000000..eff0d22
 +            "pillorder backup import values",
 +            reloaded.get("order")
 +            == ["lastseen", "ghost", "cpu", "ram", "net", "dc", "proxy",
-+                "cache"],
++                "cache", "weather", "btc", "eth", "usd", "eur", "gold"],
 +            reloaded)
 +
 +    return (
@@ -34785,6 +35041,106 @@ index 0000000..eff0d22
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_ai_stream(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    def stream(arguments, name):
++        result = run(cli, arguments)
++        if result.returncode != 0:
++            ledger.check(
++                name,
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(name, False, f"json: {error}")
++            return None
++        if not isinstance(payload, dict):
++            ledger.check(name, False, payload)
++            return None
++        return payload
++
++    basic = stream(
++        ["ai-stream-parse", str(FIXTURES / "ai-stream-basic.txt")],
++        "ai stream basic parse")
++    if basic is not None:
++        ledger.check(
++            "ai stream basic text",
++            basic.get("text") == "Hello, world",
++            repr(basic.get("text")))
++        ledger.check(
++            "ai stream basic done", basic.get("done") is True, basic)
++
++    expected = "\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440\nline2"
++    split = stream(
++        ["ai-stream-parse", str(FIXTURES / "ai-stream-split.txt")],
++        "ai stream split parse")
++    if split is not None:
++        ledger.check(
++            "ai stream split whole text",
++            split.get("text") == expected,
++            repr(split.get("text")))
++        ledger.check(
++            "ai stream split whole done", split.get("done") is True, split)
++
++    for size in (1, 7):
++        chunked = stream(
++            ["ai-stream-chunk", str(FIXTURES / "ai-stream-split.txt"),
++             str(size)],
++            f"ai stream split chunk {size}")
++        if chunked is not None:
++            ledger.check(
++                f"ai stream chunk {size} text",
++                chunked.get("text") == expected,
++                repr(chunked.get("text")))
++            ledger.check(
++                f"ai stream chunk {size} done",
++                chunked.get("done") is True,
++                chunked)
++
++    chunked = stream(
++        ["ai-stream-chunk", str(FIXTURES / "ai-stream-basic.txt"), "3"],
++        "ai stream basic chunk 3")
++    if chunked is not None:
++        ledger.check(
++            "ai stream basic chunk text",
++            chunked.get("text") == "Hello, world",
++            repr(chunked.get("text")))
++
++    error = stream(
++        ["ai-stream-parse", str(FIXTURES / "ai-stream-error.txt")],
++        "ai stream error parse")
++    if error is not None:
++        ledger.check(
++            "ai stream error empty text",
++            error.get("text") == "",
++            repr(error.get("text")))
++        ledger.check(
++            "ai stream error not done", error.get("done") is False, error)
++
++    empty_dir = work / "ai-stream"
++    empty_dir.mkdir(parents=True, exist_ok=True)
++    empty_path = empty_dir / "empty.txt"
++    empty_path.write_bytes(b"")
++    empty = stream(
++        ["ai-stream-parse", str(empty_path)], "ai stream empty parse")
++    if empty is not None:
++        ledger.check(
++            "ai stream empty text",
++            empty.get("text") == "",
++            repr(empty.get("text")))
++        ledger.check(
++            "ai stream empty not done", empty.get("done") is False, empty)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_recognition(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -35062,6 +35418,7 @@ index 0000000..eff0d22
 +        update_channel = check_update_channel(ledger, cli, work)
 +        translation = check_translation(ledger, cli, work)
 +        ai = check_ai(ledger, cli, work)
++        ai_stream = check_ai_stream(ledger, cli, work)
 +        recognition = check_recognition(ledger, cli, work)
 +        network = check_network(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
@@ -35144,6 +35501,7 @@ index 0000000..eff0d22
 +          f"{update_channel[0] - update_channel[1]} passed")
 +    print(f"translation: {translation[0] - translation[1]} passed")
 +    print(f"ai: {ai[0] - ai[1]} passed")
++    print(f"ai-stream: {ai_stream[0] - ai_stream[1]} passed")
 +    print(f"recognition: {recognition[0] - recognition[1]} passed")
 +    print(f"network: {network[0] - network[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")

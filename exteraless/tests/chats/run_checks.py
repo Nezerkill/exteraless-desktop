@@ -7475,6 +7475,106 @@ def check_ai(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ai_stream(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    def stream(arguments, name):
+        result = run(cli, arguments)
+        if result.returncode != 0:
+            ledger.check(
+                name,
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(name, False, f"json: {error}")
+            return None
+        if not isinstance(payload, dict):
+            ledger.check(name, False, payload)
+            return None
+        return payload
+
+    basic = stream(
+        ["ai-stream-parse", str(FIXTURES / "ai-stream-basic.txt")],
+        "ai stream basic parse")
+    if basic is not None:
+        ledger.check(
+            "ai stream basic text",
+            basic.get("text") == "Hello, world",
+            repr(basic.get("text")))
+        ledger.check(
+            "ai stream basic done", basic.get("done") is True, basic)
+
+    expected = "\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440\nline2"
+    split = stream(
+        ["ai-stream-parse", str(FIXTURES / "ai-stream-split.txt")],
+        "ai stream split parse")
+    if split is not None:
+        ledger.check(
+            "ai stream split whole text",
+            split.get("text") == expected,
+            repr(split.get("text")))
+        ledger.check(
+            "ai stream split whole done", split.get("done") is True, split)
+
+    for size in (1, 7):
+        chunked = stream(
+            ["ai-stream-chunk", str(FIXTURES / "ai-stream-split.txt"),
+             str(size)],
+            f"ai stream split chunk {size}")
+        if chunked is not None:
+            ledger.check(
+                f"ai stream chunk {size} text",
+                chunked.get("text") == expected,
+                repr(chunked.get("text")))
+            ledger.check(
+                f"ai stream chunk {size} done",
+                chunked.get("done") is True,
+                chunked)
+
+    chunked = stream(
+        ["ai-stream-chunk", str(FIXTURES / "ai-stream-basic.txt"), "3"],
+        "ai stream basic chunk 3")
+    if chunked is not None:
+        ledger.check(
+            "ai stream basic chunk text",
+            chunked.get("text") == "Hello, world",
+            repr(chunked.get("text")))
+
+    error = stream(
+        ["ai-stream-parse", str(FIXTURES / "ai-stream-error.txt")],
+        "ai stream error parse")
+    if error is not None:
+        ledger.check(
+            "ai stream error empty text",
+            error.get("text") == "",
+            repr(error.get("text")))
+        ledger.check(
+            "ai stream error not done", error.get("done") is False, error)
+
+    empty_dir = work / "ai-stream"
+    empty_dir.mkdir(parents=True, exist_ok=True)
+    empty_path = empty_dir / "empty.txt"
+    empty_path.write_bytes(b"")
+    empty = stream(
+        ["ai-stream-parse", str(empty_path)], "ai stream empty parse")
+    if empty is not None:
+        ledger.check(
+            "ai stream empty text",
+            empty.get("text") == "",
+            repr(empty.get("text")))
+        ledger.check(
+            "ai stream empty not done", empty.get("done") is False, empty)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_recognition(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -7752,6 +7852,7 @@ def main():
         update_channel = check_update_channel(ledger, cli, work)
         translation = check_translation(ledger, cli, work)
         ai = check_ai(ledger, cli, work)
+        ai_stream = check_ai_stream(ledger, cli, work)
         recognition = check_recognition(ledger, cli, work)
         network = check_network(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
@@ -7834,6 +7935,7 @@ def main():
           f"{update_channel[0] - update_channel[1]} passed")
     print(f"translation: {translation[0] - translation[1]} passed")
     print(f"ai: {ai[0] - ai[1]} passed")
+    print(f"ai-stream: {ai_stream[0] - ai_stream[1]} passed")
     print(f"recognition: {recognition[0] - recognition[1]} passed")
     print(f"network: {network[0] - network[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
