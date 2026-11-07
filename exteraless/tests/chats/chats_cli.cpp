@@ -19,6 +19,7 @@
 #include "exteraless/proxy_rules.h"
 #include "exteraless/regex_filters.h"
 #include "exteraless/save_path.h"
+#include "exteraless/stt.h"
 #include "exteraless/subtitles.h"
 #include "exteraless/update_check.h"
 #include "exteraless/zalgo.h"
@@ -266,7 +267,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli network\n"
 		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
-		<< "  exteraless-chats-cli network-set-doh <url|->\n";
+		<< "  exteraless-chats-cli network-set-doh <url|->\n"
+		<< "  exteraless-chats-cli stt-model-info\n"
+		<< "  exteraless-chats-cli stt-transcribe <file> [lang]\n";
 	return 2;
 }
 
@@ -3294,6 +3297,34 @@ int main(int argc, char *argv[]) {
 		}
 		PrintJson(QJsonObject{
 			{ QStringLiteral("text"), text },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("stt-model-info")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("modelDir"), Exteraless::Speech::ModelDir() },
+			{ QStringLiteral("version"), Exteraless::Speech::EngineVersion() },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("stt-transcribe")) {
+		if (arguments.size() != 3 && arguments.size() != 4) {
+			return PrintUsage();
+		}
+		const auto lang = (arguments.size() == 4)
+			? arguments[3]
+			: Exteraless::Config::Instance().recognitionLanguage();
+		const auto result = Exteraless::Speech::TranscribeBlocking(
+			arguments[2],
+			QByteArray(),
+			lang);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("ok"), result.ok },
+			{ QStringLiteral("text"), result.text },
+			{ QStringLiteral("error"), result.error },
 		});
 		return 0;
 	}

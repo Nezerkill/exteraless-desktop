@@ -192,7 +192,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
 | Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡 субтитры ✅ NB-32, качество/кодеки ❌ |
 | Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ✅ NB-58 (персидский календарь): `OEGeneralUsePersianCalendar`/`OEGeneralPersianCalendarLatin` и `Exteraless::PersianDateText` через `QCalendar` Jalali (12 месяцев, цифры ASCII или `U+06F0`), подмена в `langDayOfMonth*`/`langDateTime*` меняет только `lt_date`; остальное ❌ |
-| Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | 🟡 stub ✅ NB-51: язык распознавания (`OEGeneralRecognitionLanguage`, строка, default `ru`, алиас `recognitionLanguage`, 6 языков в селекторе) сохраняется, пункт «Transcribe offline» в меню голосовых показывает тост `lng_media_view_transcribe_offline_na`; самого Vosk (нет в nixpkgs), моделей и провайдеров транскрипции нет |
+| Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | ✅ NB-51 full: sherpa-onnx 1.13.8 (vosk отсутствует в nixpkgs) — `EXTERALESS_STT_MODEL`, `stt.{h,cpp}` (WAV + `TranscribePcm`), декод `.oga` в меню, тост с текстом; язык (`OEGeneralRecognitionLanguage`, 6 языков) сохранён |
 | Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 2 формата: `.extera` и полный JSON ✅ NB-57 (whitelist + redaction, 2026-11-07); плагины, стикеры и облако ❌ |
 | WEB proxy (desktop-only) | — | ~3.1k строк | 🟡 код есть, сервер нет |
 
@@ -577,7 +577,7 @@ link-filter в `InitElementTextPart`, тот же флаг на `_textCache` в
 Офлайн-распознавание Vosk (`speech/VoskManager`, `VoskModel(s)`,
 `VoskTranscriber`, `VoskSettingsActivity`) со скачиванием моделей, и четыре
 провайдера транскрипции (`transcribeProvider`: Cloudflare, Gemini, OpenAI,
-дефолт) с ключами и промптами. В desktop нет ни того, ни другого: upstream
+дефолт) с ключами и промптами. В desktop — sherpa-onnx ✅ NB-51 (без Vosk-моделей и без сторонних провайдеров): upstream
 умеет серверную транскрипцию Telegram (`menu_item_rate_transcribe*`), но
 пользовательских провайдеров не имеет. VK-специфичных функций в Android-дереве
 не найдено (поиск по `VK` пуст), поэтому «VK» в перечне семейств не выделяется

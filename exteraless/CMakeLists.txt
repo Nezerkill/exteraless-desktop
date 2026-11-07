@@ -1,3 +1,27 @@
+find_package(PkgConfig QUIET)
+set(SHERPA_ONNX_ROOT "" CACHE PATH
+    "sherpa-onnx prefix, used when pkg-config cannot locate sherpa-onnx")
+
+if (PkgConfig_FOUND)
+    pkg_check_modules(SHERPA_ONNX QUIET sherpa-onnx)
+endif()
+
+if (SHERPA_ONNX_FOUND)
+    set(exteraless_sherpa_include_dirs ${SHERPA_ONNX_INCLUDE_DIRS})
+    set(exteraless_sherpa_libraries ${SHERPA_ONNX_LINK_LIBRARIES})
+elseif (SHERPA_ONNX_ROOT)
+    find_library(SHERPA_ONNX_C_API_LIBRARY
+        NAMES sherpa-onnx-c-api
+        HINTS "${SHERPA_ONNX_ROOT}/lib"
+        REQUIRED)
+    set(exteraless_sherpa_include_dirs "${SHERPA_ONNX_ROOT}/include")
+    set(exteraless_sherpa_libraries "${SHERPA_ONNX_C_API_LIBRARY}")
+else()
+    message(FATAL_ERROR
+        "sherpa-onnx not found: install its pkg-config file or pass "
+        "-DSHERPA_ONNX_ROOT=<prefix>")
+endif()
+
 add_library(exteraless STATIC
     ai_client.cpp
     ai_client.h
@@ -44,6 +68,8 @@ add_library(exteraless STATIC
     regex_filters.h
     save_path.cpp
     save_path.h
+    stt.cpp
+    stt.h
     subtitles.cpp
     subtitles.h
     update_check.cpp
@@ -62,6 +88,16 @@ PUBLIC
 target_include_directories(exteraless
 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
+target_include_directories(exteraless
+PRIVATE
+    ${exteraless_sherpa_include_dirs}
+)
+
+target_link_libraries(exteraless
+PRIVATE
+    ${exteraless_sherpa_libraries}
 )
 
 add_subdirectory(tests/plugins)

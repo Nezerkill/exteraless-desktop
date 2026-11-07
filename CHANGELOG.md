@@ -2,6 +2,20 @@
 
 ## 2026-11-07
 
+- Офлайн-распознавание речи (NB-51, full): движок sherpa-onnx 1.13.8
+  (есть в pinned nixpkgs, vosk — нет); `nix/package.nix`: sherpa в
+  `buildInputs`, FOD модели + `EXTERALESS_STT_MODEL` в wrapper;
+  `exteraless/stt.{h,cpp}`: WAV-декод + собственный реземплер в mono 16k,
+  `TranscribePcm` для сырого stereo 48k, offline-recognizer per-call,
+  async thread + post-to-main, ошибки `model-missing`/`invalid-file`/
+  `empty-audio`/`model-invalid`/`decode-failed`; фаза 2 — декод `.oga`
+  через `Media::FFMpegLoader` прямо в пункте меню (UI-поток, speed 1.0);
+  тост с текстом / тост ошибки (новых lang-ключей нет); CLI
+  `stt-transcribe`/`stt-model-info` + фикстура; `check_stt` — 12 проверок,
+  раннеры 1132/32/252 PASS; `kKeysCount` без изменений (11241); патч
+  `6f5c1035…`, `nix flake check` PASS. Ограничения: streaming-модель
+  может дать `model-invalid` в offline-recognizer (с реальной моделью не
+  проверялось); декод на UI-потоке; Xvfb-смоук не выполнялся.
 - Список tracking-параметров (NB-78, решение пользователя — вшитый список,
   без сети): в `IsTrackingKey` (`exteraless/links.cpp`) десять новых ключей —
   `fb_action_ids`, `gclsrc`, `ysclid`, `pk_campaign`, `pk_kwd`,

@@ -8010,6 +8010,106 @@ def check_recognition(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_stt(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "stt-defaults")
+    env.pop("EXTERALESS_STT_MODEL", None)
+
+    data = json_call(ledger, cli, ["stt-model-info"], env, "stt model info")
+    if data is not None:
+        version = data.get("version")
+        ledger.check(
+            "stt model info version",
+            isinstance(version, str) and any(c.isdigit() for c in version),
+            version)
+        ledger.check(
+            "stt model info without env",
+            data.get("modelDir") == "",
+            data.get("modelDir"))
+
+    model = work / "stt-model"
+    model.mkdir(parents=True)
+    (model / "tokens.txt").write_text("", encoding="utf-8")
+    for name in ("encoder.onnx", "decoder.onnx", "joiner.onnx"):
+        (model / name).write_text("", encoding="utf-8")
+    model_env = make_env(work / "stt-with-model")
+    model_env["EXTERALESS_STT_MODEL"] = str(model)
+
+    data = json_call(
+        ledger, cli, ["stt-model-info"], model_env, "stt model info env")
+    if data is not None:
+        ledger.check(
+            "stt model info echoes env",
+            data.get("modelDir") == str(model),
+            data.get("modelDir"))
+
+    tone = FIXTURES / "stt-tone.wav"
+    data = json_call(
+        ledger, cli, ["stt-transcribe", str(tone)], env,
+        "stt transcribe without model")
+    if data is not None:
+        ledger.check(
+            "stt transcribe model missing",
+            data.get("ok") is False and data.get("error") == "model-missing",
+            data)
+        ledger.check(
+            "stt transcribe payload keys",
+            set(data) == {"ok", "text", "error"},
+            sorted(data))
+
+    data = json_call(
+        ledger, cli,
+        ["stt-transcribe", str(work / "stt-absent.wav"), "en"], env,
+        "stt transcribe absent file without model")
+    if data is not None:
+        ledger.check(
+            "stt transcribe absent file reports model first",
+            data.get("ok") is False and data.get("error") == "model-missing",
+            data)
+
+    bad = work / "stt-bad.bin"
+    bad.write_bytes(b"this is not an audio stream")
+
+    data = json_call(
+        ledger, cli, ["stt-transcribe", str(bad)], model_env,
+        "stt transcribe invalid file")
+    if data is not None:
+        ledger.check(
+            "stt transcribe invalid file",
+            data.get("ok") is False and data.get("error") == "invalid-file",
+            data)
+        ledger.check(
+            "stt transcribe invalid file keeps text",
+            data.get("text") == "",
+            data)
+
+    data = json_call(
+        ledger, cli, ["stt-transcribe", str(bad), "en"], model_env,
+        "stt transcribe explicit lang")
+    if data is not None:
+        ledger.check(
+            "stt transcribe explicit lang accepted",
+            data.get("error") == "invalid-file",
+            data)
+
+    for name, arguments in [
+            ("stt transcribe without file", ["stt-transcribe"]),
+            ("stt transcribe with extra args",
+             ["stt-transcribe", "a.wav", "ru", "extra"]),
+            ("stt model info with args", ["stt-model-info", "x"])]:
+        result = run(cli, arguments)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_network(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -8221,6 +8321,7 @@ def main():
         ai_stream = check_ai_stream(ledger, cli, work)
         ai_roles = check_ai_roles(ledger, cli, work)
         recognition = check_recognition(ledger, cli, work)
+        stt = check_stt(ledger, cli, work)
         network = check_network(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
@@ -8306,6 +8407,7 @@ def main():
     print(f"ai-stream: {ai_stream[0] - ai_stream[1]} passed")
     print(f"ai-roles: {ai_roles[0] - ai_roles[1]} passed")
     print(f"recognition: {recognition[0] - recognition[1]} passed")
+    print(f"stt: {stt[0] - stt[1]} passed")
     print(f"network: {network[0] - network[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")

@@ -10,6 +10,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
 #include "exteraless/plugin_runtime.h"
+#include "exteraless/stt.h"
 
 #include "api/api_attached_stickers.h"
 #include "api/api_editing.h"
@@ -42,6 +43,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "info/info_memento.h"
 #include "iv/editor/iv_editor_session.h"
 #include "iv/iv_rich_message_html_export.h"
+#include "media/audio/media_audio_ffmpeg_loader.h"
 #include "ui/effects/ripple_animation.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/widgets/menu/menu_action.h"
@@ -127,6 +129,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtGui/QClipboard>
 
 #include <algorithm>
+#include <cstdint>
+#include <variant>
 
 namespace HistoryView {
 namespace {
@@ -439,6 +443,51 @@ void ShowInFolder(not_null<DocumentData*> document) {
 	}
 }
 
+[[nodiscard]] bool DecodeVoiceToS16(
+		const QString &path,
+		QByteArray *samples) {
+	auto loader = ::Media::FFMpegLoader(
+		Core::FileLocation(path),
+		QByteArray(),
+		bytes::vector());
+	if (!loader.open(0)) {
+		return false;
+	}
+	const auto format = loader.format();
+	const auto stereo = (format == AL_FORMAT_STEREO16);
+	if (!stereo && format != AL_FORMAT_MONO16) {
+		return false;
+	}
+	using Error = ::Media::AudioPlayerLoader::ReadError;
+	while (true) {
+		const auto result = loader.readMore();
+		if (result == Error::Retry) {
+			continue;
+		} else if (result == Error::EndOfFile) {
+			break;
+		}
+		const auto chunk = std::get_if<bytes::const_span>(&result);
+		if (!chunk || chunk->empty()) {
+			return false;
+		} else if (stereo) {
+			samples->append(
+				reinterpret_cast<const char*>(chunk->data()),
+				int(chunk->size()));
+			continue;
+		}
+		const auto count = int(chunk->size() / sizeof(int16_t));
+		const auto values = reinterpret_cast<const int16_t*>(chunk->data());
+		const auto offset = samples->size();
+		samples->resize(offset + count * 2 * int(sizeof(int16_t)));
+		const auto out = reinterpret_cast<int16_t*>(samples->data() + offset);
+		for (auto i = 0; i != count; ++i) {
+			out[2 * i] = values[i];
+			out[2 * i + 1] = values[i];
+		}
+	}
+	return !samples->isEmpty();
+}
+
 void AddDocumentActions(
 		not_null<Ui::PopupMenu*> menu,
 		not_null<DocumentData*> document,
@@ -530,9 +579,32 @@ void AddDocumentActions(
 		}
 	}
 	if (document->isVoiceMessage()) {
-		menu->addAction(u"Transcribe offline"_q, [] {
-			Ui::Toast::Show(tr::lng_media_view_transcribe_offline_na(tr::now));
-		});
+		const auto language
+			= Exteraless::Config::Instance().recognitionLanguage();
+		menu->addAction(u"Transcribe offline"_q, crl::guard(list.get(), [=] {
+			const auto path = document->filepath(true);
+			auto samples = QByteArray();
+			if (path.isEmpty() || !DecodeVoiceToS16(path, &samples)) {
+				Ui::Toast::Show(
+					tr::lng_media_view_transcribe_offline_na(tr::now));
+				return;
+			}
+			Exteraless::Speech::TranscribePcm(
+				reinterpret_cast<const int16_t*>(samples.constData()),
+				size_t(samples.size() / (2 * sizeof(int16_t))),
+				language,
+				crl::guard(
+					list.get(),
+					[](Exteraless::Speech::Result result) {
+						if (!result.ok) {
+							Ui::Toast::Show(
+								tr::lng_media_view_transcribe_offline_na(
+									tr::now));
+						} else if (!result.text.isEmpty()) {
+							Ui::Toast::Show(result.text);
+						}
+					}));
+		}));
 	}
 	AddSaveDocumentAction(menu, item, document, list);
 	AddCopyFilename(

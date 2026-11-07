@@ -6,17 +6,23 @@
 }:
 let
   base = pkgs.telegram-desktop;
+  sttModel = pkgs.fetchzip {
+    url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2";
+    sha256 = "sha256-ce0aFqfyv0aUSx70Mcr8WMaQxR8JBkBMoCsMIAztKHY=";
+  };
   unwrapped = base.unwrapped.overrideAttrs (old: {
     pname = "exteraless-desktop-unwrapped";
     inherit version;
     __intentionallyOverridingVersion = true;
     patches = (old.patches or []) ++ [ ./patches/exteraless.patch ];
+    buildInputs = (old.buildInputs or []) ++ [ pkgs.sherpa-onnx ];
     cmakeFlags = [
       "-DTDESKTOP_API_ID:STRING=${apiId}"
       "-DTDESKTOP_API_HASH:STRING=${apiHash}"
       "-DDESKTOP_APP_DISABLE_SWIFT6:BOOL=TRUE"
       "-DDESKTOP_APP_DISABLE_AUTOUPDATE:BOOL=TRUE"
       "-DDESKTOP_APP_DISABLE_CRASH_REPORTS:BOOL=TRUE"
+      "-DSHERPA_ONNX_ROOT:STRING=${pkgs.sherpa-onnx}"
     ];
   });
 in
@@ -39,6 +45,7 @@ in
 
   postFixup = (old.postFixup or "") + ''
     wrapProgram "$out/bin/Telegram" \
-      --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap pkgs.python3 ]}
+      --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.bubblewrap pkgs.python3 ]} \
+      --set-default EXTERALESS_STT_MODEL "${sttModel}"
   '';
 })
