@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1132 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1141 проверок PASS
   (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -115,8 +115,11 @@
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 26 ai-roles,
-  12 stt, 105 backup, 11 backup-redacted);
+  9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Город погоды (NB-56, follow-up): 12 столиц (`WeatherCityIds`/`WeatherCity`),
+  `OENetworkWeatherCity` + алиас `weatherCity`; селектор в Network;
+  `check_weather_city` (9 проверок), раннеры 1141/32/252 PASS.
 - Офлайн-распознавание речи (NB-51, full): sherpa-onnx 1.13.8 из pinned
   nixpkgs (vosk там нет); `buildInputs` + FOD модели + `EXTERALESS_STT_MODEL`;
   `exteraless/stt.{h,cpp}` (WAV + `TranscribePcm` stereo48k→mono16k,

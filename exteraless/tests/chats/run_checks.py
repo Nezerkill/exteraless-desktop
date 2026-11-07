@@ -846,7 +846,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 138,
+            len(section) == 139,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -867,7 +867,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 143,
+            sum(len(value) for value in exported.values()) == 144,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -887,7 +887,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 143,
+                data.get("applied") == 144,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -1065,6 +1065,7 @@ def check_backup(ledger, cli, work):
             "OENetworkUseIPv6": True,
             "OENetworkDnsType": 1,
             "OENetworkCustomDoH": "https://full.test/dns-query",
+            "OENetworkWeatherCity": "tokyo",
         },
         "pillstackconfig": {
             "OEPillStackEnabled": True,
@@ -1086,7 +1087,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 143,
+            data.get("applied") == 144,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1102,10 +1103,12 @@ def check_backup(ledger, cli, work):
             section.get("OENetworkUseIPv6") is True
             and section.get("OENetworkDnsType") == 1
             and section.get("OENetworkCustomDoH")
-            == "https://full.test/dns-query",
+            == "https://full.test/dns-query"
+            and section.get("OENetworkWeatherCity") == "tokyo",
             (section.get("OENetworkUseIPv6"),
              section.get("OENetworkDnsType"),
-             section.get("OENetworkCustomDoH")))
+             section.get("OENetworkCustomDoH"),
+             section.get("OENetworkWeatherCity")))
         ledger.check(
             "backup full ghost flags",
             all(section.get(key) is False for key in (
@@ -1409,10 +1412,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 138",
+            "backup legacy eight completed to 139",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (138, 3, 2),
+             len(sections["mainconfig"])) == (139, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1724,8 +1727,8 @@ def check_backup_redacted(ledger, cli, work):
                 "OETranslationProvider")})
         ledger.check(
             "backup redacted key counts",
-            len(section) == 141
-            and sum(len(value) for value in sections.values()) == 146,
+            len(section) == 142
+            and sum(len(value) for value in sections.values()) == 147,
             {name: len(value) for name, value in sections.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -1751,7 +1754,7 @@ def check_backup_redacted(ledger, cli, work):
                 "backup redacted import applied",
                 imported.get("ok") is True
                 and imported.get("unknown") == []
-                and imported.get("applied") == 146,
+                and imported.get("applied") == 147,
                 imported)
         raw = json_call(
             ledger, cli, ["config-raw"], env, "backup redacted local config")
@@ -8248,6 +8251,99 @@ def check_network(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_weather_city(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    cities = [
+        "moscow", "london", "new-york", "tokyo", "berlin", "paris",
+        "beijing", "delhi", "istanbul", "kyiv", "warsaw", "astana"]
+
+    env = make_env(work / "weather-city-defaults")
+    data = json_call(
+        ledger, cli, ["weather-city"], env, "weather city defaults")
+    if data is not None:
+        ledger.check(
+            "weather city default",
+            data.get("city") == "moscow",
+            data)
+        ledger.check(
+            "weather city list",
+            data.get("cities") == cities,
+            data.get("cities"))
+
+    data = json_call(
+        ledger, cli, ["weather-city-set", "TOKYO"], env,
+        "weather city set")
+    if data is not None:
+        ledger.check(
+            "weather city set tokyo",
+            data.get("city") == "tokyo",
+            data)
+    reloaded = json_call(
+        ledger, cli, ["weather-city"], env, "weather city reload")
+    if reloaded is not None:
+        ledger.check(
+            "weather city persisted",
+            reloaded.get("city") == "tokyo",
+            reloaded)
+
+    result = run(cli, ["weather-city-set", "atlantis"], env=env)
+    ledger.check(
+        "cli weather city set invalid",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+    kept = json_call(
+        ledger, cli, ["weather-city"], env, "weather city after invalid")
+    if kept is not None:
+        ledger.check(
+            "weather city invalid keeps previous",
+            kept.get("city") == "tokyo",
+            kept)
+
+    alias_env = make_env(work / "weather-city-alias")
+    data = json_call(
+        ledger, cli,
+        ["backup-import-json", json.dumps({
+            "version": 1,
+            "exteraconfig": {"weatherCity": "berlin"},
+        })],
+        alias_env, "weather city alias import")
+    if data is not None:
+        ledger.check(
+            "weather city alias applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    exported = json_call(
+        ledger, cli, ["backup-export-current"], alias_env,
+        "weather city alias export")
+    if exported is not None:
+        section = backup_sections(exported)["exteraconfig"]
+        ledger.check(
+            "weather city alias exported",
+            section.get("OENetworkWeatherCity") == "berlin",
+            section.get("OENetworkWeatherCity"))
+
+    result = run(
+        cli,
+        ["extra-pills-parse", "weather",
+         str(FIXTURES / "extra-pills-weather.json")])
+    text = None
+    if result.returncode == 0:
+        try:
+            text = json.loads(result.stdout).get("text")
+        except json.JSONDecodeError:
+            text = None
+    ledger.check(
+        "weather city parse unchanged",
+        result.returncode == 0 and text == "+23\u00b0",
+        f"exit {result.returncode}, text {text!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def main():
     cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
     if not cli.is_file():
@@ -8323,6 +8419,7 @@ def main():
         recognition = check_recognition(ledger, cli, work)
         stt = check_stt(ledger, cli, work)
         network = check_network(ledger, cli, work)
+        weather_city = check_weather_city(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
         lyrics = check_lyrics(ledger, cli, work)
@@ -8409,6 +8506,7 @@ def main():
     print(f"recognition: {recognition[0] - recognition[1]} passed")
     print(f"stt: {stt[0] - stt[1]} passed")
     print(f"network: {network[0] - network[1]} passed")
+    print(f"weather-city: {weather_city[0] - weather_city[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"lyrics: {lyrics[0] - lyrics[1]} passed")

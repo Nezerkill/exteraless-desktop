@@ -1,5 +1,7 @@
 #include "exteraless/extra_pills.h"
 
+#include "exteraless/config.h"
+
 #include <QElapsedTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -19,10 +21,28 @@
 namespace Exteraless {
 namespace {
 
-// Moscow fallback: there is no location setting yet, so the caller cannot
-// pick a city; a city setting is the obvious follow-up.
-constexpr auto kDefaultLatitude = 55.75;
-constexpr auto kDefaultLongitude = 37.61;
+struct CityRow {
+	const char *id;
+	const char *label;
+	double lat;
+	double lon;
+};
+
+constexpr auto kWeatherCities = std::array<CityRow, 12>{ {
+	{ "moscow", "Moscow", 55.75, 37.61 },
+	{ "london", "London", 51.51, -0.13 },
+	{ "new-york", "New York", 40.71, -74.01 },
+	{ "tokyo", "Tokyo", 35.68, 139.69 },
+	{ "berlin", "Berlin", 52.52, 13.41 },
+	{ "paris", "Paris", 48.86, 2.35 },
+	{ "beijing", "Beijing", 39.90, 116.41 },
+	{ "delhi", "Delhi", 28.61, 77.21 },
+	{ "istanbul", "Istanbul", 41.01, 28.98 },
+	{ "kyiv", "Kyiv", 50.45, 30.52 },
+	{ "warsaw", "Warsaw", 52.23, 21.01 },
+	{ "astana", "Astana", 51.17, 71.45 },
+} };
+
 constexpr qint64 kRefreshIntervalMs = 30 * 60 * 1000;
 
 enum class Slot {
@@ -90,14 +110,49 @@ constexpr auto kSlotCount = int(Slot::Count);
 	return true;
 }
 
-} // namespace
+[[nodiscard]] const CityRow *FindCity(const QString &id) {
+	const auto key = id.trimmed().toLower();
+	for (const auto &row : kWeatherCities) {
+		if (key == QLatin1String(row.id)) {
+			return &row;
+		}
+	}
+	return nullptr;
+}
 
-QString WeatherApiUrl() {
+[[nodiscard]] QString BuildWeatherUrl(const CityRow &city) {
 	return QStringLiteral(
 		"https://api.open-meteo.com/v1/forecast"
 		"?latitude=%1&longitude=%2&current=temperature_2m")
-		.arg(QString::number(kDefaultLatitude, 'f', 2))
-		.arg(QString::number(kDefaultLongitude, 'f', 2));
+		.arg(QString::number(city.lat, 'f', 2))
+		.arg(QString::number(city.lon, 'f', 2));
+}
+
+} // namespace
+
+QStringList WeatherCityIds() {
+	auto result = QStringList();
+	for (const auto &row : kWeatherCities) {
+		result.push_back(QString::fromLatin1(row.id));
+	}
+	return result;
+}
+
+std::optional<WeatherCityInfo> WeatherCity(const QString &id) {
+	const auto row = FindCity(id);
+	if (!row) {
+		return std::nullopt;
+	}
+	return WeatherCityInfo{
+		QString::fromLatin1(row->label),
+		row->lat,
+		row->lon,
+	};
+}
+
+QString WeatherApiUrl() {
+	const auto city = FindCity(Config::Instance().networkWeatherCity());
+	return BuildWeatherUrl(city ? *city : kWeatherCities.front());
 }
 
 QString CoinbaseSpotUrl(const QString &code) {

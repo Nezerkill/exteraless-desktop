@@ -2,6 +2,7 @@
 
 #include "exteraless/ai_client.h"
 #include "exteraless/doubletap.h"
+#include "exteraless/extra_pills.h"
 
 #include <QDir>
 #include <algorithm>
@@ -95,6 +96,8 @@ constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
 constexpr auto kNetworkDnsType = "OENetworkDnsType";
 constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
+constexpr auto kNetworkWeatherCity = "OENetworkWeatherCity";
+constexpr auto kDefaultWeatherCity = "moscow";
 constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 constexpr auto kGhostSendOnline = "OEGhostSendOnline";
@@ -201,6 +204,11 @@ constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
 
 [[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
 	return value.isEmpty() ? QStringLiteral("ru") : value;
+}
+
+[[nodiscard]] QString NormalizeWeatherCity(const QString &value) {
+	const auto id = value.trimmed().toLower();
+	return WeatherCity(id) ? id : QString::fromLatin1(kDefaultWeatherCity);
 }
 
 [[nodiscard]] int SanitizeAudioBitrate(int value) {
@@ -980,6 +988,16 @@ void Config::setNetworkCustomDoH(const QString &value) {
 	setValue(kNetworkCustomDoH, value);
 }
 
+QString Config::networkWeatherCity() const {
+	return NormalizeWeatherCity(stringValue(
+		kNetworkWeatherCity,
+		QString::fromLatin1(kDefaultWeatherCity)));
+}
+
+void Config::setNetworkWeatherCity(const QString &value) {
+	setValue(kNetworkWeatherCity, NormalizeWeatherCity(value));
+}
+
 bool Config::ghostSendReadPackets() const {
 	return boolValue(kGhostSendReadPackets, true);
 }
@@ -1696,6 +1714,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kNetworkUseIPv6
 			|| key == kNetworkDnsType
 			|| key == kNetworkCustomDoH
+			|| key == kNetworkWeatherCity
 			|| key == kGhostSendReadPackets
 			|| key == kGhostSendReadStories
 			|| key == kGhostSendOnline
@@ -1810,6 +1829,13 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
 	} else if (accepted.contains(kPillStackOrder)) {
 		accepted.remove(kPillStackOrder);
+	}
+	if (const auto city = accepted.value(kNetworkWeatherCity);
+		city.isString()) {
+		accepted[kNetworkWeatherCity] = NormalizeWeatherCity(
+			city.toString());
+	} else if (accepted.contains(kNetworkWeatherCity)) {
+		accepted.remove(kNetworkWeatherCity);
 	}
 	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
 		const auto value = accepted.value(key);

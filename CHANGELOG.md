@@ -2,6 +2,16 @@
 
 ## 2026-11-07
 
+- Город погоды (NB-56, follow-up): таблица 12 столиц в `extra_pills`
+  (`WeatherCityIds`/`WeatherCity` → label/lat/lon, Москва дефолт);
+  `OENetworkWeatherCity` (default `moscow`, нормализация регистра,
+  неизвестный → `moscow`) + алиас `weatherCity`; `WeatherApiUrl()` читает
+  выбранный город из конфига; Radioenum-селектор в подсекции Network
+  (индекс→id, `st::boxMaxListHeight` — список в ScrollArea); 1 lang-ключ;
+  CLI `weather-city`/`weather-city-set` + `check_weather_city` (9 проверок),
+  раннеры 1141/32/252 PASS; `kKeysCount` 11242 (+1); патч `8948fd61…`,
+  `nix flake check` PASS. Ограничения: закэшированный текст обновляется
+  следующим циклом (до 30 мин); Xvfb-смоук не выполнялся.
 - Офлайн-распознавание речи (NB-51, full): движок sherpa-onnx 1.13.8
   (есть в pinned nixpkgs, vosk — нет); `nix/package.nix`: sherpa в
   `buildInputs`, FOD модели + `EXTERALESS_STT_MODEL` в wrapper;

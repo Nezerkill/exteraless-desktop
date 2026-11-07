@@ -196,6 +196,8 @@ public:
 	void setNetworkDnsType(int value);
 	[[nodiscard]] QString networkCustomDoH() const;
 	void setNetworkCustomDoH(const QString &value);
+	[[nodiscard]] QString networkWeatherCity() const;
+	void setNetworkWeatherCity(const QString &value);
 
 	[[nodiscard]] bool ghostSendReadPackets() const;
 	void setGhostSendReadPackets(bool value);

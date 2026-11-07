@@ -189,9 +189,11 @@ constexpr auto kProxyAutoDisabled = "OEProxyAutoDisabled";
 constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
 constexpr auto kNetworkDnsType = "OENetworkDnsType";
 constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
+constexpr auto kNetworkWeatherCity = "OENetworkWeatherCity";
 constexpr auto kNetworkUseIPv6Alias = "useIPv6";
 constexpr auto kNetworkDnsTypeAlias = "dnsType";
 constexpr auto kNetworkCustomDoHAlias = "customDoH";
+constexpr auto kNetworkWeatherCityAlias = "weatherCity";
 constexpr auto kPluginStates = "OEPluginStates";
 constexpr auto kPluginsSettings = "OEPluginSettings";
 constexpr auto kPluginsSettingsAlias = "pluginSettings";
@@ -511,6 +513,7 @@ QString BuildBackup(bool redactSecrets) {
 	extera[kNetworkUseIPv6] = config.networkUseIPv6();
 	extera[kNetworkDnsType] = config.networkDnsType();
 	extera[kNetworkCustomDoH] = config.networkCustomDoH();
+	extera[kNetworkWeatherCity] = config.networkWeatherCity();
 	extera[kPluginStates] = config.pluginStates();
 	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
@@ -829,6 +832,10 @@ BackupImportResult ApplyBackup(const QString &text) {
 		} else if ((key == kNetworkCustomDoH || key == kNetworkCustomDoHAlias)
 			&& value.isString()) {
 			config.setNetworkCustomDoH(value.toString());
+		} else if ((key == kNetworkWeatherCity
+			|| key == kNetworkWeatherCityAlias)
+			&& value.isString()) {
+			config.setNetworkWeatherCity(value.toString());
 		} else if (key == kPluginStates && value.isObject()) {
 			config.setPluginStates(value.toObject());
 		} else if ((key == kPluginsSettings || key == kPluginsSettingsAlias)

@@ -9422,5 +9422,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_network_dns_builtin" = "Built-in DoH";
 "lng_settings_exteraless_network_dns_system" = "System";
 "lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
+"lng_settings_exteraless_network_weather_city" = "Weather city";
 
 // Keys finished

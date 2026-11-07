@@ -2,8 +2,10 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 #include <memory>
+#include <optional>
 
 namespace Exteraless {
 
@@ -12,6 +14,15 @@ struct FiatRates {
 	double eurToRub = 0.;
 	double usdToRub = 0.;
 };
+
+struct WeatherCityInfo {
+	QString label;
+	double lat = 0.;
+	double lon = 0.;
+};
+
+[[nodiscard]] QStringList WeatherCityIds();
+[[nodiscard]] std::optional<WeatherCityInfo> WeatherCity(const QString &id);
 
 [[nodiscard]] QString WeatherApiUrl();
 [[nodiscard]] QString CoinbaseSpotUrl(const QString &code);

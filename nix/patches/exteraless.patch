@@ -109,7 +109,7 @@ index 811707d..fd1cdaa 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..08f6622 100644
+index ffc8ec9..3ba68b1 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -123,7 +123,7 @@ index ffc8ec9..08f6622 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9186,241 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9186,242 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -363,6 +363,7 @@ index ffc8ec9..08f6622 100644
 +"lng_settings_exteraless_network_dns_builtin" = "Built-in DoH";
 +"lng_settings_exteraless_network_dns_system" = "System";
 +"lng_settings_exteraless_network_custom_doh" = "Custom DoH URL";
++"lng_settings_exteraless_network_weather_city" = "Weather city";
 +
  // Keys finished
 diff --git a/Telegram/SourceFiles/api/api_send_progress.cpp b/Telegram/SourceFiles/api/api_send_progress.cpp
@@ -11332,10 +11333,10 @@ index ceae87b..ce8ddf6 100644
  		- st::overviewSmallCheck.size;
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..87b9ff1
+index 0000000..db578b8
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,3031 @@
+@@ -0,0 +1,3086 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -11344,6 +11345,7 @@ index 0000000..87b9ff1
 +#include "exteraless/config.h"
 +#include "exteraless/deleted_messages.h"
 +#include "exteraless/doubletap.h"
++#include "exteraless/extra_pills.h"
 +#include "exteraless/plugins_box.h"
 +#include "exteraless/proxy_rules.h"
 +#include "base/openssl_help.h"
@@ -14249,6 +14251,60 @@ index 0000000..87b9ff1
 +		.keywords = { u"doh"_q, u"dns"_q, u"url"_q },
 +	});
 +
++	const auto weatherCities = Exteraless::WeatherCityIds();
++	const auto weatherCityLabel = [](const QString &id) {
++		const auto city = Exteraless::WeatherCity(id);
++		return city ? city->label : QString();
++	};
++	const auto weatherCityValue = std::make_shared<rpl::variable<QString>>(
++		weatherCityLabel(
++			Exteraless::Config::Instance().networkWeatherCity()));
++	builder.addButton({
++		.id = u"exteraless/network/weather-city"_q,
++		.title = tr::lng_settings_exteraless_network_weather_city(),
++		.st = &st::settingsButtonNoIcon,
++		.label = weatherCityValue->value(),
++		.onClick = [=] {
++			const auto controller = builder.controller();
++			if (!controller) {
++				return;
++			}
++			const auto current = Exteraless::Config::Instance()
++				.networkWeatherCity();
++			const auto index = qMax(
++				0,
++				static_cast<int>(weatherCities.indexOf(current)));
++			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
++				index);
++			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
++				box->setTitle(
++					tr::lng_settings_exteraless_network_weather_city());
++				box->setMaxHeight(st::boxMaxListHeight);
++				const auto inner = box->addRow(
++					object_ptr<Ui::VerticalLayout>(box));
++				for (auto i = 0; i != weatherCities.size(); ++i) {
++					inner->add(
++						object_ptr<Ui::Radioenum<int>>(
++							inner,
++							group,
++							i,
++							weatherCityLabel(weatherCities[i]),
++							st::settingsSendType),
++						st::settingsSendTypePadding);
++				}
++				group->setChangedCallback([=](int i) {
++					const auto id = weatherCities[i];
++					Exteraless::Config::Instance()
++						.setNetworkWeatherCity(id);
++					weatherCityValue->force_assign(weatherCityLabel(id));
++					box->closeBox();
++				});
++				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
++			}));
++		},
++		.keywords = { u"weather"_q, u"city"_q, u"network"_q },
++	});
++
 +	builder.addSubsectionTitle({
 +		.id = u"exteraless/plugins"_q,
 +		.title = tr::lng_settings_exteraless_plugins(),
@@ -16449,10 +16505,10 @@ index 0000000..81b95c1
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..aa5908a
+index 0000000..1118289
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1314 @@
+@@ -0,0 +1,1321 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/ai_client.h"
@@ -16644,9 +16700,11 @@ index 0000000..aa5908a
 +constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
 +constexpr auto kNetworkDnsType = "OENetworkDnsType";
 +constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
++constexpr auto kNetworkWeatherCity = "OENetworkWeatherCity";
 +constexpr auto kNetworkUseIPv6Alias = "useIPv6";
 +constexpr auto kNetworkDnsTypeAlias = "dnsType";
 +constexpr auto kNetworkCustomDoHAlias = "customDoH";
++constexpr auto kNetworkWeatherCityAlias = "weatherCity";
 +constexpr auto kPluginStates = "OEPluginStates";
 +constexpr auto kPluginsSettings = "OEPluginSettings";
 +constexpr auto kPluginsSettingsAlias = "pluginSettings";
@@ -16966,6 +17024,7 @@ index 0000000..aa5908a
 +	extera[kNetworkUseIPv6] = config.networkUseIPv6();
 +	extera[kNetworkDnsType] = config.networkDnsType();
 +	extera[kNetworkCustomDoH] = config.networkCustomDoH();
++	extera[kNetworkWeatherCity] = config.networkWeatherCity();
 +	extera[kPluginStates] = config.pluginStates();
 +	extera[kChatsStripTrackingOnOpen] = chats.stripTrackingOnOpen;
 +	extera[kChatsStripTrackingOnPaste] = chats.stripTrackingOnPaste;
@@ -17284,6 +17343,10 @@ index 0000000..aa5908a
 +		} else if ((key == kNetworkCustomDoH || key == kNetworkCustomDoHAlias)
 +			&& value.isString()) {
 +			config.setNetworkCustomDoH(value.toString());
++		} else if ((key == kNetworkWeatherCity
++			|| key == kNetworkWeatherCityAlias)
++			&& value.isString()) {
++			config.setNetworkWeatherCity(value.toString());
 +		} else if (key == kPluginStates && value.isObject()) {
 +			config.setPluginStates(value.toObject());
 +		} else if ((key == kPluginsSettings || key == kPluginsSettingsAlias)
@@ -17891,14 +17954,15 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..fcb9415
+index 0000000..98022b3
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1966 @@
+@@ -0,0 +1,1992 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/ai_client.h"
 +#include "exteraless/doubletap.h"
++#include "exteraless/extra_pills.h"
 +
 +#include <QDir>
 +#include <algorithm>
@@ -17992,6 +18056,8 @@ index 0000000..fcb9415
 +constexpr auto kNetworkUseIPv6 = "OENetworkUseIPv6";
 +constexpr auto kNetworkDnsType = "OENetworkDnsType";
 +constexpr auto kNetworkCustomDoH = "OENetworkCustomDoH";
++constexpr auto kNetworkWeatherCity = "OENetworkWeatherCity";
++constexpr auto kDefaultWeatherCity = "moscow";
 +constexpr auto kGhostSendReadPackets = "OEGhostSendReadPackets";
 +constexpr auto kGhostSendReadStories = "OEGhostSendReadStories";
 +constexpr auto kGhostSendOnline = "OEGhostSendOnline";
@@ -18098,6 +18164,11 @@ index 0000000..fcb9415
 +
 +[[nodiscard]] QString SanitizeRecognitionLanguage(const QString &value) {
 +	return value.isEmpty() ? QStringLiteral("ru") : value;
++}
++
++[[nodiscard]] QString NormalizeWeatherCity(const QString &value) {
++	const auto id = value.trimmed().toLower();
++	return WeatherCity(id) ? id : QString::fromLatin1(kDefaultWeatherCity);
 +}
 +
 +[[nodiscard]] int SanitizeAudioBitrate(int value) {
@@ -18877,6 +18948,16 @@ index 0000000..fcb9415
 +	setValue(kNetworkCustomDoH, value);
 +}
 +
++QString Config::networkWeatherCity() const {
++	return NormalizeWeatherCity(stringValue(
++		kNetworkWeatherCity,
++		QString::fromLatin1(kDefaultWeatherCity)));
++}
++
++void Config::setNetworkWeatherCity(const QString &value) {
++	setValue(kNetworkWeatherCity, NormalizeWeatherCity(value));
++}
++
 +bool Config::ghostSendReadPackets() const {
 +	return boolValue(kGhostSendReadPackets, true);
 +}
@@ -19593,6 +19674,7 @@ index 0000000..fcb9415
 +			|| key == kNetworkUseIPv6
 +			|| key == kNetworkDnsType
 +			|| key == kNetworkCustomDoH
++			|| key == kNetworkWeatherCity
 +			|| key == kGhostSendReadPackets
 +			|| key == kGhostSendReadStories
 +			|| key == kGhostSendOnline
@@ -19707,6 +19789,13 @@ index 0000000..fcb9415
 +		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
 +	} else if (accepted.contains(kPillStackOrder)) {
 +		accepted.remove(kPillStackOrder);
++	}
++	if (const auto city = accepted.value(kNetworkWeatherCity);
++		city.isString()) {
++		accepted[kNetworkWeatherCity] = NormalizeWeatherCity(
++			city.toString());
++	} else if (accepted.contains(kNetworkWeatherCity)) {
++		accepted.remove(kNetworkWeatherCity);
 +	}
 +	for (const auto key : { kChatsDoubleTapIn, kChatsDoubleTapOut }) {
 +		const auto value = accepted.value(key);
@@ -19863,10 +19952,10 @@ index 0000000..fcb9415
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..53dab1f
+index 0000000..a56a6ef
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,376 @@
+@@ -0,0 +1,378 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -20065,6 +20154,8 @@ index 0000000..53dab1f
 +	void setNetworkDnsType(int value);
 +	[[nodiscard]] QString networkCustomDoH() const;
 +	void setNetworkCustomDoH(const QString &value);
++	[[nodiscard]] QString networkWeatherCity() const;
++	void setNetworkWeatherCity(const QString &value);
 +
 +	[[nodiscard]] bool ghostSendReadPackets() const;
 +	void setGhostSendReadPackets(bool value);
@@ -21092,11 +21183,13 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.cpp b/exteraless/extra_pills.cpp
 new file mode 100644
-index 0000000..ce8a0ff
+index 0000000..c5c3cc5
 --- /dev/null
 +++ b/exteraless/extra_pills.cpp
-@@ -0,0 +1,497 @@
+@@ -0,0 +1,552 @@
 +#include "exteraless/extra_pills.h"
++
++#include "exteraless/config.h"
 +
 +#include <QElapsedTimer>
 +#include <QJsonDocument>
@@ -21117,10 +21210,28 @@ index 0000000..ce8a0ff
 +namespace Exteraless {
 +namespace {
 +
-+// Moscow fallback: there is no location setting yet, so the caller cannot
-+// pick a city; a city setting is the obvious follow-up.
-+constexpr auto kDefaultLatitude = 55.75;
-+constexpr auto kDefaultLongitude = 37.61;
++struct CityRow {
++	const char *id;
++	const char *label;
++	double lat;
++	double lon;
++};
++
++constexpr auto kWeatherCities = std::array<CityRow, 12>{ {
++	{ "moscow", "Moscow", 55.75, 37.61 },
++	{ "london", "London", 51.51, -0.13 },
++	{ "new-york", "New York", 40.71, -74.01 },
++	{ "tokyo", "Tokyo", 35.68, 139.69 },
++	{ "berlin", "Berlin", 52.52, 13.41 },
++	{ "paris", "Paris", 48.86, 2.35 },
++	{ "beijing", "Beijing", 39.90, 116.41 },
++	{ "delhi", "Delhi", 28.61, 77.21 },
++	{ "istanbul", "Istanbul", 41.01, 28.98 },
++	{ "kyiv", "Kyiv", 50.45, 30.52 },
++	{ "warsaw", "Warsaw", 52.23, 21.01 },
++	{ "astana", "Astana", 51.17, 71.45 },
++} };
++
 +constexpr qint64 kRefreshIntervalMs = 30 * 60 * 1000;
 +
 +enum class Slot {
@@ -21188,14 +21299,49 @@ index 0000000..ce8a0ff
 +	return true;
 +}
 +
-+} // namespace
++[[nodiscard]] const CityRow *FindCity(const QString &id) {
++	const auto key = id.trimmed().toLower();
++	for (const auto &row : kWeatherCities) {
++		if (key == QLatin1String(row.id)) {
++			return &row;
++		}
++	}
++	return nullptr;
++}
 +
-+QString WeatherApiUrl() {
++[[nodiscard]] QString BuildWeatherUrl(const CityRow &city) {
 +	return QStringLiteral(
 +		"https://api.open-meteo.com/v1/forecast"
 +		"?latitude=%1&longitude=%2&current=temperature_2m")
-+		.arg(QString::number(kDefaultLatitude, 'f', 2))
-+		.arg(QString::number(kDefaultLongitude, 'f', 2));
++		.arg(QString::number(city.lat, 'f', 2))
++		.arg(QString::number(city.lon, 'f', 2));
++}
++
++} // namespace
++
++QStringList WeatherCityIds() {
++	auto result = QStringList();
++	for (const auto &row : kWeatherCities) {
++		result.push_back(QString::fromLatin1(row.id));
++	}
++	return result;
++}
++
++std::optional<WeatherCityInfo> WeatherCity(const QString &id) {
++	const auto row = FindCity(id);
++	if (!row) {
++		return std::nullopt;
++	}
++	return WeatherCityInfo{
++		QString::fromLatin1(row->label),
++		row->lat,
++		row->lon,
++	};
++}
++
++QString WeatherApiUrl() {
++	const auto city = FindCity(Config::Instance().networkWeatherCity());
++	return BuildWeatherUrl(city ? *city : kWeatherCities.front());
 +}
 +
 +QString CoinbaseSpotUrl(const QString &code) {
@@ -21595,16 +21741,18 @@ index 0000000..ce8a0ff
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.h b/exteraless/extra_pills.h
 new file mode 100644
-index 0000000..f255b9e
+index 0000000..2c0645b
 --- /dev/null
 +++ b/exteraless/extra_pills.h
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,64 @@
 +#pragma once
 +
 +#include <QByteArray>
 +#include <QString>
++#include <QStringList>
 +
 +#include <memory>
++#include <optional>
 +
 +namespace Exteraless {
 +
@@ -21613,6 +21761,15 @@ index 0000000..f255b9e
 +	double eurToRub = 0.;
 +	double usdToRub = 0.;
 +};
++
++struct WeatherCityInfo {
++	QString label;
++	double lat = 0.;
++	double lon = 0.;
++};
++
++[[nodiscard]] QStringList WeatherCityIds();
++[[nodiscard]] std::optional<WeatherCityInfo> WeatherCity(const QString &id);
 +
 +[[nodiscard]] QString WeatherApiUrl();
 +[[nodiscard]] QString CoinbaseSpotUrl(const QString &code);
@@ -24951,10 +25108,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..ae72925
+index 0000000..e53d96a
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3332 @@
+@@ -0,0 +1,3362 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -25225,6 +25382,8 @@ index 0000000..ae72925
 +		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 +		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
 +		<< "  exteraless-chats-cli network-set-doh <url|->\n"
++		<< "  exteraless-chats-cli weather-city\n"
++		<< "  exteraless-chats-cli weather-city-set <id>\n"
 +		<< "  exteraless-chats-cli stt-model-info\n"
 +		<< "  exteraless-chats-cli stt-transcribe <file> [lang]\n";
 +	return 2;
@@ -25410,6 +25569,15 @@ index 0000000..ae72925
 +		{ QStringLiteral("useIPv6"), config.networkUseIPv6() },
 +		{ QStringLiteral("dnsType"), config.networkDnsType() },
 +		{ QStringLiteral("customDoh"), config.networkCustomDoH() },
++	});
++}
++
++void PrintWeatherCity() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("city"),
++			Exteraless::Config::Instance().networkWeatherCity() },
++		{ QStringLiteral("cities"),
++			QJsonArray::fromStringList(Exteraless::WeatherCityIds()) },
 +	});
 +}
 +
@@ -27002,6 +27170,25 @@ index 0000000..ae72925
 +				? QString()
 +				: arguments[2]);
 +		PrintNetwork();
++		return 0;
++	}
++	if (mode == QStringLiteral("weather-city")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintWeatherCity();
++		return 0;
++	}
++	if (mode == QStringLiteral("weather-city-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		const auto id = arguments[2].trimmed().toLower();
++		if (!Exteraless::WeatherCity(id)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setNetworkWeatherCity(id);
++		PrintWeatherCity();
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("forward-date")) {
@@ -28771,10 +28958,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..53a49c2
+index 0000000..31c8173
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8430 @@
+@@ -0,0 +1,8528 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -29623,7 +29810,7 @@ index 0000000..53a49c2
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 138,
++            len(section) == 139,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -29644,7 +29831,7 @@ index 0000000..53a49c2
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 143,
++            sum(len(value) for value in exported.values()) == 144,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -29664,7 +29851,7 @@ index 0000000..53a49c2
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 143,
++                data.get("applied") == 144,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -29842,6 +30029,7 @@ index 0000000..53a49c2
 +            "OENetworkUseIPv6": True,
 +            "OENetworkDnsType": 1,
 +            "OENetworkCustomDoH": "https://full.test/dns-query",
++            "OENetworkWeatherCity": "tokyo",
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -29863,7 +30051,7 @@ index 0000000..53a49c2
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 143,
++            data.get("applied") == 144,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -29879,10 +30067,12 @@ index 0000000..53a49c2
 +            section.get("OENetworkUseIPv6") is True
 +            and section.get("OENetworkDnsType") == 1
 +            and section.get("OENetworkCustomDoH")
-+            == "https://full.test/dns-query",
++            == "https://full.test/dns-query"
++            and section.get("OENetworkWeatherCity") == "tokyo",
 +            (section.get("OENetworkUseIPv6"),
 +             section.get("OENetworkDnsType"),
-+             section.get("OENetworkCustomDoH")))
++             section.get("OENetworkCustomDoH"),
++             section.get("OENetworkWeatherCity")))
 +        ledger.check(
 +            "backup full ghost flags",
 +            all(section.get(key) is False for key in (
@@ -30186,10 +30376,10 @@ index 0000000..53a49c2
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 138",
++            "backup legacy eight completed to 139",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (138, 3, 2),
++             len(sections["mainconfig"])) == (139, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -30501,8 +30691,8 @@ index 0000000..53a49c2
 +                "OETranslationProvider")})
 +        ledger.check(
 +            "backup redacted key counts",
-+            len(section) == 141
-+            and sum(len(value) for value in sections.values()) == 146,
++            len(section) == 142
++            and sum(len(value) for value in sections.values()) == 147,
 +            {name: len(value) for name, value in sections.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -30528,7 +30718,7 @@ index 0000000..53a49c2
 +                "backup redacted import applied",
 +                imported.get("ok") is True
 +                and imported.get("unknown") == []
-+                and imported.get("applied") == 146,
++                and imported.get("applied") == 147,
 +                imported)
 +        raw = json_call(
 +            ledger, cli, ["config-raw"], env, "backup redacted local config")
@@ -37025,6 +37215,99 @@ index 0000000..53a49c2
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_weather_city(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    cities = [
++        "moscow", "london", "new-york", "tokyo", "berlin", "paris",
++        "beijing", "delhi", "istanbul", "kyiv", "warsaw", "astana"]
++
++    env = make_env(work / "weather-city-defaults")
++    data = json_call(
++        ledger, cli, ["weather-city"], env, "weather city defaults")
++    if data is not None:
++        ledger.check(
++            "weather city default",
++            data.get("city") == "moscow",
++            data)
++        ledger.check(
++            "weather city list",
++            data.get("cities") == cities,
++            data.get("cities"))
++
++    data = json_call(
++        ledger, cli, ["weather-city-set", "TOKYO"], env,
++        "weather city set")
++    if data is not None:
++        ledger.check(
++            "weather city set tokyo",
++            data.get("city") == "tokyo",
++            data)
++    reloaded = json_call(
++        ledger, cli, ["weather-city"], env, "weather city reload")
++    if reloaded is not None:
++        ledger.check(
++            "weather city persisted",
++            reloaded.get("city") == "tokyo",
++            reloaded)
++
++    result = run(cli, ["weather-city-set", "atlantis"], env=env)
++    ledger.check(
++        "cli weather city set invalid",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++    kept = json_call(
++        ledger, cli, ["weather-city"], env, "weather city after invalid")
++    if kept is not None:
++        ledger.check(
++            "weather city invalid keeps previous",
++            kept.get("city") == "tokyo",
++            kept)
++
++    alias_env = make_env(work / "weather-city-alias")
++    data = json_call(
++        ledger, cli,
++        ["backup-import-json", json.dumps({
++            "version": 1,
++            "exteraconfig": {"weatherCity": "berlin"},
++        })],
++        alias_env, "weather city alias import")
++    if data is not None:
++        ledger.check(
++            "weather city alias applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    exported = json_call(
++        ledger, cli, ["backup-export-current"], alias_env,
++        "weather city alias export")
++    if exported is not None:
++        section = backup_sections(exported)["exteraconfig"]
++        ledger.check(
++            "weather city alias exported",
++            section.get("OENetworkWeatherCity") == "berlin",
++            section.get("OENetworkWeatherCity"))
++
++    result = run(
++        cli,
++        ["extra-pills-parse", "weather",
++         str(FIXTURES / "extra-pills-weather.json")])
++    text = None
++    if result.returncode == 0:
++        try:
++            text = json.loads(result.stdout).get("text")
++        except json.JSONDecodeError:
++            text = None
++    ledger.check(
++        "weather city parse unchanged",
++        result.returncode == 0 and text == "+23\u00b0",
++        f"exit {result.returncode}, text {text!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def main():
 +    cli = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_CLI
 +    if not cli.is_file():
@@ -37100,6 +37383,7 @@ index 0000000..53a49c2
 +        recognition = check_recognition(ledger, cli, work)
 +        stt = check_stt(ledger, cli, work)
 +        network = check_network(ledger, cli, work)
++        weather_city = check_weather_city(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
 +        lyrics = check_lyrics(ledger, cli, work)
@@ -37186,6 +37470,7 @@ index 0000000..53a49c2
 +    print(f"recognition: {recognition[0] - recognition[1]} passed")
 +    print(f"stt: {stt[0] - stt[1]} passed")
 +    print(f"network: {network[0] - network[1]} passed")
++    print(f"weather-city: {weather_city[0] - weather_city[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"lyrics: {lyrics[0] - lyrics[1]} passed")

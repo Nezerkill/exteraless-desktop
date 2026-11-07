@@ -268,6 +268,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
 		<< "  exteraless-chats-cli network-set-doh <url|->\n"
+		<< "  exteraless-chats-cli weather-city\n"
+		<< "  exteraless-chats-cli weather-city-set <id>\n"
 		<< "  exteraless-chats-cli stt-model-info\n"
 		<< "  exteraless-chats-cli stt-transcribe <file> [lang]\n";
 	return 2;
@@ -453,6 +455,15 @@ void PrintNetwork() {
 		{ QStringLiteral("useIPv6"), config.networkUseIPv6() },
 		{ QStringLiteral("dnsType"), config.networkDnsType() },
 		{ QStringLiteral("customDoh"), config.networkCustomDoH() },
+	});
+}
+
+void PrintWeatherCity() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("city"),
+			Exteraless::Config::Instance().networkWeatherCity() },
+		{ QStringLiteral("cities"),
+			QJsonArray::fromStringList(Exteraless::WeatherCityIds()) },
 	});
 }
 
@@ -2045,6 +2056,25 @@ int main(int argc, char *argv[]) {
 				? QString()
 				: arguments[2]);
 		PrintNetwork();
+		return 0;
+	}
+	if (mode == QStringLiteral("weather-city")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintWeatherCity();
+		return 0;
+	}
+	if (mode == QStringLiteral("weather-city-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		const auto id = arguments[2].trimmed().toLower();
+		if (!Exteraless::WeatherCity(id)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setNetworkWeatherCity(id);
+		PrintWeatherCity();
 		return 0;
 	}
 	if (mode == QStringLiteral("forward-date")) {

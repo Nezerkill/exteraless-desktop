@@ -6,6 +6,7 @@
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
 #include "exteraless/doubletap.h"
+#include "exteraless/extra_pills.h"
 #include "exteraless/plugins_box.h"
 #include "exteraless/proxy_rules.h"
 #include "base/openssl_help.h"
@@ -2909,6 +2910,60 @@ const auto kMeta = Builder::BuildHelper({
 			}));
 		},
 		.keywords = { u"doh"_q, u"dns"_q, u"url"_q },
+	});
+
+	const auto weatherCities = Exteraless::WeatherCityIds();
+	const auto weatherCityLabel = [](const QString &id) {
+		const auto city = Exteraless::WeatherCity(id);
+		return city ? city->label : QString();
+	};
+	const auto weatherCityValue = std::make_shared<rpl::variable<QString>>(
+		weatherCityLabel(
+			Exteraless::Config::Instance().networkWeatherCity()));
+	builder.addButton({
+		.id = u"exteraless/network/weather-city"_q,
+		.title = tr::lng_settings_exteraless_network_weather_city(),
+		.st = &st::settingsButtonNoIcon,
+		.label = weatherCityValue->value(),
+		.onClick = [=] {
+			const auto controller = builder.controller();
+			if (!controller) {
+				return;
+			}
+			const auto current = Exteraless::Config::Instance()
+				.networkWeatherCity();
+			const auto index = qMax(
+				0,
+				static_cast<int>(weatherCities.indexOf(current)));
+			const auto group = std::make_shared<Ui::RadioenumGroup<int>>(
+				index);
+			controller->show(Box([=](not_null<Ui::GenericBox*> box) {
+				box->setTitle(
+					tr::lng_settings_exteraless_network_weather_city());
+				box->setMaxHeight(st::boxMaxListHeight);
+				const auto inner = box->addRow(
+					object_ptr<Ui::VerticalLayout>(box));
+				for (auto i = 0; i != weatherCities.size(); ++i) {
+					inner->add(
+						object_ptr<Ui::Radioenum<int>>(
+							inner,
+							group,
+							i,
+							weatherCityLabel(weatherCities[i]),
+							st::settingsSendType),
+						st::settingsSendTypePadding);
+				}
+				group->setChangedCallback([=](int i) {
+					const auto id = weatherCities[i];
+					Exteraless::Config::Instance()
+						.setNetworkWeatherCity(id);
+					weatherCityValue->force_assign(weatherCityLabel(id));
+					box->closeBox();
+				});
+				box->addButton(tr::lng_box_ok(), [=] { box->closeBox(); });
+			}));
+		},
+		.keywords = { u"weather"_q, u"city"_q, u"network"_q },
 	});
 
 	builder.addSubsectionTitle({
