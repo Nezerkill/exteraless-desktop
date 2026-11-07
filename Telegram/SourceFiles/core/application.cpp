@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "exteraless/config.h"
 #include "exteraless/deleted_messages.h"
+#include "exteraless/extra_pills.h"
 #include "exteraless/plugin_runtime.h"
 #include "exteraless/proxy_rules.h"
 
@@ -190,6 +191,8 @@ Application::Application()
 , _autoLockTimer([=] { checkAutoLock(); }) {
 	Ui::Integration::Set(&_private->uiIntegration);
 	Exteraless::Config::Instance().setWorkingDir(cWorkingDir());
+	Exteraless::SetExtraPillsCachePath(
+		QDir(cWorkingDir()).filePath(u"tdata/extra-pills-cache.json"_q));
 	base::options::lookup<bool>(
 		Dialogs::kOptionDialogsUnreadOnTop
 	).set(Exteraless::Config::Instance().chatsSettings().sortByUnread);

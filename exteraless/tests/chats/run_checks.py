@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -6792,6 +6793,173 @@ def check_extra_pills(ledger, cli, work):
             data.get("applied") == 0
             and sorted(data.get("unknown") or [])
             == ["pillstackconfig.OEPillStackPills"],
+            data)
+
+    def write_cache(root, entries):
+        path = (root / "data" / "ExteralessDesktop" / "tdata"
+                / "extra-pills-cache.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(entries), encoding="utf-8")
+        return path
+
+    now = int(time.time() * 1000)
+    env = make_env(work / "extra-pills-cache-default")
+    data = json_call(
+        ledger, cli, ["extra-pills-cache"], env,
+        "extra pills cache default")
+    default_path = (
+        Path(env["XDG_DATA_HOME"]) / "ExteralessDesktop"
+        / "tdata" / "extra-pills-cache.json")
+    if data is not None:
+        ledger.check(
+            "extra pills cache path",
+            Path(data.get("path", "")) == default_path,
+            data.get("path"))
+        ledger.check(
+            "extra pills cache empty count",
+            data.get("entries") == 0,
+            data)
+        ledger.check(
+            "extra pills cache empty dash",
+            data.get("weather") == "\u2014",
+            data.get("weather"))
+
+    env = make_env(work / "extra-pills-cache-workdir-env")
+    native = work / "extra-pills-cache-workdir"
+    env["EXTERALESS_WORKDIR"] = str(native)
+    data = json_call(
+        ledger, cli, ["extra-pills-cache"], env,
+        "extra pills cache workdir")
+    if data is not None:
+        ledger.check(
+            "extra pills cache workdir path",
+            Path(data.get("path", ""))
+            == native / "tdata" / "extra-pills-cache.json",
+            data.get("path"))
+
+    stored_root = work / "extra-pills-cache-stored"
+    env = make_env(stored_root)
+    write_cache(stored_root, {
+        "weather": {"text": "+3\u00b0", "at": now},
+        "btc": {"text": "75789", "at": now},
+        "usd": {"text": "91.2", "at": now},
+        "gold": {"text": "4072", "at": now},
+        "eth": {"text": "", "at": now},
+        "eur": {"text": "100.5", "at": 0},
+    })
+    data = json_call(
+        ledger, cli, ["extra-pills-cache"], env,
+        "extra pills cache stored")
+    if data is not None:
+        ledger.check(
+            "extra pills cache stored count",
+            data.get("entries") == 4,
+            data)
+        ledger.check(
+            "extra pills cache stored texts",
+            (data.get("weather"), data.get("btc"),
+             data.get("usd"), data.get("gold"))
+            == ("+3\u00b0", "$75789", "91.2", "$4072"),
+            data)
+        ledger.check(
+            "extra pills cache skips blank",
+            data.get("eth") == "\u2014" and data.get("eur") == "\u2014",
+            data)
+
+    stale_root = work / "extra-pills-cache-stale"
+    env = make_env(stale_root)
+    old = now - 3 * 60 * 60 * 1000
+    write_cache(stale_root, {
+        "weather": {"text": "+3\u00b0", "at": old},
+        "btc": {"text": "75789", "at": old},
+    })
+    data = json_call(
+        ledger, cli, ["extra-pills-cache"], env,
+        "extra pills cache stale")
+    if data is not None:
+        ledger.check(
+            "extra pills cache stale shown",
+            (data.get("entries"), data.get("weather"), data.get("btc"))
+            == (2, "+3\u00b0", "$75789"),
+            data)
+
+    load_env = make_env(work / "extra-pills-cache-load")
+    good = work / "extra-pills-cache-good.json"
+    good.write_text(json.dumps({
+        "weather": {"text": "-6\u00b0", "at": 1000},
+        "gold": {"text": "4072", "at": 1000},
+    }), encoding="utf-8")
+    data = json_call(
+        ledger, cli, ["extra-pills-cache-load", str(good)], load_env,
+        "extra pills cache load")
+    if data is not None:
+        ledger.check(
+            "extra pills cache load ok",
+            data.get("ok") is True and data.get("entries") == 2,
+            data)
+        ledger.check(
+            "extra pills cache load texts",
+            (data.get("weather"), data.get("gold"))
+            == ("-6\u00b0", "$4072"),
+            data)
+
+    broken = work / "extra-pills-cache-broken.json"
+    broken.write_text("{not json", encoding="utf-8")
+    data = json_call(
+        ledger, cli, ["extra-pills-cache-load", str(broken)], load_env,
+        "extra pills cache broken")
+    if data is not None:
+        ledger.check(
+            "extra pills cache broken rejected",
+            data.get("ok") is False and data.get("entries") == 0,
+            data)
+
+    result = run(
+        cli,
+        ["extra-pills-cache-load",
+         str(work / "extra-pills-cache-missing.json")],
+        env=load_env)
+    ledger.check(
+        "extra pills cache missing file",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    save_env = make_env(work / "extra-pills-cache-save")
+    source = work / "extra-pills-cache-save-source.json"
+    source.write_text(json.dumps({
+        "weather": {"text": "+3\u00b0", "at": now},
+        "btc": {"text": "75789", "at": now},
+    }), encoding="utf-8")
+    target = work / "extra-pills-cache-saved" / "extra-pills-cache.json"
+    data = json_call(
+        ledger, cli,
+        ["extra-pills-cache-save", str(source), str(target)], save_env,
+        "extra pills cache save")
+    if data is not None:
+        ledger.check(
+            "extra pills cache save ok",
+            data.get("saved") is True and data.get("entries") == 2,
+            data)
+        saved = (json.loads(target.read_text(encoding="utf-8"))
+                 if target.is_file() else {})
+        ledger.check(
+            "extra pills cache save file",
+            sorted(saved) == ["btc", "weather"]
+            and saved["btc"]["text"] == "75789"
+            and saved["weather"]["at"] == now,
+            saved)
+
+    empty_source = work / "extra-pills-cache-save-empty.json"
+    empty_source.write_text("{}", encoding="utf-8")
+    data = json_call(
+        ledger, cli,
+        ["extra-pills-cache-save", str(empty_source),
+         str(work / "extra-pills-cache-saved-empty.json")], save_env,
+        "extra pills cache save empty")
+    if data is not None:
+        ledger.check(
+            "extra pills cache save empty skipped",
+            data.get("saved") is False and data.get("entries") == 0,
             data)
 
     return (

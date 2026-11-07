@@ -30,6 +30,9 @@ struct WeatherCityInfo {
 [[nodiscard]] QString CbrDailyUrl();
 [[nodiscard]] QString GoldApiUrl();
 
+[[nodiscard]] QString ExtraPillsCachePath();
+void SetExtraPillsCachePath(const QString &path);
+
 [[nodiscard]] QString ParseWeather(const QByteArray &data);
 [[nodiscard]] QString ParseCoinbase(const QByteArray &data);
 [[nodiscard]] FiatRates ParseEcbXml(const QByteArray &data);
@@ -50,6 +53,11 @@ public:
 	[[nodiscard]] static ExtraPills &Instance();
 
 	void Refresh();
+
+	[[nodiscard]] QString CachePath() const;
+	[[nodiscard]] int CachedEntries() const;
+	[[nodiscard]] bool LoadCache(const QString &path);
+	[[nodiscard]] bool SaveCache(const QString &path) const;
 
 	[[nodiscard]] QString WeatherText() const;
 	[[nodiscard]] QString CryptoText(const QString &code) const;

@@ -1221,21 +1221,22 @@ index 401b0ab..7d99d8f 100644
  	};
  }
 diff --git a/Telegram/SourceFiles/core/application.cpp b/Telegram/SourceFiles/core/application.cpp
-index 7a309ac..9be139c 100644
+index 7a309ac..b585028 100644
 --- a/Telegram/SourceFiles/core/application.cpp
 +++ b/Telegram/SourceFiles/core/application.cpp
-@@ -6,6 +6,10 @@ For license and copyright information please follow this link:
+@@ -6,6 +6,11 @@ For license and copyright information please follow this link:
  https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "core/application.h"
 +#include "exteraless/config.h"
 +#include "exteraless/deleted_messages.h"
++#include "exteraless/extra_pills.h"
 +#include "exteraless/plugin_runtime.h"
 +#include "exteraless/proxy_rules.h"
  
  #include "data/data_abstract_structure.h"
  #include "data/data_channel.h"
-@@ -58,6 +62,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -58,6 +63,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "tray.h"
  #include "core/click_handler_types.h" // ClickHandlerContext.
  #include "core/crash_reports.h"
@@ -1243,18 +1244,20 @@ index 7a309ac..9be139c 100644
  #include "main/main_account.h"
  #include "main/main_domain.h"
  #include "main/main_session.h"
-@@ -184,6 +189,10 @@ Application::Application()
+@@ -184,6 +190,12 @@ Application::Application()
  , _setupEmailLock(false)
  , _autoLockTimer([=] { checkAutoLock(); }) {
  	Ui::Integration::Set(&_private->uiIntegration);
 +	Exteraless::Config::Instance().setWorkingDir(cWorkingDir());
++	Exteraless::SetExtraPillsCachePath(
++		QDir(cWorkingDir()).filePath(u"tdata/extra-pills-cache.json"_q));
 +	base::options::lookup<bool>(
 +		Dialogs::kOptionDialogsUnreadOnTop
 +	).set(Exteraless::Config::Instance().chatsSettings().sortByUnread);
  	_private->proxyRotation = std::make_unique<ProxyRotationManager>();
  
  	_platformIntegration->init();
-@@ -209,6 +218,9 @@ Application::Application()
+@@ -209,6 +221,9 @@ Application::Application()
  
  	_domain->activeSessionChanges(
  	) | rpl::on_next([=](Main::Session *session) {
@@ -1264,7 +1267,7 @@ index 7a309ac..9be139c 100644
  		if (session && !UpdaterDisabled()) { // #TODO multi someSessionValue
  			UpdateChecker().setMtproto(session);
  		}
-@@ -285,6 +297,8 @@ Application::~Application() {
+@@ -285,6 +300,8 @@ Application::~Application() {
  	_domain->finish();
  	MTP::WebProxy::Transport::Shutdown();
  
@@ -1273,7 +1276,7 @@ index 7a309ac..9be139c 100644
  	Local::finish();
  
  	Shortcuts::Finish();
-@@ -559,6 +573,7 @@ void Application::startSettingsAndBackground() {
+@@ -559,6 +576,7 @@ void Application::startSettingsAndBackground() {
  	checkSystemDarkMode();
  	Ui::SetScreenReaderModeDisabled(
  		settings().readPref<bool>(kScreenReaderModeDisabledKey));
@@ -1281,7 +1284,7 @@ index 7a309ac..9be139c 100644
  }
  
  void Application::checkSystemDarkMode() {
-@@ -943,6 +958,11 @@ void Application::badMtprotoConfigurationError() {
+@@ -943,6 +961,11 @@ void Application::badMtprotoConfigurationError() {
  void Application::startLocalStorage() {
  	Ui::GL::DetectLastCheckCrash();
  	Local::start();
@@ -21459,15 +21462,19 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.cpp b/exteraless/extra_pills.cpp
 new file mode 100644
-index 0000000..c5c3cc5
+index 0000000..d0aedeb
 --- /dev/null
 +++ b/exteraless/extra_pills.cpp
-@@ -0,0 +1,552 @@
+@@ -0,0 +1,716 @@
 +#include "exteraless/extra_pills.h"
 +
 +#include "exteraless/config.h"
 +
++#include <QDateTime>
++#include <QDir>
 +#include <QElapsedTimer>
++#include <QFile>
++#include <QFileInfo>
 +#include <QJsonDocument>
 +#include <QJsonObject>
 +#include <QJsonParseError>
@@ -21475,6 +21482,8 @@ index 0000000..c5c3cc5
 +#include <QNetworkAccessManager>
 +#include <QNetworkReply>
 +#include <QNetworkRequest>
++#include <QSaveFile>
++#include <QStandardPaths>
 +#include <QUrl>
 +#include <QXmlStreamReader>
 +
@@ -21521,6 +21530,33 @@ index 0000000..c5c3cc5
 +};
 +
 +constexpr auto kSlotCount = int(Slot::Count);
++
++constexpr auto kCacheSlots = std::array<Slot, kSlotCount>{ {
++	Slot::Weather,
++	Slot::Btc,
++	Slot::Eth,
++	Slot::Usd,
++	Slot::Eur,
++	Slot::Gold,
++} };
++
++QString &CachePathOverride() {
++	static auto value = QString();
++	return value;
++}
++
++[[nodiscard]] const char *SlotKey(Slot slot) {
++	switch (slot) {
++	case Slot::Weather: return "weather";
++	case Slot::Btc: return "btc";
++	case Slot::Eth: return "eth";
++	case Slot::Usd: return "usd";
++	case Slot::Eur: return "eur";
++	case Slot::Gold: return "gold";
++	case Slot::Count: break;
++	}
++	return "";
++}
 +
 +[[nodiscard]] QString TrimZeros(QString text) {
 +	while (text.endsWith(u'0')) {
@@ -21594,6 +21630,20 @@ index 0000000..c5c3cc5
 +}
 +
 +} // namespace
++
++QString ExtraPillsCachePath() {
++	if (!CachePathOverride().isEmpty()) {
++		return CachePathOverride();
++	}
++	// Same tdata directory as exteraless.json in Config::ensureLoaded().
++	return QStandardPaths::writableLocation(
++		QStandardPaths::AppLocalDataLocation)
++		+ QStringLiteral("/tdata/extra-pills-cache.json");
++}
++
++void SetExtraPillsCachePath(const QString &path) {
++	CachePathOverride() = path;
++}
 +
 +QStringList WeatherCityIds() {
 +	auto result = QStringList();
@@ -21822,6 +21872,7 @@ index 0000000..c5c3cc5
 +	struct Entry {
 +		QString text;
 +		QElapsedTimer since;
++		qint64 at = 0;
 +		bool pending = false;
 +	};
 +
@@ -21831,6 +21882,7 @@ index 0000000..c5c3cc5
 +		FiatRates rates;
 +	};
 +
++	QString cachePath;
 +	QNetworkAccessManager manager;
 +	std::array<Entry, kSlotCount> entries = {};
 +	RatesEntry cbr;
@@ -21847,13 +21899,96 @@ index 0000000..c5c3cc5
 +		Entry &entry,
 +		const QString &url,
 +		std::function<void(const QByteArray &)> apply);
++	bool saveCache(const QString &path) const;
++	bool loadCache(const QString &path);
 +
 +	[[nodiscard]] bool fresh(const QElapsedTimer &since) const;
++	[[nodiscard]] bool cachedFresh(const Entry &entry) const;
++	[[nodiscard]] int cachedEntries() const;
 +	[[nodiscard]] QString text(Slot slot) const;
 +};
 +
 +bool ExtraPills::State::fresh(const QElapsedTimer &since) const {
 +	return since.isValid() && since.elapsed() < kRefreshIntervalMs;
++}
++
++bool ExtraPills::State::cachedFresh(const Entry &entry) const {
++	return entry.at > 0
++		&& (QDateTime::currentMSecsSinceEpoch() - entry.at
++			< kRefreshIntervalMs);
++}
++
++int ExtraPills::State::cachedEntries() const {
++	auto count = 0;
++	for (const auto &entry : entries) {
++		count += entry.text.isEmpty() ? 0 : 1;
++	}
++	return count;
++}
++
++bool ExtraPills::State::loadCache(const QString &path) {
++	if (path.isEmpty()) {
++		return false;
++	}
++	auto file = QFile(path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return false;
++	}
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(file.readAll(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return false;
++	}
++	const auto root = document.object();
++	auto loaded = 0;
++	for (const auto slot : kCacheSlots) {
++		const auto value = root.value(QLatin1String(SlotKey(slot)));
++		if (!value.isObject()) {
++			continue;
++		}
++		const auto object = value.toObject();
++		const auto text = object.value(QStringLiteral("text")).toString();
++		const auto at = qint64(object.value(QStringLiteral("at")).toDouble());
++		if (text.isEmpty() || at <= 0) {
++			continue;
++		}
++		// WHY: a stale value still beats a dash, so age is deliberately
++		// not part of this filter; only the refetch gate checks it.
++		auto &target = entries[int(slot)];
++		target.text = text;
++		target.at = at;
++		++loaded;
++	}
++	return loaded > 0;
++}
++
++bool ExtraPills::State::saveCache(const QString &path) const {
++	if (path.isEmpty()) {
++		return false;
++	}
++	auto root = QJsonObject();
++	for (const auto slot : kCacheSlots) {
++		const auto &entry = entries[int(slot)];
++		if (entry.text.isEmpty() || entry.at <= 0) {
++			continue;
++		}
++		root.insert(QLatin1String(SlotKey(slot)), QJsonObject{
++			{ QStringLiteral("text"), entry.text },
++			{ QStringLiteral("at"), entry.at },
++		});
++	}
++	if (root.isEmpty()) {
++		return false;
++	}
++	if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
++		return false;
++	}
++	auto file = QSaveFile(path);
++	if (!file.open(QIODevice::WriteOnly)) {
++		return false;
++	}
++	file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
++	return file.commit();
 +}
 +
 +QString ExtraPills::State::text(Slot slot) const {
@@ -21884,6 +22019,10 @@ index 0000000..c5c3cc5
 +				return;
 +			}
 +			apply(bytes);
++			if (!entry.text.isEmpty()) {
++				entry.at = QDateTime::currentMSecsSinceEpoch();
++				saveCache(cachePath);
++			}
 +		});
 +}
 +
@@ -21911,6 +22050,7 @@ index 0000000..c5c3cc5
 +			}
 +			entry.rates = parse(reply->readAll());
 +			updateFiatTexts();
++			saveCache(cachePath);
 +		});
 +}
 +
@@ -21921,22 +22061,31 @@ index 0000000..c5c3cc5
 +	auto &eur = entries[int(Slot::Eur)];
 +	usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
 +	eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
++	if (!usd.text.isEmpty() || !eur.text.isEmpty()) {
++		const auto at = QDateTime::currentMSecsSinceEpoch();
++		usd.at = at;
++		eur.at = at;
++	}
 +}
 +
 +void ExtraPills::State::refreshFiat() {
++	if (cachedFresh(entries[int(Slot::Usd)])
++		|| cachedFresh(entries[int(Slot::Eur)])) {
++		return;
++	}
 +	refreshRates(cbr, CbrDailyUrl(), ParseCbrXml);
 +	refreshRates(ecb, EcbDailyUrl(), ParseEcbXml);
 +}
 +
 +void ExtraPills::State::refreshAll() {
 +	auto &weather = entries[int(Slot::Weather)];
-+	if (!fresh(weather.since)) {
++	if (!fresh(weather.since) && !cachedFresh(weather)) {
 +		fetch(weather, WeatherApiUrl(), [this](const QByteArray &data) {
 +			entries[int(Slot::Weather)].text = ParseWeather(data);
 +		});
 +	}
 +	auto &btc = entries[int(Slot::Btc)];
-+	if (!fresh(btc.since)) {
++	if (!fresh(btc.since) && !cachedFresh(btc)) {
 +		fetch(
 +			btc,
 +			CoinbaseSpotUrl(QStringLiteral("BTC")),
@@ -21945,7 +22094,7 @@ index 0000000..c5c3cc5
 +			});
 +	}
 +	auto &eth = entries[int(Slot::Eth)];
-+	if (!fresh(eth.since)) {
++	if (!fresh(eth.since) && !cachedFresh(eth)) {
 +		fetch(
 +			eth,
 +			CoinbaseSpotUrl(QStringLiteral("ETH")),
@@ -21955,7 +22104,7 @@ index 0000000..c5c3cc5
 +	}
 +	refreshFiat();
 +	auto &gold = entries[int(Slot::Gold)];
-+	if (!fresh(gold.since)) {
++	if (!fresh(gold.since) && !cachedFresh(gold)) {
 +		fetch(gold, GoldApiUrl(), [this](const QByteArray &data) {
 +			entries[int(Slot::Gold)].text = ParseGoldApi(data);
 +		});
@@ -21964,6 +22113,8 @@ index 0000000..c5c3cc5
 +
 +ExtraPills::ExtraPills()
 +: _state(std::make_unique<State>()) {
++	_state->cachePath = ExtraPillsCachePath();
++	_state->loadCache(_state->cachePath);
 +}
 +
 +ExtraPills::~ExtraPills() = default;
@@ -21975,6 +22126,22 @@ index 0000000..c5c3cc5
 +
 +void ExtraPills::Refresh() {
 +	_state->refreshAll();
++}
++
++QString ExtraPills::CachePath() const {
++	return _state->cachePath;
++}
++
++int ExtraPills::CachedEntries() const {
++	return _state->cachedEntries();
++}
++
++bool ExtraPills::LoadCache(const QString &path) {
++	return _state->loadCache(path);
++}
++
++bool ExtraPills::SaveCache(const QString &path) const {
++	return _state->saveCache(path);
 +}
 +
 +QString ExtraPills::WeatherText() const {
@@ -22017,10 +22184,10 @@ index 0000000..c5c3cc5
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.h b/exteraless/extra_pills.h
 new file mode 100644
-index 0000000..2c0645b
+index 0000000..a9a9e23
 --- /dev/null
 +++ b/exteraless/extra_pills.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,72 @@
 +#pragma once
 +
 +#include <QByteArray>
@@ -22053,6 +22220,9 @@ index 0000000..2c0645b
 +[[nodiscard]] QString CbrDailyUrl();
 +[[nodiscard]] QString GoldApiUrl();
 +
++[[nodiscard]] QString ExtraPillsCachePath();
++void SetExtraPillsCachePath(const QString &path);
++
 +[[nodiscard]] QString ParseWeather(const QByteArray &data);
 +[[nodiscard]] QString ParseCoinbase(const QByteArray &data);
 +[[nodiscard]] FiatRates ParseEcbXml(const QByteArray &data);
@@ -22073,6 +22243,11 @@ index 0000000..2c0645b
 +	[[nodiscard]] static ExtraPills &Instance();
 +
 +	void Refresh();
++
++	[[nodiscard]] QString CachePath() const;
++	[[nodiscard]] int CachedEntries() const;
++	[[nodiscard]] bool LoadCache(const QString &path);
++	[[nodiscard]] bool SaveCache(const QString &path) const;
 +
 +	[[nodiscard]] QString WeatherText() const;
 +	[[nodiscard]] QString CryptoText(const QString &code) const;
@@ -25384,10 +25559,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..e53d96a
+index 0000000..2a1c2bc
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3362 @@
+@@ -0,0 +1,3420 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -25417,7 +25592,9 @@ index 0000000..e53d96a
 +#include <QByteArray>
 +#include <QCoreApplication>
 +#include <QDate>
++#include <QDir>
 +#include <QFile>
++#include <QFileInfo>
 +#include <QJsonArray>
 +#include <QJsonDocument>
 +#include <QJsonObject>
@@ -25474,6 +25651,9 @@ index 0000000..e53d96a
 +		<< "  exteraless-chats-cli pillorder-reset\n"
 +		<< "  exteraless-chats-cli extra-pills-parse <domain> <file> "
 +		<< "[<code>]\n"
++		<< "  exteraless-chats-cli extra-pills-cache\n"
++		<< "  exteraless-chats-cli extra-pills-cache-load <file>\n"
++		<< "  exteraless-chats-cli extra-pills-cache-save <source> <target>\n"
 +		<< "  exteraless-chats-cli ghost\n"
 +		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 +		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -25735,6 +25915,21 @@ index 0000000..e53d96a
 +		{ QStringLiteral("chats"),
 +			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
 +	});
++}
++
++QJsonObject ExtraPillsCacheJson(Exteraless::ExtraPills &pills) {
++	return QJsonObject{
++		{ QStringLiteral("path"), pills.CachePath() },
++		{ QStringLiteral("entries"), pills.CachedEntries() },
++		{ QStringLiteral("weather"), pills.WeatherText() },
++		{ QStringLiteral("btc"),
++			pills.CryptoText(QStringLiteral("BTC")) },
++		{ QStringLiteral("eth"),
++			pills.CryptoText(QStringLiteral("ETH")) },
++		{ QStringLiteral("usd"), pills.FiatText(QStringLiteral("USD")) },
++		{ QStringLiteral("eur"), pills.FiatText(QStringLiteral("EUR")) },
++		{ QStringLiteral("gold"), pills.GoldText() },
++	};
 +}
 +
 +void PrintGeneral() {
@@ -26071,6 +26266,8 @@ index 0000000..e53d96a
 +	const auto workdir = qEnvironmentVariable("EXTERALESS_WORKDIR");
 +	if (!workdir.isEmpty()) {
 +		Exteraless::Config::Instance().setWorkingDir(workdir);
++		Exteraless::SetExtraPillsCachePath(QDir(workdir).filePath(
++			QStringLiteral("tdata/extra-pills-cache.json")));
 +	}
 +	const auto arguments = app.arguments();
 +	if (arguments.size() < 2) {
@@ -28720,6 +28917,42 @@ index 0000000..e53d96a
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("extra-pills-cache")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintJson(ExtraPillsCacheJson(Exteraless::ExtraPills::Instance()));
++		return 0;
++	}
++	if (mode == QStringLiteral("extra-pills-cache-load")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		if (!QFileInfo::exists(arguments[2])) {
++			return PrintUsage();
++		}
++		auto &pills = Exteraless::ExtraPills::Instance();
++		const auto loaded = pills.LoadCache(arguments[2]);
++		auto payload = ExtraPillsCacheJson(pills);
++		payload[QStringLiteral("ok")] = loaded;
++		PrintJson(payload);
++		return 0;
++	}
++	if (mode == QStringLiteral("extra-pills-cache-save")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		if (!QFileInfo::exists(arguments[2])) {
++			return PrintUsage();
++		}
++		auto &pills = Exteraless::ExtraPills::Instance();
++		const auto loaded = pills.LoadCache(arguments[2]);
++		auto payload = ExtraPillsCacheJson(pills);
++		payload[QStringLiteral("loaded")] = loaded;
++		payload[QStringLiteral("saved")] = pills.SaveCache(arguments[3]);
++		PrintJson(payload);
++		return 0;
++	}
 +	if (mode == QStringLiteral("stt-model-info")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -29234,10 +29467,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..31c8173
+index 0000000..c1759bf
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8528 @@
+@@ -0,0 +1,8696 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -29246,6 +29479,7 @@ index 0000000..31c8173
 +import subprocess
 +import sys
 +import tempfile
++import time
 +from pathlib import Path
 +
 +ROOT = Path(__file__).resolve().parents[3]
@@ -36032,6 +36266,173 @@ index 0000000..31c8173
 +            data.get("applied") == 0
 +            and sorted(data.get("unknown") or [])
 +            == ["pillstackconfig.OEPillStackPills"],
++            data)
++
++    def write_cache(root, entries):
++        path = (root / "data" / "ExteralessDesktop" / "tdata"
++                / "extra-pills-cache.json")
++        path.parent.mkdir(parents=True, exist_ok=True)
++        path.write_text(json.dumps(entries), encoding="utf-8")
++        return path
++
++    now = int(time.time() * 1000)
++    env = make_env(work / "extra-pills-cache-default")
++    data = json_call(
++        ledger, cli, ["extra-pills-cache"], env,
++        "extra pills cache default")
++    default_path = (
++        Path(env["XDG_DATA_HOME"]) / "ExteralessDesktop"
++        / "tdata" / "extra-pills-cache.json")
++    if data is not None:
++        ledger.check(
++            "extra pills cache path",
++            Path(data.get("path", "")) == default_path,
++            data.get("path"))
++        ledger.check(
++            "extra pills cache empty count",
++            data.get("entries") == 0,
++            data)
++        ledger.check(
++            "extra pills cache empty dash",
++            data.get("weather") == "\u2014",
++            data.get("weather"))
++
++    env = make_env(work / "extra-pills-cache-workdir-env")
++    native = work / "extra-pills-cache-workdir"
++    env["EXTERALESS_WORKDIR"] = str(native)
++    data = json_call(
++        ledger, cli, ["extra-pills-cache"], env,
++        "extra pills cache workdir")
++    if data is not None:
++        ledger.check(
++            "extra pills cache workdir path",
++            Path(data.get("path", ""))
++            == native / "tdata" / "extra-pills-cache.json",
++            data.get("path"))
++
++    stored_root = work / "extra-pills-cache-stored"
++    env = make_env(stored_root)
++    write_cache(stored_root, {
++        "weather": {"text": "+3\u00b0", "at": now},
++        "btc": {"text": "75789", "at": now},
++        "usd": {"text": "91.2", "at": now},
++        "gold": {"text": "4072", "at": now},
++        "eth": {"text": "", "at": now},
++        "eur": {"text": "100.5", "at": 0},
++    })
++    data = json_call(
++        ledger, cli, ["extra-pills-cache"], env,
++        "extra pills cache stored")
++    if data is not None:
++        ledger.check(
++            "extra pills cache stored count",
++            data.get("entries") == 4,
++            data)
++        ledger.check(
++            "extra pills cache stored texts",
++            (data.get("weather"), data.get("btc"),
++             data.get("usd"), data.get("gold"))
++            == ("+3\u00b0", "$75789", "91.2", "$4072"),
++            data)
++        ledger.check(
++            "extra pills cache skips blank",
++            data.get("eth") == "\u2014" and data.get("eur") == "\u2014",
++            data)
++
++    stale_root = work / "extra-pills-cache-stale"
++    env = make_env(stale_root)
++    old = now - 3 * 60 * 60 * 1000
++    write_cache(stale_root, {
++        "weather": {"text": "+3\u00b0", "at": old},
++        "btc": {"text": "75789", "at": old},
++    })
++    data = json_call(
++        ledger, cli, ["extra-pills-cache"], env,
++        "extra pills cache stale")
++    if data is not None:
++        ledger.check(
++            "extra pills cache stale shown",
++            (data.get("entries"), data.get("weather"), data.get("btc"))
++            == (2, "+3\u00b0", "$75789"),
++            data)
++
++    load_env = make_env(work / "extra-pills-cache-load")
++    good = work / "extra-pills-cache-good.json"
++    good.write_text(json.dumps({
++        "weather": {"text": "-6\u00b0", "at": 1000},
++        "gold": {"text": "4072", "at": 1000},
++    }), encoding="utf-8")
++    data = json_call(
++        ledger, cli, ["extra-pills-cache-load", str(good)], load_env,
++        "extra pills cache load")
++    if data is not None:
++        ledger.check(
++            "extra pills cache load ok",
++            data.get("ok") is True and data.get("entries") == 2,
++            data)
++        ledger.check(
++            "extra pills cache load texts",
++            (data.get("weather"), data.get("gold"))
++            == ("-6\u00b0", "$4072"),
++            data)
++
++    broken = work / "extra-pills-cache-broken.json"
++    broken.write_text("{not json", encoding="utf-8")
++    data = json_call(
++        ledger, cli, ["extra-pills-cache-load", str(broken)], load_env,
++        "extra pills cache broken")
++    if data is not None:
++        ledger.check(
++            "extra pills cache broken rejected",
++            data.get("ok") is False and data.get("entries") == 0,
++            data)
++
++    result = run(
++        cli,
++        ["extra-pills-cache-load",
++         str(work / "extra-pills-cache-missing.json")],
++        env=load_env)
++    ledger.check(
++        "extra pills cache missing file",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    save_env = make_env(work / "extra-pills-cache-save")
++    source = work / "extra-pills-cache-save-source.json"
++    source.write_text(json.dumps({
++        "weather": {"text": "+3\u00b0", "at": now},
++        "btc": {"text": "75789", "at": now},
++    }), encoding="utf-8")
++    target = work / "extra-pills-cache-saved" / "extra-pills-cache.json"
++    data = json_call(
++        ledger, cli,
++        ["extra-pills-cache-save", str(source), str(target)], save_env,
++        "extra pills cache save")
++    if data is not None:
++        ledger.check(
++            "extra pills cache save ok",
++            data.get("saved") is True and data.get("entries") == 2,
++            data)
++        saved = (json.loads(target.read_text(encoding="utf-8"))
++                 if target.is_file() else {})
++        ledger.check(
++            "extra pills cache save file",
++            sorted(saved) == ["btc", "weather"]
++            and saved["btc"]["text"] == "75789"
++            and saved["weather"]["at"] == now,
++            saved)
++
++    empty_source = work / "extra-pills-cache-save-empty.json"
++    empty_source.write_text("{}", encoding="utf-8")
++    data = json_call(
++        ledger, cli,
++        ["extra-pills-cache-save", str(empty_source),
++         str(work / "extra-pills-cache-saved-empty.json")], save_env,
++        "extra pills cache save empty")
++    if data is not None:
++        ledger.check(
++            "extra pills cache save empty skipped",
++            data.get("saved") is False and data.get("entries") == 0,
 +            data)
 +
 +    return (

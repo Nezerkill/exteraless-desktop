@@ -27,7 +27,9 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDate>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -84,6 +86,9 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli pillorder-reset\n"
 		<< "  exteraless-chats-cli extra-pills-parse <domain> <file> "
 		<< "[<code>]\n"
+		<< "  exteraless-chats-cli extra-pills-cache\n"
+		<< "  exteraless-chats-cli extra-pills-cache-load <file>\n"
+		<< "  exteraless-chats-cli extra-pills-cache-save <source> <target>\n"
 		<< "  exteraless-chats-cli ghost\n"
 		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -345,6 +350,21 @@ void PrintChats() {
 		{ QStringLiteral("chats"),
 			ChatsArray(Exteraless::Config::Instance().chatsSettings()) },
 	});
+}
+
+QJsonObject ExtraPillsCacheJson(Exteraless::ExtraPills &pills) {
+	return QJsonObject{
+		{ QStringLiteral("path"), pills.CachePath() },
+		{ QStringLiteral("entries"), pills.CachedEntries() },
+		{ QStringLiteral("weather"), pills.WeatherText() },
+		{ QStringLiteral("btc"),
+			pills.CryptoText(QStringLiteral("BTC")) },
+		{ QStringLiteral("eth"),
+			pills.CryptoText(QStringLiteral("ETH")) },
+		{ QStringLiteral("usd"), pills.FiatText(QStringLiteral("USD")) },
+		{ QStringLiteral("eur"), pills.FiatText(QStringLiteral("EUR")) },
+		{ QStringLiteral("gold"), pills.GoldText() },
+	};
 }
 
 void PrintGeneral() {
@@ -681,6 +701,8 @@ int main(int argc, char *argv[]) {
 	const auto workdir = qEnvironmentVariable("EXTERALESS_WORKDIR");
 	if (!workdir.isEmpty()) {
 		Exteraless::Config::Instance().setWorkingDir(workdir);
+		Exteraless::SetExtraPillsCachePath(QDir(workdir).filePath(
+			QStringLiteral("tdata/extra-pills-cache.json")));
 	}
 	const auto arguments = app.arguments();
 	if (arguments.size() < 2) {
@@ -3328,6 +3350,42 @@ int main(int argc, char *argv[]) {
 		PrintJson(QJsonObject{
 			{ QStringLiteral("text"), text },
 		});
+		return 0;
+	}
+	if (mode == QStringLiteral("extra-pills-cache")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintJson(ExtraPillsCacheJson(Exteraless::ExtraPills::Instance()));
+		return 0;
+	}
+	if (mode == QStringLiteral("extra-pills-cache-load")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		if (!QFileInfo::exists(arguments[2])) {
+			return PrintUsage();
+		}
+		auto &pills = Exteraless::ExtraPills::Instance();
+		const auto loaded = pills.LoadCache(arguments[2]);
+		auto payload = ExtraPillsCacheJson(pills);
+		payload[QStringLiteral("ok")] = loaded;
+		PrintJson(payload);
+		return 0;
+	}
+	if (mode == QStringLiteral("extra-pills-cache-save")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		if (!QFileInfo::exists(arguments[2])) {
+			return PrintUsage();
+		}
+		auto &pills = Exteraless::ExtraPills::Instance();
+		const auto loaded = pills.LoadCache(arguments[2]);
+		auto payload = ExtraPillsCacheJson(pills);
+		payload[QStringLiteral("loaded")] = loaded;
+		payload[QStringLiteral("saved")] = pills.SaveCache(arguments[3]);
+		PrintJson(payload);
 		return 0;
 	}
 	if (mode == QStringLiteral("stt-model-info")) {

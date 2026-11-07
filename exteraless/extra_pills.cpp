@@ -2,7 +2,11 @@
 
 #include "exteraless/config.h"
 
+#include <QDateTime>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -10,6 +14,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QXmlStreamReader>
 
@@ -56,6 +62,33 @@ enum class Slot {
 };
 
 constexpr auto kSlotCount = int(Slot::Count);
+
+constexpr auto kCacheSlots = std::array<Slot, kSlotCount>{ {
+	Slot::Weather,
+	Slot::Btc,
+	Slot::Eth,
+	Slot::Usd,
+	Slot::Eur,
+	Slot::Gold,
+} };
+
+QString &CachePathOverride() {
+	static auto value = QString();
+	return value;
+}
+
+[[nodiscard]] const char *SlotKey(Slot slot) {
+	switch (slot) {
+	case Slot::Weather: return "weather";
+	case Slot::Btc: return "btc";
+	case Slot::Eth: return "eth";
+	case Slot::Usd: return "usd";
+	case Slot::Eur: return "eur";
+	case Slot::Gold: return "gold";
+	case Slot::Count: break;
+	}
+	return "";
+}
 
 [[nodiscard]] QString TrimZeros(QString text) {
 	while (text.endsWith(u'0')) {
@@ -129,6 +162,20 @@ constexpr auto kSlotCount = int(Slot::Count);
 }
 
 } // namespace
+
+QString ExtraPillsCachePath() {
+	if (!CachePathOverride().isEmpty()) {
+		return CachePathOverride();
+	}
+	// Same tdata directory as exteraless.json in Config::ensureLoaded().
+	return QStandardPaths::writableLocation(
+		QStandardPaths::AppLocalDataLocation)
+		+ QStringLiteral("/tdata/extra-pills-cache.json");
+}
+
+void SetExtraPillsCachePath(const QString &path) {
+	CachePathOverride() = path;
+}
 
 QStringList WeatherCityIds() {
 	auto result = QStringList();
@@ -357,6 +404,7 @@ struct ExtraPills::State final {
 	struct Entry {
 		QString text;
 		QElapsedTimer since;
+		qint64 at = 0;
 		bool pending = false;
 	};
 
@@ -366,6 +414,7 @@ struct ExtraPills::State final {
 		FiatRates rates;
 	};
 
+	QString cachePath;
 	QNetworkAccessManager manager;
 	std::array<Entry, kSlotCount> entries = {};
 	RatesEntry cbr;
@@ -382,13 +431,96 @@ struct ExtraPills::State final {
 		Entry &entry,
 		const QString &url,
 		std::function<void(const QByteArray &)> apply);
+	bool saveCache(const QString &path) const;
+	bool loadCache(const QString &path);
 
 	[[nodiscard]] bool fresh(const QElapsedTimer &since) const;
+	[[nodiscard]] bool cachedFresh(const Entry &entry) const;
+	[[nodiscard]] int cachedEntries() const;
 	[[nodiscard]] QString text(Slot slot) const;
 };
 
 bool ExtraPills::State::fresh(const QElapsedTimer &since) const {
 	return since.isValid() && since.elapsed() < kRefreshIntervalMs;
+}
+
+bool ExtraPills::State::cachedFresh(const Entry &entry) const {
+	return entry.at > 0
+		&& (QDateTime::currentMSecsSinceEpoch() - entry.at
+			< kRefreshIntervalMs);
+}
+
+int ExtraPills::State::cachedEntries() const {
+	auto count = 0;
+	for (const auto &entry : entries) {
+		count += entry.text.isEmpty() ? 0 : 1;
+	}
+	return count;
+}
+
+bool ExtraPills::State::loadCache(const QString &path) {
+	if (path.isEmpty()) {
+		return false;
+	}
+	auto file = QFile(path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		return false;
+	}
+	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
+	const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return false;
+	}
+	const auto root = document.object();
+	auto loaded = 0;
+	for (const auto slot : kCacheSlots) {
+		const auto value = root.value(QLatin1String(SlotKey(slot)));
+		if (!value.isObject()) {
+			continue;
+		}
+		const auto object = value.toObject();
+		const auto text = object.value(QStringLiteral("text")).toString();
+		const auto at = qint64(object.value(QStringLiteral("at")).toDouble());
+		if (text.isEmpty() || at <= 0) {
+			continue;
+		}
+		// WHY: a stale value still beats a dash, so age is deliberately
+		// not part of this filter; only the refetch gate checks it.
+		auto &target = entries[int(slot)];
+		target.text = text;
+		target.at = at;
+		++loaded;
+	}
+	return loaded > 0;
+}
+
+bool ExtraPills::State::saveCache(const QString &path) const {
+	if (path.isEmpty()) {
+		return false;
+	}
+	auto root = QJsonObject();
+	for (const auto slot : kCacheSlots) {
+		const auto &entry = entries[int(slot)];
+		if (entry.text.isEmpty() || entry.at <= 0) {
+			continue;
+		}
+		root.insert(QLatin1String(SlotKey(slot)), QJsonObject{
+			{ QStringLiteral("text"), entry.text },
+			{ QStringLiteral("at"), entry.at },
+		});
+	}
+	if (root.isEmpty()) {
+		return false;
+	}
+	if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
+		return false;
+	}
+	auto file = QSaveFile(path);
+	if (!file.open(QIODevice::WriteOnly)) {
+		return false;
+	}
+	file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+	return file.commit();
 }
 
 QString ExtraPills::State::text(Slot slot) const {
@@ -419,6 +551,10 @@ void ExtraPills::State::fetch(
 				return;
 			}
 			apply(bytes);
+			if (!entry.text.isEmpty()) {
+				entry.at = QDateTime::currentMSecsSinceEpoch();
+				saveCache(cachePath);
+			}
 		});
 }
 
@@ -446,6 +582,7 @@ void ExtraPills::State::refreshRates(
 			}
 			entry.rates = parse(reply->readAll());
 			updateFiatTexts();
+			saveCache(cachePath);
 		});
 }
 
@@ -456,22 +593,31 @@ void ExtraPills::State::updateFiatTexts() {
 	auto &eur = entries[int(Slot::Eur)];
 	usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
 	eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
+	if (!usd.text.isEmpty() || !eur.text.isEmpty()) {
+		const auto at = QDateTime::currentMSecsSinceEpoch();
+		usd.at = at;
+		eur.at = at;
+	}
 }
 
 void ExtraPills::State::refreshFiat() {
+	if (cachedFresh(entries[int(Slot::Usd)])
+		|| cachedFresh(entries[int(Slot::Eur)])) {
+		return;
+	}
 	refreshRates(cbr, CbrDailyUrl(), ParseCbrXml);
 	refreshRates(ecb, EcbDailyUrl(), ParseEcbXml);
 }
 
 void ExtraPills::State::refreshAll() {
 	auto &weather = entries[int(Slot::Weather)];
-	if (!fresh(weather.since)) {
+	if (!fresh(weather.since) && !cachedFresh(weather)) {
 		fetch(weather, WeatherApiUrl(), [this](const QByteArray &data) {
 			entries[int(Slot::Weather)].text = ParseWeather(data);
 		});
 	}
 	auto &btc = entries[int(Slot::Btc)];
-	if (!fresh(btc.since)) {
+	if (!fresh(btc.since) && !cachedFresh(btc)) {
 		fetch(
 			btc,
 			CoinbaseSpotUrl(QStringLiteral("BTC")),
@@ -480,7 +626,7 @@ void ExtraPills::State::refreshAll() {
 			});
 	}
 	auto &eth = entries[int(Slot::Eth)];
-	if (!fresh(eth.since)) {
+	if (!fresh(eth.since) && !cachedFresh(eth)) {
 		fetch(
 			eth,
 			CoinbaseSpotUrl(QStringLiteral("ETH")),
@@ -490,7 +636,7 @@ void ExtraPills::State::refreshAll() {
 	}
 	refreshFiat();
 	auto &gold = entries[int(Slot::Gold)];
-	if (!fresh(gold.since)) {
+	if (!fresh(gold.since) && !cachedFresh(gold)) {
 		fetch(gold, GoldApiUrl(), [this](const QByteArray &data) {
 			entries[int(Slot::Gold)].text = ParseGoldApi(data);
 		});
@@ -499,6 +645,8 @@ void ExtraPills::State::refreshAll() {
 
 ExtraPills::ExtraPills()
 : _state(std::make_unique<State>()) {
+	_state->cachePath = ExtraPillsCachePath();
+	_state->loadCache(_state->cachePath);
 }
 
 ExtraPills::~ExtraPills() = default;
@@ -510,6 +658,22 @@ ExtraPills &ExtraPills::Instance() {
 
 void ExtraPills::Refresh() {
 	_state->refreshAll();
+}
+
+QString ExtraPills::CachePath() const {
+	return _state->cachePath;
+}
+
+int ExtraPills::CachedEntries() const {
+	return _state->cachedEntries();
+}
+
+bool ExtraPills::LoadCache(const QString &path) {
+	return _state->loadCache(path);
+}
+
+bool ExtraPills::SaveCache(const QString &path) const {
+	return _state->saveCache(path);
 }
 
 QString ExtraPills::WeatherText() const {

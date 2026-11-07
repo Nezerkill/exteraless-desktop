@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1141 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1156 проверок PASS
   (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -114,9 +114,12 @@
   19 update-channel, 32 translation, 23 ai, 13 ai-stream, 6 recognition,
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 26 ai-roles,
+  27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Disk-кэш пилюль (NB-56, follow-up): `tdata/extra-pills-cache.json`,
+  загрузка при первом `Instance()`, TTL 30 мин, протухшее — fallback;
+  CLI 3 режима + 15 проверок; раннеры 1156/32/252 PASS.
 - Лента каналов (NB-47, v1 — синтетический фильтр, только чтение):
   `Dialogs::Feed` (`dialogs/dialogs_feed.{h,cpp}`) — `IsEligible` (broadcast
   без megagroup), `Collect` через `enumerateBroadcasts`, исключения в

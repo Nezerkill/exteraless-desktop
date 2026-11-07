@@ -2,6 +2,13 @@
 
 ## 2026-11-07
 
+- Disk-кэш пилюль (NB-56, follow-up): `extra-pills-cache.json`
+  (`tdata/`, QSaveFile) с текстами и метками всех 6 слотов; загрузка при
+  первом `Instance()`, TTL 30 мин (протухшее показывается как fallback);
+  portable-путь через `SetExtraPillsCachePath` рядом с `setWorkingDir`;
+  CLI `extra-pills-cache`/`-load`/`-save` + 15 проверок, раннеры
+  1156/32/252 PASS (extra-pills 66); патч `b4a7cc15…`, flake PASS.
+  Ограничения: запись только при успешном fetch; Xvfb-смоук не выполнялся.
 - Лента каналов (NB-47, v1 — синтетический фильтр, только чтение):
   `dialogs/dialogs_feed.{h,cpp}` — `IsEligible` (broadcast без megagroup),
   `Collect` через `enumerateBroadcasts`, исключения в `feed_excluded`
