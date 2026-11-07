@@ -64,6 +64,33 @@ DeletedMessages &DeletedMessages::Instance() {
 	return instance;
 }
 
+TextWithTags DeletedMessages::BuildQuotePrefix(
+		const Entry &entry,
+		const QString &authorName) {
+	const auto hasAuthor = !authorName.isEmpty();
+	auto rich = TextWithEntities{ .text = hasAuthor
+		? (authorName + u"\n"_q + entry.text + u"\n\n"_q)
+		: (entry.text + u"\n\n"_q) };
+	if (hasAuthor) {
+		rich.entities.push_back(EntityInText(
+			EntityType::Bold,
+			0,
+			int(authorName.size())));
+	}
+	const auto shift = hasAuthor ? int(authorName.size()) + 1 : 0;
+	for (const auto &entity : entry.entities) {
+		rich.entities.push_back(EntityInText(
+			EntityType(entity.type),
+			entity.offset + shift,
+			entity.length,
+			entity.data));
+	}
+	return {
+		.text = rich.text,
+		.tags = TextUtilities::ConvertEntitiesToTextTags(rich.entities),
+	};
+}
+
 void DeletedMessages::attach(Main::Session *session) {
 	if (!session) {
 		return;
@@ -248,8 +275,28 @@ void DeletedMessages::refresh() {
 	}
 }
 
+std::optional<DeletedMessages::Entry> DeletedMessages::entryForPlaceholder(
+		const FullMsgId &placeholderId) const {
+	const auto original = _placeholders.find(placeholderId);
+	if (original == _placeholders.end()) {
+		return std::nullopt;
+	}
+	const auto peerId = qint64(placeholderId.peer.value);
+	const auto msgId = qint64(original->second.bare);
+	for (const auto &entry : _entries) {
+		if (entry.peerId == peerId && entry.msgId == msgId) {
+			return entry;
+		}
+	}
+	return std::nullopt;
+}
+
+bool DeletedMessages::isPlaceholder(FullMsgId itemId) const {
+	return _placeholders.contains(itemId);
+}
+
 bool DeletedMessages::isPlaceholder(not_null<HistoryItem*> item) const {
-	return _placeholders.contains(item->fullId());
+	return isPlaceholder(item->fullId());
 }
 
 void DeletedMessages::onItemsDestroyed(

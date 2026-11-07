@@ -6783,14 +6783,15 @@ index 9971a38..6c1e80e 100644
  	const auto afterAuthorWidth = st::msgDateFont->width(afterAuthor);
  	const auto authorWidth = st::msgDateFont->width(author);
 diff --git a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
-index 28e423b..bf0736c 100644
+index 28e423b..ff48f0a 100644
 --- a/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_chat_section.cpp
-@@ -7,6 +7,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7,6 +7,13 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  */
  #include "history/view/history_view_chat_section.h"
  
 +#include "exteraless/config.h"
++#include "exteraless/deleted_messages.h"
 +#include "exteraless/ghost_schedule.h"
 +
 +#include "base/unixtime.h"
@@ -6799,7 +6800,41 @@ index 28e423b..bf0736c 100644
  #include "history/admin_log/history_admin_log_section.h"
  #include "history/view/controls/history_view_top_controls.h"
  #include "history/view/controls/history_view_bottom_controls.h"
-@@ -886,6 +892,22 @@ ChatWidget::ChatWidget(
+@@ -690,6 +697,33 @@ ChatWidget::ChatWidget(
+ 		}
+ 	}, _inner->lifetime());
+ 
++	_inner->quoteDeletedMessageRequested(
++	) | rpl::on_next([=](FullMsgId itemId) {
++		const auto &deleted = Exteraless::DeletedMessages::Instance();
++		const auto entry = deleted.entryForPlaceholder(itemId);
++		if (!entry) {
++			return;
++		}
++		auto prefix = Exteraless::DeletedMessages::BuildQuotePrefix(
++			*entry,
++			entry->fromName);
++		prefix.tags.push_front({
++			.offset = 0,
++			.length = int(prefix.text.size()),
++			.id = Ui::InputField::kTagBlockquote,
++		});
++		if (const auto field = _composeControls->fieldForMention()) {
++			auto current = field->getTextWithTags();
++			for (auto &tag : current.tags) {
++				tag.offset += int(prefix.text.size());
++			}
++			prefix.text += current.text;
++			prefix.tags += current.tags;
++			_composeControls->setText(prefix);
++			_composeControls->focus();
++		}
++	}, _inner->lifetime());
++
+ 	_inner->showMessageRequested(
+ 	) | rpl::on_next([=](auto fullId) {
+ 		if (const auto item = session().data().message(fullId)) {
+@@ -886,6 +920,22 @@ ChatWidget::ChatWidget(
  		case BottomControlsAction::MuteUnmute:
  			toggleMuteUnmute();
  			break;
@@ -6822,7 +6857,7 @@ index 28e423b..bf0736c 100644
  		case BottomControlsAction::Report:
  			reportSelectedMessages();
  			break;
-@@ -2326,6 +2348,9 @@ Api::SendAction ChatWidget::prepareSendAction(
+@@ -2326,6 +2376,9 @@ Api::SendAction ChatWidget::prepareSendAction(
  	}
  
  	result.options.sendAs = _composeControls->sendAsPeer();
@@ -6832,7 +6867,7 @@ index 28e423b..bf0736c 100644
  	result.options.suggest = suggestOptions();
  	result.clearDraft = !Iv::Editor::IsComposeBoxOpen(
  		&session(),
-@@ -2565,6 +2590,42 @@ void ChatWidget::sendTextWithTags(
+@@ -2565,6 +2618,42 @@ void ChatWidget::sendTextWithTags(
  		_cornerButtons.clearReplyReturns();
  	}
  
@@ -6875,7 +6910,7 @@ index 28e423b..bf0736c 100644
  	auto message = Api::MessageToSend(prepareSendAction(options));
  	message.textWithTags = textWithTags;
  	if (useCurrentWebPageDraft) {
-@@ -4538,6 +4599,9 @@ void ChatWidget::onScroll() {
+@@ -4538,6 +4627,9 @@ void ChatWidget::onScroll() {
  	}
  	if (!_synteticScrollEvent) {
  		_lastUserScrolled = crl::now();
@@ -6886,7 +6921,7 @@ index 28e423b..bf0736c 100644
  	updateInnerVisibleArea();
  }
 diff --git a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
-index 3e25a13..cb037bd 100644
+index 3e25a13..3291bb4 100644
 --- a/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_context_menu.cpp
 @@ -7,6 +7,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -6980,15 +7015,50 @@ index 3e25a13..cb037bd 100644
  	const auto context = list->elementContext();
  	const auto item = request.quote.item
  		? request.quote.item
-@@ -835,6 +858,7 @@ bool AddReplyToMessageAction(
- 	const auto peer = item ? item->history()->peer.get() : nullptr;
- 	if (!item
- 		|| (!item->isRegular() && !CanReplyToEphemeral(item))
-+		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)
- 		|| IsAnchoredEphemeral(item)
- 		|| (context != Context::History
- 			&& context != Context::Replies
-@@ -945,6 +969,9 @@ bool AddEditMessageAction(
+@@ -853,20 +876,30 @@ bool AddReplyToMessageAction(
+ 		? request.link->property(kTodoListItemIdProperty).toInt()
+ 		: 0;
+ 	const auto &quote = request.quote;
+-	auto text = (todoListTaskId
+-		? tr::lng_context_reply_to_task
+-		: quote.highlight.quote.empty()
+-		? tr::lng_context_reply_msg
+-		: tr::lng_context_quote_and_reply)(
++	const auto placeholder
++		= Exteraless::DeletedMessages::Instance().isPlaceholder(item);
++	auto text = placeholder
++		? tr::lng_context_reply_msg(
+ 			tr::now,
+-			Ui::Text::FixAmpersandInAction);
++			Ui::Text::FixAmpersandInAction)
++		: (todoListTaskId
++			? tr::lng_context_reply_to_task
++			: quote.highlight.quote.empty()
++			? tr::lng_context_reply_msg
++			: tr::lng_context_quote_and_reply)(
++				tr::now,
++				Ui::Text::FixAmpersandInAction);
+ 	menu->addAction(std::move(text), [=, itemId = item->fullId()] {
+-		list->replyToMessageRequestNotify({
+-			.messageId = itemId,
+-			.quote = quote.highlight.quote,
+-			.quoteOffset = quote.highlight.quoteOffset,
+-			.todoItemId = todoListTaskId,
+-		}, base::IsCtrlPressed());
++		if (placeholder) {
++			list->quoteDeletedMessageRequestNotify(itemId);
++		} else {
++			list->replyToMessageRequestNotify({
++				.messageId = itemId,
++				.quote = quote.highlight.quote,
++				.quoteOffset = quote.highlight.quoteOffset,
++				.todoItemId = todoListTaskId,
++			}, base::IsCtrlPressed());
++		}
+ 	}, &st::menuIconReply);
+ 	return true;
+ }
+@@ -945,6 +978,9 @@ bool AddEditMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -6998,7 +7068,7 @@ index 3e25a13..cb037bd 100644
  	if (!HasEditMessageAction(request, list)) {
  		return false;
  	}
-@@ -1010,6 +1037,9 @@ bool AddPinMessageAction(
+@@ -1010,6 +1046,9 @@ bool AddPinMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -7008,7 +7078,7 @@ index 3e25a13..cb037bd 100644
  	const auto context = list->elementContext();
  	const auto item = request.item;
  	if (!item || !item->isRegular()) {
-@@ -1134,7 +1164,9 @@ bool AddDeleteMessageAction(
+@@ -1134,7 +1173,9 @@ bool AddDeleteMessageAction(
  	const auto item = request.item;
  	if (!request.selectedItems.empty()) {
  		return false;
@@ -7019,7 +7089,7 @@ index 3e25a13..cb037bd 100644
  		return false;
  	}
  	const auto owner = &item->history()->owner();
-@@ -1206,6 +1238,9 @@ void AddDeleteAction(
+@@ -1206,6 +1247,9 @@ void AddDeleteAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -7029,7 +7099,7 @@ index 3e25a13..cb037bd 100644
  	if (!AddDeleteSelectedAction(menu, request, list)) {
  		AddDeleteMessageAction(menu, request, list);
  	}
-@@ -1245,6 +1280,9 @@ void AddReportAction(
+@@ -1245,6 +1289,9 @@ void AddReportAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -7039,7 +7109,7 @@ index 3e25a13..cb037bd 100644
  	const auto item = request.item;
  	if (!request.selectedItems.empty()) {
  		return;
-@@ -1314,6 +1352,9 @@ bool AddSelectMessageAction(
+@@ -1314,6 +1361,9 @@ bool AddSelectMessageAction(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -7049,7 +7119,7 @@ index 3e25a13..cb037bd 100644
  	const auto item = request.item;
  	if (request.overSelection && !request.selectedItems.empty()) {
  		return false;
-@@ -1402,11 +1443,14 @@ void AddMessageActions(
+@@ -1402,11 +1452,14 @@ void AddMessageActions(
  		not_null<Ui::PopupMenu*> menu,
  		const ContextMenuRequest &request,
  		not_null<ListWidget*> list) {
@@ -7065,7 +7135,7 @@ index 3e25a13..cb037bd 100644
  	AddDownloadFilesAction(menu, request, list);
  	AddSaveRichHtmlAction(menu, request, list);
  	AddReportAction(menu, request, list);
-@@ -1422,6 +1466,65 @@ void AddMessageActions(
+@@ -1422,6 +1475,65 @@ void AddMessageActions(
  		AddEphemeralAboutAction(menu, request.item);
  	}
  	AddRescheduleAction(menu, request, list);
@@ -7131,7 +7201,7 @@ index 3e25a13..cb037bd 100644
  }
  
  void AddCopyLinkAction(
-@@ -1812,7 +1915,8 @@ void FillContextMenuItems(
+@@ -1812,7 +1924,8 @@ void FillContextMenuItems(
  
  	if (request.overSelection
  		&& !list->hasCopyRestrictionForSelected()
@@ -7141,7 +7211,7 @@ index 3e25a13..cb037bd 100644
  		const auto text = request.selectedItems.empty()
  			? tr::lng_context_copy_selected(tr::now)
  			: tr::lng_context_copy_selected_items(tr::now);
-@@ -1822,7 +1926,8 @@ void FillContextMenuItems(
+@@ -1822,7 +1935,8 @@ void FillContextMenuItems(
  	}
  	if (request.overSelection
  		&& view
@@ -7151,7 +7221,7 @@ index 3e25a13..cb037bd 100644
  		const auto owner = &view->history()->owner();
  		result->addAction(tr::lng_context_translate_selected(tr::now), [=] {
  			if (const auto item = owner->message(itemId)) {
-@@ -1878,7 +1983,8 @@ void FillContextMenuItems(
+@@ -1878,7 +1992,8 @@ void FillContextMenuItems(
  			AddDocumentActions(result, document, view->data(), list);
  		}
  		if (!link && (view->hasVisibleText() || mediaHasTextForCopy)) {
@@ -7161,7 +7231,7 @@ index 3e25a13..cb037bd 100644
  				const auto asGroup = (request.pointState != PointState::GroupPart);
  				result->addAction(tr::lng_context_copy_text(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
-@@ -1905,7 +2011,8 @@ void FillContextMenuItems(
+@@ -1905,7 +2020,8 @@ void FillContextMenuItems(
  				: item->originalText();
  			if ((!item->translation() || !item->history()->translatedTo())
  				&& !translate.text.isEmpty()
@@ -7171,7 +7241,7 @@ index 3e25a13..cb037bd 100644
  				result->addAction(tr::lng_context_translate(tr::now), [=] {
  					if (const auto item = owner->message(itemId)) {
  						list->controller()->show(Box(
-@@ -1919,6 +2026,14 @@ void FillContextMenuItems(
+@@ -1919,6 +2035,14 @@ void FillContextMenuItems(
  					}
  				}, &st::menuIconTranslate);
  			}
@@ -7186,7 +7256,7 @@ index 3e25a13..cb037bd 100644
  		}
  	}
  
-@@ -1947,6 +2062,7 @@ void FillContextMenuItems(
+@@ -1947,6 +2071,7 @@ void FillContextMenuItems(
  				list->controller());
  		}
  	}
@@ -7194,7 +7264,7 @@ index 3e25a13..cb037bd 100644
  }
  
  base::unique_qptr<Ui::PopupMenu> FillContextMenu(
-@@ -2367,7 +2483,8 @@ void AddPollActions(
+@@ -2367,7 +2492,8 @@ void AddPollActions(
  		for (const auto &answer : poll->answers) {
  			text.append('\n').append(radio).append(answer.text);
  		}
@@ -7420,7 +7490,7 @@ index 8b3f3d7..968d94b 100644
  	void setTextWithLinks(
  		const TextWithEntities &text,
 diff --git a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
-index fdbce14..8251a8f 100644
+index fdbce14..0872eb6 100644
 --- a/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
 +++ b/Telegram/SourceFiles/history/view/history_view_list_widget.cpp
 @@ -7,6 +7,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -7607,6 +7677,42 @@ index fdbce14..8251a8f 100644
  		}
  	}
  }
+@@ -5885,6 +6011,14 @@ void ListWidget::editMessageRequestNotify(FullMsgId item) const {
+ 	_requestedToEditMessage.fire(std::move(item));
+ }
+ 
++rpl::producer<FullMsgId> ListWidget::quoteDeletedMessageRequested() const {
++	return _requestedToQuoteDeletedMessage.events();
++}
++
++void ListWidget::quoteDeletedMessageRequestNotify(FullMsgId item) const {
++	_requestedToQuoteDeletedMessage.fire(std::move(item));
++}
++
+ bool ListWidget::lastMessageEditRequestNotify() const {
+ 	const auto now = base::unixtime::now();
+ 	const auto &list = ranges::views::reverse(_items);
+diff --git a/Telegram/SourceFiles/history/view/history_view_list_widget.h b/Telegram/SourceFiles/history/view/history_view_list_widget.h
+index f2409f1..c436744 100644
+--- a/Telegram/SourceFiles/history/view/history_view_list_widget.h
++++ b/Telegram/SourceFiles/history/view/history_view_list_widget.h
+@@ -457,6 +457,8 @@ public:
+ 	};
+ 	[[nodiscard]] rpl::producer<FullMsgId> editMessageRequested() const;
+ 	void editMessageRequestNotify(FullMsgId item) const;
++	[[nodiscard]] rpl::producer<FullMsgId> quoteDeletedMessageRequested() const;
++	void quoteDeletedMessageRequestNotify(FullMsgId item) const;
+ 	[[nodiscard]] bool lastMessageEditRequestNotify() const;
+ 	[[nodiscard]] auto replyToMessageRequested() const
+ 		-> rpl::producer<ReplyToMessageRequest>;
+@@ -1095,6 +1097,7 @@ private:
+ 	Ui::MiddleClickAutoscroll _middleClickAutoscroll;
+ 
+ 	rpl::event_stream<FullMsgId> _requestedToEditMessage;
++	rpl::event_stream<FullMsgId> _requestedToQuoteDeletedMessage;
+ 	rpl::event_stream<ReplyToMessageRequest> _requestedToReplyToMessage;
+ 	rpl::event_stream<FullMsgId> _requestedToReadMessage;
+ 	rpl::event_stream<FullMsgId> _requestedToShowMessage;
 diff --git a/Telegram/SourceFiles/history/view/history_view_message.cpp b/Telegram/SourceFiles/history/view/history_view_message.cpp
 index 5152d85..806354d 100644
 --- a/Telegram/SourceFiles/history/view/history_view_message.cpp
@@ -19280,10 +19386,10 @@ index 0000000..82d1a5c
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.cpp b/exteraless/deleted_messages.cpp
 new file mode 100644
-index 0000000..e93b9ca
+index 0000000..ea9463a
 --- /dev/null
 +++ b/exteraless/deleted_messages.cpp
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,440 @@
 +#include "exteraless/deleted_messages.h"
 +
 +#include "exteraless/config.h"
@@ -19348,6 +19454,33 @@ index 0000000..e93b9ca
 +DeletedMessages &DeletedMessages::Instance() {
 +	static auto instance = DeletedMessages();
 +	return instance;
++}
++
++TextWithTags DeletedMessages::BuildQuotePrefix(
++		const Entry &entry,
++		const QString &authorName) {
++	const auto hasAuthor = !authorName.isEmpty();
++	auto rich = TextWithEntities{ .text = hasAuthor
++		? (authorName + u"\n"_q + entry.text + u"\n\n"_q)
++		: (entry.text + u"\n\n"_q) };
++	if (hasAuthor) {
++		rich.entities.push_back(EntityInText(
++			EntityType::Bold,
++			0,
++			int(authorName.size())));
++	}
++	const auto shift = hasAuthor ? int(authorName.size()) + 1 : 0;
++	for (const auto &entity : entry.entities) {
++		rich.entities.push_back(EntityInText(
++			EntityType(entity.type),
++			entity.offset + shift,
++			entity.length,
++			entity.data));
++	}
++	return {
++		.text = rich.text,
++		.tags = TextUtilities::ConvertEntitiesToTextTags(rich.entities),
++	};
 +}
 +
 +void DeletedMessages::attach(Main::Session *session) {
@@ -19534,8 +19667,28 @@ index 0000000..e93b9ca
 +	}
 +}
 +
++std::optional<DeletedMessages::Entry> DeletedMessages::entryForPlaceholder(
++		const FullMsgId &placeholderId) const {
++	const auto original = _placeholders.find(placeholderId);
++	if (original == _placeholders.end()) {
++		return std::nullopt;
++	}
++	const auto peerId = qint64(placeholderId.peer.value);
++	const auto msgId = qint64(original->second.bare);
++	for (const auto &entry : _entries) {
++		if (entry.peerId == peerId && entry.msgId == msgId) {
++			return entry;
++		}
++	}
++	return std::nullopt;
++}
++
++bool DeletedMessages::isPlaceholder(FullMsgId itemId) const {
++	return _placeholders.contains(itemId);
++}
++
 +bool DeletedMessages::isPlaceholder(not_null<HistoryItem*> item) const {
-+	return _placeholders.contains(item->fullId());
++	return isPlaceholder(item->fullId());
 +}
 +
 +void DeletedMessages::onItemsDestroyed(
@@ -19679,10 +19832,10 @@ index 0000000..e93b9ca
 +} // namespace Exteraless
 diff --git a/exteraless/deleted_messages.h b/exteraless/deleted_messages.h
 new file mode 100644
-index 0000000..51b3c59
+index 0000000..609d906
 --- /dev/null
 +++ b/exteraless/deleted_messages.h
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,62 @@
 +#pragma once
 +
 +#include "base/basic_types.h"
@@ -19690,8 +19843,10 @@ index 0000000..51b3c59
 +#include "data/data_msg_id.h"
 +#include "data/data_peer_id.h"
 +#include "exteraless/deleted_entry.h"
++#include "ui/text/text_entity.h"
 +
 +#include <QString>
++#include <optional>
 +#include <vector>
 +
 +class History;
@@ -19710,6 +19865,10 @@ index 0000000..51b3c59
 +
 +	static DeletedMessages &Instance();
 +
++	[[nodiscard]] static TextWithTags BuildQuotePrefix(
++		const Entry &entry,
++		const QString &authorName);
++
 +	void attach(Main::Session *session);
 +
 +	[[nodiscard]] int count(PeerId peerId) const;
@@ -19719,6 +19878,9 @@ index 0000000..51b3c59
 +	void insertFor(not_null<History*> history);
 +	void removeFrom(not_null<History*> history);
 +	void refresh();
++	[[nodiscard]] std::optional<Entry> entryForPlaceholder(
++		const FullMsgId &placeholderId) const;
++	[[nodiscard]] bool isPlaceholder(FullMsgId itemId) const;
 +	[[nodiscard]] bool isPlaceholder(not_null<HistoryItem*> item) const;
 +
 +private:

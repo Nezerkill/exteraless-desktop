@@ -2,6 +2,27 @@
 
 ## 2026-11-07
 
+- Ответ на удалённое сообщение цитатой (NB-33, закрывает split NB-20): пункт
+  Reply у плейсхолдера удалённого идёт в новую ветку —
+  `ListWidget::quoteDeletedMessageRequested()` и
+  `quoteDeletedMessageRequestNotify()` (event stream
+  `_requestedToQuoteDeletedMessage`) вместо `replyToMessageRequestNotify`.
+  Подписка `ChatWidget` в `history/view/history_view_chat_section.cpp`
+  находит sidecar-запись по `FullMsgId`
+  (`DeletedMessages::entryForPlaceholder`) и строит префикс
+  `BuildQuotePrefix(entry, fromName)`: жирная строка автора, текст с
+  сохранёнными entities (сдвинуты на длину автора) и пустая строка после.
+  Весь префикс помечается `Ui::InputField::kTagBlockquote` и ставится
+  перед текущим текстом compose (`ComposeControls::setText` + фокус), а
+  entities черновика сдвигаются на длину префикса. Ответ как таковой не
+  заводится: `_replyTo` не трогается, `reply_to_msg_id` не отправляется,
+  postponed-очереди не затрагиваются, `FullMsgId` остаётся локальным.
+  Удаление плейсхолдера снимает регистрацию (`_placeholders`), запись
+  sidecar остаётся и пере-вставляется при перестройке истории. Новых
+  lang-ключей и CLI нет — `kKeysCount` 11232, `kTagsCount` 185; раннеры
+  978/32/252 PASS, `nix flake check` PASS; sha256 патча `18b582f9…`.
+  Не сделано: inline-медиа и реакции в плейсхолдере (наследие NB-92);
+  Xvfb-смоук не выполнялся.
 - Inline-показ удалённых сообщений в чате (NB-92, продолжение NB-20):
   `History::addLocalMessageInPlace` вставляет запись sidecar в историю на её
   настоящее место — порядок по паре `(date, entry.msgId)` — и регистрирует

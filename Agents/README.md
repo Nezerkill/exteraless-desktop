@@ -143,12 +143,18 @@ sibling-чекаутом: `../exteraless`.
   `loadedAtTop()` и `loadedAtBottom()`; метка — текстом (🗑 из
   `OEChatsUseDeletedIcon` или `OEChatsCustomDeletedMark`), прозрачность 0.6
   в `Message::draw` при `OEChatsTranslucentDeleted`; тумблеры save и
-  translucent вызывают `refresh()`, Reply и Delete плейсхолдера закрыты
-  guard'ом в контекстном меню. Не сделано: inline-медиа и реакции, цветная
+  translucent вызывают `refresh()`. Delete плейсхолдера закрыт guard'ом, а Reply
+  вставляет blockquote-цитату из sidecar в поле ввода (NB-33, настоящим
+  ответом не становится). Не сделано: inline-медиа и реакции, цветная
   метка (подходящего `EntityType` нет, `kMaxEntityType` не менялся —
   реальный максимум 27 покрывают текущие 28). Ограничения: вставки
   появляются после перестройки истории; удаление плейсхолдера снимает только
   регистрацию — запись sidecar остаётся; Xvfb-смоук не выполнялся.
+- Ответ на удалённое (NB-33): Reply у плейсхолдера больше не закрыт guard'ом,
+  а вставляет цитату в compose — `DeletedMessages::BuildQuotePrefix` плюс
+  blockquote-тег через `ComposeControls::setText`, при этом `_replyTo` не
+  трогается и `reply_to_msg_id` не уходит; Delete плейсхолдера по-прежнему
+  закрыт guard'ом.
 - `nix/upstream-base` — закреплённая база патча: локальный коммит, tree-хеш и
   upstream-коммит; `nix/update-patch.sh --check` проверяет применимость.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.

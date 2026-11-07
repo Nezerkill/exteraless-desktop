@@ -8,6 +8,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/history_view_chat_section.h"
 
 #include "exteraless/config.h"
+#include "exteraless/deleted_messages.h"
 #include "exteraless/ghost_schedule.h"
 
 #include "base/unixtime.h"
@@ -693,6 +694,33 @@ ChatWidget::ChatWidget(
 			if (_composeSearch) {
 				_composeSearch->hideAnimated();
 			}
+		}
+	}, _inner->lifetime());
+
+	_inner->quoteDeletedMessageRequested(
+	) | rpl::on_next([=](FullMsgId itemId) {
+		const auto &deleted = Exteraless::DeletedMessages::Instance();
+		const auto entry = deleted.entryForPlaceholder(itemId);
+		if (!entry) {
+			return;
+		}
+		auto prefix = Exteraless::DeletedMessages::BuildQuotePrefix(
+			*entry,
+			entry->fromName);
+		prefix.tags.push_front({
+			.offset = 0,
+			.length = int(prefix.text.size()),
+			.id = Ui::InputField::kTagBlockquote,
+		});
+		if (const auto field = _composeControls->fieldForMention()) {
+			auto current = field->getTextWithTags();
+			for (auto &tag : current.tags) {
+				tag.offset += int(prefix.text.size());
+			}
+			prefix.text += current.text;
+			prefix.tags += current.tags;
+			_composeControls->setText(prefix);
+			_composeControls->focus();
 		}
 	}, _inner->lifetime());
 

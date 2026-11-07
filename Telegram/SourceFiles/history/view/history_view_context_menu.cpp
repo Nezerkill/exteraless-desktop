@@ -858,7 +858,6 @@ bool AddReplyToMessageAction(
 	const auto peer = item ? item->history()->peer.get() : nullptr;
 	if (!item
 		|| (!item->isRegular() && !CanReplyToEphemeral(item))
-		|| Exteraless::DeletedMessages::Instance().isPlaceholder(item)
 		|| IsAnchoredEphemeral(item)
 		|| (context != Context::History
 			&& context != Context::Replies
@@ -877,20 +876,30 @@ bool AddReplyToMessageAction(
 		? request.link->property(kTodoListItemIdProperty).toInt()
 		: 0;
 	const auto &quote = request.quote;
-	auto text = (todoListTaskId
-		? tr::lng_context_reply_to_task
-		: quote.highlight.quote.empty()
-		? tr::lng_context_reply_msg
-		: tr::lng_context_quote_and_reply)(
+	const auto placeholder
+		= Exteraless::DeletedMessages::Instance().isPlaceholder(item);
+	auto text = placeholder
+		? tr::lng_context_reply_msg(
 			tr::now,
-			Ui::Text::FixAmpersandInAction);
+			Ui::Text::FixAmpersandInAction)
+		: (todoListTaskId
+			? tr::lng_context_reply_to_task
+			: quote.highlight.quote.empty()
+			? tr::lng_context_reply_msg
+			: tr::lng_context_quote_and_reply)(
+				tr::now,
+				Ui::Text::FixAmpersandInAction);
 	menu->addAction(std::move(text), [=, itemId = item->fullId()] {
-		list->replyToMessageRequestNotify({
-			.messageId = itemId,
-			.quote = quote.highlight.quote,
-			.quoteOffset = quote.highlight.quoteOffset,
-			.todoItemId = todoListTaskId,
-		}, base::IsCtrlPressed());
+		if (placeholder) {
+			list->quoteDeletedMessageRequestNotify(itemId);
+		} else {
+			list->replyToMessageRequestNotify({
+				.messageId = itemId,
+				.quote = quote.highlight.quote,
+				.quoteOffset = quote.highlight.quoteOffset,
+				.todoItemId = todoListTaskId,
+			}, base::IsCtrlPressed());
+		}
 	}, &st::menuIconReply);
 	return true;
 }

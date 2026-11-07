@@ -5,8 +5,10 @@
 #include "data/data_msg_id.h"
 #include "data/data_peer_id.h"
 #include "exteraless/deleted_entry.h"
+#include "ui/text/text_entity.h"
 
 #include <QString>
+#include <optional>
 #include <vector>
 
 class History;
@@ -25,6 +27,10 @@ public:
 
 	static DeletedMessages &Instance();
 
+	[[nodiscard]] static TextWithTags BuildQuotePrefix(
+		const Entry &entry,
+		const QString &authorName);
+
 	void attach(Main::Session *session);
 
 	[[nodiscard]] int count(PeerId peerId) const;
@@ -34,6 +40,9 @@ public:
 	void insertFor(not_null<History*> history);
 	void removeFrom(not_null<History*> history);
 	void refresh();
+	[[nodiscard]] std::optional<Entry> entryForPlaceholder(
+		const FullMsgId &placeholderId) const;
+	[[nodiscard]] bool isPlaceholder(FullMsgId itemId) const;
 	[[nodiscard]] bool isPlaceholder(not_null<HistoryItem*> item) const;
 
 private:

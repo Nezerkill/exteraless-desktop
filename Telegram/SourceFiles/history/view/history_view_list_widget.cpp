@@ -6011,6 +6011,14 @@ void ListWidget::editMessageRequestNotify(FullMsgId item) const {
 	_requestedToEditMessage.fire(std::move(item));
 }
 
+rpl::producer<FullMsgId> ListWidget::quoteDeletedMessageRequested() const {
+	return _requestedToQuoteDeletedMessage.events();
+}
+
+void ListWidget::quoteDeletedMessageRequestNotify(FullMsgId item) const {
+	_requestedToQuoteDeletedMessage.fire(std::move(item));
+}
+
 bool ListWidget::lastMessageEditRequestNotify() const {
 	const auto now = base::unixtime::now();
 	const auto &list = ranges::views::reverse(_items);

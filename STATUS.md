@@ -116,6 +116,26 @@
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 104 backup);
   плагины без изменений — 32 и 213 проверок.
+- Ответ на удалённое цитатой (NB-33, закрывает split NB-20): пункт Reply у
+  плейсхолдера удалённого (`AddReplyToMessageAction`,
+  `history/view/history_view_context_menu.cpp`) идёт через
+  `ListWidget::quoteDeletedMessageRequested()` и
+  `quoteDeletedMessageRequestNotify()` (event stream
+  `_requestedToQuoteDeletedMessage`) вместо `replyToMessageRequestNotify`.
+  Подписка `ChatWidget` берёт запись
+  `DeletedMessages::entryForPlaceholder(FullMsgId)` и строит префикс
+  `BuildQuotePrefix(entry, fromName)` — жирный автор, текст с entities
+  (сдвинуты на длину автора) и пустая строка, — помечает его
+  `Ui::InputField::kTagBlockquote` и ставит перед текущим compose
+  (`ComposeControls::setText` + фокус), сдвигая entities черновика.
+  Это цитата, а не ответ: `_replyTo` не трогается, `reply_to_msg_id` не
+  отправляется, postponed-очереди не затрагиваются, `FullMsgId` остаётся
+  локальным. Удаление плейсхолдера снимает регистрацию, sidecar-запись
+  остаётся и пере-вставляется при перестройке истории. Chats-раннер — 978
+  проверок, плагины 32 и host-раннер 252 — без изменений (новых ключей и
+  CLI у NB-33 нет); `kKeysCount` 11232, `.extera` не тронут; sha256 патча
+  `18b582f9…`, `nix flake check` PASS. Не сделано: inline-медиа и реакции
+  в плейсхолдере (наследие NB-92); Xvfb-смоук не выполнялся.
 - Inline-показ удалённых (NB-92, продолжение NB-20):
   `History::addLocalMessageInPlace` (`history/history.cpp`) вставляет запись
   sidecar в историю на её место — порядок по паре `(date, entry.msgId)` — и
