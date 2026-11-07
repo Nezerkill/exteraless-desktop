@@ -852,9 +852,9 @@ def check_backup(ledger, cli, work):
             "backup pill keys",
             exported["pillstackconfig"] == {
                 "OEPillStackEnabled": False,
-                "OEPillStackPills": 255,
+                "OEPillStackPills": 0x3FFF,
                 "OEPillStackOrder":
-                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
+                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold",
             },
             exported["pillstackconfig"])
         ledger.check(
@@ -1064,7 +1064,7 @@ def check_backup(ledger, cli, work):
         "pillstackconfig": {
             "OEPillStackEnabled": True,
             "OEPillStackPills": 5,
-            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
+            "OEPillStackOrder": "ghost,cache,cpu,ram,net,dc,proxy,lastseen,weather,btc,eth,usd,eur,gold",
         },
         "mainconfig": {
             "OEMainMenuOrder": "ghost,exteraless",
@@ -1321,7 +1321,7 @@ def check_backup(ledger, cli, work):
                 "OEPillStackEnabled": True,
                 "OEPillStackPills": 5,
                 "OEPillStackOrder":
-                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen",
+                    "ghost,cache,cpu,ram,net,dc,proxy,lastseen,weather,btc,eth,usd,eur,gold",
             },
             sections["pillstackconfig"])
         ledger.check(
@@ -1340,7 +1340,7 @@ def check_backup(ledger, cli, work):
             "OEUnknown": True,
         },
         "pillstackconfig": {
-            "OEPillStackPills": 300,
+            "OEPillStackPills": 0x4000,
             "futurePill": 1,
         },
         "mainconfig": {
@@ -1439,7 +1439,7 @@ def check_backup(ledger, cli, work):
     for index, (name, proxy, pills) in enumerate([
             ("fractional", 6.5, 5.9),
             ("negative", -1, -1),
-            ("too big", 8, 256)]):
+            ("too big", 8, 0x4000)]):
         env = make_env(work / f"backup-numeric-{index}")
         root = {
             "version": 1,
@@ -2339,7 +2339,7 @@ def check_pill_order(ledger, cli, work):
     before_failures = len(ledger.failures)
 
     default = ["cpu", "ram", "net", "dc", "proxy", "cache", "ghost",
-               "lastseen"]
+               "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
 
     env = make_env(work / "pillorder-defaults")
     data = json_call(ledger, cli, ["pillorder"], env, "pillorder defaults")
@@ -2355,7 +2355,7 @@ def check_pill_order(ledger, cli, work):
         ["pillorder-set", "ghost,cpu,ram,net,dc,proxy,cache,lastseen"],
         env, "pillorder custom")
     custom = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
-              "lastseen"]
+              "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
     if data is not None:
         ledger.check(
             "pillorder custom set",
@@ -2394,7 +2394,7 @@ def check_pill_order(ledger, cli, work):
         ledger, cli, ["pillorder-set", "GHOST,cpu,ghost,bogus"], env,
         "pillorder sanitize")
     sanitized = ["ghost", "cpu", "ram", "net", "dc", "proxy", "cache",
-                 "lastseen"]
+                 "lastseen", "weather", "btc", "eth", "usd", "eur", "gold"]
     if data is not None:
         ledger.check(
             "pillorder sanitized",
@@ -2421,7 +2421,8 @@ def check_pill_order(ledger, cli, work):
             "pillorder fromJson values",
             reloaded.get("order")
             == ["cache", "ghost", "cpu", "ram", "net", "dc", "proxy",
-                "lastseen"],
+                "lastseen", "weather", "btc", "eth", "usd", "eur",
+                "gold"],
             reloaded)
 
     env = make_env(work / "pillorder-backup")
@@ -2433,7 +2434,7 @@ def check_pill_order(ledger, cli, work):
         ledger.check(
             "pillorder backup default",
             pills.get("OEPillStackOrder")
-            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
+            == "cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold",
             pills)
     root = {
         "version": 1,
@@ -2454,7 +2455,7 @@ def check_pill_order(ledger, cli, work):
             "pillorder backup import values",
             reloaded.get("order")
             == ["lastseen", "ghost", "cpu", "ram", "net", "dc", "proxy",
-                "cache"],
+                "cache", "weather", "btc", "eth", "usd", "eur", "gold"],
             reloaded)
 
     return (
@@ -6391,6 +6392,220 @@ def check_lrclib(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_extra_pills(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    def parse(domain, path, code=None):
+        arguments = ["extra-pills-parse", domain, str(path)]
+        if code is not None:
+            arguments.append(code)
+        result = run(cli, arguments)
+        if result.returncode != 0:
+            ledger.check(
+                f"extra pills {domain} {path.name}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(
+                f"extra pills {domain} {path.name}",
+                False,
+                f"json: {error}")
+            return None
+        text = payload.get("text")
+        if not isinstance(text, str):
+            ledger.check(
+                f"extra pills {domain} {path.name}", False, payload)
+            return None
+        ledger.check(f"extra pills {domain} {path.name}", True)
+        return text
+
+    weather = parse("weather", FIXTURES / "extra-pills-weather.json")
+    if weather is not None:
+        ledger.check(
+            "extra pills weather positive",
+            weather == "+23\u00b0",
+            weather)
+    cold = parse("weather", FIXTURES / "extra-pills-weather-negative.json")
+    if cold is not None:
+        ledger.check(
+            "extra pills weather negative",
+            cold == "-6\u00b0",
+            cold)
+
+    coin = parse("coinbase", FIXTURES / "extra-pills-coinbase.json")
+    if coin is not None:
+        ledger.check("extra pills coinbase spot", coin == "75789", coin)
+    small = parse("coinbase", FIXTURES / "extra-pills-coinbase-small.json")
+    if small is not None:
+        ledger.check("extra pills coinbase small", small == "0.52", small)
+
+    gold = parse("gold", FIXTURES / "extra-pills-gold.json")
+    if gold is not None:
+        ledger.check("extra pills gold price", gold == "4072", gold)
+
+    for domain, name in [
+            ("weather", "extra-pills-broken.json"),
+            ("coinbase", "extra-pills-broken.json"),
+            ("gold", "extra-pills-broken.json"),
+            ("weather", "extra-pills-empty.json"),
+            ("coinbase", "extra-pills-empty.json"),
+            ("gold", "extra-pills-empty.json")]:
+        text = parse(domain, FIXTURES / name)
+        if text is not None:
+            ledger.check(
+                f"extra pills {domain} {name} empty", text == "", text)
+
+    ecb = work / "extra-pills-ecb"
+    ecb.mkdir(parents=True, exist_ok=True)
+    envelope = (
+        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        "<gesmes:Envelope"
+        " xmlns:gesmes='http://www.gesmes.org/xml/2002-08-01'"
+        " xmlns='http://www.ecb.int/vocabulary/2002-08-01/eurofxref'>\n"
+        "\t<Cube>\n"
+        "\t\t<Cube time='2026-11-06'>\n"
+        "%s"
+        "\t\t</Cube>\n"
+        "\t</Cube>\n"
+        "</gesmes:Envelope>\n")
+    with_rub = ecb / "with-rub.xml"
+    with_rub.write_text(
+        envelope % (
+            "\t\t\t<Cube currency='USD' rate='1.1165'/>\n"
+            "\t\t\t<Cube currency='RUB' rate='101.5'/>\n"),
+        encoding="utf-8")
+    no_rub = ecb / "no-rub.xml"
+    no_rub.write_text(
+        envelope % (
+            "\t\t\t<Cube currency='USD' rate='1.1165'/>\n"
+            "\t\t\t<Cube currency='JPY' rate='176.77'/>\n"),
+        encoding="utf-8")
+    broken_xml = ecb / "broken.xml"
+    broken_xml.write_text(
+        "<Cube currency='USD' rate='1.1165'>", encoding="utf-8")
+
+    usd = parse("ecb", with_rub, "USD")
+    if usd is not None:
+        ledger.check("extra pills ecb usd cross", usd == "90.91", usd)
+    eur = parse("ecb", with_rub, "EUR")
+    if eur is not None:
+        ledger.check("extra pills ecb eur rate", eur == "101.5", eur)
+    default_usd = parse("ecb", with_rub)
+    if default_usd is not None:
+        ledger.check(
+            "extra pills ecb default code usd",
+            default_usd == "90.91",
+            default_usd)
+    missing_rub = parse("ecb", no_rub, "USD")
+    if missing_rub is not None:
+        ledger.check(
+            "extra pills ecb without rub empty",
+            missing_rub == "",
+            missing_rub)
+    invalid_xml = parse("ecb", broken_xml, "USD")
+    if invalid_xml is not None:
+        ledger.check(
+            "extra pills ecb broken empty",
+            invalid_xml == "",
+            invalid_xml)
+
+    result = run(
+        cli,
+        ["extra-pills-parse", "weather", str(FIXTURES / "pills-missing.json")])
+    ledger.check(
+        "extra pills missing file",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+    result = run(
+        cli,
+        ["extra-pills-parse", "bogus",
+         str(FIXTURES / "extra-pills-weather.json")])
+    ledger.check(
+        "extra pills unknown domain",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    env = make_env(work / "extra-pills-mask-full")
+    data = json_call(
+        ledger, cli,
+        ["config-fromjson", json.dumps({
+            "version": 1,
+            "exteraconfig": {"OEPillStackPills": 0x3FFF},
+        })],
+        env, "extra pills mask config")
+    if data is not None:
+        ledger.check(
+            "extra pills mask accepted",
+            data.get("accepted") is True,
+            data.get("accepted"))
+    exported = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "extra pills mask export")
+    if exported is not None:
+        pills = exported.get("pillstackconfig") or {}
+        ledger.check(
+            "extra pills mask roundtrip",
+            pills.get("OEPillStackPills") == 0x3FFF,
+            pills)
+
+    subset = 0x100 | 0x200 | 0x800 | 0x2000
+    env = make_env(work / "extra-pills-mask-subset")
+    json_call(
+        ledger, cli,
+        ["config-fromjson", json.dumps({
+            "version": 1,
+            "exteraconfig": {"OEPillStackPills": subset},
+        })],
+        env, "extra pills mask subset config")
+    exported = json_call(
+        ledger, cli, ["backup-export-current"], env,
+        "extra pills mask subset export")
+    if exported is not None:
+        pills = exported.get("pillstackconfig") or {}
+        ledger.check(
+            "extra pills mask subset roundtrip",
+            pills.get("OEPillStackPills") == subset,
+            pills)
+
+    env = make_env(work / "extra-pills-mask-import")
+    data = json_call(
+        ledger, cli,
+        ["backup-import-json", json.dumps({
+            "version": 1,
+            "pillstackconfig": {"OEPillStackPills": 0x3FFF},
+        })],
+        env, "extra pills mask import")
+    if data is not None:
+        ledger.check(
+            "extra pills mask import applied",
+            data.get("applied") == 1 and data.get("unknown") == [],
+            data)
+    env = make_env(work / "extra-pills-mask-overflow")
+    data = json_call(
+        ledger, cli,
+        ["backup-import-json", json.dumps({
+            "version": 1,
+            "pillstackconfig": {"OEPillStackPills": 0x4000},
+        })],
+        env, "extra pills mask overflow")
+    if data is not None:
+        ledger.check(
+            "extra pills mask overflow rejected",
+            data.get("applied") == 0
+            and sorted(data.get("unknown") or [])
+            == ["pillstackconfig.OEPillStackPills"],
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_download_boost(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -7543,6 +7758,7 @@ def main():
         subtitles = check_subtitles(ledger, cli, work)
         lyrics = check_lyrics(ledger, cli, work)
         lrclib = check_lrclib(ledger, cli, work)
+        extra_pills = check_extra_pills(ledger, cli, work)
         regex_filters = check_regex_filters(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
@@ -7624,6 +7840,7 @@ def main():
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
     print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
     print(f"lrclib: {lrclib[0] - lrclib[1]} passed")
+    print(f"extra-pills: {extra_pills[0] - extra_pills[1]} passed")
     print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:

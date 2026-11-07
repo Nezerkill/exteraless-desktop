@@ -6,6 +6,7 @@
 #include "data/data_session.h"
 #include "data/data_user.h"
 #include "exteraless/config.h"
+#include "exteraless/extra_pills.h"
 #include "exteraless/ghost_mode.h"
 #include "main/main_session.h"
 #include "mtproto/facade.h"
@@ -182,6 +183,12 @@ PillStack::PillStack(
 		{ Kind::Cache, u"Cache …"_q },
 		{ Kind::Ghost, u"Ghost …"_q },
 		{ Kind::LastSeen, u"Seen …"_q },
+		{ Kind::Weather, u"Weather …"_q },
+		{ Kind::Btc, u"BTC …"_q },
+		{ Kind::Eth, u"ETH …"_q },
+		{ Kind::Usd, u"USD …"_q },
+		{ Kind::Eur, u"EUR …"_q },
+		{ Kind::Gold, u"Gold …"_q },
 	};
 	setMouseTracking(true);
 	setCursor(Qt::PointingHandCursor);
@@ -220,6 +227,7 @@ void PillStack::tick() {
 		_visibilityChanges.fire({});
 	}
 	if (enabled) {
+		ExtraPills::Instance().Refresh();
 		updatePills();
 	}
 }
@@ -321,6 +329,13 @@ void PillStack::updatePills() {
 	const auto user = _controller->session().user();
 	setText(Kind::LastSeen, u"Seen %1"_q.arg(LastSeenText(user)));
 
+	setText(Kind::Weather, ExtraPills::Instance().WeatherText());
+	setText(Kind::Btc, ExtraPills::Instance().CryptoText(u"BTC"_q));
+	setText(Kind::Eth, ExtraPills::Instance().CryptoText(u"ETH"_q));
+	setText(Kind::Usd, ExtraPills::Instance().FiatText(u"USD"_q));
+	setText(Kind::Eur, ExtraPills::Instance().FiatText(u"EUR"_q));
+	setText(Kind::Gold, ExtraPills::Instance().GoldText());
+
 	const auto mask = Config::Instance().pillStackPills();
 	if (mask != _pillsMask) {
 		_pillsMask = mask;
@@ -371,6 +386,12 @@ QString PillStack::KindKey(Kind kind) {
 	case Kind::Cache: return u"cache"_q;
 	case Kind::Ghost: return u"ghost"_q;
 	case Kind::LastSeen: return u"lastseen"_q;
+	case Kind::Weather: return u"weather"_q;
+	case Kind::Btc: return u"btc"_q;
+	case Kind::Eth: return u"eth"_q;
+	case Kind::Usd: return u"usd"_q;
+	case Kind::Eur: return u"eur"_q;
+	case Kind::Gold: return u"gold"_q;
 	}
 	return QString();
 }
@@ -384,6 +405,12 @@ std::optional<PillStack::Kind> PillStack::KindFromKey(const QString &key) {
 	if (key == u"cache"_q) return Kind::Cache;
 	if (key == u"ghost"_q) return Kind::Ghost;
 	if (key == u"lastseen"_q) return Kind::LastSeen;
+	if (key == u"weather"_q) return Kind::Weather;
+	if (key == u"btc"_q) return Kind::Btc;
+	if (key == u"eth"_q) return Kind::Eth;
+	if (key == u"usd"_q) return Kind::Usd;
+	if (key == u"eur"_q) return Kind::Eur;
+	if (key == u"gold"_q) return Kind::Gold;
 	return std::nullopt;
 }
 
@@ -397,7 +424,7 @@ void PillStack::updateLayout() {
 	auto rowBottom = top + pillHeight;
 	auto anyPlaced = false;
 	for (auto &pill : _pills) {
-		if (!isPillEnabled(pill.kind)) {
+		if (!isPillEnabled(pill.kind) || pill.text.isEmpty()) {
 			pill.rect = QRect();
 			continue;
 		}
@@ -571,6 +598,12 @@ bool PillStack::isPillEnabled(Kind kind) const {
 		case Kind::Cache: return PillStackPill::Cache;
 		case Kind::Ghost: return PillStackPill::Ghost;
 		case Kind::LastSeen: return PillStackPill::LastSeen;
+		case Kind::Weather: return PillStackPill::Weather;
+		case Kind::Btc: return PillStackPill::Btc;
+		case Kind::Eth: return PillStackPill::Eth;
+		case Kind::Usd: return PillStackPill::Usd;
+		case Kind::Eur: return PillStackPill::Eur;
+		case Kind::Gold: return PillStackPill::Gold;
 		}
 		return PillStackPill::Cpu;
 	}();

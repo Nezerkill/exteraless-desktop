@@ -2589,6 +2589,36 @@ const auto kMeta = Builder::BuildHelper({
 		u"exteraless/pill-stack/last-seen"_q,
 		tr::lng_settings_exteraless_pill_last_seen(),
 		{ u"last seen"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Weather,
+		u"exteraless/pill-stack/weather"_q,
+		tr::lng_settings_exteraless_pill_weather(),
+		{ u"weather"_q, u"temperature"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Btc,
+		u"exteraless/pill-stack/btc"_q,
+		tr::lng_settings_exteraless_pill_btc(),
+		{ u"btc"_q, u"bitcoin"_q, u"crypto"_q, u"rate"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Eth,
+		u"exteraless/pill-stack/eth"_q,
+		tr::lng_settings_exteraless_pill_eth(),
+		{ u"eth"_q, u"ethereum"_q, u"crypto"_q, u"rate"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Usd,
+		u"exteraless/pill-stack/usd"_q,
+		tr::lng_settings_exteraless_pill_usd(),
+		{ u"usd"_q, u"dollar"_q, u"fiat"_q, u"rate"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Eur,
+		u"exteraless/pill-stack/eur"_q,
+		tr::lng_settings_exteraless_pill_eur(),
+		{ u"eur"_q, u"euro"_q, u"fiat"_q, u"rate"_q, u"pill"_q });
+	addPillToggle(
+		Exteraless::PillStackPill::Gold,
+		u"exteraless/pill-stack/gold"_q,
+		tr::lng_settings_exteraless_pill_gold(),
+		{ u"gold"_q, u"rate"_q, u"pill"_q });
 
 	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
 

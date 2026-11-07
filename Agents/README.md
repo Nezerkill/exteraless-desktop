@@ -62,6 +62,13 @@ sibling-чекаутом: `../exteraless`.
     только в боксе `Telegram/SourceFiles/boxes/ai_request_box.*` («Ask AI» из
     контекстного меню текстового сообщения: поле запроса, ответ,
     Send/Copy/Close), ключ `OEAiApiKey` читается при каждой отправке.
+  - `extra_pills.*` — погода, курсы и золото для Pill Stack (`Weather`,
+    `Btc`, `Eth`, `Usd`, `Eur`, `Gold`): URL-билдеры `WeatherApiUrl`
+    (Open-Meteo, координаты Москвы захардкожены), `CoinbaseSpotUrl`,
+    `EcbDailyUrl` и `GoldApiUrl` плюс парсеры `ParseWeather`,
+    `ParseCoinbase`, `ParseEcbXml`/`FormatFiatRate` и `ParseGoldApi`;
+    `ExtraPills::Refresh` троттлится 30 минутами, кэш только в памяти, а
+    пустой ответ или ошибка сети дают прочерк `—`.
 - `Telegram/SourceFiles/exteraless/plugin_runtime.*` — singleton `Runtime`:
   один `QProcess` на приложение (bwrap + Python host), JSON-lines IPC,
   проверка путей, audit-лог, load/unload и остановка host при выходе.
@@ -76,7 +83,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (1006 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, network, download-boost, subtitles, lyrics, lrclib, avatar-corners, section-radius, regex-filters, backup);
+  (1045 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, network, download-boost, subtitles, lyrics, lrclib, extra-pills, avatar-corners, section-radius, regex-filters, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму

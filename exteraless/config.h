@@ -19,9 +19,15 @@ enum class PillStackPill : int {
 	Cache = 32,
 	Ghost = 64,
 	LastSeen = 128,
+	Weather = 256,
+	Btc = 512,
+	Eth = 1024,
+	Usd = 2048,
+	Eur = 4096,
+	Gold = 8192,
 };
 
-constexpr auto kPillStackAllPills = 0xFF;
+constexpr auto kPillStackAllPills = 0x3FFF;
 
 [[nodiscard]] constexpr bool HasPillStackPill(
 		int mask,

@@ -109,7 +109,7 @@ index 811707d..fd1cdaa 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..37b0d47 100644
+index ffc8ec9..08f6622 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -123,7 +123,7 @@ index ffc8ec9..37b0d47 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9186,235 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -9182,4 +9186,241 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -305,6 +305,12 @@ index ffc8ec9..37b0d47 100644
 +"lng_settings_exteraless_pill_cache" = "Cache";
 +"lng_settings_exteraless_pill_ghost" = "Ghost Mode";
 +"lng_settings_exteraless_pill_last_seen" = "Last seen";
++"lng_settings_exteraless_pill_weather" = "Weather";
++"lng_settings_exteraless_pill_btc" = "BTC";
++"lng_settings_exteraless_pill_eth" = "ETH";
++"lng_settings_exteraless_pill_usd" = "USD";
++"lng_settings_exteraless_pill_eur" = "EUR";
++"lng_settings_exteraless_pill_gold" = "Gold";
 +"lng_settings_exteraless_pill_order_hint" = "Drag pills on the strip above the chat list to reorder them.";
 +"lng_settings_exteraless_pill_order_reset" = "Reset pill order";
 +"lng_settings_exteraless_pill_order_reset_done" = "Pill order reset.";
@@ -2515,10 +2521,10 @@ index 0000000..ca87602
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.cpp b/Telegram/SourceFiles/exteraless/pill_stack.cpp
 new file mode 100644
-index 0000000..db3fa5e
+index 0000000..dc21e39
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.cpp
-@@ -0,0 +1,580 @@
+@@ -0,0 +1,613 @@
 +#include "exteraless/pill_stack.h"
 +
 +#include "base/unixtime.h"
@@ -2527,6 +2533,7 @@ index 0000000..db3fa5e
 +#include "data/data_session.h"
 +#include "data/data_user.h"
 +#include "exteraless/config.h"
++#include "exteraless/extra_pills.h"
 +#include "exteraless/ghost_mode.h"
 +#include "main/main_session.h"
 +#include "mtproto/facade.h"
@@ -2703,6 +2710,12 @@ index 0000000..db3fa5e
 +		{ Kind::Cache, u"Cache …"_q },
 +		{ Kind::Ghost, u"Ghost …"_q },
 +		{ Kind::LastSeen, u"Seen …"_q },
++		{ Kind::Weather, u"Weather …"_q },
++		{ Kind::Btc, u"BTC …"_q },
++		{ Kind::Eth, u"ETH …"_q },
++		{ Kind::Usd, u"USD …"_q },
++		{ Kind::Eur, u"EUR …"_q },
++		{ Kind::Gold, u"Gold …"_q },
 +	};
 +	setMouseTracking(true);
 +	setCursor(Qt::PointingHandCursor);
@@ -2741,6 +2754,7 @@ index 0000000..db3fa5e
 +		_visibilityChanges.fire({});
 +	}
 +	if (enabled) {
++		ExtraPills::Instance().Refresh();
 +		updatePills();
 +	}
 +}
@@ -2842,6 +2856,13 @@ index 0000000..db3fa5e
 +	const auto user = _controller->session().user();
 +	setText(Kind::LastSeen, u"Seen %1"_q.arg(LastSeenText(user)));
 +
++	setText(Kind::Weather, ExtraPills::Instance().WeatherText());
++	setText(Kind::Btc, ExtraPills::Instance().CryptoText(u"BTC"_q));
++	setText(Kind::Eth, ExtraPills::Instance().CryptoText(u"ETH"_q));
++	setText(Kind::Usd, ExtraPills::Instance().FiatText(u"USD"_q));
++	setText(Kind::Eur, ExtraPills::Instance().FiatText(u"EUR"_q));
++	setText(Kind::Gold, ExtraPills::Instance().GoldText());
++
 +	const auto mask = Config::Instance().pillStackPills();
 +	if (mask != _pillsMask) {
 +		_pillsMask = mask;
@@ -2892,6 +2913,12 @@ index 0000000..db3fa5e
 +	case Kind::Cache: return u"cache"_q;
 +	case Kind::Ghost: return u"ghost"_q;
 +	case Kind::LastSeen: return u"lastseen"_q;
++	case Kind::Weather: return u"weather"_q;
++	case Kind::Btc: return u"btc"_q;
++	case Kind::Eth: return u"eth"_q;
++	case Kind::Usd: return u"usd"_q;
++	case Kind::Eur: return u"eur"_q;
++	case Kind::Gold: return u"gold"_q;
 +	}
 +	return QString();
 +}
@@ -2905,6 +2932,12 @@ index 0000000..db3fa5e
 +	if (key == u"cache"_q) return Kind::Cache;
 +	if (key == u"ghost"_q) return Kind::Ghost;
 +	if (key == u"lastseen"_q) return Kind::LastSeen;
++	if (key == u"weather"_q) return Kind::Weather;
++	if (key == u"btc"_q) return Kind::Btc;
++	if (key == u"eth"_q) return Kind::Eth;
++	if (key == u"usd"_q) return Kind::Usd;
++	if (key == u"eur"_q) return Kind::Eur;
++	if (key == u"gold"_q) return Kind::Gold;
 +	return std::nullopt;
 +}
 +
@@ -2918,7 +2951,7 @@ index 0000000..db3fa5e
 +	auto rowBottom = top + pillHeight;
 +	auto anyPlaced = false;
 +	for (auto &pill : _pills) {
-+		if (!isPillEnabled(pill.kind)) {
++		if (!isPillEnabled(pill.kind) || pill.text.isEmpty()) {
 +			pill.rect = QRect();
 +			continue;
 +		}
@@ -3092,6 +3125,12 @@ index 0000000..db3fa5e
 +		case Kind::Cache: return PillStackPill::Cache;
 +		case Kind::Ghost: return PillStackPill::Ghost;
 +		case Kind::LastSeen: return PillStackPill::LastSeen;
++		case Kind::Weather: return PillStackPill::Weather;
++		case Kind::Btc: return PillStackPill::Btc;
++		case Kind::Eth: return PillStackPill::Eth;
++		case Kind::Usd: return PillStackPill::Usd;
++		case Kind::Eur: return PillStackPill::Eur;
++		case Kind::Gold: return PillStackPill::Gold;
 +		}
 +		return PillStackPill::Cpu;
 +	}();
@@ -3101,10 +3140,10 @@ index 0000000..db3fa5e
 +} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/pill_stack.h b/Telegram/SourceFiles/exteraless/pill_stack.h
 new file mode 100644
-index 0000000..37cdfee
+index 0000000..2b830fd
 --- /dev/null
 +++ b/Telegram/SourceFiles/exteraless/pill_stack.h
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,98 @@
 +#pragma once
 +
 +#include "base/timer.h"
@@ -3152,6 +3191,12 @@ index 0000000..37cdfee
 +		Cache,
 +		Ghost,
 +		LastSeen,
++		Weather,
++		Btc,
++		Eth,
++		Usd,
++		Eur,
++		Gold,
 +	};
 +
 +	struct Pill {
@@ -11020,10 +11065,10 @@ index ceae87b..ce8ddf6 100644
  		- st::overviewSmallCheck.size;
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
-index 0000000..bac4a76
+index 0000000..87b9ff1
 --- /dev/null
 +++ b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
-@@ -0,0 +1,3001 @@
+@@ -0,0 +1,3031 @@
 +#include "settings/sections/settings_exteraless.h"
 +
 +#include "settings/settings_common_session.h"
@@ -13615,6 +13660,36 @@ index 0000000..bac4a76
 +		u"exteraless/pill-stack/last-seen"_q,
 +		tr::lng_settings_exteraless_pill_last_seen(),
 +		{ u"last seen"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Weather,
++		u"exteraless/pill-stack/weather"_q,
++		tr::lng_settings_exteraless_pill_weather(),
++		{ u"weather"_q, u"temperature"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Btc,
++		u"exteraless/pill-stack/btc"_q,
++		tr::lng_settings_exteraless_pill_btc(),
++		{ u"btc"_q, u"bitcoin"_q, u"crypto"_q, u"rate"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Eth,
++		u"exteraless/pill-stack/eth"_q,
++		tr::lng_settings_exteraless_pill_eth(),
++		{ u"eth"_q, u"ethereum"_q, u"crypto"_q, u"rate"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Usd,
++		u"exteraless/pill-stack/usd"_q,
++		tr::lng_settings_exteraless_pill_usd(),
++		{ u"usd"_q, u"dollar"_q, u"fiat"_q, u"rate"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Eur,
++		u"exteraless/pill-stack/eur"_q,
++		tr::lng_settings_exteraless_pill_eur(),
++		{ u"eur"_q, u"euro"_q, u"fiat"_q, u"rate"_q, u"pill"_q });
++	addPillToggle(
++		Exteraless::PillStackPill::Gold,
++		u"exteraless/pill-stack/gold"_q,
++		tr::lng_settings_exteraless_pill_gold(),
++		{ u"gold"_q, u"rate"_q, u"pill"_q });
 +
 +	builder.addDividerText(tr::lng_settings_exteraless_pill_order_hint());
 +
@@ -15640,10 +15715,10 @@ index 79a0a3c..87a5eaa 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..6595145
+index 0000000..4a4dc51
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,68 @@
 +add_library(exteraless STATIC
 +    ai_client.cpp
 +    ai_client.h
@@ -15659,6 +15734,8 @@ index 0000000..6595145
 +    doubletap.h
 +    exteraless.cpp
 +    exteraless.h
++    extra_pills.cpp
++    extra_pills.h
 +    format.cpp
 +    format.h
 +    ghost_schedule.cpp
@@ -19158,10 +19235,10 @@ index 0000000..29d7822
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..3d65b8e
+index 0000000..71bb917
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,364 @@
+@@ -0,0 +1,370 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -19183,9 +19260,15 @@ index 0000000..3d65b8e
 +	Cache = 32,
 +	Ghost = 64,
 +	LastSeen = 128,
++	Weather = 256,
++	Btc = 512,
++	Eth = 1024,
++	Usd = 2048,
++	Eur = 4096,
++	Gold = 8192,
 +};
 +
-+constexpr auto kPillStackAllPills = 0xFF;
++constexpr auto kPillStackAllPills = 0x3FFF;
 +
 +[[nodiscard]] constexpr bool HasPillStackPill(
 +		int mask,
@@ -20371,6 +20454,477 @@ index 0000000..b88f272
 +[[nodiscard]] QString Name();
 +[[nodiscard]] QString AppFileName();
 +[[nodiscard]] QString Version();
++
++} // namespace Exteraless
+diff --git a/exteraless/extra_pills.cpp b/exteraless/extra_pills.cpp
+new file mode 100644
+index 0000000..89b5d39
+--- /dev/null
++++ b/exteraless/extra_pills.cpp
+@@ -0,0 +1,408 @@
++#include "exteraless/extra_pills.h"
++
++#include <QElapsedTimer>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++#include <QJsonValue>
++#include <QNetworkAccessManager>
++#include <QNetworkReply>
++#include <QNetworkRequest>
++#include <QUrl>
++#include <QXmlStreamReader>
++
++#include <array>
++#include <cmath>
++#include <functional>
++#include <utility>
++
++namespace Exteraless {
++namespace {
++
++// Moscow fallback: there is no location setting yet, so the caller cannot
++// pick a city; a city setting is the obvious follow-up.
++constexpr auto kDefaultLatitude = 55.75;
++constexpr auto kDefaultLongitude = 37.61;
++constexpr qint64 kRefreshIntervalMs = 30 * 60 * 1000;
++
++enum class Slot {
++	Weather,
++	Btc,
++	Eth,
++	Usd,
++	Eur,
++	Gold,
++	Count,
++};
++
++constexpr auto kSlotCount = int(Slot::Count);
++
++[[nodiscard]] QString TrimZeros(QString text) {
++	while (text.endsWith(u'0')) {
++		text.chop(1);
++	}
++	if (text.endsWith(u'.')) {
++		text.chop(1);
++	}
++	return text;
++}
++
++[[nodiscard]] QString FormatAmount(double value) {
++	if (!std::isfinite(value) || value <= 0.) {
++		return QString();
++	}
++	if (value >= 1000.) {
++		return QString::number(std::llround(value));
++	}
++	return TrimZeros(QString::number(value, 'f', 2));
++}
++
++[[nodiscard]] bool ParseJsonObject(
++		const QByteArray &data,
++		QJsonObject *object) {
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(data, &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return false;
++	}
++	*object = document.object();
++	return true;
++}
++
++[[nodiscard]] QString DashText() {
++	return QString(QChar(0x2014));
++}
++
++[[nodiscard]] QString WithDash(const QString &text) {
++	return text.isEmpty() ? DashText() : text;
++}
++
++} // namespace
++
++QString WeatherApiUrl() {
++	return QStringLiteral(
++		"https://api.open-meteo.com/v1/forecast"
++		"?latitude=%1&longitude=%2&current=temperature_2m")
++		.arg(QString::number(kDefaultLatitude, 'f', 2))
++		.arg(QString::number(kDefaultLongitude, 'f', 2));
++}
++
++QString CoinbaseSpotUrl(const QString &code) {
++	const auto upper = code.trimmed().toUpper();
++	if (upper.isEmpty()) {
++		return QString();
++	}
++	for (const auto ch : upper) {
++		const auto value = ch.unicode();
++		if ((value < u'A' || value > u'Z')
++			&& (value < u'0' || value > u'9')) {
++			return QString();
++		}
++	}
++	return QStringLiteral(
++		"https://api.coinbase.com/v2/prices/%1-USD/spot").arg(upper);
++}
++
++QString EcbDailyUrl() {
++	return QStringLiteral(
++		"https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml");
++}
++
++QString GoldApiUrl() {
++	return QStringLiteral("https://api.gold-api.com/price/XAU");
++}
++
++QString ParseWeather(const QByteArray &data) {
++	auto object = QJsonObject();
++	if (!ParseJsonObject(data, &object)) {
++		return QString();
++	}
++	const auto current = object.value(QStringLiteral("current"));
++	if (!current.isObject()) {
++		return QString();
++	}
++	const auto temperature = current.toObject().value(
++		QStringLiteral("temperature_2m"));
++	if (!temperature.isDouble()) {
++		return QString();
++	}
++	const auto value = temperature.toDouble();
++	if (!std::isfinite(value) || value < -99. || value > 99.) {
++		return QString();
++	}
++	const auto rounded = int(std::lround(value));
++	if (rounded > 0) {
++		return QStringLiteral("+") + QString::number(rounded) + QChar(0x00B0);
++	}
++	return QString::number(rounded) + QChar(0x00B0);
++}
++
++QString ParseCoinbase(const QByteArray &data) {
++	auto object = QJsonObject();
++	if (!ParseJsonObject(data, &object)) {
++		return QString();
++	}
++	const auto payload = object.value(QStringLiteral("data"));
++	if (!payload.isObject()) {
++		return QString();
++	}
++	const auto amount = payload.toObject().value(QStringLiteral("amount"));
++	if (!amount.isString()) {
++		return QString();
++	}
++	auto ok = false;
++	const auto value = amount.toString().toDouble(&ok);
++	return ok ? FormatAmount(value) : QString();
++}
++
++FiatRates ParseEcbXml(const QByteArray &data) {
++	auto rates = FiatRates();
++	auto reader = QXmlStreamReader(data);
++	auto usdPerEur = 0.;
++	auto rubPerEur = 0.;
++	auto hasUsd = false;
++	auto hasRub = false;
++	while (!reader.atEnd()) {
++		if (reader.readNext() != QXmlStreamReader::StartElement) {
++			continue;
++		}
++		if (reader.name() != QLatin1String("Cube")) {
++			continue;
++		}
++		const auto attributes = reader.attributes();
++		const auto currency = attributes.value(QLatin1String("currency"));
++		const auto rate = attributes.value(QLatin1String("rate"));
++		if (currency.isEmpty() || rate.isEmpty()) {
++			continue;
++		}
++		auto ok = false;
++		const auto value = rate.toDouble(&ok);
++		if (!ok || !std::isfinite(value) || value <= 0.) {
++			continue;
++		}
++		const auto code = currency.toString().toUpper();
++		if (code == QStringLiteral("USD")) {
++			usdPerEur = value;
++			hasUsd = true;
++		} else if (code == QStringLiteral("RUB")) {
++			rubPerEur = value;
++			hasRub = true;
++		}
++	}
++	if (reader.hasError() || !hasUsd || !hasRub || usdPerEur <= 0.) {
++		return rates;
++	}
++	rates.ok = true;
++	rates.eurToRub = rubPerEur;
++	rates.usdToRub = rubPerEur / usdPerEur;
++	return rates;
++}
++
++QString FormatFiatRate(const FiatRates &rates, const QString &code) {
++	if (!rates.ok) {
++		return QString();
++	}
++	const auto upper = code.trimmed().toUpper();
++	auto value = 0.;
++	if (upper == QStringLiteral("USD")) {
++		value = rates.usdToRub;
++	} else if (upper == QStringLiteral("EUR")) {
++		value = rates.eurToRub;
++	} else {
++		return QString();
++	}
++	if (!std::isfinite(value) || value <= 0.) {
++		return QString();
++	}
++	return TrimZeros(QString::number(value, 'f', 2));
++}
++
++QString ParseGoldApi(const QByteArray &data) {
++	auto object = QJsonObject();
++	if (!ParseJsonObject(data, &object)) {
++		return QString();
++	}
++	const auto price = object.value(QStringLiteral("price"));
++	if (!price.isDouble()) {
++		return QString();
++	}
++	return FormatAmount(price.toDouble());
++}
++
++struct ExtraPills::State final {
++	struct Entry {
++		QString text;
++		QElapsedTimer since;
++		bool pending = false;
++	};
++
++	QNetworkAccessManager manager;
++	std::array<Entry, kSlotCount> entries = {};
++	bool fiatPending = false;
++
++	void refreshAll();
++	void refreshFiat();
++	void fetch(
++		Entry &entry,
++		const QString &url,
++		std::function<void(const QByteArray &)> apply);
++
++	[[nodiscard]] bool fresh(const Entry &entry) const;
++	[[nodiscard]] QString text(Slot slot) const;
++};
++
++bool ExtraPills::State::fresh(const Entry &entry) const {
++	return entry.since.isValid()
++		&& entry.since.elapsed() < kRefreshIntervalMs;
++}
++
++QString ExtraPills::State::text(Slot slot) const {
++	return entries[int(slot)].text;
++}
++
++void ExtraPills::State::fetch(
++		Entry &entry,
++		const QString &url,
++		std::function<void(const QByteArray &)> apply) {
++	if (entry.pending || url.isEmpty()) {
++		return;
++	}
++	entry.pending = true;
++	entry.since.start();
++	auto request = QNetworkRequest(QUrl(url));
++	request.setRawHeader("User-Agent", "ExteralessDesktop");
++	const auto reply = manager.get(request);
++	QObject::connect(
++		reply,
++		&QNetworkReply::finished,
++		&manager,
++		[this, reply, &entry, apply = std::move(apply)] {
++			reply->deleteLater();
++			entry.pending = false;
++			const auto bytes = reply->readAll();
++			if (reply->error() != QNetworkReply::NoError) {
++				return;
++			}
++			apply(bytes);
++		});
++}
++
++void ExtraPills::State::refreshFiat() {
++	auto &usd = entries[int(Slot::Usd)];
++	auto &eur = entries[int(Slot::Eur)];
++	if (fiatPending || (fresh(usd) && fresh(eur))) {
++		return;
++	}
++	const auto url = EcbDailyUrl();
++	if (url.isEmpty()) {
++		return;
++	}
++	fiatPending = true;
++	usd.pending = true;
++	eur.pending = true;
++	usd.since.start();
++	eur.since.start();
++	const auto reply = manager.get(QNetworkRequest(QUrl(url)));
++	QObject::connect(reply, &QNetworkReply::finished, &manager, [this, reply] {
++		reply->deleteLater();
++		fiatPending = false;
++		auto &usd = entries[int(Slot::Usd)];
++		auto &eur = entries[int(Slot::Eur)];
++		usd.pending = false;
++		eur.pending = false;
++		if (reply->error() != QNetworkReply::NoError) {
++			return;
++		}
++		const auto rates = ParseEcbXml(reply->readAll());
++		usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
++		eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
++	});
++}
++
++void ExtraPills::State::refreshAll() {
++	auto &weather = entries[int(Slot::Weather)];
++	if (!fresh(weather)) {
++		fetch(weather, WeatherApiUrl(), [this](const QByteArray &data) {
++			entries[int(Slot::Weather)].text = ParseWeather(data);
++		});
++	}
++	auto &btc = entries[int(Slot::Btc)];
++	if (!fresh(btc)) {
++		fetch(
++			btc,
++			CoinbaseSpotUrl(QStringLiteral("BTC")),
++			[this](const QByteArray &data) {
++				entries[int(Slot::Btc)].text = ParseCoinbase(data);
++			});
++	}
++	auto &eth = entries[int(Slot::Eth)];
++	if (!fresh(eth)) {
++		fetch(
++			eth,
++			CoinbaseSpotUrl(QStringLiteral("ETH")),
++			[this](const QByteArray &data) {
++				entries[int(Slot::Eth)].text = ParseCoinbase(data);
++			});
++	}
++	refreshFiat();
++	auto &gold = entries[int(Slot::Gold)];
++	if (!fresh(gold)) {
++		fetch(gold, GoldApiUrl(), [this](const QByteArray &data) {
++			entries[int(Slot::Gold)].text = ParseGoldApi(data);
++		});
++	}
++}
++
++ExtraPills::ExtraPills()
++: _state(std::make_unique<State>()) {
++}
++
++ExtraPills::~ExtraPills() = default;
++
++ExtraPills &ExtraPills::Instance() {
++	static auto instance = ExtraPills();
++	return instance;
++}
++
++void ExtraPills::Refresh() {
++	_state->refreshAll();
++}
++
++QString ExtraPills::WeatherText() const {
++	return WithDash(_state->text(Slot::Weather));
++}
++
++QString ExtraPills::CryptoText(const QString &code) const {
++	const auto upper = code.trimmed().toUpper();
++	auto slot = Slot::Count;
++	if (upper == QStringLiteral("BTC")) {
++		slot = Slot::Btc;
++	} else if (upper == QStringLiteral("ETH")) {
++		slot = Slot::Eth;
++	} else {
++		return QString();
++	}
++	const auto text = _state->text(slot);
++	return text.isEmpty()
++		? DashText()
++		: (QStringLiteral("$") + text);
++}
++
++QString ExtraPills::FiatText(const QString &code) const {
++	const auto upper = code.trimmed().toUpper();
++	if (upper == QStringLiteral("USD")) {
++		return WithDash(_state->text(Slot::Usd));
++	} else if (upper == QStringLiteral("EUR")) {
++		return WithDash(_state->text(Slot::Eur));
++	}
++	return QString();
++}
++
++QString ExtraPills::GoldText() const {
++	const auto text = _state->text(Slot::Gold);
++	return text.isEmpty()
++		? DashText()
++		: (QStringLiteral("$") + text);
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/extra_pills.h b/exteraless/extra_pills.h
+new file mode 100644
+index 0000000..4fc0d55
+--- /dev/null
++++ b/exteraless/extra_pills.h
+@@ -0,0 +1,51 @@
++#pragma once
++
++#include <QByteArray>
++#include <QString>
++
++#include <memory>
++
++namespace Exteraless {
++
++struct FiatRates {
++	bool ok = false;
++	double eurToRub = 0.;
++	double usdToRub = 0.;
++};
++
++[[nodiscard]] QString WeatherApiUrl();
++[[nodiscard]] QString CoinbaseSpotUrl(const QString &code);
++[[nodiscard]] QString EcbDailyUrl();
++[[nodiscard]] QString GoldApiUrl();
++
++[[nodiscard]] QString ParseWeather(const QByteArray &data);
++[[nodiscard]] QString ParseCoinbase(const QByteArray &data);
++[[nodiscard]] FiatRates ParseEcbXml(const QByteArray &data);
++[[nodiscard]] QString FormatFiatRate(
++	const FiatRates &rates,
++	const QString &code);
++[[nodiscard]] QString ParseGoldApi(const QByteArray &data);
++
++class ExtraPills final {
++public:
++	ExtraPills();
++	~ExtraPills();
++
++	ExtraPills(const ExtraPills &) = delete;
++	ExtraPills &operator=(const ExtraPills &) = delete;
++
++	[[nodiscard]] static ExtraPills &Instance();
++
++	void Refresh();
++
++	[[nodiscard]] QString WeatherText() const;
++	[[nodiscard]] QString CryptoText(const QString &code) const;
++	[[nodiscard]] QString FiatText(const QString &code) const;
++	[[nodiscard]] QString GoldText() const;
++
++private:
++	struct State;
++	std::unique_ptr<State> _state;
++};
 +
 +} // namespace Exteraless
 diff --git a/exteraless/format.cpp b/exteraless/format.cpp
@@ -23255,10 +23809,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..c686a58
+index 0000000..8f5b5b6
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3110 @@
+@@ -0,0 +1,3144 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -23266,6 +23820,7 @@ index 0000000..c686a58
 +#include "exteraless/deleted_entry.h"
 +#include "exteraless/deleted_messages_trim.h"
 +#include "exteraless/doubletap.h"
++#include "exteraless/extra_pills.h"
 +#include "exteraless/format.h"
 +#include "exteraless/ghost_schedule.h"
 +#include "exteraless/ghost_status.h"
@@ -23341,6 +23896,8 @@ index 0000000..c686a58
 +		<< "  exteraless-chats-cli pillorder\n"
 +		<< "  exteraless-chats-cli pillorder-set <csv>\n"
 +		<< "  exteraless-chats-cli pillorder-reset\n"
++		<< "  exteraless-chats-cli extra-pills-parse <domain> <file> "
++		<< "[<code>]\n"
 +		<< "  exteraless-chats-cli ghost\n"
 +		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 +		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -26367,6 +26924,37 @@ index 0000000..c686a58
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("extra-pills-parse")) {
++		if (arguments.size() != 4 && arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[3], &bytes)) {
++			return PrintUsage();
++		}
++		const auto domain = arguments[2];
++		const auto code = (arguments.size() == 5)
++			? arguments[4]
++			: QString();
++		auto text = QString();
++		if (domain == QStringLiteral("weather")) {
++			text = Exteraless::ParseWeather(bytes);
++		} else if (domain == QStringLiteral("coinbase")) {
++			text = Exteraless::ParseCoinbase(bytes);
++		} else if (domain == QStringLiteral("ecb")) {
++			text = Exteraless::FormatFiatRate(
++				Exteraless::ParseEcbXml(bytes),
++				code.isEmpty() ? QStringLiteral("USD") : code);
++		} else if (domain == QStringLiteral("gold")) {
++			text = Exteraless::ParseGoldApi(bytes);
++		} else {
++			return PrintUsage();
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("text"), text },
++		});
++		return 0;
++	}
 +	return PrintUsage();
 +}
 diff --git a/exteraless/tests/chats/fixtures/basic.lrc b/exteraless/tests/chats/fixtures/basic.lrc
@@ -26475,6 +27063,55 @@ index 0000000..64dc265
 +00:00:07,000 --> 00:00:08,000
 +No trailing blank line
 \ No newline at end of file
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-broken.json b/exteraless/tests/chats/fixtures/extra-pills-broken.json
+new file mode 100644
+index 0000000..8b09fcf
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-broken.json
+@@ -0,0 +1 @@
++{"current": {"temperature_2m": 12.0}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-coinbase-small.json b/exteraless/tests/chats/fixtures/extra-pills-coinbase-small.json
+new file mode 100644
+index 0000000..c10405e
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-coinbase-small.json
+@@ -0,0 +1 @@
++{"data":{"amount":"0.523","base":"ETH","currency":"USD"}}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-coinbase.json b/exteraless/tests/chats/fixtures/extra-pills-coinbase.json
+new file mode 100644
+index 0000000..e0beb7f
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-coinbase.json
+@@ -0,0 +1 @@
++{"data":{"amount":"75789.105","base":"BTC","currency":"USD"}}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-empty.json b/exteraless/tests/chats/fixtures/extra-pills-empty.json
+new file mode 100644
+index 0000000..0967ef4
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-empty.json
+@@ -0,0 +1 @@
++{}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-gold.json b/exteraless/tests/chats/fixtures/extra-pills-gold.json
+new file mode 100644
+index 0000000..2299bce
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-gold.json
+@@ -0,0 +1 @@
++{"currency":"USD","currencySymbol":"$","exchangeRate":1.0,"name":"Gold","price":4072.100098,"symbol":"XAU","updatedAt":"2026-11-07T04:08:06Z","updatedAtReadable":"a few seconds ago"}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-weather-negative.json b/exteraless/tests/chats/fixtures/extra-pills-weather-negative.json
+new file mode 100644
+index 0000000..308108b
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-weather-negative.json
+@@ -0,0 +1 @@
++{"latitude":55.75,"longitude":37.61,"utc_offset_seconds":0,"timezone":"GMT","current_units":{"temperature_2m":"C"},"current":{"time":"2023-01-14T09:00","interval":900,"temperature_2m":-5.6}}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-weather.json b/exteraless/tests/chats/fixtures/extra-pills-weather.json
+new file mode 100644
+index 0000000..15de95d
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-weather.json
+@@ -0,0 +1 @@
++{"latitude":55.7817,"longitude":37.570797,"generationtime_ms":0.04374980926513672,"utc_offset_seconds":0,"timezone":"GMT","timezone_abbreviation":"GMT","elevation":141.0,"current_units":{"time":"iso8601","interval":"seconds","temperature_2m":"C"},"current":{"time":"2026-11-07T04:00","interval":900,"temperature_2m":23.4}}
 diff --git a/exteraless/tests/chats/fixtures/lrclib-broken.json b/exteraless/tests/chats/fixtures/lrclib-broken.json
 new file mode 100644
 index 0000000..c424619
@@ -26668,10 +27305,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..ac81b6a
+index 0000000..eff0d22
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7639 @@
+@@ -0,0 +1,7855 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -27526,7 +28163,7 @@ index 0000000..ac81b6a
 +            "backup pill keys",
 +            exported["pillstackconfig"] == {
 +                "OEPillStackEnabled": False,
-+                "OEPillStackPills": 255,
++                "OEPillStackPills": 0x3FFF,
 +                "OEPillStackOrder":
 +                    "cpu,ram,net,dc,proxy,cache,ghost,lastseen",
 +            },
@@ -28014,7 +28651,7 @@ index 0000000..ac81b6a
 +            "OEUnknown": True,
 +        },
 +        "pillstackconfig": {
-+            "OEPillStackPills": 300,
++            "OEPillStackPills": 0x4000,
 +            "futurePill": 1,
 +        },
 +        "mainconfig": {
@@ -28113,7 +28750,7 @@ index 0000000..ac81b6a
 +    for index, (name, proxy, pills) in enumerate([
 +            ("fractional", 6.5, 5.9),
 +            ("negative", -1, -1),
-+            ("too big", 8, 256)]):
++            ("too big", 8, 0x4000)]):
 +        env = make_env(work / f"backup-numeric-{index}")
 +        root = {
 +            "version": 1,
@@ -33065,6 +33702,220 @@ index 0000000..ac81b6a
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_extra_pills(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    def parse(domain, path, code=None):
++        arguments = ["extra-pills-parse", domain, str(path)]
++        if code is not None:
++            arguments.append(code)
++        result = run(cli, arguments)
++        if result.returncode != 0:
++            ledger.check(
++                f"extra pills {domain} {path.name}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(
++                f"extra pills {domain} {path.name}",
++                False,
++                f"json: {error}")
++            return None
++        text = payload.get("text")
++        if not isinstance(text, str):
++            ledger.check(
++                f"extra pills {domain} {path.name}", False, payload)
++            return None
++        ledger.check(f"extra pills {domain} {path.name}", True)
++        return text
++
++    weather = parse("weather", FIXTURES / "extra-pills-weather.json")
++    if weather is not None:
++        ledger.check(
++            "extra pills weather positive",
++            weather == "+23\u00b0",
++            weather)
++    cold = parse("weather", FIXTURES / "extra-pills-weather-negative.json")
++    if cold is not None:
++        ledger.check(
++            "extra pills weather negative",
++            cold == "-6\u00b0",
++            cold)
++
++    coin = parse("coinbase", FIXTURES / "extra-pills-coinbase.json")
++    if coin is not None:
++        ledger.check("extra pills coinbase spot", coin == "75789", coin)
++    small = parse("coinbase", FIXTURES / "extra-pills-coinbase-small.json")
++    if small is not None:
++        ledger.check("extra pills coinbase small", small == "0.52", small)
++
++    gold = parse("gold", FIXTURES / "extra-pills-gold.json")
++    if gold is not None:
++        ledger.check("extra pills gold price", gold == "4072", gold)
++
++    for domain, name in [
++            ("weather", "extra-pills-broken.json"),
++            ("coinbase", "extra-pills-broken.json"),
++            ("gold", "extra-pills-broken.json"),
++            ("weather", "extra-pills-empty.json"),
++            ("coinbase", "extra-pills-empty.json"),
++            ("gold", "extra-pills-empty.json")]:
++        text = parse(domain, FIXTURES / name)
++        if text is not None:
++            ledger.check(
++                f"extra pills {domain} {name} empty", text == "", text)
++
++    ecb = work / "extra-pills-ecb"
++    ecb.mkdir(parents=True, exist_ok=True)
++    envelope = (
++        "<?xml version='1.0' encoding='UTF-8'?>\n"
++        "<gesmes:Envelope"
++        " xmlns:gesmes='http://www.gesmes.org/xml/2002-08-01'"
++        " xmlns='http://www.ecb.int/vocabulary/2002-08-01/eurofxref'>\n"
++        "\t<Cube>\n"
++        "\t\t<Cube time='2026-11-06'>\n"
++        "%s"
++        "\t\t</Cube>\n"
++        "\t</Cube>\n"
++        "</gesmes:Envelope>\n")
++    with_rub = ecb / "with-rub.xml"
++    with_rub.write_text(
++        envelope % (
++            "\t\t\t<Cube currency='USD' rate='1.1165'/>\n"
++            "\t\t\t<Cube currency='RUB' rate='101.5'/>\n"),
++        encoding="utf-8")
++    no_rub = ecb / "no-rub.xml"
++    no_rub.write_text(
++        envelope % (
++            "\t\t\t<Cube currency='USD' rate='1.1165'/>\n"
++            "\t\t\t<Cube currency='JPY' rate='176.77'/>\n"),
++        encoding="utf-8")
++    broken_xml = ecb / "broken.xml"
++    broken_xml.write_text(
++        "<Cube currency='USD' rate='1.1165'>", encoding="utf-8")
++
++    usd = parse("ecb", with_rub, "USD")
++    if usd is not None:
++        ledger.check("extra pills ecb usd cross", usd == "90.91", usd)
++    eur = parse("ecb", with_rub, "EUR")
++    if eur is not None:
++        ledger.check("extra pills ecb eur rate", eur == "101.5", eur)
++    default_usd = parse("ecb", with_rub)
++    if default_usd is not None:
++        ledger.check(
++            "extra pills ecb default code usd",
++            default_usd == "90.91",
++            default_usd)
++    missing_rub = parse("ecb", no_rub, "USD")
++    if missing_rub is not None:
++        ledger.check(
++            "extra pills ecb without rub empty",
++            missing_rub == "",
++            missing_rub)
++    invalid_xml = parse("ecb", broken_xml, "USD")
++    if invalid_xml is not None:
++        ledger.check(
++            "extra pills ecb broken empty",
++            invalid_xml == "",
++            invalid_xml)
++
++    result = run(
++        cli,
++        ["extra-pills-parse", "weather", str(FIXTURES / "pills-missing.json")])
++    ledger.check(
++        "extra pills missing file",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++    result = run(
++        cli,
++        ["extra-pills-parse", "bogus",
++         str(FIXTURES / "extra-pills-weather.json")])
++    ledger.check(
++        "extra pills unknown domain",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    env = make_env(work / "extra-pills-mask-full")
++    data = json_call(
++        ledger, cli,
++        ["config-fromjson", json.dumps({
++            "version": 1,
++            "exteraconfig": {"OEPillStackPills": 0x3FFF},
++        })],
++        env, "extra pills mask config")
++    if data is not None:
++        ledger.check(
++            "extra pills mask accepted",
++            data.get("accepted") is True,
++            data.get("accepted"))
++    exported = json_call(
++        ledger, cli, ["backup-export-current"], env,
++        "extra pills mask export")
++    if exported is not None:
++        pills = exported.get("pillstackconfig") or {}
++        ledger.check(
++            "extra pills mask roundtrip",
++            pills.get("OEPillStackPills") == 0x3FFF,
++            pills)
++
++    subset = 0x100 | 0x200 | 0x800 | 0x2000
++    env = make_env(work / "extra-pills-mask-subset")
++    json_call(
++        ledger, cli,
++        ["config-fromjson", json.dumps({
++            "version": 1,
++            "exteraconfig": {"OEPillStackPills": subset},
++        })],
++        env, "extra pills mask subset config")
++    exported = json_call(
++        ledger, cli, ["backup-export-current"], env,
++        "extra pills mask subset export")
++    if exported is not None:
++        pills = exported.get("pillstackconfig") or {}
++        ledger.check(
++            "extra pills mask subset roundtrip",
++            pills.get("OEPillStackPills") == subset,
++            pills)
++
++    env = make_env(work / "extra-pills-mask-import")
++    data = json_call(
++        ledger, cli,
++        ["backup-import-json", json.dumps({
++            "version": 1,
++            "pillstackconfig": {"OEPillStackPills": 0x3FFF},
++        })],
++        env, "extra pills mask import")
++    if data is not None:
++        ledger.check(
++            "extra pills mask import applied",
++            data.get("applied") == 1 and data.get("unknown") == [],
++            data)
++    env = make_env(work / "extra-pills-mask-overflow")
++    data = json_call(
++        ledger, cli,
++        ["backup-import-json", json.dumps({
++            "version": 1,
++            "pillstackconfig": {"OEPillStackPills": 0x4000},
++        })],
++        env, "extra pills mask overflow")
++    if data is not None:
++        ledger.check(
++            "extra pills mask overflow rejected",
++            data.get("applied") == 0
++            and sorted(data.get("unknown") or [])
++            == ["pillstackconfig.OEPillStackPills"],
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_download_boost(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -34217,6 +35068,7 @@ index 0000000..ac81b6a
 +        subtitles = check_subtitles(ledger, cli, work)
 +        lyrics = check_lyrics(ledger, cli, work)
 +        lrclib = check_lrclib(ledger, cli, work)
++        extra_pills = check_extra_pills(ledger, cli, work)
 +        regex_filters = check_regex_filters(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
@@ -34298,6 +35150,7 @@ index 0000000..ac81b6a
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
 +    print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
 +    print(f"lrclib: {lrclib[0] - lrclib[1]} passed")
++    print(f"extra-pills: {extra_pills[0] - extra_pills[1]} passed")
 +    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:

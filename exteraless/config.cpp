@@ -212,9 +212,22 @@ const auto kDefaultMainMenuOrder = QStringLiteral(
 	"exteraless,ghost,pillstack,proxy,storage");
 
 const auto kDefaultPillStackOrder = QStringLiteral(
-	"cpu,ram,net,dc,proxy,cache,ghost,lastseen");
-const auto kPillStackOrderKeys = std::array<const char*, 8>{
-	"cpu", "ram", "net", "dc", "proxy", "cache", "ghost", "lastseen" };
+	"cpu,ram,net,dc,proxy,cache,ghost,lastseen,weather,btc,eth,usd,eur,gold");
+const auto kPillStackOrderKeys = std::array<const char*, 14>{
+	"cpu",
+	"ram",
+	"net",
+	"dc",
+	"proxy",
+	"cache",
+	"ghost",
+	"lastseen",
+	"weather",
+	"btc",
+	"eth",
+	"usd",
+	"eur",
+	"gold" };
 
 [[nodiscard]] QString SanitizePillStackOrder(const QString &value) {
 	auto accepted = QStringList();

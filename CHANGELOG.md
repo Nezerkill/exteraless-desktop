@@ -2,6 +2,29 @@
 
 ## 2026-11-07
 
+- Пилюли погоды, курсов и золота (NB-56): в `PillStack` шесть новых
+  `PillStackPill` — `Weather` (256), `Btc` (512), `Eth` (1024), `Usd` (2048),
+  `Eur` (4096) и `Gold` (8192), — поэтому `kPillStackAllPills` вырос с
+  `0xFF` до `0x3FFF` (`exteraless/config.h`). Сеть и разбор — Qt-only
+  `exteraless/extra_pills.{h,cpp}`: `WeatherApiUrl` (Open-Meteo, `current`),
+  `CoinbaseSpotUrl` (эндпоинт `prices/<код>-USD/spot`), `EcbDailyUrl` и `GoldApiUrl`;
+  парсеры `ParseWeather`, `ParseCoinbase` (код монеты проверяется на
+  `A-Z0-9`, мелкая сумма сохраняет знаки — `0.52`), `ParseEcbXml` +
+  `FormatFiatRate` (курс рубля из куба RUB, USD — кросс-курсом
+  `rubPerEur / usdPerEur`) и `ParseGoldApi`. `ExtraPills::Refresh`
+  обновляет все слоты не чаще раза в 30 минут, значения живут только в
+  памяти, а пустой ответ или ошибка сети дают прочерк `—`, поэтому сбой
+  провайдера не ломает полосу. В настройках шесть тумблеров и шесть
+  lang-ключей `lng_settings_exteraless_pill_{weather,btc,eth,usd,eur,gold}`;
+  CLI `extra-pills-parse <domain> <file> [code]` и семь фикстур,
+  `check_extra_pills` — 39 проверок; chats-раннер 1045 (1006 + 39), плагины
+  32 и host-раннер 252 без изменений, backup 105; `kKeysCount` 11241 (+6),
+  `kTagsCount` 185; sha256 патча `0156a54c…`, `nix flake check` PASS.
+  Не сделано: выбора города нет — координаты Москвы захардкожены
+  (`kDefaultLatitude`/`kDefaultLongitude`). Ограничения: ECB перестал
+  публиковать RUB, поэтому на живом endpoint куба RUB нет и fiat-пилюли
+  показывают прочерк (follow-up — XML ЦБ РФ); кэш только в памяти, после
+  рестарта прочерк до первого fetch; порядок пилюль санитизируется по 14 ключам (`SanitizePillStackOrder` расширен); Xvfb-смоук не выполнялся.
 - MD3-плеер, фаза 2 — онлайн-тексты lrclib.net (NB-50): Qt-only модуль
   `exteraless/lrclib.{h,cpp}` — `BuildSearchUrl`/`BuildGetUrl` (поиск по
   `artist`/`track`/`album`/`duration`) и разбор ответов

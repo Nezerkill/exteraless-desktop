@@ -13,6 +13,8 @@ add_library(exteraless STATIC
     doubletap.h
     exteraless.cpp
     exteraless.h
+    extra_pills.cpp
+    extra_pills.h
     format.cpp
     format.h
     ghost_schedule.cpp

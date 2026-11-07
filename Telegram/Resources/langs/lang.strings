@@ -9364,6 +9364,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_pill_cache" = "Cache";
 "lng_settings_exteraless_pill_ghost" = "Ghost Mode";
 "lng_settings_exteraless_pill_last_seen" = "Last seen";
+"lng_settings_exteraless_pill_weather" = "Weather";
+"lng_settings_exteraless_pill_btc" = "BTC";
+"lng_settings_exteraless_pill_eth" = "ETH";
+"lng_settings_exteraless_pill_usd" = "USD";
+"lng_settings_exteraless_pill_eur" = "EUR";
+"lng_settings_exteraless_pill_gold" = "Gold";
 "lng_settings_exteraless_pill_order_hint" = "Drag pills on the strip above the chat list to reorder them.";
 "lng_settings_exteraless_pill_order_reset" = "Reset pill order";
 "lng_settings_exteraless_pill_order_reset_done" = "Pill order reset.";

@@ -45,6 +45,12 @@ private:
 		Cache,
 		Ghost,
 		LastSeen,
+		Weather,
+		Btc,
+		Eth,
+		Usd,
+		Eur,
+		Gold,
 	};
 
 	struct Pill {

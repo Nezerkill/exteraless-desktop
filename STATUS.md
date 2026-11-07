@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1006 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1045 проверок PASS
   (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -114,8 +114,29 @@
   19 update-channel, 32 translation, 23 ai, 6 recognition, 17 network,
   10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 32 lyrics, 27 lrclib, 105 backup);
-  плагины без изменений — 32 и 213 проверок.
+  27 regex-filters, 32 lyrics, 27 lrclib, 39 extra-pills, 105 backup);
+  плагины без изменений — 32 и 252 проверок.
+- Пилюли погоды, курсов и золота (NB-56): в `PillStack` шесть новых
+  `PillStackPill` — `Weather` (256), `Btc` (512), `Eth` (1024), `Usd` (2048),
+  `Eur` (4096) и `Gold` (8192), — поэтому `kPillStackAllPills` вырос с
+  `0xFF` до `0x3FFF`. Сеть и разбор — Qt-only `exteraless/extra_pills.{h,cpp}`:
+  `WeatherApiUrl` (Open-Meteo, `current`), `CoinbaseSpotUrl` (эндпоинт
+  `prices/<код>-USD/spot`), `EcbDailyUrl`, `GoldApiUrl`; парсеры `ParseWeather`,
+  `ParseCoinbase`, `ParseEcbXml` + `FormatFiatRate` (рубль из куба RUB, USD —
+  кросс-курсом `rubPerEur / usdPerEur`) и `ParseGoldApi`. `ExtraPills::Refresh`
+  обновляет слоты не чаще раза в 30 минут, держит значения в памяти и отдаёт
+  прочерк `—` на пустом ответе или ошибке сети, поэтому сбой провайдера не
+  ломает полосу. Шесть тумблеров и шесть lang-ключей
+  `lng_settings_exteraless_pill_{weather,btc,eth,usd,eur,gold}`; CLI
+  `extra-pills-parse <domain> <file> [code]`, семь фикстур, `check_extra_pills` —
+  39 проверок; chats-раннер 1045 (1006 + 39), плагины 32 и host-раннер 252
+  без изменений, backup 105; `kKeysCount` 11241 (+6), `kTagsCount` 185;
+  sha256 патча `0156a54c…`, `nix flake check` PASS. Не сделано: выбор города —
+  координаты Москвы захардкожены. Ограничения: ECB больше не публикует RUB,
+  поэтому fiat-пилюли на живом endpoint показывают прочерк (follow-up — XML
+  ЦБ РФ); кэш только в памяти, после рестарта прочерк до первого fetch;
+  порядок пилюль санитизируется по 14 ключам (`SanitizePillStackOrder` расширен);
+  Xvfb-смоук не выполнялся.
 - MD3-плеер, фаза 2 — онлайн-тексты lrclib.net (NB-50): Qt-only
   `exteraless/lrclib.{h,cpp}` — `BuildSearchUrl`/`BuildGetUrl` и разбор
   `ParseSearch`/`ParseGet` (id, track, artist, `hasSynced`; у текста

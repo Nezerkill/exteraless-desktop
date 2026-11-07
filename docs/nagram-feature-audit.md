@@ -147,7 +147,7 @@ A–F. Это одно и то же деление, и ниже использу
 | 10 | Strip tracking on open | `OEChatsStripTrackingOnOpen` | `exteraless/links.cpp`, `core/ui_integration.cpp` (`handleUrlClick`) | ✅ |
 | 11 | Strip tracking on paste | `OEChatsStripTrackingOnPaste` | `exteraless/links.cpp`, `chat_helpers/message_field.cpp` | ✅ (plain-text/URL, лимит 4096) |
 | 12 | Compact unread label | `OEChatsUnreadCapsule` | `history/view/history_view_element.cpp` (`UnreadBar::paint`), стили в `ui/chat/chat.style` | ✅ |
-| 13 | Pill Stack (8 пилюль) | `OEPillStackEnabled`, `OEPillStackPills` | `Telegram/SourceFiles/exteraless/pill_stack.{h,cpp}`, `dialogs/dialogs_widget.cpp` | ✅ (CPU/RAM/Net/DC/Proxy/Cache/Ghost/LastSeen; метрики ОС — Linux) |
+| 13 | Pill Stack (14 пилюль) | `OEPillStackEnabled`, `OEPillStackPills` | `Telegram/SourceFiles/exteraless/pill_stack.{h,cpp}`, `exteraless/extra_pills.{h,cpp}`, `dialogs/dialogs_widget.cpp` | ✅ (CPU/RAM/Net/DC/Proxy/Cache/Ghost/LastSeen; метрики ОС — Linux; погода и курсы/золото — NB-56) |
 | 14 | Drawer: аккаунты, бейджи, порядок | `OEDrawerAccountsExpanded`, `OEMainMenuOrder` | `window/window_main_menu.cpp`, `settings/sections/settings_information.cpp` (`AccountsOptions`) | ✅ |
 | 15 | Plugins stage 1+2 | `OEPluginStates` | `exteraless/plugins/scanner.cpp`, `Telegram/SourceFiles/exteraless/{plugin_runtime,plugins_box}.{h,cpp}` | ✅ по раннерам, ограничения — в `docs/feature-mapping.md` |
 | 16 | `.extera` backup | — | `exteraless/backup.cpp` (25 ключей в трёх секциях, invisible-Unicode envelope) | ✅ 25 из 25 desktop-ключей |
@@ -374,7 +374,7 @@ Telegram-редактора, саммари. Ограничения: ключ л
 
 ### 6.11 Pill Stack
 
-15 типов пилюль в Android против 8 в desktop.
+15 типов пилюль в Android против 14 в desktop.
 
 | Тип | Android id | Desktop |
 |---|---|---|
@@ -385,14 +385,16 @@ Telegram-редактора, саммари. Ограничения: ключ л
 | Кэш | `CACHE(5)` | ✅ |
 | Ghost | `GHOST(7)` | ✅ |
 | Мой статус | `LAST_SEEN(15)` | ✅ |
-| Погода | `WEATHER(1)` | ❌ (нужен провайдер, кэш, геолокация) |
+| Погода | `WEATHER(1)` | ✅ NB-56, с оговоркой: `ExtraPills::Refresh` (`exteraless/extra_pills.{h,cpp}`) тянет Open-Meteo `current=temperature_2m` и троттлится 30 минутами, кэш только в памяти, пустой ответ и ошибка сети дают прочерк; координаты Москвы захардкожены — выбора города (аналог геолокации Android) нет |
 | Telegram-подписки («gram») | `GRAM(2)` | ❌ |
-| BTC / USD / EUR / ETH / GOLD | `BTC(3)`, `USD(4)`, `EUR(14)`, `ETH(13)`, `GOLD(12)` | ❌ (сетевые курсы) |
-| Настройка видимых и порядок | `PillStackPillsSettingsInfo`, `savePillsLayout` | 🟡 видимость есть (`OEPillStackPills`, маска 8 бит), drag-порядка нет |
+| BTC / USD / EUR / ETH / GOLD | `BTC(3)`, `USD(4)`, `EUR(14)`, `ETH(13)`, `GOLD(12)` | ✅ NB-56, с оговоркой по fiat: BTC/ETH — Coinbase spot (`CoinbaseSpotUrl`), золото — `GoldApiUrl`/`ParseGoldApi`; USD/EUR — ECB XML (`EcbDailyUrl`, `ParseEcbXml` + `FormatFiatRate`: рубль из куба RUB, USD кросс-курсом `rubPerEur / usdPerEur`). ECB больше не публикует RUB, поэтому на живом endpoint fiat-пилюли показывают прочерк (follow-up — XML ЦБ РФ); кэш только в памяти |
+| Настройка видимых и порядок | `PillStackPillsSettingsInfo`, `savePillsLayout` | 🟡 видимость есть (`OEPillStackPills`, маска 14 бит после NB-56); drag пишет `OEPillStackOrder`, `SanitizePillStackOrder` (`exteraless/config.cpp`) знает все 14 ключей (расширен в NB-56) |
 | Бесконечная прокрутка, сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | ❌ |
 
-Ограничение: маска видимости — 8 бит, поэтому новые типы пилюль требуют
-расширения хранения (`exteraless/config.h`), а не просто нового `enum`.
+Ограничение: маска видимости — 14 бит (`kPillStackAllPills` = `0x3FFF`,
+шесть новых типов после NB-56); следующий тип пилюли снова требует правки
+хранения в `exteraless/config.h`, а не только нового `enum`. Список ключей
+`OEPillStackOrder` пока покрывает восемь старых пилюль.
 
 ### 6.12 Drawer и навигация
 

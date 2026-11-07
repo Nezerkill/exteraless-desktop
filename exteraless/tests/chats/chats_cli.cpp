@@ -5,6 +5,7 @@
 #include "exteraless/deleted_entry.h"
 #include "exteraless/deleted_messages_trim.h"
 #include "exteraless/doubletap.h"
+#include "exteraless/extra_pills.h"
 #include "exteraless/format.h"
 #include "exteraless/ghost_schedule.h"
 #include "exteraless/ghost_status.h"
@@ -80,6 +81,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli pillorder\n"
 		<< "  exteraless-chats-cli pillorder-set <csv>\n"
 		<< "  exteraless-chats-cli pillorder-reset\n"
+		<< "  exteraless-chats-cli extra-pills-parse <domain> <file> "
+		<< "[<code>]\n"
 		<< "  exteraless-chats-cli ghost\n"
 		<< "  exteraless-chats-cli ghost-set <0|1>\n"
 		<< "  exteraless-chats-cli ghost-flags <read> <stories> <online> "
@@ -3103,6 +3106,37 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("ok"), lyrics.ok },
 			{ QStringLiteral("synced"), lyrics.synced },
 			{ QStringLiteral("text"), lyrics.text },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("extra-pills-parse")) {
+		if (arguments.size() != 4 && arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[3], &bytes)) {
+			return PrintUsage();
+		}
+		const auto domain = arguments[2];
+		const auto code = (arguments.size() == 5)
+			? arguments[4]
+			: QString();
+		auto text = QString();
+		if (domain == QStringLiteral("weather")) {
+			text = Exteraless::ParseWeather(bytes);
+		} else if (domain == QStringLiteral("coinbase")) {
+			text = Exteraless::ParseCoinbase(bytes);
+		} else if (domain == QStringLiteral("ecb")) {
+			text = Exteraless::FormatFiatRate(
+				Exteraless::ParseEcbXml(bytes),
+				code.isEmpty() ? QStringLiteral("USD") : code);
+		} else if (domain == QStringLiteral("gold")) {
+			text = Exteraless::ParseGoldApi(bytes);
+		} else {
+			return PrintUsage();
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("text"), text },
 		});
 		return 0;
 	}
