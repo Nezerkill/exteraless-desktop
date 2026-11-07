@@ -846,7 +846,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 135,
+            len(section) == 138,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -867,7 +867,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 140,
+            sum(len(value) for value in exported.values()) == 143,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -887,7 +887,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 140,
+                data.get("applied") == 143,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -1056,6 +1056,11 @@ def check_backup(ledger, cli, work):
             "OETranslationDeepLFormality": 1,
             "OEAiEndpoint": "https://full.test/v1",
             "OEAiModel": "full-model",
+            "OEAiRoles": json.dumps([
+                {"name": "translator", "prompt": "Translate."},
+            ]),
+            "OEAiActiveRole": "translator",
+            "OEAiHistory": False,
             "OEGeneralRecognitionLanguage": "de",
             "OENetworkUseIPv6": True,
             "OENetworkDnsType": 1,
@@ -1081,7 +1086,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 140,
+            data.get("applied") == 143,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1404,10 +1409,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 135",
+            "backup legacy eight completed to 138",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (135, 3, 2),
+             len(sections["mainconfig"])) == (138, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -7631,6 +7636,182 @@ def check_ai_stream(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_ai_roles(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    roles = json.loads(
+        (FIXTURES / "ai-roles.json").read_text(encoding="utf-8"))
+    encoded_roles = json.dumps(roles)
+
+    env = make_env(work / "ai-roles-defaults")
+    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles defaults")
+    if data is not None:
+        ledger.check("ai roles default empty", data.get("roles") == [], data)
+    data = json_call(ledger, cli, ["ai-role"], env, "ai role defaults")
+    if data is not None:
+        ledger.check(
+            "ai role default none",
+            data.get("name") == ""
+            and data.get("found") is False
+            and data.get("prompt") == "",
+            data)
+    data = json_call(ledger, cli, ["ai-history"], env, "ai history default")
+    if data is not None:
+        ledger.check(
+            "ai history default enabled",
+            data.get("enabled") is True,
+            data)
+
+    data = json_call(
+        ledger, cli, ["ai-roles-set", encoded_roles], env, "ai roles set")
+    if data is not None:
+        ledger.check(
+            "ai roles set stored", data.get("roles") == roles, data)
+    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles reload")
+    if data is not None:
+        ledger.check("ai roles persisted", data.get("roles") == roles, data)
+
+    data = json_call(
+        ledger, cli, ["ai-role", roles[1]["name"]], env, "ai role by name")
+    if data is not None:
+        ledger.check(
+            "ai role by name prompt",
+            data.get("found") is True
+            and data.get("prompt") == roles[1]["prompt"],
+            data)
+
+    data = json_call(
+        ledger, cli, ["ai-role-set", roles[0]["name"]], env, "ai role set")
+    if data is not None:
+        ledger.check(
+            "ai role set active",
+            data.get("name") == roles[0]["name"]
+            and data.get("found") is True
+            and data.get("prompt") == roles[0]["prompt"],
+            data)
+    data = json_call(ledger, cli, ["ai-role"], env, "ai role reload")
+    if data is not None:
+        ledger.check(
+            "ai role persisted",
+            data.get("name") == roles[0]["name"]
+            and data.get("found") is True,
+            data)
+
+    data = json_call(
+        ledger, cli, ["ai-role-set", "missing"], env, "ai role set unknown")
+    if data is not None:
+        ledger.check(
+            "ai role unknown not found",
+            data.get("name") == "missing" and data.get("found") is False,
+            data)
+
+    for name, arguments in [
+            ("ai roles-set invalid json", ["ai-roles-set", "{"]),
+            ("ai roles-set not array", ["ai-roles-set", '{"name":"a"}']),
+            ("ai roles-set bad role", ["ai-roles-set", '[{"name":1}]']),
+            ("ai roles-set too many", ["ai-roles-set", json.dumps(
+                [{"name": f"r{i}", "prompt": "p"} for i in range(33)])]),
+            ("ai roles-set prompt too long", ["ai-roles-set", json.dumps(
+                [{"name": "long", "prompt": "x" * 4097}])]),
+            ("ai roles-set without value", ["ai-roles-set"]),
+            ("ai history-set invalid", ["ai-history-set", "2"])]:
+        result = run(cli, arguments, env=env)
+        ledger.check(
+            f"cli {name}",
+            result.returncode == 2 and bool(result.stderr.strip()),
+            f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    data = json_call(
+        ledger, cli, ["ai-roles"], env, "ai roles after invalid")
+    if data is not None:
+        ledger.check(
+            "ai roles invalid not stored", data.get("roles") == roles, data)
+
+    data = json_call(ledger, cli, ["ai-history-set", "0"], env,
+                     "ai history off")
+    if data is not None:
+        ledger.check("ai history set off", data.get("enabled") is False, data)
+    data = json_call(ledger, cli, ["ai-history"], env, "ai history reload")
+    if data is not None:
+        ledger.check(
+            "ai history persisted", data.get("enabled") is False, data)
+    data = json_call(ledger, cli, ["ai-history-set", "1"], env,
+                     "ai history on")
+    if data is not None:
+        ledger.check("ai history set on", data.get("enabled") is True, data)
+
+    data = json_call(
+        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"],
+        env, "ai roles export")
+    if data is not None:
+        section = backup_sections(data)["exteraconfig"]
+        ledger.check(
+            "ai roles export keys",
+            section.get("OEAiRoles") == encoded_roles
+            and section.get("OEAiActiveRole") == "missing"
+            and section.get("OEAiHistory") is True,
+            (section.get("OEAiRoles"),
+             section.get("OEAiActiveRole"),
+             section.get("OEAiHistory")))
+
+    env = make_env(work / "ai-roles-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "aiRoles": encoded_roles,
+            "aiActiveRole": roles[0]["name"],
+            "aiHistory": False,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ai roles alias import")
+    if data is not None:
+        ledger.check(
+            "ai roles alias applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles alias reload")
+    if data is not None:
+        ledger.check(
+            "ai roles alias roles", data.get("roles") == roles, data)
+    data = json_call(ledger, cli, ["ai-role"], env, "ai role alias reload")
+    if data is not None:
+        ledger.check(
+            "ai role alias active",
+            data.get("name") == roles[0]["name"]
+            and data.get("found") is True,
+            data)
+    data = json_call(
+        ledger, cli, ["ai-history"], env, "ai history alias reload")
+    if data is not None:
+        ledger.check(
+            "ai history alias off", data.get("enabled") is False, data)
+
+    env = make_env(work / "ai-roles-bad-alias")
+    root = {
+        "version": 1,
+        "exteraconfig": {
+            "aiRoles": '[{"name":1}]',
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(root)], env,
+        "ai roles bad alias import")
+    if data is not None:
+        ledger.check(
+            "ai roles bad alias rejected",
+            data.get("ok") is True
+            and data.get("applied") == 0
+            and data.get("unknown") == ["aiRoles"],
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_recognition(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -7909,6 +8090,7 @@ def main():
         translation = check_translation(ledger, cli, work)
         ai = check_ai(ledger, cli, work)
         ai_stream = check_ai_stream(ledger, cli, work)
+        ai_roles = check_ai_roles(ledger, cli, work)
         recognition = check_recognition(ledger, cli, work)
         network = check_network(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
@@ -7992,6 +8174,7 @@ def main():
     print(f"translation: {translation[0] - translation[1]} passed")
     print(f"ai: {ai[0] - ai[1]} passed")
     print(f"ai-stream: {ai_stream[0] - ai_stream[1]} passed")
+    print(f"ai-roles: {ai_roles[0] - ai_roles[1]} passed")
     print(f"recognition: {recognition[0] - recognition[1]} passed")
     print(f"network: {network[0] - network[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")

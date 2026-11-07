@@ -333,6 +333,12 @@ public:
 	void setAiModel(const QString &value);
 	[[nodiscard]] QString aiApiKey() const;
 	void setAiApiKey(const QString &value);
+	[[nodiscard]] QString aiRoles() const;
+	void setAiRoles(const QString &value);
+	[[nodiscard]] QString aiActiveRole() const;
+	void setAiActiveRole(const QString &value);
+	[[nodiscard]] bool aiHistory() const;
+	void setAiHistory(bool value);
 
 	[[nodiscard]] QString recognitionLanguage() const;
 	void setRecognitionLanguage(const QString &value);

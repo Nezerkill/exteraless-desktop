@@ -198,6 +198,12 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli ai-config-set-endpoint <url>\n"
 		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
 		<< "  exteraless-chats-cli ai-config-set-key <key>\n"
+		<< "  exteraless-chats-cli ai-roles\n"
+		<< "  exteraless-chats-cli ai-roles-set <json>\n"
+		<< "  exteraless-chats-cli ai-role [<name>]\n"
+		<< "  exteraless-chats-cli ai-role-set <name>\n"
+		<< "  exteraless-chats-cli ai-history\n"
+		<< "  exteraless-chats-cli ai-history-set <0|1>\n"
 		<< "  exteraless-chats-cli ai-request-json <prompt>\n"
 		<< "  exteraless-chats-cli ai-stream-parse <file>\n"
 		<< "  exteraless-chats-cli ai-stream-chunk <file> <bytes>\n"
@@ -391,6 +397,49 @@ void PrintAiConfig() {
 		{ QStringLiteral("endpoint"), config.aiEndpoint() },
 		{ QStringLiteral("model"), config.aiModel() },
 		{ QStringLiteral("hasKey"), !config.aiApiKey().isEmpty() },
+	});
+}
+
+[[nodiscard]] QJsonArray AiRolesArray() {
+	auto result = QJsonArray();
+	for (const auto &role : Exteraless::ParseAiRoles(
+			Exteraless::Config::Instance().aiRoles())) {
+		result.append(QJsonObject{
+			{ QStringLiteral("name"), role.title },
+			{ QStringLiteral("prompt"), role.system },
+		});
+	}
+	return result;
+}
+
+void PrintAiRoles() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("roles"), AiRolesArray() },
+	});
+}
+
+void PrintAiRole(const QString &name) {
+	auto prompt = QString();
+	auto found = false;
+	for (const auto &role : Exteraless::ParseAiRoles(
+			Exteraless::Config::Instance().aiRoles())) {
+		if (role.title == name) {
+			prompt = role.system;
+			found = true;
+			break;
+		}
+	}
+	PrintJson(QJsonObject{
+		{ QStringLiteral("name"), name },
+		{ QStringLiteral("found"), found },
+		{ QStringLiteral("prompt"), prompt },
+	});
+}
+
+void PrintAiHistory() {
+	PrintJson(QJsonObject{
+		{ QStringLiteral("enabled"),
+			Exteraless::Config::Instance().aiHistory() },
 	});
 }
 
@@ -1842,6 +1891,58 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setAiApiKey(arguments[2]);
 		PrintAiConfig();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-roles")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintAiRoles();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-roles-set")) {
+		if (arguments.size() != 3
+			|| !Exteraless::IsValidAiRolesJson(arguments[2])) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiRoles(arguments[2]);
+		PrintAiRoles();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-role")) {
+		if (arguments.size() < 2 || arguments.size() > 3) {
+			return PrintUsage();
+		}
+		PrintAiRole((arguments.size() == 3)
+			? arguments[2]
+			: Exteraless::Config::Instance().aiActiveRole());
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-role-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiActiveRole(arguments[2]);
+		PrintAiRole(Exteraless::Config::Instance().aiActiveRole());
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-history")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintAiHistory();
+		return 0;
+	}
+	if (mode == QStringLiteral("ai-history-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto enabled = false;
+		if (!ReadFlag(arguments[2], &enabled)) {
+			return PrintUsage();
+		}
+		Exteraless::Config::Instance().setAiHistory(enabled);
+		PrintAiHistory();
 		return 0;
 	}
 	if (mode == QStringLiteral("ai-request-json")) {

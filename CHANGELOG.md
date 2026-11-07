@@ -2,6 +2,16 @@
 
 ## 2026-11-07
 
+- Роли и история диалога AI-ассистента (NB-48, follow-up): `OEAiRoles`
+  (JSON `[{"name","prompt"}]`, ≤32, prompt ≤4KiB), `OEAiActiveRole`,
+  `OEAiHistory` (default true) + алиасы; `ParseAiRoles` с валидацией,
+  перегрузка `BuildRequestJson` (system+history, старая делегирует);
+  в боксе радиоселектор роли (+ No role), in-memory turns (cap 20),
+  кнопка Clear; CLI 6 режимов + фикстура; `check_ai_roles` — 26 проверок,
+  раннеры 1096/32/252 PASS; `kKeysCount` без изменений (11241); патч
+  `c858e748…`, `nix flake check` PASS. Не сделано: замена редактора,
+  саммари. Ограничения: история только in-memory (рестарт бокса теряет
+  контекст); Xvfb-смоук не выполнялся.
 - Пилюли курсов из ЦБ РФ (NB-56, follow-up): Qt-only
   `exteraless/extra_pills.{h,cpp}` получил `CbrDailyUrl`
   (`https://www.cbr.ru/scripts/XML_daily.asp`) и `ParseCbrXml` — разбирает

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "translator",
+    "prompt": "Translate the user message into English."
+  },
+  {
+    "name": "summarizer",
+    "prompt": "Summarize the user message in one sentence."
+  }
+]

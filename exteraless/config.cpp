@@ -1,5 +1,6 @@
 #include "exteraless/config.h"
 
+#include "exteraless/ai_client.h"
 #include "exteraless/doubletap.h"
 
 #include <QDir>
@@ -185,6 +186,9 @@ constexpr auto kTranslationDeepLFormality = "OETranslationDeepLFormality";
 constexpr auto kAiEndpoint = "OEAiEndpoint";
 constexpr auto kAiModel = "OEAiModel";
 constexpr auto kAiApiKey = "OEAiApiKey";
+constexpr auto kAiRoles = "OEAiRoles";
+constexpr auto kAiActiveRole = "OEAiActiveRole";
+constexpr auto kAiHistory = "OEAiHistory";
 constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
 
 [[nodiscard]] constexpr bool DefaultNetworkUseIPv6() {
@@ -1517,6 +1521,34 @@ void Config::setAiApiKey(const QString &value) {
 	setValue(kAiApiKey, value);
 }
 
+QString Config::aiRoles() const {
+	const auto value = stringValue(kAiRoles, QString());
+	return IsValidAiRolesJson(value) ? value : QStringLiteral("[]");
+}
+
+void Config::setAiRoles(const QString &value) {
+	if (!IsValidAiRolesJson(value)) {
+		return;
+	}
+	setValue(kAiRoles, value);
+}
+
+QString Config::aiActiveRole() const {
+	return stringValue(kAiActiveRole, QString()).trimmed();
+}
+
+void Config::setAiActiveRole(const QString &value) {
+	setValue(kAiActiveRole, value.trimmed());
+}
+
+bool Config::aiHistory() const {
+	return boolValue(kAiHistory, true);
+}
+
+void Config::setAiHistory(bool value) {
+	setValue(kAiHistory, value);
+}
+
 QString Config::recognitionLanguage() const {
 	return SanitizeRecognitionLanguage(
 		stringValue(kGeneralRecognitionLanguage, QString()));
@@ -1740,6 +1772,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kAiEndpoint
 			|| key == kAiModel
 			|| key == kAiApiKey
+			|| key == kAiRoles
+			|| key == kAiActiveRole
+			|| key == kAiHistory
 			|| key == kGeneralRecognitionLanguage) {
 			accepted.insert(key, i.value());
 		} else if (unknown) {
@@ -1757,6 +1792,20 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 	}
 	SanitizeExclusions(&accepted, kGhostReadExclusions);
 	SanitizeExclusions(&accepted, kGhostTypingExclusions);
+	if (accepted.contains(kAiRoles)
+		&& (!accepted.value(kAiRoles).isString()
+			|| !IsValidAiRolesJson(
+				accepted.value(kAiRoles).toString()))) {
+		accepted.remove(kAiRoles);
+	}
+	if (accepted.contains(kAiActiveRole)
+		&& !accepted.value(kAiActiveRole).isString()) {
+		accepted.remove(kAiActiveRole);
+	}
+	if (accepted.contains(kAiHistory)
+		&& !accepted.value(kAiHistory).isBool()) {
+		accepted.remove(kAiHistory);
+	}
 	if (const auto order = accepted.value(kPillStackOrder); order.isString()) {
 		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
 	} else if (accepted.contains(kPillStackOrder)) {

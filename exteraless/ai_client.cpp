@@ -6,6 +6,8 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 
+#include <utility>
+
 namespace Exteraless {
 namespace {
 
@@ -31,6 +33,52 @@ namespace {
 	return message.isEmpty()
 		? object.value(QStringLiteral("type")).toString()
 		: message;
+}
+
+constexpr auto kMaxAiRoles = 32;
+constexpr auto kMaxAiRolePromptBytes = 4096;
+
+[[nodiscard]] bool ValidAiRole(const QJsonValue &value, AiRole *role) {
+	if (!value.isObject()) {
+		return false;
+	}
+	const auto object = value.toObject();
+	const auto name = object.value(QStringLiteral("name"));
+	const auto prompt = object.value(QStringLiteral("prompt"));
+	if (!name.isString() || name.toString().trimmed().isEmpty()) {
+		return false;
+	}
+	if (!prompt.isString()
+		|| prompt.toString().toUtf8().size() > kMaxAiRolePromptBytes) {
+		return false;
+	}
+	*role = AiRole{ name.toString(), prompt.toString() };
+	return true;
+}
+
+[[nodiscard]] bool ParseAiRolesInto(
+		const QByteArray &json,
+		AiRoles *roles) {
+	auto error = QJsonParseError();
+	const auto document = QJsonDocument::fromJson(json, &error);
+	if (error.error != QJsonParseError::NoError || !document.isArray()) {
+		return false;
+	}
+	const auto array = document.array();
+	if (array.size() > kMaxAiRoles) {
+		return false;
+	}
+	auto result = AiRoles();
+	result.reserve(size_t(array.size()));
+	for (const auto &value : array) {
+		auto role = AiRole();
+		if (!ValidAiRole(value, &role)) {
+			return false;
+		}
+		result.push_back(std::move(role));
+	}
+	*roles = std::move(result);
+	return true;
 }
 
 const auto kDataPrefix = QByteArrayLiteral("data:");
@@ -80,20 +128,58 @@ QString ChatCompletionsUrl(const QString &endpoint) {
 	return result.endsWith(kPath) ? result : (result + kPath);
 }
 
+AiRoles ParseAiRoles(const QByteArray &json) {
+	auto roles = AiRoles();
+	if (!ParseAiRolesInto(json, &roles)) {
+		return AiRoles();
+	}
+	return roles;
+}
+
+AiRoles ParseAiRoles(const QString &json) {
+	return ParseAiRoles(json.toUtf8());
+}
+
+bool IsValidAiRolesJson(const QByteArray &json) {
+	auto roles = AiRoles();
+	return ParseAiRolesInto(json, &roles);
+}
+
+bool IsValidAiRolesJson(const QString &json) {
+	return IsValidAiRolesJson(json.toUtf8());
+}
+
 QByteArray BuildRequestJson(
 		const QString &endpoint,
 		const QString &model,
-		const AiRequest &request) {
+		const QString &prompt,
+		const QString &system,
+		const QList<QPair<QString, QString>> &history) {
 	auto messages = QJsonArray();
-	if (!request.system.isEmpty()) {
+	if (!system.isEmpty()) {
 		messages.append(QJsonObject{
 			{ QStringLiteral("role"), QStringLiteral("system") },
-			{ QStringLiteral("content"), request.system },
+			{ QStringLiteral("content"), system },
+		});
+	}
+	for (const auto &entry : history) {
+		const auto role = entry.first.trimmed().toLower();
+		if (role != QStringLiteral("user")
+			&& role != QStringLiteral("assistant")
+			&& role != QStringLiteral("system")) {
+			continue;
+		}
+		if (entry.second.isEmpty()) {
+			continue;
+		}
+		messages.append(QJsonObject{
+			{ QStringLiteral("role"), role },
+			{ QStringLiteral("content"), entry.second },
 		});
 	}
 	messages.append(QJsonObject{
 		{ QStringLiteral("role"), QStringLiteral("user") },
-		{ QStringLiteral("content"), request.prompt },
+		{ QStringLiteral("content"), prompt },
 	});
 	const auto root = QJsonObject{
 		{ QStringLiteral("model"), model },
@@ -101,6 +187,18 @@ QByteArray BuildRequestJson(
 		{ QStringLiteral("stream"), false },
 	};
 	return QJsonDocument(root).toJson(QJsonDocument::Compact);
+}
+
+QByteArray BuildRequestJson(
+		const QString &endpoint,
+		const QString &model,
+		const AiRequest &request) {
+	return BuildRequestJson(
+		endpoint,
+		model,
+		request.prompt,
+		request.system,
+		QList<QPair<QString, QString>>());
 }
 
 AiResponse ParseResponse(const QByteArray &body) {

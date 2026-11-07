@@ -1,5 +1,6 @@
 #include "exteraless/backup.h"
 
+#include "exteraless/ai_client.h"
 #include "exteraless/config.h"
 
 #include <QJsonDocument>
@@ -304,9 +305,15 @@ constexpr auto kTranslationDeepLFormalityAlias = "deepLFormality";
 constexpr auto kAiEndpoint = "OEAiEndpoint";
 constexpr auto kAiModel = "OEAiModel";
 constexpr auto kAiApiKey = "OEAiApiKey";
+constexpr auto kAiRoles = "OEAiRoles";
+constexpr auto kAiActiveRole = "OEAiActiveRole";
+constexpr auto kAiHistory = "OEAiHistory";
 constexpr auto kAiEndpointAlias = "aiEndpoint";
 constexpr auto kAiModelAlias = "aiModel";
 constexpr auto kAiApiKeyAlias = "aiApiKey";
+constexpr auto kAiRolesAlias = "aiRoles";
+constexpr auto kAiActiveRoleAlias = "aiActiveRole";
+constexpr auto kAiHistoryAlias = "aiHistory";
 constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
 constexpr auto kRecognitionLanguageAlias = "recognitionLanguage";
 
@@ -583,6 +590,9 @@ QString BuildBackup() {
 	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 	extera[kAiEndpoint] = config.aiEndpoint();
 	extera[kAiModel] = config.aiModel();
+	extera[kAiRoles] = config.aiRoles();
+	extera[kAiActiveRole] = config.aiActiveRole();
+	extera[kAiHistory] = config.aiHistory();
 	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 
 	auto pills = QJsonObject();
@@ -1227,6 +1237,16 @@ BackupImportResult ApplyBackup(const QString &text) {
 			&& value.isString()) {
 			// WHY: old backups carry the secret; import accepts, export omits.
 			config.setAiApiKey(value.toString());
+		} else if ((key == kAiRoles || key == kAiRolesAlias)
+			&& value.isString()
+			&& IsValidAiRolesJson(value.toString())) {
+			config.setAiRoles(value.toString());
+		} else if ((key == kAiActiveRole || key == kAiActiveRoleAlias)
+			&& value.isString()) {
+			config.setAiActiveRole(value.toString());
+		} else if ((key == kAiHistory || key == kAiHistoryAlias)
+			&& value.isBool()) {
+			config.setAiHistory(value.toBool());
 		} else if ((key == kGeneralRecognitionLanguage
 			|| key == kRecognitionLanguageAlias)
 			&& value.isString()

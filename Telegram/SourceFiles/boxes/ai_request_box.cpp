@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/layers/generic_box.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
+#include "ui/widgets/checkbox.h"
 #include "ui/widgets/fields/input_field.h"
 #include "ui/widgets/labels.h"
 #include "ui/wrap/vertical_layout.h"
@@ -21,6 +22,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QList>
+#include <QtCore/QPair>
 #include <QtCore/QPointer>
 #include <QtCore/QUrl>
 #include <QtGui/QClipboard>
@@ -30,6 +33,51 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <QtNetwork/QNetworkRequest>
 
 #include <rpl/rpl.h>
+
+#include <memory>
+#include <vector>
+
+namespace {
+
+constexpr auto kMaxTurns = 20;
+
+[[nodiscard]] std::vector<Exteraless::AiRole> AvailableRoles() {
+	return Exteraless::ParseAiRoles(
+		Exteraless::Config::Instance().aiRoles());
+}
+
+[[nodiscard]] QString RoleTitle(const Exteraless::AiRole &role) {
+	return role.title;
+}
+
+[[nodiscard]] QString RoleSystem(const Exteraless::AiRole &role) {
+	return role.system;
+}
+
+[[nodiscard]] QString ActiveRole() {
+	return Exteraless::Config::Instance().aiActiveRole();
+}
+
+void SetActiveRole(const QString &value) {
+	Exteraless::Config::Instance().setAiActiveRole(value);
+}
+
+[[nodiscard]] bool HistoryEnabled() {
+	return Exteraless::Config::Instance().aiHistory();
+}
+
+[[nodiscard]] QString ActiveRoleSystem(
+		const std::vector<Exteraless::AiRole> &roles,
+		const QString &active) {
+	for (const auto &role : roles) {
+		if (RoleTitle(role) == active) {
+			return RoleSystem(role);
+		}
+	}
+	return QString();
+}
+
+} // namespace
 
 namespace Ui {
 
@@ -43,6 +91,7 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		QPointer<RoundButton> sendButton;
 		QString answer;
 		QByteArray raw;
+		QList<QPair<QString, QString>> turns;
 		rpl::variable<QString> response;
 		QNetworkReply *reply = nullptr;
 		bool busy = false;
@@ -67,6 +116,39 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 
 	const auto layout = box->verticalLayout();
 	Ui::AddSkip(layout);
+
+	const auto roles = AvailableRoles();
+	const auto activeRole = ActiveRole();
+	if (!roles.empty()) {
+		auto initial = int(roles.size());
+		for (auto i = 0; i != int(roles.size()); ++i) {
+			if (RoleTitle(roles[i]) == activeRole) {
+				initial = i;
+				break;
+			}
+		}
+		const auto group = std::make_shared<Ui::RadiobuttonGroup>(initial);
+		for (auto i = 0; i != int(roles.size()); ++i) {
+			box->addRow(object_ptr<Ui::Radiobutton>(
+				box,
+				group,
+				i,
+				RoleTitle(roles[i]),
+				st::defaultBoxCheckbox), st::boxRowPadding);
+		}
+		box->addRow(object_ptr<Ui::Radiobutton>(
+			box,
+			group,
+			int(roles.size()),
+			u"No role"_q,
+			st::defaultBoxCheckbox), st::boxRowPadding);
+		group->setChangedCallback([=](int value) {
+			SetActiveRole((value < int(roles.size()))
+				? RoleTitle(roles[value])
+				: QString());
+		});
+		Ui::AddSkip(layout);
+	}
 
 	const auto field = box->addRow(object_ptr<InputField>(
 		box,
@@ -110,6 +192,25 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		}
 
 		auto messages = QJsonArray();
+		const auto system = ActiveRoleSystem(AvailableRoles(), ActiveRole());
+		if (!system.isEmpty()) {
+			messages.append(QJsonObject{
+				{ u"role"_q, u"system"_q },
+				{ u"content"_q, system },
+			});
+		}
+		if (HistoryEnabled()) {
+			for (const auto &turn : state->turns) {
+				messages.append(QJsonObject{
+					{ u"role"_q, u"user"_q },
+					{ u"content"_q, turn.first },
+				});
+				messages.append(QJsonObject{
+					{ u"role"_q, u"assistant"_q },
+					{ u"content"_q, turn.second },
+				});
+			}
+		}
 		messages.append(QJsonObject{
 			{ u"role"_q, u"user"_q },
 			{ u"content"_q, prompt },
@@ -164,6 +265,12 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 			}
 			if (!state->answer.isEmpty() && (done || !networkError)) {
 				state->response = state->answer;
+				if (HistoryEnabled()) {
+					state->turns.append({ prompt, state->answer });
+					while (state->turns.size() > kMaxTurns) {
+						state->turns.removeFirst();
+					}
+				}
 			} else if (!state->answer.isEmpty()) {
 				state->response = failure;
 			} else if (done) {
@@ -187,6 +294,9 @@ void AiRequestBox(not_null<GenericBox*> box, QString text) {
 		if (!answer.isEmpty()) {
 			QGuiApplication::clipboard()->setText(answer);
 		}
+	});
+	box->addLeftButton(rpl::single(u"Clear"_q), [=] {
+		state->turns.clear();
 	});
 	box->addLeftButton(rpl::single(u"Close"_q), [=] {
 		state->cancel();

@@ -516,10 +516,10 @@ index 31c60aa..7f7abc1 100644
  
 diff --git a/Telegram/SourceFiles/boxes/ai_request_box.cpp b/Telegram/SourceFiles/boxes/ai_request_box.cpp
 new file mode 100644
-index 0000000..c78bc0a
+index 0000000..351f7ce
 --- /dev/null
 +++ b/Telegram/SourceFiles/boxes/ai_request_box.cpp
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,310 @@
 +/*
 +This file is part of Telegram Desktop,
 +the official desktop application for the Telegram messaging service.
@@ -534,6 +534,7 @@ index 0000000..c78bc0a
 +#include "ui/layers/generic_box.h"
 +#include "ui/vertical_list.h"
 +#include "ui/widgets/buttons.h"
++#include "ui/widgets/checkbox.h"
 +#include "ui/widgets/fields/input_field.h"
 +#include "ui/widgets/labels.h"
 +#include "ui/wrap/vertical_layout.h"
@@ -543,6 +544,8 @@ index 0000000..c78bc0a
 +#include <QtCore/QJsonArray>
 +#include <QtCore/QJsonDocument>
 +#include <QtCore/QJsonObject>
++#include <QtCore/QList>
++#include <QtCore/QPair>
 +#include <QtCore/QPointer>
 +#include <QtCore/QUrl>
 +#include <QtGui/QClipboard>
@@ -552,6 +555,51 @@ index 0000000..c78bc0a
 +#include <QtNetwork/QNetworkRequest>
 +
 +#include <rpl/rpl.h>
++
++#include <memory>
++#include <vector>
++
++namespace {
++
++constexpr auto kMaxTurns = 20;
++
++[[nodiscard]] std::vector<Exteraless::AiRole> AvailableRoles() {
++	return Exteraless::ParseAiRoles(
++		Exteraless::Config::Instance().aiRoles());
++}
++
++[[nodiscard]] QString RoleTitle(const Exteraless::AiRole &role) {
++	return role.title;
++}
++
++[[nodiscard]] QString RoleSystem(const Exteraless::AiRole &role) {
++	return role.system;
++}
++
++[[nodiscard]] QString ActiveRole() {
++	return Exteraless::Config::Instance().aiActiveRole();
++}
++
++void SetActiveRole(const QString &value) {
++	Exteraless::Config::Instance().setAiActiveRole(value);
++}
++
++[[nodiscard]] bool HistoryEnabled() {
++	return Exteraless::Config::Instance().aiHistory();
++}
++
++[[nodiscard]] QString ActiveRoleSystem(
++		const std::vector<Exteraless::AiRole> &roles,
++		const QString &active) {
++	for (const auto &role : roles) {
++		if (RoleTitle(role) == active) {
++			return RoleSystem(role);
++		}
++	}
++	return QString();
++}
++
++} // namespace
 +
 +namespace Ui {
 +
@@ -565,6 +613,7 @@ index 0000000..c78bc0a
 +		QPointer<RoundButton> sendButton;
 +		QString answer;
 +		QByteArray raw;
++		QList<QPair<QString, QString>> turns;
 +		rpl::variable<QString> response;
 +		QNetworkReply *reply = nullptr;
 +		bool busy = false;
@@ -589,6 +638,39 @@ index 0000000..c78bc0a
 +
 +	const auto layout = box->verticalLayout();
 +	Ui::AddSkip(layout);
++
++	const auto roles = AvailableRoles();
++	const auto activeRole = ActiveRole();
++	if (!roles.empty()) {
++		auto initial = int(roles.size());
++		for (auto i = 0; i != int(roles.size()); ++i) {
++			if (RoleTitle(roles[i]) == activeRole) {
++				initial = i;
++				break;
++			}
++		}
++		const auto group = std::make_shared<Ui::RadiobuttonGroup>(initial);
++		for (auto i = 0; i != int(roles.size()); ++i) {
++			box->addRow(object_ptr<Ui::Radiobutton>(
++				box,
++				group,
++				i,
++				RoleTitle(roles[i]),
++				st::defaultBoxCheckbox), st::boxRowPadding);
++		}
++		box->addRow(object_ptr<Ui::Radiobutton>(
++			box,
++			group,
++			int(roles.size()),
++			u"No role"_q,
++			st::defaultBoxCheckbox), st::boxRowPadding);
++		group->setChangedCallback([=](int value) {
++			SetActiveRole((value < int(roles.size()))
++				? RoleTitle(roles[value])
++				: QString());
++		});
++		Ui::AddSkip(layout);
++	}
 +
 +	const auto field = box->addRow(object_ptr<InputField>(
 +		box,
@@ -632,6 +714,25 @@ index 0000000..c78bc0a
 +		}
 +
 +		auto messages = QJsonArray();
++		const auto system = ActiveRoleSystem(AvailableRoles(), ActiveRole());
++		if (!system.isEmpty()) {
++			messages.append(QJsonObject{
++				{ u"role"_q, u"system"_q },
++				{ u"content"_q, system },
++			});
++		}
++		if (HistoryEnabled()) {
++			for (const auto &turn : state->turns) {
++				messages.append(QJsonObject{
++					{ u"role"_q, u"user"_q },
++					{ u"content"_q, turn.first },
++				});
++				messages.append(QJsonObject{
++					{ u"role"_q, u"assistant"_q },
++					{ u"content"_q, turn.second },
++				});
++			}
++		}
 +		messages.append(QJsonObject{
 +			{ u"role"_q, u"user"_q },
 +			{ u"content"_q, prompt },
@@ -686,6 +787,12 @@ index 0000000..c78bc0a
 +			}
 +			if (!state->answer.isEmpty() && (done || !networkError)) {
 +				state->response = state->answer;
++				if (HistoryEnabled()) {
++					state->turns.append({ prompt, state->answer });
++					while (state->turns.size() > kMaxTurns) {
++						state->turns.removeFirst();
++					}
++				}
 +			} else if (!state->answer.isEmpty()) {
 +				state->response = failure;
 +			} else if (done) {
@@ -709,6 +816,9 @@ index 0000000..c78bc0a
 +		if (!answer.isEmpty()) {
 +			QGuiApplication::clipboard()->setText(answer);
 +		}
++	});
++	box->addLeftButton(rpl::single(u"Clear"_q), [=] {
++		state->turns.clear();
 +	});
 +	box->addLeftButton(rpl::single(u"Close"_q), [=] {
 +		state->cancel();
@@ -15860,10 +15970,10 @@ index 0000000..4a4dc51
 +add_subdirectory(tests/chats)
 diff --git a/exteraless/ai_client.cpp b/exteraless/ai_client.cpp
 new file mode 100644
-index 0000000..ccec65d
+index 0000000..5468dfb
 --- /dev/null
 +++ b/exteraless/ai_client.cpp
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,280 @@
 +#include "exteraless/ai_client.h"
 +
 +#include <QJsonArray>
@@ -15871,6 +15981,8 @@ index 0000000..ccec65d
 +#include <QJsonObject>
 +#include <QJsonParseError>
 +#include <QJsonValue>
++
++#include <utility>
 +
 +namespace Exteraless {
 +namespace {
@@ -15897,6 +16009,52 @@ index 0000000..ccec65d
 +	return message.isEmpty()
 +		? object.value(QStringLiteral("type")).toString()
 +		: message;
++}
++
++constexpr auto kMaxAiRoles = 32;
++constexpr auto kMaxAiRolePromptBytes = 4096;
++
++[[nodiscard]] bool ValidAiRole(const QJsonValue &value, AiRole *role) {
++	if (!value.isObject()) {
++		return false;
++	}
++	const auto object = value.toObject();
++	const auto name = object.value(QStringLiteral("name"));
++	const auto prompt = object.value(QStringLiteral("prompt"));
++	if (!name.isString() || name.toString().trimmed().isEmpty()) {
++		return false;
++	}
++	if (!prompt.isString()
++		|| prompt.toString().toUtf8().size() > kMaxAiRolePromptBytes) {
++		return false;
++	}
++	*role = AiRole{ name.toString(), prompt.toString() };
++	return true;
++}
++
++[[nodiscard]] bool ParseAiRolesInto(
++		const QByteArray &json,
++		AiRoles *roles) {
++	auto error = QJsonParseError();
++	const auto document = QJsonDocument::fromJson(json, &error);
++	if (error.error != QJsonParseError::NoError || !document.isArray()) {
++		return false;
++	}
++	const auto array = document.array();
++	if (array.size() > kMaxAiRoles) {
++		return false;
++	}
++	auto result = AiRoles();
++	result.reserve(size_t(array.size()));
++	for (const auto &value : array) {
++		auto role = AiRole();
++		if (!ValidAiRole(value, &role)) {
++			return false;
++		}
++		result.push_back(std::move(role));
++	}
++	*roles = std::move(result);
++	return true;
 +}
 +
 +const auto kDataPrefix = QByteArrayLiteral("data:");
@@ -15946,20 +16104,58 @@ index 0000000..ccec65d
 +	return result.endsWith(kPath) ? result : (result + kPath);
 +}
 +
++AiRoles ParseAiRoles(const QByteArray &json) {
++	auto roles = AiRoles();
++	if (!ParseAiRolesInto(json, &roles)) {
++		return AiRoles();
++	}
++	return roles;
++}
++
++AiRoles ParseAiRoles(const QString &json) {
++	return ParseAiRoles(json.toUtf8());
++}
++
++bool IsValidAiRolesJson(const QByteArray &json) {
++	auto roles = AiRoles();
++	return ParseAiRolesInto(json, &roles);
++}
++
++bool IsValidAiRolesJson(const QString &json) {
++	return IsValidAiRolesJson(json.toUtf8());
++}
++
 +QByteArray BuildRequestJson(
 +		const QString &endpoint,
 +		const QString &model,
-+		const AiRequest &request) {
++		const QString &prompt,
++		const QString &system,
++		const QList<QPair<QString, QString>> &history) {
 +	auto messages = QJsonArray();
-+	if (!request.system.isEmpty()) {
++	if (!system.isEmpty()) {
 +		messages.append(QJsonObject{
 +			{ QStringLiteral("role"), QStringLiteral("system") },
-+			{ QStringLiteral("content"), request.system },
++			{ QStringLiteral("content"), system },
++		});
++	}
++	for (const auto &entry : history) {
++		const auto role = entry.first.trimmed().toLower();
++		if (role != QStringLiteral("user")
++			&& role != QStringLiteral("assistant")
++			&& role != QStringLiteral("system")) {
++			continue;
++		}
++		if (entry.second.isEmpty()) {
++			continue;
++		}
++		messages.append(QJsonObject{
++			{ QStringLiteral("role"), role },
++			{ QStringLiteral("content"), entry.second },
 +		});
 +	}
 +	messages.append(QJsonObject{
 +		{ QStringLiteral("role"), QStringLiteral("user") },
-+		{ QStringLiteral("content"), request.prompt },
++		{ QStringLiteral("content"), prompt },
 +	});
 +	const auto root = QJsonObject{
 +		{ QStringLiteral("model"), model },
@@ -15967,6 +16163,18 @@ index 0000000..ccec65d
 +		{ QStringLiteral("stream"), false },
 +	};
 +	return QJsonDocument(root).toJson(QJsonDocument::Compact);
++}
++
++QByteArray BuildRequestJson(
++		const QString &endpoint,
++		const QString &model,
++		const AiRequest &request) {
++	return BuildRequestJson(
++		endpoint,
++		model,
++		request.prompt,
++		request.system,
++		QList<QPair<QString, QString>>());
 +}
 +
 +AiResponse ParseResponse(const QByteArray &body) {
@@ -16048,14 +16256,18 @@ index 0000000..ccec65d
 +} // namespace Exteraless
 diff --git a/exteraless/ai_client.h b/exteraless/ai_client.h
 new file mode 100644
-index 0000000..aa3163d
+index 0000000..81b95c1
 --- /dev/null
 +++ b/exteraless/ai_client.h
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,65 @@
 +#pragma once
 +
 +#include <QByteArray>
++#include <QList>
++#include <QPair>
 +#include <QString>
++
++#include <vector>
 +
 +namespace Exteraless {
 +
@@ -16070,7 +16282,27 @@ index 0000000..aa3163d
 +	QString error;
 +};
 +
++// Stored JSON keys are "name"/"prompt"; the box shows title and sends system.
++struct AiRole {
++	QString title;
++	QString system;
++};
++
++using AiRoles = std::vector<AiRole>;
++
 +[[nodiscard]] QString ChatCompletionsUrl(const QString &endpoint);
++
++[[nodiscard]] AiRoles ParseAiRoles(const QByteArray &json);
++[[nodiscard]] AiRoles ParseAiRoles(const QString &json);
++[[nodiscard]] bool IsValidAiRolesJson(const QByteArray &json);
++[[nodiscard]] bool IsValidAiRolesJson(const QString &json);
++
++[[nodiscard]] QByteArray BuildRequestJson(
++	const QString &endpoint,
++	const QString &model,
++	const QString &prompt,
++	const QString &system,
++	const QList<QPair<QString, QString>> &history);
 +
 +[[nodiscard]] QByteArray BuildRequestJson(
 +	const QString &endpoint,
@@ -16095,12 +16327,13 @@ index 0000000..aa3163d
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..fa94f26
+index 0000000..51561f6
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1260 @@
+@@ -0,0 +1,1280 @@
 +#include "exteraless/backup.h"
 +
++#include "exteraless/ai_client.h"
 +#include "exteraless/config.h"
 +
 +#include <QJsonDocument>
@@ -16405,9 +16638,15 @@ index 0000000..fa94f26
 +constexpr auto kAiEndpoint = "OEAiEndpoint";
 +constexpr auto kAiModel = "OEAiModel";
 +constexpr auto kAiApiKey = "OEAiApiKey";
++constexpr auto kAiRoles = "OEAiRoles";
++constexpr auto kAiActiveRole = "OEAiActiveRole";
++constexpr auto kAiHistory = "OEAiHistory";
 +constexpr auto kAiEndpointAlias = "aiEndpoint";
 +constexpr auto kAiModelAlias = "aiModel";
 +constexpr auto kAiApiKeyAlias = "aiApiKey";
++constexpr auto kAiRolesAlias = "aiRoles";
++constexpr auto kAiActiveRoleAlias = "aiActiveRole";
++constexpr auto kAiHistoryAlias = "aiHistory";
 +constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
 +constexpr auto kRecognitionLanguageAlias = "recognitionLanguage";
 +
@@ -16684,6 +16923,9 @@ index 0000000..fa94f26
 +	extera[kTranslationDeepLFormality] = config.translationDeepLFormality();
 +	extera[kAiEndpoint] = config.aiEndpoint();
 +	extera[kAiModel] = config.aiModel();
++	extera[kAiRoles] = config.aiRoles();
++	extera[kAiActiveRole] = config.aiActiveRole();
++	extera[kAiHistory] = config.aiHistory();
 +	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 +
 +	auto pills = QJsonObject();
@@ -17328,6 +17570,16 @@ index 0000000..fa94f26
 +			&& value.isString()) {
 +			// WHY: old backups carry the secret; import accepts, export omits.
 +			config.setAiApiKey(value.toString());
++		} else if ((key == kAiRoles || key == kAiRolesAlias)
++			&& value.isString()
++			&& IsValidAiRolesJson(value.toString())) {
++			config.setAiRoles(value.toString());
++		} else if ((key == kAiActiveRole || key == kAiActiveRoleAlias)
++			&& value.isString()) {
++			config.setAiActiveRole(value.toString());
++		} else if ((key == kAiHistory || key == kAiHistoryAlias)
++			&& value.isBool()) {
++			config.setAiHistory(value.toBool());
 +		} else if ((key == kGeneralRecognitionLanguage
 +			|| key == kRecognitionLanguageAlias)
 +			&& value.isString()
@@ -17483,12 +17735,13 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..bd11ef5
+index 0000000..fcb9415
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1917 @@
+@@ -0,0 +1,1966 @@
 +#include "exteraless/config.h"
 +
++#include "exteraless/ai_client.h"
 +#include "exteraless/doubletap.h"
 +
 +#include <QDir>
@@ -17674,6 +17927,9 @@ index 0000000..bd11ef5
 +constexpr auto kAiEndpoint = "OEAiEndpoint";
 +constexpr auto kAiModel = "OEAiModel";
 +constexpr auto kAiApiKey = "OEAiApiKey";
++constexpr auto kAiRoles = "OEAiRoles";
++constexpr auto kAiActiveRole = "OEAiActiveRole";
++constexpr auto kAiHistory = "OEAiHistory";
 +constexpr auto kGeneralRecognitionLanguage = "OEGeneralRecognitionLanguage";
 +
 +[[nodiscard]] constexpr bool DefaultNetworkUseIPv6() {
@@ -19006,6 +19262,34 @@ index 0000000..bd11ef5
 +	setValue(kAiApiKey, value);
 +}
 +
++QString Config::aiRoles() const {
++	const auto value = stringValue(kAiRoles, QString());
++	return IsValidAiRolesJson(value) ? value : QStringLiteral("[]");
++}
++
++void Config::setAiRoles(const QString &value) {
++	if (!IsValidAiRolesJson(value)) {
++		return;
++	}
++	setValue(kAiRoles, value);
++}
++
++QString Config::aiActiveRole() const {
++	return stringValue(kAiActiveRole, QString()).trimmed();
++}
++
++void Config::setAiActiveRole(const QString &value) {
++	setValue(kAiActiveRole, value.trimmed());
++}
++
++bool Config::aiHistory() const {
++	return boolValue(kAiHistory, true);
++}
++
++void Config::setAiHistory(bool value) {
++	setValue(kAiHistory, value);
++}
++
 +QString Config::recognitionLanguage() const {
 +	return SanitizeRecognitionLanguage(
 +		stringValue(kGeneralRecognitionLanguage, QString()));
@@ -19229,6 +19513,9 @@ index 0000000..bd11ef5
 +			|| key == kAiEndpoint
 +			|| key == kAiModel
 +			|| key == kAiApiKey
++			|| key == kAiRoles
++			|| key == kAiActiveRole
++			|| key == kAiHistory
 +			|| key == kGeneralRecognitionLanguage) {
 +			accepted.insert(key, i.value());
 +		} else if (unknown) {
@@ -19246,6 +19533,20 @@ index 0000000..bd11ef5
 +	}
 +	SanitizeExclusions(&accepted, kGhostReadExclusions);
 +	SanitizeExclusions(&accepted, kGhostTypingExclusions);
++	if (accepted.contains(kAiRoles)
++		&& (!accepted.value(kAiRoles).isString()
++			|| !IsValidAiRolesJson(
++				accepted.value(kAiRoles).toString()))) {
++		accepted.remove(kAiRoles);
++	}
++	if (accepted.contains(kAiActiveRole)
++		&& !accepted.value(kAiActiveRole).isString()) {
++		accepted.remove(kAiActiveRole);
++	}
++	if (accepted.contains(kAiHistory)
++		&& !accepted.value(kAiHistory).isBool()) {
++		accepted.remove(kAiHistory);
++	}
 +	if (const auto order = accepted.value(kPillStackOrder); order.isString()) {
 +		accepted[kPillStackOrder] = SanitizePillStackOrder(order.toString());
 +	} else if (accepted.contains(kPillStackOrder)) {
@@ -19406,10 +19707,10 @@ index 0000000..bd11ef5
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..71bb917
+index 0000000..53dab1f
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,370 @@
+@@ -0,0 +1,376 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -19745,6 +20046,12 @@ index 0000000..71bb917
 +	void setAiModel(const QString &value);
 +	[[nodiscard]] QString aiApiKey() const;
 +	void setAiApiKey(const QString &value);
++	[[nodiscard]] QString aiRoles() const;
++	void setAiRoles(const QString &value);
++	[[nodiscard]] QString aiActiveRole() const;
++	void setAiActiveRole(const QString &value);
++	[[nodiscard]] bool aiHistory() const;
++	void setAiHistory(bool value);
 +
 +	[[nodiscard]] QString recognitionLanguage() const;
 +	void setRecognitionLanguage(const QString &value);
@@ -24071,10 +24378,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..f0b263d
+index 0000000..745c3f6
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3192 @@
+@@ -0,0 +1,3293 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -24275,6 +24582,12 @@ index 0000000..f0b263d
 +		<< "  exteraless-chats-cli ai-config-set-endpoint <url>\n"
 +		<< "  exteraless-chats-cli ai-config-set-model <model>\n"
 +		<< "  exteraless-chats-cli ai-config-set-key <key>\n"
++		<< "  exteraless-chats-cli ai-roles\n"
++		<< "  exteraless-chats-cli ai-roles-set <json>\n"
++		<< "  exteraless-chats-cli ai-role [<name>]\n"
++		<< "  exteraless-chats-cli ai-role-set <name>\n"
++		<< "  exteraless-chats-cli ai-history\n"
++		<< "  exteraless-chats-cli ai-history-set <0|1>\n"
 +		<< "  exteraless-chats-cli ai-request-json <prompt>\n"
 +		<< "  exteraless-chats-cli ai-stream-parse <file>\n"
 +		<< "  exteraless-chats-cli ai-stream-chunk <file> <bytes>\n"
@@ -24468,6 +24781,49 @@ index 0000000..f0b263d
 +		{ QStringLiteral("endpoint"), config.aiEndpoint() },
 +		{ QStringLiteral("model"), config.aiModel() },
 +		{ QStringLiteral("hasKey"), !config.aiApiKey().isEmpty() },
++	});
++}
++
++[[nodiscard]] QJsonArray AiRolesArray() {
++	auto result = QJsonArray();
++	for (const auto &role : Exteraless::ParseAiRoles(
++			Exteraless::Config::Instance().aiRoles())) {
++		result.append(QJsonObject{
++			{ QStringLiteral("name"), role.title },
++			{ QStringLiteral("prompt"), role.system },
++		});
++	}
++	return result;
++}
++
++void PrintAiRoles() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("roles"), AiRolesArray() },
++	});
++}
++
++void PrintAiRole(const QString &name) {
++	auto prompt = QString();
++	auto found = false;
++	for (const auto &role : Exteraless::ParseAiRoles(
++			Exteraless::Config::Instance().aiRoles())) {
++		if (role.title == name) {
++			prompt = role.system;
++			found = true;
++			break;
++		}
++	}
++	PrintJson(QJsonObject{
++		{ QStringLiteral("name"), name },
++		{ QStringLiteral("found"), found },
++		{ QStringLiteral("prompt"), prompt },
++	});
++}
++
++void PrintAiHistory() {
++	PrintJson(QJsonObject{
++		{ QStringLiteral("enabled"),
++			Exteraless::Config::Instance().aiHistory() },
 +	});
 +}
 +
@@ -25921,6 +26277,58 @@ index 0000000..f0b263d
 +		PrintAiConfig();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("ai-roles")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintAiRoles();
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-roles-set")) {
++		if (arguments.size() != 3
++			|| !Exteraless::IsValidAiRolesJson(arguments[2])) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setAiRoles(arguments[2]);
++		PrintAiRoles();
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-role")) {
++		if (arguments.size() < 2 || arguments.size() > 3) {
++			return PrintUsage();
++		}
++		PrintAiRole((arguments.size() == 3)
++			? arguments[2]
++			: Exteraless::Config::Instance().aiActiveRole());
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-role-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setAiActiveRole(arguments[2]);
++		PrintAiRole(Exteraless::Config::Instance().aiActiveRole());
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-history")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintAiHistory();
++		return 0;
++	}
++	if (mode == QStringLiteral("ai-history-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto enabled = false;
++		if (!ReadFlag(arguments[2], &enabled)) {
++			return PrintUsage();
++		}
++		Exteraless::Config::Instance().setAiHistory(enabled);
++		PrintAiHistory();
++		return 0;
++	}
 +	if (mode == QStringLiteral("ai-request-json")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -27267,6 +27675,22 @@ index 0000000..f0b263d
 +	}
 +	return PrintUsage();
 +}
+diff --git a/exteraless/tests/chats/fixtures/ai-roles.json b/exteraless/tests/chats/fixtures/ai-roles.json
+new file mode 100644
+index 0000000..9ccf8d8
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/ai-roles.json
+@@ -0,0 +1,10 @@
++[
++  {
++    "name": "translator",
++    "prompt": "Translate the user message into English."
++  },
++  {
++    "name": "summarizer",
++    "prompt": "Summarize the user message in one sentence."
++  }
++]
 diff --git a/exteraless/tests/chats/fixtures/ai-stream-basic.txt b/exteraless/tests/chats/fixtures/ai-stream-basic.txt
 new file mode 100644
 index 0000000..6e940fe
@@ -27688,10 +28112,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..44bb314
+index 0000000..c0cf3ad
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8014 @@
+@@ -0,0 +1,8197 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -28540,7 +28964,7 @@ index 0000000..44bb314
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 135,
++            len(section) == 138,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -28561,7 +28985,7 @@ index 0000000..44bb314
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 140,
++            sum(len(value) for value in exported.values()) == 143,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -28581,7 +29005,7 @@ index 0000000..44bb314
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 140,
++                data.get("applied") == 143,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -28750,6 +29174,11 @@ index 0000000..44bb314
 +            "OETranslationDeepLFormality": 1,
 +            "OEAiEndpoint": "https://full.test/v1",
 +            "OEAiModel": "full-model",
++            "OEAiRoles": json.dumps([
++                {"name": "translator", "prompt": "Translate."},
++            ]),
++            "OEAiActiveRole": "translator",
++            "OEAiHistory": False,
 +            "OEGeneralRecognitionLanguage": "de",
 +            "OENetworkUseIPv6": True,
 +            "OENetworkDnsType": 1,
@@ -28775,7 +29204,7 @@ index 0000000..44bb314
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 140,
++            data.get("applied") == 143,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -29098,10 +29527,10 @@ index 0000000..44bb314
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 135",
++            "backup legacy eight completed to 138",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (135, 3, 2),
++             len(sections["mainconfig"])) == (138, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -35325,6 +35754,182 @@ index 0000000..44bb314
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_ai_roles(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    roles = json.loads(
++        (FIXTURES / "ai-roles.json").read_text(encoding="utf-8"))
++    encoded_roles = json.dumps(roles)
++
++    env = make_env(work / "ai-roles-defaults")
++    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles defaults")
++    if data is not None:
++        ledger.check("ai roles default empty", data.get("roles") == [], data)
++    data = json_call(ledger, cli, ["ai-role"], env, "ai role defaults")
++    if data is not None:
++        ledger.check(
++            "ai role default none",
++            data.get("name") == ""
++            and data.get("found") is False
++            and data.get("prompt") == "",
++            data)
++    data = json_call(ledger, cli, ["ai-history"], env, "ai history default")
++    if data is not None:
++        ledger.check(
++            "ai history default enabled",
++            data.get("enabled") is True,
++            data)
++
++    data = json_call(
++        ledger, cli, ["ai-roles-set", encoded_roles], env, "ai roles set")
++    if data is not None:
++        ledger.check(
++            "ai roles set stored", data.get("roles") == roles, data)
++    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles reload")
++    if data is not None:
++        ledger.check("ai roles persisted", data.get("roles") == roles, data)
++
++    data = json_call(
++        ledger, cli, ["ai-role", roles[1]["name"]], env, "ai role by name")
++    if data is not None:
++        ledger.check(
++            "ai role by name prompt",
++            data.get("found") is True
++            and data.get("prompt") == roles[1]["prompt"],
++            data)
++
++    data = json_call(
++        ledger, cli, ["ai-role-set", roles[0]["name"]], env, "ai role set")
++    if data is not None:
++        ledger.check(
++            "ai role set active",
++            data.get("name") == roles[0]["name"]
++            and data.get("found") is True
++            and data.get("prompt") == roles[0]["prompt"],
++            data)
++    data = json_call(ledger, cli, ["ai-role"], env, "ai role reload")
++    if data is not None:
++        ledger.check(
++            "ai role persisted",
++            data.get("name") == roles[0]["name"]
++            and data.get("found") is True,
++            data)
++
++    data = json_call(
++        ledger, cli, ["ai-role-set", "missing"], env, "ai role set unknown")
++    if data is not None:
++        ledger.check(
++            "ai role unknown not found",
++            data.get("name") == "missing" and data.get("found") is False,
++            data)
++
++    for name, arguments in [
++            ("ai roles-set invalid json", ["ai-roles-set", "{"]),
++            ("ai roles-set not array", ["ai-roles-set", '{"name":"a"}']),
++            ("ai roles-set bad role", ["ai-roles-set", '[{"name":1}]']),
++            ("ai roles-set too many", ["ai-roles-set", json.dumps(
++                [{"name": f"r{i}", "prompt": "p"} for i in range(33)])]),
++            ("ai roles-set prompt too long", ["ai-roles-set", json.dumps(
++                [{"name": "long", "prompt": "x" * 4097}])]),
++            ("ai roles-set without value", ["ai-roles-set"]),
++            ("ai history-set invalid", ["ai-history-set", "2"])]:
++        result = run(cli, arguments, env=env)
++        ledger.check(
++            f"cli {name}",
++            result.returncode == 2 and bool(result.stderr.strip()),
++            f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    data = json_call(
++        ledger, cli, ["ai-roles"], env, "ai roles after invalid")
++    if data is not None:
++        ledger.check(
++            "ai roles invalid not stored", data.get("roles") == roles, data)
++
++    data = json_call(ledger, cli, ["ai-history-set", "0"], env,
++                     "ai history off")
++    if data is not None:
++        ledger.check("ai history set off", data.get("enabled") is False, data)
++    data = json_call(ledger, cli, ["ai-history"], env, "ai history reload")
++    if data is not None:
++        ledger.check(
++            "ai history persisted", data.get("enabled") is False, data)
++    data = json_call(ledger, cli, ["ai-history-set", "1"], env,
++                     "ai history on")
++    if data is not None:
++        ledger.check("ai history set on", data.get("enabled") is True, data)
++
++    data = json_call(
++        ledger, cli, ["backup-export", "0", "1", "0", "1", "0", "1", "1"],
++        env, "ai roles export")
++    if data is not None:
++        section = backup_sections(data)["exteraconfig"]
++        ledger.check(
++            "ai roles export keys",
++            section.get("OEAiRoles") == encoded_roles
++            and section.get("OEAiActiveRole") == "missing"
++            and section.get("OEAiHistory") is True,
++            (section.get("OEAiRoles"),
++             section.get("OEAiActiveRole"),
++             section.get("OEAiHistory")))
++
++    env = make_env(work / "ai-roles-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "aiRoles": encoded_roles,
++            "aiActiveRole": roles[0]["name"],
++            "aiHistory": False,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "ai roles alias import")
++    if data is not None:
++        ledger.check(
++            "ai roles alias applied",
++            data.get("applied") == 3 and data.get("unknown") == [],
++            data)
++    data = json_call(ledger, cli, ["ai-roles"], env, "ai roles alias reload")
++    if data is not None:
++        ledger.check(
++            "ai roles alias roles", data.get("roles") == roles, data)
++    data = json_call(ledger, cli, ["ai-role"], env, "ai role alias reload")
++    if data is not None:
++        ledger.check(
++            "ai role alias active",
++            data.get("name") == roles[0]["name"]
++            and data.get("found") is True,
++            data)
++    data = json_call(
++        ledger, cli, ["ai-history"], env, "ai history alias reload")
++    if data is not None:
++        ledger.check(
++            "ai history alias off", data.get("enabled") is False, data)
++
++    env = make_env(work / "ai-roles-bad-alias")
++    root = {
++        "version": 1,
++        "exteraconfig": {
++            "aiRoles": '[{"name":1}]',
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(root)], env,
++        "ai roles bad alias import")
++    if data is not None:
++        ledger.check(
++            "ai roles bad alias rejected",
++            data.get("ok") is True
++            and data.get("applied") == 0
++            and data.get("unknown") == ["aiRoles"],
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_recognition(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -35603,6 +36208,7 @@ index 0000000..44bb314
 +        translation = check_translation(ledger, cli, work)
 +        ai = check_ai(ledger, cli, work)
 +        ai_stream = check_ai_stream(ledger, cli, work)
++        ai_roles = check_ai_roles(ledger, cli, work)
 +        recognition = check_recognition(ledger, cli, work)
 +        network = check_network(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
@@ -35686,6 +36292,7 @@ index 0000000..44bb314
 +    print(f"translation: {translation[0] - translation[1]} passed")
 +    print(f"ai: {ai[0] - ai[1]} passed")
 +    print(f"ai-stream: {ai_stream[0] - ai_stream[1]} passed")
++    print(f"ai-roles: {ai_roles[0] - ai_roles[1]} passed")
 +    print(f"recognition: {recognition[0] - recognition[1]} passed")
 +    print(f"network: {network[0] - network[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
