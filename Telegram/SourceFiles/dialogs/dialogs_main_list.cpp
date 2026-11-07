@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/dialogs_main_list.h"
 
+#include "dialogs/dialogs_feed.h"
+#include "dialogs/dialogs_filters.h"
 #include "data/data_changes.h"
 #include "data/data_session.h"
 #include "data/data_chat_filters.h"
@@ -15,6 +17,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history.h"
 
 namespace Dialogs {
+namespace {
+
+void FillFeed(MainList &list, not_null<Main::Session*> session) {
+	for (const auto &history : Feed::Collect(session)) {
+		list.addEntry(Key(history));
+	}
+	list.setLoaded();
+}
+
+} // namespace
 
 MainList::MainList(
 	not_null<Main::Session*> session,
@@ -35,6 +47,10 @@ MainList::MainList(
 	) | rpl::on_next([=](const Data::NameUpdate &update) {
 		_all.peerNameChanged(_filterId, update.peer, update.oldFirstLetters);
 	}, _lifetime);
+
+	if (_filterId == kFeedFilterId) {
+		FillFeed(*this, session);
+	}
 }
 
 bool MainList::empty() const {

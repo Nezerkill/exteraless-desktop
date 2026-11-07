@@ -26,6 +26,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_stories.h"
 #include "data/data_user.h"
+#include "dialogs/dialogs_filters.h"
 #include "exteraless/config.h"
 #include "exteraless/ghost_mode.h"
 #include "exteraless/plugin_runtime.h"
@@ -1014,6 +1015,13 @@ void MainMenu::setupMenu() {
 			});
 		}
 	}
+
+	addAction(
+		tr::lng_filters_feed(),
+		{ &st::menuIconChannel }
+	)->setClickedCallback([=] {
+		controller->setActiveChatsFilter(Dialogs::kFeedFilterId);
+	});
 
 	_nightThemeToggle = addAction(
 		tr::lng_menu_night_mode(),

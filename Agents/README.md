@@ -191,6 +191,14 @@ sibling-чекаутом: `../exteraless`.
   upstream-коммит; `nix/update-patch.sh --check` проверяет применимость.
 - `Telegram/SourceFiles/mtproto/mtproto_request_filter.h` — интерфейс фильтра запросов.
 - `Telegram/SourceFiles/window/window_main_menu.cpp` — пункты Exteraless в главном меню.
+- `Telegram/SourceFiles/dialogs/dialogs_feed.{h,cpp}` — лента каналов (NB-47,
+  v1, только чтение): `IsEligible` (broadcast без megagroup), `Collect` через
+  `enumerateBroadcasts`, персист исключений в `feed_excluded` и
+  `Generation`/`Invalidate`; синтетический фильтр `Dialogs::kFeedFilterId`
+  (`FilterId(1000)`, `dialogs/dialogs_filters.h`) наполняет `FillFeed` в
+  конструкторе `MainList`, а открывает пункт «Feed» главного меню. Список
+  строится заново при пересоздании — live-update, strip-строка вкладки и
+  действия над элементами остаются follow-up'ом (v2).
 - Плагины этапа 1: каталог `cWorkingDir()/tdata/plugins`, манифесты
   `.plugin`/`.py`, `.elyx`/`.eaf` показываются как unsupported. Сканер
   читает метаданные через AST и не исполняет код плагина.

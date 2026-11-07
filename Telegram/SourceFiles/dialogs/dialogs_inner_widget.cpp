@@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/ui/dialogs_message_view.h"
 #include "dialogs/ui/dialogs_video_userpic.h"
 #include "dialogs/dialogs_indexed_list.h"
+#include "dialogs/dialogs_filters.h"
 #include "dialogs/dialogs_row.h"
 #include "dialogs/dialogs_community_requestable_list.h"
 #include "dialogs/dialogs_widget.h"
@@ -4892,7 +4893,7 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
 }
 
 void InnerWidget::editOpenedFilter() {
-	if (_filterId > 0) {
+	if (_filterId > 0 && _filterId != Dialogs::kFeedFilterId) {
 		EditExistingFilter(_controller, _filterId);
 	}
 }

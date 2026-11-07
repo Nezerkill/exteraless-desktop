@@ -9,7 +9,7 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..fd1cdaa 100644
+index 811707d..3ec1a76 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
 @@ -70,6 +70,39 @@ endif()
@@ -69,7 +69,17 @@ index 811707d..fd1cdaa 100644
      boxes/compose_ai_box.cpp
      boxes/compose_ai_box.h
      boxes/create_ai_box.cpp
-@@ -1492,6 +1528,10 @@ PRIVATE
+@@ -850,6 +886,9 @@ PRIVATE
+     dialogs/dialogs_community_rows_view.h
+     dialogs/dialogs_entry.cpp
+     dialogs/dialogs_entry.h
++    dialogs/dialogs_feed.cpp
++    dialogs/dialogs_feed.h
++    dialogs/dialogs_filters.h
+     dialogs/dialogs_indexed_list.cpp
+     dialogs/dialogs_indexed_list.h
+     dialogs/dialogs_inner_widget.cpp
+@@ -1492,6 +1531,10 @@ PRIVATE
      lang/lang_numbers_animation.h
      lang/lang_translator.cpp
      lang/lang_translator.h
@@ -80,7 +90,7 @@ index 811707d..fd1cdaa 100644
      lang/translate_mtproto_provider.cpp
      lang/translate_mtproto_provider.h
      lang/translate_provider.cpp
-@@ -1680,6 +1720,7 @@ PRIVATE
+@@ -1680,6 +1723,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -88,7 +98,7 @@ index 811707d..fd1cdaa 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1938,8 @@ PRIVATE
+@@ -1897,6 +1941,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -97,7 +107,7 @@ index 811707d..fd1cdaa 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2573,10 @@ else()
+@@ -2530,6 +2576,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -109,7 +119,7 @@ index 811707d..fd1cdaa 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..3ba68b1 100644
+index ffc8ec9..726fee1 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -6171,6 +6171,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -123,7 +133,15 @@ index ffc8ec9..3ba68b1 100644
  "lng_mediaview_forward" = "Forward";
  "lng_mediaview_share_at_time" = "Share at {time}";
  "lng_mediaview_delete" = "Delete";
-@@ -9182,4 +9186,242 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -7821,6 +7825,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ "lng_filters_all" = "All chats";
+ "lng_filters_all_short" = "All";
++"lng_filters_feed" = "Feed";
+ "lng_filters_setup" = "Edit";
+ "lng_filters_title" = "Folders";
+ "lng_filters_subtitle" = "My folders";
+@@ -9182,4 +9187,242 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -1804,11 +1822,193 @@ index 5b15fcf..093a805 100644
  dialogsMiniPlay: icon{{ "dialogs/dialogs_mini_play", videoPlayIconFg }};
  
  dialogsUnreadMediaDotEmoji: IconEmoji {
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_feed.cpp b/Telegram/SourceFiles/dialogs/dialogs_feed.cpp
+new file mode 100644
+index 0000000..f4ef337
+--- /dev/null
++++ b/Telegram/SourceFiles/dialogs/dialogs_feed.cpp
+@@ -0,0 +1,109 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#include "dialogs/dialogs_feed.h"
++
++#include "base/flat_set.h"
++#include "core/application.h"
++#include "core/core_settings.h"
++#include "data/data_channel.h"
++#include "data/data_peer.h"
++#include "data/data_session.h"
++#include "history/history.h"
++#include "main/main_session.h"
++
++namespace Dialogs::Feed {
++namespace {
++
++constexpr auto kExcludedKey = "feed_excluded";
++
++struct Storage {
++	base::flat_set<PeerId> excluded;
++	bool loaded = false;
++	uint64 generation = 0;
++};
++
++[[nodiscard]] Storage &Global() {
++	static auto result = Storage();
++	return result;
++}
++
++void WriteExcluded() {
++	auto packed = QByteArray();
++	for (const auto &id : Global().excluded) {
++		if (!packed.isEmpty()) {
++			packed.append(',');
++		}
++		packed.append(QByteArray::number(id.value));
++	}
++	Core::App().settings().writePref<QByteArray>(kExcludedKey, packed);
++}
++
++void Load() {
++	auto &global = Global();
++	if (global.loaded) {
++		return;
++	}
++	global.loaded = true;
++	const auto packed = Core::App().settings().readPref<QByteArray>(
++		kExcludedKey);
++	for (const auto &part : packed.split(',')) {
++		auto ok = false;
++		const auto value = part.toULongLong(&ok);
++		if (ok) {
++			global.excluded.emplace(PeerId(value));
++		}
++	}
++}
++
++} // namespace
++
++bool IsEligible(const PeerData *peer) {
++	return peer && peer->isBroadcast() && !peer->isMegagroup();
++}
++
++std::vector<not_null<History*>> Collect(not_null<Main::Session*> session) {
++	Load();
++	auto result = std::vector<not_null<History*>>();
++	session->data().enumerateBroadcasts([&](not_null<ChannelData*> channel) {
++		if (!IsEligible(channel) || IsExcluded(channel->id)) {
++			return;
++		}
++		result.push_back(session->data().history(channel->id));
++	});
++	return result;
++}
++
++bool IsExcluded(PeerId peerId) {
++	Load();
++	return Global().excluded.contains(peerId);
++}
++
++void SetExcluded(PeerId peerId, bool excluded) {
++	Load();
++	auto &global = Global();
++	if (excluded == global.excluded.contains(peerId)) {
++		return;
++	}
++	if (excluded) {
++		global.excluded.emplace(peerId);
++	} else {
++		global.excluded.remove(peerId);
++	}
++	WriteExcluded();
++	Invalidate();
++}
++
++void Invalidate() {
++	++Global().generation;
++}
++
++uint64 Generation() {
++	return Global().generation;
++}
++
++} // namespace Dialogs::Feed
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_feed.h b/Telegram/SourceFiles/dialogs/dialogs_feed.h
+new file mode 100644
+index 0000000..dfad56a
+--- /dev/null
++++ b/Telegram/SourceFiles/dialogs/dialogs_feed.h
+@@ -0,0 +1,32 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#pragma once
++
++#include "base/basic_types.h"
++#include "data/data_peer_id.h"
++
++#include <vector>
++
++class PeerData;
++class History;
++
++namespace Main {
++class Session;
++} // namespace Main
++
++namespace Dialogs::Feed {
++
++[[nodiscard]] bool IsEligible(const PeerData *peer);
++[[nodiscard]] std::vector<not_null<History*>> Collect(
++	not_null<Main::Session*> session);
++[[nodiscard]] bool IsExcluded(PeerId peerId);
++void SetExcluded(PeerId peerId, bool excluded);
++void Invalidate();
++[[nodiscard]] uint64 Generation();
++
++} // namespace Dialogs::Feed
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_filters.h b/Telegram/SourceFiles/dialogs/dialogs_filters.h
+new file mode 100644
+index 0000000..5818908
+--- /dev/null
++++ b/Telegram/SourceFiles/dialogs/dialogs_filters.h
+@@ -0,0 +1,16 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#pragma once
++
++#include "data/data_types.h"
++
++namespace Dialogs {
++
++inline constexpr auto kFeedFilterId = FilterId(1000);
++
++} // namespace Dialogs
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp b/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
-index 2f0a620..63b7144 100644
+index 2f0a620..71feb39 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
 +++ b/Telegram/SourceFiles/dialogs/dialogs_inner_widget.cpp
-@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -14,12 +14,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "dialogs/ui/dialogs_message_view.h"
+ #include "dialogs/ui/dialogs_video_userpic.h"
+ #include "dialogs/dialogs_indexed_list.h"
++#include "dialogs/dialogs_filters.h"
+ #include "dialogs/dialogs_row.h"
+ #include "dialogs/dialogs_community_requestable_list.h"
+ #include "dialogs/dialogs_widget.h"
  #include "dialogs/dialogs_search_from_controllers.h"
  #include "dialogs/dialogs_search_tags.h"
  #include "dialogs/dialogs_quick_action.h"
@@ -1816,7 +2016,7 @@ index 2f0a620..63b7144 100644
  #include "history/view/history_view_context_menu.h"
  #include "history/view/history_view_subsection_tabs.h"
  #include "history/history.h"
-@@ -664,7 +665,12 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
+@@ -664,7 +666,12 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
  		? _shownList->begin()->get()->folder()
  		: nullptr;
  	const auto inMainMenu = session().settings().archiveInMainMenu();
@@ -1830,7 +2030,7 @@ index 2f0a620..63b7144 100644
  		if (_selected && _selected->folder() == archive) {
  			_selected = nullptr;
  		}
-@@ -672,7 +678,7 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
+@@ -672,7 +679,7 @@ void InnerWidget::refreshWithCollapsedRows(bool toTop) {
  			clearPressed();
  		}
  		_skipTopDialog = true;
@@ -1839,7 +2039,7 @@ index 2f0a620..63b7144 100644
  			_collapsedRows.push_back(
  				std::make_unique<CollapsedRow>(archive));
  		}
-@@ -4874,8 +4880,10 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
+@@ -4874,8 +4881,10 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
  		&& (_collapsedRows.back()->folder != nullptr);
  	const auto archiveIsCollapsed = (archive != nullptr)
  		&& session().settings().archiveCollapsed();
@@ -1851,6 +2051,56 @@ index 2f0a620..63b7144 100644
  	return archiveIsInMainMenu
  		? (collapsedHasArchive || !_skipTopDialog)
  		: archiveIsCollapsed
+@@ -4884,7 +4893,7 @@ bool InnerWidget::needCollapsedRowsRefresh() const {
+ }
+ 
+ void InnerWidget::editOpenedFilter() {
+-	if (_filterId > 0) {
++	if (_filterId > 0 && _filterId != Dialogs::kFeedFilterId) {
+ 		EditExistingFilter(_controller, _filterId);
+ 	}
+ }
+diff --git a/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp b/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
+index cd8aff9..e72e968 100644
+--- a/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
++++ b/Telegram/SourceFiles/dialogs/dialogs_main_list.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "dialogs/dialogs_main_list.h"
+ 
++#include "dialogs/dialogs_feed.h"
++#include "dialogs/dialogs_filters.h"
+ #include "data/data_changes.h"
+ #include "data/data_session.h"
+ #include "data/data_chat_filters.h"
+@@ -15,6 +17,16 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "history/history.h"
+ 
+ namespace Dialogs {
++namespace {
++
++void FillFeed(MainList &list, not_null<Main::Session*> session) {
++	for (const auto &history : Feed::Collect(session)) {
++		list.addEntry(Key(history));
++	}
++	list.setLoaded();
++}
++
++} // namespace
+ 
+ MainList::MainList(
+ 	not_null<Main::Session*> session,
+@@ -35,6 +47,10 @@ MainList::MainList(
+ 	) | rpl::on_next([=](const Data::NameUpdate &update) {
+ 		_all.peerNameChanged(_filterId, update.peer, update.oldFirstLetters);
+ 	}, _lifetime);
++
++	if (_filterId == kFeedFilterId) {
++		FillFeed(*this, session);
++	}
+ }
+ 
+ bool MainList::empty() const {
 diff --git a/Telegram/SourceFiles/dialogs/dialogs_row.h b/Telegram/SourceFiles/dialogs/dialogs_row.h
 index a2ac2e4..ac722c5 100644
 --- a/Telegram/SourceFiles/dialogs/dialogs_row.h
@@ -15285,20 +15535,21 @@ index c49a9d3..f95e1e4 100644
  	// Re-establish the list's Tab-stop on the folder that was focused (if it
  	// survived the rebuild), else on the active one, so a refresh - rename,
 diff --git a/Telegram/SourceFiles/window/window_main_menu.cpp b/Telegram/SourceFiles/window/window_main_menu.cpp
-index db8dcec..ec672d5 100644
+index db8dcec..b995fbd 100644
 --- a/Telegram/SourceFiles/window/window_main_menu.cpp
 +++ b/Telegram/SourceFiles/window/window_main_menu.cpp
-@@ -26,6 +26,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -26,6 +26,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "data/data_session.h"
  #include "data/data_stories.h"
  #include "data/data_user.h"
++#include "dialogs/dialogs_filters.h"
 +#include "exteraless/config.h"
 +#include "exteraless/ghost_mode.h"
 +#include "exteraless/plugin_runtime.h"
  #include "info/info_memento.h"
  #include "info/profile/info_profile_badge.h"
  #include "settings/settings_common.h"
-@@ -41,7 +44,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -41,7 +45,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "mtproto/mtproto_config.h"
  #include "settings/sections/settings_advanced.h"
  #include "settings/sections/settings_calls.h"
@@ -15308,7 +15559,7 @@ index db8dcec..ec672d5 100644
  #include "storage/localstorage.h"
  #include "storage/storage_account.h"
  #include "support/support_templates.h"
-@@ -65,6 +70,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -65,6 +71,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "ui/widgets/scroll_area.h"
  #include "ui/widgets/shadow.h"
  #include "ui/wrap/slide_wrap.h"
@@ -15316,7 +15567,7 @@ index db8dcec..ec672d5 100644
  #include "wallet/wallet_panel.h"
  #include "window/themes/window_theme.h"
  #include "window/window_controller.h"
-@@ -84,6 +90,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -84,6 +91,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include <QtGui/QGuiApplication>
  #include <QtGui/QClipboard>
  
@@ -15326,7 +15577,7 @@ index db8dcec..ec672d5 100644
  namespace Window {
  namespace {
  
-@@ -121,11 +130,49 @@ constexpr auto kPlayStatusLimit = 2;
+@@ -121,11 +131,49 @@ constexpr auto kPlayStatusLimit = 2;
  	}) | rpl::flatten_latest();
  }
  
@@ -15377,7 +15628,7 @@ index db8dcec..ec672d5 100644
  
  	[[nodiscard]] int rightSkip() const {
  		return _rightSkip.current();
-@@ -164,7 +211,8 @@ protected:
+@@ -164,7 +212,8 @@ protected:
  
  MainMenu::ToggleAccountsButton::ToggleAccountsButton(
  	QWidget *parent,
@@ -15387,7 +15638,7 @@ index db8dcec..ec672d5 100644
  : AbstractButton(parent)
  , _current(current) {
  	rpl::single(rpl::empty) | rpl::then(
-@@ -177,13 +225,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
+@@ -177,13 +226,7 @@ MainMenu::ToggleAccountsButton::ToggleAccountsButton(
  		}
  	}, lifetime());
  
@@ -15402,7 +15653,7 @@ index db8dcec..ec672d5 100644
  		return (_toggled != value);
  	}) | rpl::on_next([=](bool value) {
  		_toggled = value;
-@@ -316,7 +358,12 @@ MainMenu::MainMenu(
+@@ -316,7 +359,12 @@ MainMenu::MainMenu(
  	this,
  	_controller->session().user(),
  	st::mainMenuUserpic)
@@ -15416,7 +15667,7 @@ index db8dcec..ec672d5 100644
  , _setEmojiStatus(this, SetStatusLabel(&controller->session()))
  , _emojiStatusPanel(std::make_unique<Info::Profile::EmojiStatusPanel>())
  , _badge(std::make_unique<Info::Profile::Badge>(
-@@ -597,9 +644,10 @@ void MainMenu::setupUserpicButton() {
+@@ -597,9 +645,10 @@ void MainMenu::setupUserpicButton() {
  }
  
  void MainMenu::toggleAccounts() {
@@ -15430,7 +15681,7 @@ index db8dcec..ec672d5 100644
  	Core::App().saveSettingsDelayed();
  }
  
-@@ -607,7 +655,10 @@ void MainMenu::setupAccounts() {
+@@ -607,7 +656,10 @@ void MainMenu::setupAccounts() {
  	const auto inner = _accounts->entity();
  
  	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
@@ -15442,7 +15693,7 @@ index db8dcec..ec672d5 100644
  	inner->add(object_ptr<Ui::FixedHeightWidget>(inner, st::mainMenuSkip));
  
  	std::move(
-@@ -616,7 +667,7 @@ void MainMenu::setupAccounts() {
+@@ -616,7 +668,7 @@ void MainMenu::setupAccounts() {
  		closeLayer();
  	}, inner->lifetime());
  
@@ -15451,7 +15702,7 @@ index db8dcec..ec672d5 100644
  	_accounts->finishAnimating();
  
  	_shadow->setDuration(0)->toggleOn(_accounts->shownValue());
-@@ -774,6 +825,196 @@ void MainMenu::setupMenu() {
+@@ -774,6 +826,203 @@ void MainMenu::setupMenu() {
  		controller->showSettings();
  	});
  
@@ -15644,6 +15895,13 @@ index db8dcec..ec672d5 100644
 +			});
 +		}
 +	}
++
++	addAction(
++		tr::lng_filters_feed(),
++		{ &st::menuIconChannel }
++	)->setClickedCallback([=] {
++		controller->setActiveChatsFilter(Dialogs::kFeedFilterId);
++	});
 +
  	_nightThemeToggle = addAction(
  		tr::lng_menu_night_mode(),
@@ -15917,7 +16175,7 @@ index 56d2e56..47e57a5 100644
  				fieldForMention->insertTag(
  					peer->shortName(),
 diff --git a/Telegram/SourceFiles/window/window_session_controller.cpp b/Telegram/SourceFiles/window/window_session_controller.cpp
-index df2166f..cc8b6f8 100644
+index df2166f..8e66466 100644
 --- a/Telegram/SourceFiles/window/window_session_controller.cpp
 +++ b/Telegram/SourceFiles/window/window_session_controller.cpp
 @@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -15928,7 +16186,15 @@ index df2166f..cc8b6f8 100644
  #include "apiwrap.h"
  #include "api/api_cloud_password.h"
  #include "api/api_text_entities.h"
-@@ -618,9 +619,69 @@ void SessionNavigation::showMessageByLinkResolved(
+@@ -67,6 +68,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "data/data_premium_limits.h"
+ #include "data/data_web_page.h"
+ #include "data/data_search_calendar.h"
++#include "dialogs/dialogs_filters.h"
+ #include "dialogs/ui/chat_search_in.h"
+ #include "passport/passport_form_controller.h"
+ #include "chat_helpers/tabbed_selector.h"
+@@ -618,9 +620,69 @@ void SessionNavigation::showMessageByLinkResolved(
  	}
  }
  
@@ -15998,7 +16264,17 @@ index df2166f..cc8b6f8 100644
  	auto params = SectionShow{
  		SectionShow::Way::Forward
  	};
-@@ -4163,9 +4224,15 @@ bool CheckAndJumpToNearChatsFilter(
+@@ -2043,6 +2105,9 @@ rpl::producer<> SessionController::filtersMenuChanged() const {
+ void SessionController::checkOpenedFilter() {
+ 	activateFirstChatsFilter();
+ 	if (const auto filterId = activeChatsFilterCurrent()) {
++		if (filterId == Dialogs::kFeedFilterId) {
++			return;
++		}
+ 		const auto &list = session().data().chatsFilters().list();
+ 		const auto i = ranges::find(list, filterId, &Data::ChatFilter::id);
+ 		if (i == end(list)) {
+@@ -4163,9 +4228,15 @@ bool CheckAndJumpToNearChatsFilter(
  		return false;
  	}
  	if (jump) {

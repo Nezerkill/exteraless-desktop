@@ -886,6 +886,9 @@ PRIVATE
     dialogs/dialogs_community_rows_view.h
     dialogs/dialogs_entry.cpp
     dialogs/dialogs_entry.h
+    dialogs/dialogs_feed.cpp
+    dialogs/dialogs_feed.h
+    dialogs/dialogs_filters.h
     dialogs/dialogs_indexed_list.cpp
     dialogs/dialogs_indexed_list.h
     dialogs/dialogs_inner_widget.cpp

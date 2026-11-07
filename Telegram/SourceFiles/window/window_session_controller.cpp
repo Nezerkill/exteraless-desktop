@@ -68,6 +68,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_premium_limits.h"
 #include "data/data_web_page.h"
 #include "data/data_search_calendar.h"
+#include "dialogs/dialogs_filters.h"
 #include "dialogs/ui/chat_search_in.h"
 #include "passport/passport_form_controller.h"
 #include "chat_helpers/tabbed_selector.h"
@@ -2104,6 +2105,9 @@ rpl::producer<> SessionController::filtersMenuChanged() const {
 void SessionController::checkOpenedFilter() {
 	activateFirstChatsFilter();
 	if (const auto filterId = activeChatsFilterCurrent()) {
+		if (filterId == Dialogs::kFeedFilterId) {
+			return;
+		}
 		const auto &list = session().data().chatsFilters().list();
 		const auto i = ranges::find(list, filterId, &Data::ChatFilter::id);
 		if (i == end(list)) {

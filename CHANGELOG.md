@@ -2,6 +2,23 @@
 
 ## 2026-11-07
 
+- Лента каналов (NB-47, v1 — синтетический фильтр, только чтение):
+  `dialogs/dialogs_feed.{h,cpp}` — `IsEligible` (broadcast без megagroup),
+  `Collect` через `enumerateBroadcasts`, исключения в `feed_excluded`
+  (`SetExcluded`/`IsExcluded` с персистом в `Core::Settings`),
+  `Generation`/`Invalidate`; `kFeedFilterId = FilterId(1000)` в
+  `dialogs/dialogs_filters.h`; наполнение — `FillFeed` в конструкторе
+  `MainList` (`addEntry` + `setLoaded`, порядок `sortByDate` индекса),
+  вход — пункт «Feed» главного меню (`menuIconChannel`,
+  `setActiveChatsFilter`), бейдж — суммой unread по папочному пути;
+  правый клик «Edit Folder» подавлен guard'ом в `editOpenedFilter`, а
+  `checkOpenedFilter` синтетический id не сбрасывает; 1 lang-ключ
+  `lng_filters_feed`; `Telegram/CMakeLists.txt` +3 строки; раннеры
+  1141/32/252 PASS (без изменений — новых CLI/ключей нет); `kKeysCount`
+  11243 (+1, сверено с `out/Telegram/gen/lang_auto_counts.h`); патч
+  `79330a02…`, `nix flake check` PASS. Ограничения: список обновляется
+  только при пересоздании (вход в ленту всегда свежий), strip-строка не
+  тронута (v2), Xvfb-смоук не выполнялся.
 - Город погоды (NB-56, follow-up): таблица 12 столиц в `extra_pills`
   (`WeatherCityIds`/`WeatherCity` → label/lat/lon, Москва дефолт);
   `OENetworkWeatherCity` (default `moscow`, нормализация регистра,

@@ -117,6 +117,19 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Лента каналов (NB-47, v1 — синтетический фильтр, только чтение):
+  `Dialogs::Feed` (`dialogs/dialogs_feed.{h,cpp}`) — `IsEligible` (broadcast
+  без megagroup), `Collect` через `enumerateBroadcasts`, исключения в
+  `feed_excluded` (персист в `Core::Settings`), `Invalidate`/`Generation`;
+  `kFeedFilterId` (`FilterId(1000)`, `dialogs/dialogs_filters.h`)
+  наполняется `FillFeed` в конструкторе `MainList` (порядок — `sortByDate`
+  индекса), вход — пункт «Feed» главного меню, бейдж — сумма unread как у
+  папок; «Edit Folder» правым кликом подавлен, `checkOpenedFilter`
+  синтетический id не сбрасывает; 1 lang-ключ. Счётчик проверок без
+  изменений — 1141 (новых CLI/ключей нет); `kKeysCount` 11243 (сверено с
+  `out/Telegram/gen/lang_auto_counts.h`). Ограничения: список обновляется
+  только при пересоздании (вход в ленту всегда свежий), strip-строка не
+  тронута (v2), Xvfb-смоук не выполнялся.
 - Город погоды (NB-56, follow-up): 12 столиц (`WeatherCityIds`/`WeatherCity`),
   `OENetworkWeatherCity` + алиас `weatherCity`; селектор в Network;
   `check_weather_city` (9 проверок), раннеры 1141/32/252 PASS.
