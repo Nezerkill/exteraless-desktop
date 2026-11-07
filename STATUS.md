@@ -117,6 +117,7 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Строка Feed в полосе (NB-47, v2): секция последней, маппинг индексов, unread, guard reorder/drag; раннеры 1156/32/252 PASS (без изменений).
 - Disk-кэш пилюль (NB-56, follow-up): `tdata/extra-pills-cache.json`,
   загрузка при первом `Instance()`, TTL 30 мин, протухшее — fallback;
   CLI 3 режима + 15 проверок; раннеры 1156/32/252 PASS.

@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_session.h"
 #include "data/data_unread_value.h"
 #include "data/data_user.h"
+#include "dialogs/dialogs_filters.h"
 #include "lang/lang_keys.h"
 #include "menu/menu_mark_as_read.h"
 #include "main/main_session.h"
@@ -233,23 +234,38 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		state->reorderLifetime.destroy();
 		const auto &list = session->data().chatsFilters().list();
 		auto includeMuted = Data::IncludeMutedCounterFoldersValue();
+		const auto applyUnread = [=](
+				int index,
+				const Dialogs::UnreadState &unread,
+				bool includeMuted) {
+			const auto chats = unread.chats;
+			const auto chatsMuted = unread.chatsMuted;
+			const auto muted = (chatsMuted + unread.marksMuted);
+			const auto count = (chats + unread.marks)
+				- (includeMuted ? 0 : muted);
+			const auto isMuted = includeMuted && (count == muted);
+			slider->setUnreadCount(index, count, isMuted);
+			slider->fitWidthToSections();
+		};
 		for (auto i = 0; i < list.size(); i++) {
 			rpl::combine(
 				Data::UnreadStateValue(session, list[i].id()),
 				rpl::duplicate(includeMuted)
 			) | rpl::on_next([=](
-					const Dialogs::UnreadState &state,
+					const Dialogs::UnreadState &unread,
 					bool includeMuted) {
-				const auto chats = state.chats;
-				const auto chatsMuted = state.chatsMuted;
-				const auto muted = (chatsMuted + state.marksMuted);
-				const auto count = (chats + state.marks)
-					- (includeMuted ? 0 : muted);
-				const auto isMuted = includeMuted && (count == muted);
-				slider->setUnreadCount(i, count, isMuted);
-				slider->fitWidthToSections();
+				applyUnread(i, unread, includeMuted);
 			}, state->reorderLifetime);
 		}
+		const auto feedIndex = int(list.size());
+		rpl::combine(
+			Data::UnreadStateValue(session, Dialogs::kFeedFilterId),
+			rpl::duplicate(includeMuted)
+		) | rpl::on_next([=](
+				const Dialogs::UnreadState &unread,
+				bool includeMuted) {
+			applyUnread(feedIndex, unread, includeMuted);
+		}, state->reorderLifetime);
 	};
 	if (trackActiveFilterAndUnreadAndReorder) {
 		using Reorder = Ui::ChatsFiltersTabsReorder;
@@ -263,6 +279,11 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 
 			const auto filters = &session->data().chatsFilters();
 			const auto &list = filters->list();
+			if (oldPosition >= int(list.size())
+				|| newPosition >= int(list.size())) {
+				slider->reorderSections(newPosition, oldPosition);
+				return;
+			}
 			if (!session->user()->isPremium()) {
 				if (list[0].id() != FilterId()) {
 					filters->moveAllToFront();
@@ -313,9 +334,10 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 					if (x >= left && x < right) {
 						const auto &list
 							= session->data().chatsFilters().list();
-						return (i < list.size())
-							? list[i].id()
-							: FilterId();
+						if (i >= int(list.size())) {
+							return std::nullopt;
+						}
+						return list[i].id();
 					}
 				}
 				return std::nullopt;
@@ -369,6 +391,16 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		choose(filter.id());
 	};
 
+	const auto applyIndex = [=](int index) {
+		if (slider->reordering()) {
+			return;
+		}
+		const auto &list = session->data().chatsFilters().list();
+		choose((index < int(list.size()))
+			? list[index].id()
+			: Dialogs::kFeedFilterId);
+	};
+
 	const auto filterByIndex = [=](int index) -> const Data::ChatFilter& {
 		const auto &list = session->data().chatsFilters().list();
 		Assert(index >= 0 && index < list.size());
@@ -385,24 +417,30 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 			return On(PowerSaving::kEmojiChat)
 				|| controller->isGifPausedAtLeastFor(pauseLevel);
 		};
-		const auto sectionsChanged = slider->setSectionsAndCheckChanged(
-			ranges::views::all(
-				list
-			) | ranges::views::transform([](const Data::ChatFilter &filter) {
-				auto title = filter.title();
-				return title.text.empty()
-					? TextWithEntities{ tr::lng_filters_all_short(tr::now) }
-					: title.isStatic
-					? Data::ForceCustomEmojiStatic(title.text)
-					: title.text;
-			}) | ranges::to_vector, context, paused);
-		slider->setSectionIcons(ranges::views::all(
+		auto titles = ranges::views::all(
+			list
+		) | ranges::views::transform([](const Data::ChatFilter &filter) {
+			auto title = filter.title();
+			return title.text.empty()
+				? TextWithEntities{ tr::lng_filters_all_short(tr::now) }
+				: title.isStatic
+				? Data::ForceCustomEmojiStatic(title.text)
+				: title.text;
+		}) | ranges::to_vector;
+		titles.push_back({ tr::lng_filters_feed(tr::now) });
+		auto icons = ranges::views::all(
 			list
 		) | ranges::views::transform([](const Data::ChatFilter &filter) {
 			return LookupFilterIcon(filter.id()
 				? ComputeFilterIcon(filter)
 				: FilterIcon::All).tabs.get();
-		}) | ranges::to_vector);
+		}) | ranges::to_vector;
+		icons.push_back(&st::menuIconChannel);
+		const auto sectionsChanged = slider->setSectionsAndCheckChanged(
+			std::move(titles),
+			context,
+			paused);
+		slider->setSectionIcons(std::move(icons));
 		if (!sectionsChanged) {
 			return;
 		}
@@ -428,20 +466,33 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 				state->reorder->addPinnedInterval(
 					premiumFrom,
 					std::max(1, int(list.size()) - maxLimit));
+				state->reorder->addPinnedInterval(int(list.size()), 1);
 			}
 		}
 		if (trackActiveFilterAndUnreadAndReorder) {
 			reassignUnreadValue();
 		}
 		[&] {
+			const auto wasLast = !!state->lastFilterId;
 			const auto lookingId = state->lastFilterId.value_or(
 				trackActiveFilterAndUnreadAndReorder
 					? controller->activeChatsFilterCurrent()
 					: list[0].id());
+			if (lookingId == Dialogs::kFeedFilterId) {
+				const auto index = int(list.size());
+				state->lastFilterId = lookingId;
+				slider->setActiveSectionFast(index);
+				scrollToIndex(
+					index,
+					wasLast ? anim::type::normal : anim::type::instant);
+				if (wasLast || !trackActiveFilterAndUnreadAndReorder) {
+					applyIndex(index);
+				}
+				return;
+			}
 			for (auto i = 0; i < list.size(); i++) {
 				const auto &filter = list[i];
 				if (filter.id() == lookingId) {
-					const auto wasLast = !!state->lastFilterId;
 					state->lastFilterId = filter.id();
 					slider->setActiveSectionFast(i);
 					scrollToIndex(
@@ -466,14 +517,20 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 			controller->activeChatsFilter(
 			) | rpl::on_next([=](FilterId id) {
 				const auto &list = session->data().chatsFilters().list();
+				auto index = (id == Dialogs::kFeedFilterId)
+					? int(list.size())
+					: -1;
 				for (auto i = 0; i < list.size(); ++i) {
 					if (list[i].id() == id) {
-						state->ignoreActivation = true;
-						slider->setActiveSection(i);
-						state->ignoreActivation = false;
-						scrollToIndex(i, anim::type::normal);
+						index = i;
 						break;
 					}
+				}
+				if (index >= 0) {
+					state->ignoreActivation = true;
+					slider->setActiveSection(index);
+					state->ignoreActivation = false;
+					scrollToIndex(index, anim::type::normal);
 				}
 				state->reorder->finishReordering();
 			}, state->rebuildLifetime);
@@ -482,16 +539,19 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 			slider->sectionActivated()
 		) | rpl::combine_previous(
 		) | rpl::on_next([=](int was, int index) {
-			if (slider->reordering()) {
+			if (slider->reordering() || index < 0) {
 				return;
 			}
-			const auto &filter = filterByIndex(index);
+			const auto &list = session->data().chatsFilters().list();
+			const auto id = (index < int(list.size()))
+				? list[index].id()
+				: Dialogs::kFeedFilterId;
 			if (was != index) {
-				state->lastFilterId = filter.id();
+				state->lastFilterId = id;
 				scrollToIndex(index, anim::type::normal);
 			}
 			if (!state->ignoreActivation) {
-				applyFilter(filter);
+				applyIndex(index);
 			}
 		}, state->rebuildLifetime);
 		slider->contextMenuRequested() | rpl::on_next([=](int index) {
@@ -553,15 +613,21 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 					|| (request.action == Qt::Key_Backtab));
 		}) | rpl::on_next([=](const Shortcuts::ChatSwitchRequest &request) {
 			const auto count = slider->sectionsCount();
+			const auto feed = count - 1;
 			const auto locked = slider->lockedFrom();
-			const auto limit = locked ? locked : count;
-			if (limit <= 1) {
+			const auto folders = (locked > 0 && locked < feed)
+				? locked
+				: feed;
+			if (folders <= 0) {
 				return;
 			}
+			const auto slots = folders + 1;
+			const auto active = std::min(
+				std::max(slider->activeSection(), 0),
+				slots - 1);
 			const auto back = (request.action == Qt::Key_Backtab);
-			const auto current = std::min(slider->activeSection(), limit - 1);
-			const auto next = (current + (back ? -1 : 1) + limit) % limit;
-			slider->setActiveSection(next);
+			const auto next = (active + (back ? -1 : 1) + slots) % slots;
+			slider->setActiveSection((next == folders) ? feed : next);
 		}, wrap->lifetime());
 	}
 
