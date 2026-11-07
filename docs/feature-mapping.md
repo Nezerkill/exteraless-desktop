@@ -199,6 +199,14 @@ The port adds display names, ping display and the auto-disable mask
 (`OEProxyDisableConditions`). If detection is unavailable, the condition is
 inactive and the setting UI says so.
 
+`WEB` proxy type (desktop-only, NB-90): `MTP::ProxyData::Type::Web` with
+`tg://webproxy` / `t.me/webproxy` links and a `WEB` entry in the proxy-type
+selector (`boxes/connection_box.cpp`); transport in
+`mtproto/web_proxy/*` + `mtproto/details/mtproto_web_proxy_socket.*`
+(~3.1k lines). The relay itself is external infrastructure
+(`docs/web-proxy-plan.md`): without a deployed relay only the client side
+is covered — connection and fallback are untested (see `docs/web-proxy-test-plan.md`).
+
 ### Backup
 
 `.extera` is a JSON document wrapped in invisible Unicode characters. It

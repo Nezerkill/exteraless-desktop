@@ -117,6 +117,7 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- WEB proxy в документации (NB-90, только доки по решению пользователя).
 - Плагины, этап 3c — intents и уровни доступа (NB-79.3c): `OEPluginTrustLevels`
   — JSON `id → 0|1|2` с default `1` (Gated): отклонение от Android
   (ISOLATED=0) сделано потому, что манифест уже декларирует `intents` при
