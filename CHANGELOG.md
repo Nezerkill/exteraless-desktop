@@ -2,6 +2,30 @@
 
 ## 2026-11-07
 
+- MD3-плеер, фаза 1 — LRC и тексты в аудио-экране (NB-50): Qt-only модуль
+  `exteraless/lyrics.{h,cpp}` — `ParseLyrics` и `ActiveIndex` для одного LRC
+  (SRT не принимается): `[offset:±ms]` сдвигает все таймстемпы, строка с
+  несколькими `[mm:ss.xx]` дублируется на каждую метку, word-time
+  `<mm:ss.xx>` внутри текста вырезается, BOM UTF-8/UTF-16 LE/BE
+  распознаётся, прочие теги в `[...]` (`[ar:]`, `[ti:]`) отбрасываются.
+  Файл без таймстемпов даёт unsynced (`synced: false`, одна строка от нуля),
+  а без текста — instrumental. В приложении
+  `Telegram/SourceFiles/exteraless/media_lyrics.{h,cpp}` держит текст на
+  видео: JSON-карта в `OELyricsFiles` (алиас `lyricsFiles`, санитайзер при
+  импорте `.extera`), `activeText` по позиции. В меню медиавьюера «Choose
+  Lyrics File…» (`FileDialog` `*.lrc`) и «Disable Lyrics» под гейтом аудио;
+  в overview аудио-блок показывает активную строку акцентным цветом
+  (`songLyricsActiveFg`), сам подкручивает к ней и держит не больше трёх
+  строк (`songLyricsMaxLines`, `songLyricsTop`). CLI `lyrics-parse` и
+  `lyrics-active`, пять фикстур (`basic`, `wordtime`, `unsynced`,
+  `bom-utf16`, `broken`); `check_lyrics` — 32 проверки, chats-раннер 978
+  (= 943 + 32 lyrics + 2 CLI + 1 backup), backup 104, плагины 32 и
+  host-раннер 252 без изменений; `kKeysCount` не менялся (11232) — новых
+  lang-ключей нет, пункты меню — литералы; sha256 патча `3b570173…`,
+  `nix flake check` PASS. Не сделано (follow-up): lrclib.net с кэшем и
+  consent'ом, MD3-ребилд плеера, мини-плеер, очередь и drag, server-side
+  транскрипция (= NB-51). Ограничения: выбранный файл виден после
+  переоткрытия вкладки Media; Xvfb-смоук не выполнялся — проверка CLI.
 - Плагины, этап 3b — меню плагина (NB-30): плагин публикует пункты через
   `add_menu_item(MenuItemData(...), context)` и `MenuItemType` —
   `main`/`message`/`chat` (PROFILE не перенесён), удаляет через

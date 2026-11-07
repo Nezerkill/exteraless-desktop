@@ -9,6 +9,7 @@
 #include "exteraless/ghost_schedule.h"
 #include "exteraless/ghost_status.h"
 #include "exteraless/links.h"
+#include "exteraless/lyrics.h"
 #include "exteraless/math.h"
 #include "exteraless/network.h"
 #include "exteraless/pangu.h"
@@ -245,6 +246,8 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli subtitles-parse <file>\n"
 		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
 		<< "  exteraless-chats-cli subtitles-key <docId>\n"
+		<< "  exteraless-chats-cli lyrics-parse <file>\n"
+		<< "  exteraless-chats-cli lyrics-active <file> <posMs>\n"
 		<< "  exteraless-chats-cli network\n"
 		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
@@ -3015,6 +3018,50 @@ int main(int argc, char *argv[]) {
 		}
 		PrintJson(QJsonObject{
 			{ QStringLiteral("key"), Exteraless::VideoKey(docId) },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("lyrics-parse")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		const auto lyrics = Exteraless::ParseLyrics(bytes);
+		auto lines = QJsonArray();
+		for (const auto &line : lyrics.lines) {
+			lines.append(QJsonObject{
+				{ QStringLiteral("ms"), line.ms },
+				{ QStringLiteral("text"), line.text },
+			});
+		}
+		PrintJson(QJsonObject{
+			{ QStringLiteral("lines"), lines },
+			{ QStringLiteral("synced"), lyrics.synced },
+		});
+		return 0;
+	}
+	if (mode == QStringLiteral("lyrics-active")) {
+		if (arguments.size() != 4) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto position = arguments[3].toLongLong(&ok);
+		if (!ok || position < 0) {
+			return PrintUsage();
+		}
+		auto bytes = QByteArray();
+		if (!ReadFileBytes(arguments[2], &bytes)) {
+			return PrintUsage();
+		}
+		const auto lyrics = Exteraless::ParseLyrics(bytes);
+		const auto index = Exteraless::ActiveIndex(lyrics, position);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("index"), index },
+			{ QStringLiteral("text"),
+				(index >= 0) ? lyrics.lines[index].text : QString() },
 		});
 		return 0;
 	}

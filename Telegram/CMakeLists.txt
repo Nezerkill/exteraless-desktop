@@ -91,6 +91,8 @@ target_sources(Telegram PRIVATE
     ../exteraless/proxy_rules_state.h
     SourceFiles/boxes/deleted_messages_box.cpp
     SourceFiles/boxes/deleted_messages_box.h
+    SourceFiles/exteraless/media_lyrics.cpp
+    SourceFiles/exteraless/media_lyrics.h
     SourceFiles/exteraless/media_subtitles.cpp
     SourceFiles/exteraless/media_subtitles.h
     SourceFiles/exteraless/pill_stack.cpp

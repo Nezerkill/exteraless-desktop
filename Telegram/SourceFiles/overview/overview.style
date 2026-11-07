@@ -16,6 +16,9 @@ OverviewFileLayout {
 	songThumbSize: pixels;
 	songNameTop: pixels;
 	songStatusTop: pixels;
+	songLyricsTop: pixels;
+	songLyricsMaxLines: int;
+	songLyricsActiveFg: color;
 	songIconBg: color;
 	songOverBg: color;
 	songPause: icon;
@@ -94,6 +97,9 @@ overviewFileLayout: OverviewFileLayout {
 	songThumbSize: 36px;
 	songNameTop: 7px;
 	songStatusTop: 25px;
+	songLyricsTop: 4px;
+	songLyricsMaxLines: 3;
+	songLyricsActiveFg: windowActiveTextFg;
 	songIconBg: msgFileInBg;
 	songOverBg: msgFileInBgOver;
 	songPause: overviewSongPause;

@@ -48,6 +48,7 @@ constexpr auto kMediaViewerMenuCopyPhoto = "OEMediaViewerMenuCopyPhoto";
 constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
+constexpr auto kLyricsFiles = "OELyricsFiles";
 constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -641,6 +642,21 @@ void Config::setSubtitlesFiles(const QString &value) {
 		return;
 	}
 	setValue(kSubtitlesFiles, value);
+}
+
+QString Config::lyricsFiles() const {
+	const auto value = stringValue(kLyricsFiles, QString());
+	const auto document = QJsonDocument::fromJson(value.toUtf8());
+	return document.isObject() ? value : QStringLiteral("{}");
+}
+
+void Config::setLyricsFiles(const QString &value) {
+	auto error = QJsonParseError{0, QJsonParseError::NoError};
+	const auto document = QJsonDocument::fromJson(value.toUtf8(), &error);
+	if (error.error != QJsonParseError::NoError || !document.isObject()) {
+		return;
+	}
+	setValue(kLyricsFiles, value);
 }
 
 bool Config::chatMenuBoost() const {
@@ -1588,6 +1604,7 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kMediaViewerMenuSetProfile
 			|| key == kMediaViewerMenuSubtitles
 			|| key == kSubtitlesFiles
+			|| key == kLyricsFiles
 			|| key == kChatMenuBoost
 			|| key == kChatMenuLinked
 			|| key == kChatMenuViewDeleted

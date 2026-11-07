@@ -107,6 +107,8 @@ public:
 	void setMediaViewerMenuSubtitles(bool value);
 	[[nodiscard]] QString subtitlesFiles() const;
 	void setSubtitlesFiles(const QString &value);
+	[[nodiscard]] QString lyricsFiles() const;
+	void setLyricsFiles(const QString &value);
 	[[nodiscard]] bool chatMenuBoost() const;
 	void setChatMenuBoost(bool value);
 	[[nodiscard]] bool chatMenuLinked() const;

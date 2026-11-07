@@ -38,6 +38,18 @@ sibling-чекаутом: `../exteraless`.
     помнит субтитры по видео (JSON-карта в `OESubtitlesFiles`), медиавьюер
     добавляет пункты «Choose Subtitles File» и «Disable Subtitles», а реплики
     рисуются в raster, OpenGL и RHI.
+  - `lyrics.*` — парсер LRC: `ParseLyrics` и `ActiveIndex`. Формат только
+    LRC (SRT не принимается): `[offset:±ms]` сдвигает таймстемпы, строка с
+    несколькими `[mm:ss.xx]` дублируется на каждую метку, word-time
+    `<mm:ss.xx>` внутри текста вырезается, BOM UTF-8/UTF-16 LE/BE
+    распознаётся, прочие теги в `[...]` отбрасываются; файл без таймстемпов
+    даёт `synced: false` и одну строку от нуля, файл без текста —
+    `instrumental`. Тексты в аудио-экране — NB-50, фаза 1: `media_lyrics.*`
+    помнит текст по видео (JSON-карта в `OELyricsFiles`, алиас
+    `lyricsFiles`, `activeText` по позиции), медиавьюер добавляет «Choose
+    Lyrics File…» (`*.lrc`) и «Disable Lyrics», а в overview аудио-блок
+    показывает активную строку акцентом с автоскроллом и лимитом в три
+    строки.
   - `ai_client.*` — OpenAI-совместимый сборщик запроса без сети:
     `ChatCompletionsUrl` (дописывает `/chat/completions`), `BuildRequestJson`
     (`messages`, `stream: false`) и `ParseResponse` (первый непустой
@@ -59,7 +71,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (943 проверки: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, network, download-boost, subtitles, avatar-corners, section-radius, regex-filters, backup);
+  (978 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, recognition, network, download-boost, subtitles, lyrics, avatar-corners, section-radius, regex-filters, backup);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму

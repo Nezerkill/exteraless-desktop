@@ -99,8 +99,8 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 943 проверки PASS
-  (44 strip, 10 reactions, 61 CLI, 7 config, 22 general, 9 bot-privacy,
+- Chats: `exteraless/tests/chats/run_checks.py` — 978 проверок PASS
+  (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
@@ -114,8 +114,29 @@
   19 update-channel, 32 translation, 23 ai, 6 recognition, 17 network,
   10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 103 backup);
+  27 regex-filters, 32 lyrics, 104 backup);
   плагины без изменений — 32 и 213 проверок.
+- MD3-плеер, фаза 1 — LRC и тексты (NB-50): Qt-only парсер
+  `exteraless/lyrics.{h,cpp}` (`ParseLyrics`/`ActiveIndex`) читает один LRC
+  (SRT не принимается): `[offset:±ms]` сдвигает таймстемпы, мультитаймстемпы
+  `[mm:ss.xx]` дублируют строку, word-time `<mm:ss.xx>` внутри текста
+  вырезается, BOM UTF-8/UTF-16 LE/BE распознаётся, прочие теги в `[...]`
+  отбрасываются; файл без таймстемпов — unsynced (одна строка от нуля,
+  `synced: false`), без текста — instrumental. Память per-video —
+  `Telegram/SourceFiles/exteraless/media_lyrics.{h,cpp}`: JSON-карта в
+  `OELyricsFiles` (алиас `lyricsFiles`, санитайзер в импорте `.extera`),
+  `activeText` по позиции. UI: «Choose Lyrics File…» (`FileDialog` `*.lrc`)
+  и «Disable Lyrics» в меню медиавьюера под гейтом аудио; в overview
+  аудио-блок показывает активную строку акцентом (`songLyricsActiveFg`),
+  сам подкручивает к ней и держит ≤ 3 строк (`songLyricsMaxLines`,
+  `songLyricsTop`). CLI `lyrics-parse`/`lyrics-active`, пять фикстур,
+  `check_lyrics` — 32 проверки; chats-раннер 978 (= 943 + 32 + 2 CLI +
+  1 backup), backup 104, плагины 32 и host-раннер 252 без изменений;
+  `kKeysCount` 11232 — lang не менялся, пункты меню — литералы; sha256
+  патча `3b570173…`, `nix flake check` PASS. Не сделано: lrclib.net с кэшем
+  и consent'ом, MD3-ребилд плеера, мини-плеер, очередь/drag, server-side
+  транскрипция (= NB-51). Ограничения: выбор файла виден после переоткрытия
+  вкладки Media; Xvfb-смоук не выполнялся.
 - Плагины, этап 3b — меню плагина (NB-30): `MenuItemType` `main`/`message`/
   `chat` (PROFILE не перенесён), `add_menu_item`/`remove_menu_item`, снимок
   `menu` в ответе `loaded`, `cmd: menu` → `clicked`/`error`; валидация — id

@@ -21,6 +21,8 @@ add_library(exteraless STATIC
     ghost_status.h
     links.cpp
     links.h
+    lyrics.cpp
+    lyrics.h
     math.cpp
     math.h
     message_menu.h

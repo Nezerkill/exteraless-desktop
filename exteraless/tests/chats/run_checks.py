@@ -219,6 +219,8 @@ def check_cli_args(ledger, cli):
         ("subtitles-parse without file", ["subtitles-parse"]),
         ("subtitles-active without position", ["subtitles-active", "a.srt"]),
         ("subtitles-key without id", ["subtitles-key"]),
+        ("lyrics-parse without file", ["lyrics-parse"]),
+        ("lyrics-active without position", ["lyrics-active", "a.lrc"]),
         ("header-style-set with wrong count", ["header-style-set"]),
     ]
     before = len(ledger.failures)
@@ -844,7 +846,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 133,
+            len(section) == 134,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -865,7 +867,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 138,
+            sum(len(value) for value in exported.values()) == 139,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -885,7 +887,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 138,
+                data.get("applied") == 139,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -1025,6 +1027,9 @@ def check_backup(ledger, cli, work):
             "OESubtitlesFiles": {
                 "doc_1": {"path": "/tmp/a.srt", "label": "en"},
             },
+            "OELyricsFiles": {
+                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
+            },
             "OEChatsAlwaysShowDownloadIcon": True,
             "OEPrivacyFalseBottom": True,
             "OEAppearanceChatDecoration": 1,
@@ -1075,7 +1080,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 138,
+            data.get("applied") == 139,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1119,6 +1124,12 @@ def check_backup(ledger, cli, work):
             "backup full plugin states sanitized",
             section.get("OEPluginStates") == {"plugin-a": True},
             section.get("OEPluginStates"))
+        ledger.check(
+            "backup full lyrics files",
+            section.get("OELyricsFiles") == {
+                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
+            },
+            section.get("OELyricsFiles"))
         ledger.check(
             "backup full save deleted",
             section.get("OESaveDeletedMessages") is True,
@@ -1388,10 +1399,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 133",
+            "backup legacy eight completed to 134",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (133, 3, 2),
+             len(sections["mainconfig"])) == (134, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -6043,6 +6054,173 @@ def check_subtitles(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_lyrics(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    def parse(name):
+        result = run(cli, ["lyrics-parse", str(FIXTURES / name)])
+        if result.returncode != 0:
+            ledger.check(
+                f"lyrics parse {name}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(f"lyrics parse {name}", False, f"json: {error}")
+            return None
+        lines = payload.get("lines")
+        if (not isinstance(lines, list)
+                or not isinstance(payload.get("synced"), bool)):
+            ledger.check(f"lyrics parse {name}", False, payload)
+            return None
+        for line in lines:
+            if (not isinstance(line, dict)
+                    or not isinstance(line.get("ms"), int)
+                    or not isinstance(line.get("text"), str)):
+                ledger.check(f"lyrics parse {name}", False, line)
+                return None
+        ledger.check(f"lyrics parse {name}", True)
+        return payload
+
+    def active(name, position):
+        result = run(
+            cli, ["lyrics-active", str(FIXTURES / name), str(position)])
+        if result.returncode != 0:
+            ledger.check(
+                f"lyrics active {name} @{position}",
+                False,
+                f"exit {result.returncode}, "
+                f"stderr {result.stderr.strip()!r}")
+            return None
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            ledger.check(
+                f"lyrics active {name} @{position}",
+                False,
+                f"json: {error}")
+            return None
+        index = payload.get("index")
+        text = payload.get("text")
+        if not isinstance(index, int) or not isinstance(text, str):
+            ledger.check(
+                f"lyrics active {name} @{position}", False, payload)
+            return None
+        return index, text
+
+    payload = parse("basic.lrc")
+    if payload is not None:
+        lines = payload["lines"]
+        ledger.check("basic lyrics synced", payload["synced"] is True)
+        ledger.check("basic lyrics line count", len(lines) == 4, len(lines))
+        times = [line["ms"] for line in lines]
+        ledger.check(
+            "basic lyrics offset applied",
+            times == [2000, 6000, 10250, 31000],
+            times)
+        ledger.check(
+            "basic lyrics sorted",
+            all(first <= second for first, second in zip(times, times[1:])),
+            times)
+        texts = [line["text"] for line in lines]
+        ledger.check(
+            "basic lyrics duplicated multi timestamp",
+            texts == ["First line", "Second line", "Last cue", "Last cue"],
+            texts)
+        ledger.check(
+            "basic lyrics tags stripped",
+            all("[" not in text and "]" not in text for text in texts),
+            texts)
+
+    cases = [
+        ("before first line", 1999, (-1, "")),
+        ("at first line", 2000, (0, "First line")),
+        ("inside first line", 5999, (0, "First line")),
+        ("at third line", 10250, (2, "Last cue")),
+        ("at last line", 31000, (3, "Last cue")),
+        ("past end", 10000000, (3, "Last cue")),
+    ]
+    for name, position, expected in cases:
+        current = active("basic.lrc", position)
+        ledger.check(
+            f"basic lyrics {name}", current == expected, current)
+
+    payload = parse("wordtime.lrc")
+    if payload is not None:
+        lines = payload["lines"]
+        ledger.check("wordtime lyrics synced", payload["synced"] is True)
+        texts = [line["text"] for line in lines]
+        ledger.check(
+            "wordtime tags removed",
+            texts == ["Hello world", "Plain line"],
+            texts)
+        times = [line["ms"] for line in lines]
+        ledger.check("wordtime lyrics times", times == [2000, 4500], times)
+
+    payload = parse("unsynced.lrc")
+    if payload is not None:
+        lines = payload["lines"]
+        ledger.check("unsynced lyrics synced false", payload["synced"] is False)
+        ledger.check("unsynced lyrics single line", len(lines) == 1, len(lines))
+        text = lines[0]["text"] if lines else None
+        ledger.check(
+            "unsynced lyrics joined text",
+            text == "Plain first line\nPlain second line\nPlain third line",
+            repr(text))
+        start = lines[0]["ms"] if lines else None
+        ledger.check("unsynced lyrics start at zero", start == 0, start)
+    current = active("unsynced.lrc", 0)
+    ledger.check(
+        "unsynced lyrics active at zero",
+        current is not None and current[0] == 0,
+        current)
+
+    payload = parse("bom-utf16.lrc")
+    if payload is not None:
+        lines = payload["lines"]
+        texts = [line["text"] for line in lines]
+        ledger.check("bom lyrics line count", len(lines) == 2, len(lines))
+        ledger.check(
+            "bom lyrics utf-16 decoded",
+            texts == ["UTF-16 line one", "UTF-16 line two"],
+            texts)
+        ledger.check(
+            "bom lyrics marker dropped",
+            all("\ufeff" not in text for text in texts),
+            texts)
+
+    payload = parse("broken.lrc")
+    if payload is not None:
+        lines = payload["lines"]
+        texts = [line["text"] for line in lines]
+        ledger.check(
+            "broken lyrics skipped",
+            texts == ["Valid one", "Valid two", "Valid three"],
+            texts)
+        times = [line["ms"] for line in lines]
+        ledger.check(
+            "broken lyrics times",
+            times == [1000, 3000, 9000],
+            times)
+    current = active("broken.lrc", 3000)
+    ledger.check(
+        "broken lyrics active", current == (1, "Valid two"), current)
+
+    result = run(cli, ["lyrics-parse", str(FIXTURES / "missing.lrc")])
+    ledger.check(
+        "lyrics parse missing file",
+        result.returncode == 2 and bool(result.stderr.strip()),
+        f"exit {result.returncode}, stderr {result.stderr!r}")
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_download_boost(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -7193,6 +7371,7 @@ def main():
         network = check_network(ledger, cli, work)
         download_boost = check_download_boost(ledger, cli, work)
         subtitles = check_subtitles(ledger, cli, work)
+        lyrics = check_lyrics(ledger, cli, work)
         regex_filters = check_regex_filters(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
@@ -7272,6 +7451,7 @@ def main():
     print(f"network: {network[0] - network[1]} passed")
     print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
     print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
+    print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
     print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
     if ledger.failures:

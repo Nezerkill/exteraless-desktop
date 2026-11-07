@@ -9,10 +9,10 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..bbd7372 100644
+index 811707d..fd1cdaa 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
-@@ -70,6 +70,37 @@ endif()
+@@ -70,6 +70,39 @@ endif()
  
  set_target_properties(Telegram PROPERTIES AUTOMOC ON)
  
@@ -37,6 +37,8 @@ index 811707d..bbd7372 100644
 +    ../exteraless/proxy_rules_state.h
 +    SourceFiles/boxes/deleted_messages_box.cpp
 +    SourceFiles/boxes/deleted_messages_box.h
++    SourceFiles/exteraless/media_lyrics.cpp
++    SourceFiles/exteraless/media_lyrics.h
 +    SourceFiles/exteraless/media_subtitles.cpp
 +    SourceFiles/exteraless/media_subtitles.h
 +    SourceFiles/exteraless/pill_stack.cpp
@@ -50,7 +52,7 @@ index 811707d..bbd7372 100644
  target_link_libraries(Telegram
  PRIVATE
      tdesktop::lib_fido2
-@@ -109,6 +140,7 @@ PRIVATE
+@@ -109,6 +142,7 @@ PRIVATE
      desktop-app::external_openal
      desktop-app::external_wallet_engine
      desktop-app::external_xxhash
@@ -58,7 +60,7 @@ index 811707d..bbd7372 100644
  )
  
  if (NOT DESKTOP_APP_DISABLE_SWIFT6)
-@@ -414,6 +446,8 @@ PRIVATE
+@@ -414,6 +448,8 @@ PRIVATE
      boxes/stickers_box.h
      boxes/transfer_gift_box.cpp
      boxes/transfer_gift_box.h
@@ -67,7 +69,7 @@ index 811707d..bbd7372 100644
      boxes/compose_ai_box.cpp
      boxes/compose_ai_box.h
      boxes/create_ai_box.cpp
-@@ -1492,6 +1526,10 @@ PRIVATE
+@@ -1492,6 +1528,10 @@ PRIVATE
      lang/lang_numbers_animation.h
      lang/lang_translator.cpp
      lang/lang_translator.h
@@ -78,7 +80,7 @@ index 811707d..bbd7372 100644
      lang/translate_mtproto_provider.cpp
      lang/translate_mtproto_provider.h
      lang/translate_provider.cpp
-@@ -1680,6 +1718,7 @@ PRIVATE
+@@ -1680,6 +1720,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -86,7 +88,7 @@ index 811707d..bbd7372 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1936,8 @@ PRIVATE
+@@ -1897,6 +1938,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -95,7 +97,7 @@ index 811707d..bbd7372 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2571,10 @@ else()
+@@ -2530,6 +2573,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -1898,6 +1900,215 @@ index 2bdf47a..e66bf76 100644
  		result.erase(ranges::find(result, Key{ Tab::Downloads }));
  	}
  	return result;
+diff --git a/Telegram/SourceFiles/exteraless/media_lyrics.cpp b/Telegram/SourceFiles/exteraless/media_lyrics.cpp
+new file mode 100644
+index 0000000..86fb19c
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/media_lyrics.cpp
+@@ -0,0 +1,160 @@
++#include "exteraless/media_lyrics.h"
++
++#include "exteraless/config.h"
++#include "exteraless/subtitles.h"
++
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QJsonParseError>
++
++#include <optional>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMaxStoredDocs = 128;
++
++[[nodiscard]] QJsonObject ReadStore() {
++	auto error = QJsonParseError{ 0, QJsonParseError::NoError };
++	const auto document = QJsonDocument::fromJson(
++		Config::Instance().lyricsFiles().toUtf8(),
++		&error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return {};
++	}
++	return document.object();
++}
++
++void WriteStore(const QJsonObject &store) {
++	Config::Instance().setLyricsFiles(QString::fromUtf8(
++		QJsonDocument(store).toJson(QJsonDocument::Compact)));
++}
++
++[[nodiscard]] QString StoredPath(const QJsonObject &store, qint64 docId) {
++	const auto key = VideoKey(docId);
++	if (!MediaLyrics::ValidVideoKey(key)) {
++		return {};
++	}
++	const auto path = store.value(key).toObject().value(
++		u"path"_q).toString();
++	return QFileInfo(path).isFile() ? path : QString();
++}
++
++[[nodiscard]] std::optional<MediaLyrics::State> ReadState(
++		const QString &path) {
++	auto file = QFile(path);
++	if (!file.open(QIODevice::ReadOnly)) {
++		return std::nullopt;
++	}
++	auto lyrics = ParseLyrics(file.readAll());
++	if (lyrics.instrumental || lyrics.lines.isEmpty()) {
++		return std::nullopt;
++	}
++	return MediaLyrics::State{
++		.path = path,
++		.label = QFileInfo(path).fileName(),
++		.lyrics = std::move(lyrics),
++	};
++}
++
++} // namespace
++
++MediaLyrics &MediaLyrics::Instance() {
++	static auto instance = MediaLyrics();
++	return instance;
++}
++
++bool MediaLyrics::ValidVideoKey(const QString &key) {
++	if (!key.startsWith(u"doc_"_q)) {
++		return false;
++	}
++	auto ok = false;
++	const auto docId = key.mid(4).toLongLong(&ok);
++	return ok && docId >= 0 && (VideoKey(docId) == key);
++}
++
++MediaLyrics::State *MediaLyrics::find(qint64 docId) {
++	if (docId <= 0) {
++		return nullptr;
++	}
++	if (const auto i = _states.find(docId); i != _states.end()) {
++		return &i->second;
++	}
++	const auto path = StoredPath(ReadStore(), docId);
++	if (path.isEmpty()) {
++		return nullptr;
++	}
++	auto state = ReadState(path);
++	if (!state) {
++		return nullptr;
++	}
++	const auto inserted = _states.emplace(docId, std::move(*state));
++	return &inserted.first->second;
++}
++
++bool MediaLyrics::load(qint64 docId, const QString &path) {
++	if (docId <= 0) {
++		return false;
++	}
++	auto state = ReadState(path);
++	if (!state) {
++		return false;
++	}
++	while (!_states.empty() && _states.size() >= kMaxStoredDocs) {
++		_states.erase(_states.begin());
++	}
++	_states[docId] = std::move(*state);
++	persist(docId);
++	return true;
++}
++
++void MediaLyrics::disable(qint64 docId) {
++	_states.erase(docId);
++	persist(docId);
++}
++
++int MediaLyrics::activeIndex(qint64 docId, qint64 positionMs) const {
++	const auto i = _states.find(docId);
++	if (i == _states.end()) {
++		return -1;
++	}
++	return ActiveIndex(i->second.lyrics, positionMs);
++}
++
++QString MediaLyrics::activeText(qint64 docId, qint64 positionMs) const {
++	const auto index = activeIndex(docId, positionMs);
++	if (index < 0) {
++		return QString();
++	}
++	const auto &lines = _states.find(docId)->second.lyrics.lines;
++	return lines[index].text;
++}
++
++void MediaLyrics::persist(qint64 docId) const {
++	auto store = ReadStore();
++	const auto videoKey = VideoKey(docId);
++	const auto i = _states.find(docId);
++	if (i == _states.end()) {
++		if (!store.contains(videoKey)) {
++			return;
++		}
++		store.remove(videoKey);
++	} else {
++		auto entry = QJsonObject();
++		entry[u"path"_q] = i->second.path;
++		entry[u"label"_q] = i->second.label;
++		store[videoKey] = entry;
++	}
++	for (const auto &storedKey : store.keys()) {
++		if (store.size() <= kMaxStoredDocs) {
++			break;
++		} else if (storedKey != videoKey) {
++			store.remove(storedKey);
++		}
++	}
++	WriteStore(store);
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/exteraless/media_lyrics.h b/Telegram/SourceFiles/exteraless/media_lyrics.h
+new file mode 100644
+index 0000000..c432cc9
+--- /dev/null
++++ b/Telegram/SourceFiles/exteraless/media_lyrics.h
+@@ -0,0 +1,37 @@
++#pragma once
++
++#include "exteraless/lyrics.h"
++
++#include <QString>
++
++#include <map>
++
++namespace Exteraless {
++
++class MediaLyrics final {
++public:
++	struct State {
++		QString path;
++		QString label;
++		Lyrics lyrics;
++	};
++
++	[[nodiscard]] static MediaLyrics &Instance();
++
++	[[nodiscard]] static bool ValidVideoKey(const QString &key);
++
++	[[nodiscard]] State *find(qint64 docId);
++	[[nodiscard]] bool load(qint64 docId, const QString &path);
++	void disable(qint64 docId);
++
++	[[nodiscard]] int activeIndex(qint64 docId, qint64 positionMs) const;
++	[[nodiscard]] QString activeText(qint64 docId, qint64 positionMs) const;
++
++private:
++	void persist(qint64 docId) const;
++
++	std::map<qint64, State> _states;
++
++};
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/exteraless/media_subtitles.cpp b/Telegram/SourceFiles/exteraless/media_subtitles.cpp
 new file mode 100644
 index 0000000..0f2b5a8
@@ -9256,19 +9467,20 @@ index 059d22f..bd2e53e 100644
  	void paintRoundedCorners(int radius) override;
  	void paintStoriesSiblingPart(
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..80420ad 100644
+index 2acbe80..b019eaa 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-@@ -19,6 +19,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  #include "boxes/premium_preview_box.h"
  #include "calls/calls_instance.h"
  #include "core/application.h"
 +#include "exteraless/config.h"
++#include "exteraless/media_lyrics.h"
 +#include "exteraless/media_subtitles.h"
  #include "core/click_handler_types.h"
  #include "core/core_screenshot_protection.h"
  #include "core/file_utilities.h"
-@@ -139,6 +141,12 @@ namespace Media {
+@@ -139,6 +142,12 @@ namespace Media {
  namespace View {
  namespace {
  
@@ -9281,7 +9493,7 @@ index 2acbe80..80420ad 100644
  struct RecognitionId {
  	uint64 sessionUniqueId = 0;
  	PhotoId photoId = 0;
-@@ -205,8 +213,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
+@@ -205,8 +214,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
  constexpr auto kZoomToScreenLevel = 1024;
  constexpr auto kPinchZoomStep = 0.25;
  constexpr auto kOverlayLoaderPriority = 2;
@@ -9297,7 +9509,7 @@ index 2acbe80..80420ad 100644
  constexpr auto kFrameStepFallbackFps = 30.;
  constexpr auto kFrameStepThrottleMs = crl::time(150);
  
-@@ -2296,15 +2309,20 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2296,15 +2310,20 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { copyRecognitionSelection(); },
  			&st::mediaMenuIconCopy);
  	}
@@ -9327,7 +9539,7 @@ index 2acbe80..80420ad 100644
  	}
  	if ((_photo && _photo->hasAttachedStickers())
  		|| (_document && _document->hasAttachedStickers())) {
-@@ -2313,7 +2331,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2313,7 +2332,9 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { showAttachedStickers(); },
  			&st::mediaMenuIconStickers);
  	}
@@ -9338,7 +9550,7 @@ index 2acbe80..80420ad 100644
  		addAction(
  			tr::lng_mediaview_forward(tr::now),
  			[=] { forwardMedia(); },
-@@ -2344,11 +2364,26 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2344,11 +2365,38 @@ void OverlayWidget::fillContextMenuActions(
  			}, state->lifetime);
  		}
  	}
@@ -9363,10 +9575,22 @@ index 2acbe80..80420ad 100644
 +				&st::mediaMenuIconCancel);
 +		}
 +	}
++	if (canShowLyrics()) {
++		addAction(
++			u"Choose Lyrics File…"_q,
++			[=] { chooseLyrics(); },
++			&st::mediaMenuIconShowInFolder);
++		if (hasChosenLyrics()) {
++			addAction(
++				u"Disable Lyrics"_q,
++				[=] { disableLyrics(); },
++				&st::mediaMenuIconCancel);
++		}
++	}
  	const auto canDelete = [&] {
  		if (story && story->canDelete()) {
  			return true;
-@@ -2416,6 +2451,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2416,6 +2464,9 @@ void OverlayWidget::fillContextMenuActions(
  		} else {
  			return;
  		}
@@ -9376,7 +9600,7 @@ index 2acbe80..80420ad 100644
  		const auto photo = _photo;
  		const auto peer = _peer;
  		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
-@@ -3025,7 +3063,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
+@@ -3025,7 +3076,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
  		_streamedQualityChangeFinished = false;
  		if ((_document = document)) {
  			_quality = _document->initialPlaybackVideoQuality(
@@ -9385,7 +9609,7 @@ index 2acbe80..80420ad 100644
  			_chosenQuality = _document->chooseQuality(_message, _quality);
  			_documentMedia = _document->createMediaView();
  			_videoCover = LookupVideoCover(_document, _message);
-@@ -3445,6 +3483,79 @@ void OverlayWidget::shareAtTime() {
+@@ -3445,6 +3496,124 @@ void OverlayWidget::shareAtTime() {
  	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
  }
  
@@ -9462,10 +9686,55 @@ index 2acbe80..80420ad 100644
 +	update();
 +}
 +
++bool OverlayWidget::canShowLyrics() const {
++	const auto media = _message ? _message->media() : nullptr;
++	return _document
++		&& media
++		&& _document == media->document()
++		&& _document->isAudioFile()
++		&& !media->webpage();
++}
++
++bool OverlayWidget::hasChosenLyrics() {
++	return canShowLyrics()
++		&& Exteraless::MediaLyrics::Instance().find(
++			static_cast<qint64>(_document->id)) != nullptr;
++}
++
++void OverlayWidget::chooseLyrics() {
++	if (!canShowLyrics()) {
++		return;
++	}
++	const auto documentId = static_cast<qint64>(_document->id);
++	FileDialog::GetOpenPath(
++		_window.get(),
++		u"Choose lyrics"_q,
++		u"Lyrics files (*.lrc)"_q,
++		crl::guard(_window, [=](FileDialog::OpenResult &&result) {
++			if (result.paths.isEmpty()) {
++				return;
++			}
++			if (Exteraless::MediaLyrics::Instance().load(
++					documentId,
++					result.paths.front())) {
++				update();
++			}
++		}));
++}
++
++void OverlayWidget::disableLyrics() {
++	if (!canShowLyrics()) {
++		return;
++	}
++	Exteraless::MediaLyrics::Instance().disable(
++		static_cast<qint64>(_document->id));
++	update();
++}
++
  void OverlayWidget::downloadMedia() {
  	if (!_photo && !_document) {
  		return;
-@@ -5284,6 +5395,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
+@@ -5284,6 +5453,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
  		Core::App().updateNonIdle();
  		updatePlaybackState();
  		_streamedPosition = update.position;
@@ -9473,7 +9742,7 @@ index 2acbe80..80420ad 100644
  	}, [&](PreloadedAudio) {
  		updatePlaybackState();
  	}, [&](UpdateAudio) {
-@@ -5597,7 +5709,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
+@@ -5597,7 +5767,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
  			&& _document->hasDuration())
  			? _document->duration()
  			: crl::time(0)),
@@ -9483,7 +9752,7 @@ index 2acbe80..80420ad 100644
  		.seekable = !_stories,
  	};
  	if (!_streamed->withSound) {
-@@ -6046,6 +6159,7 @@ void OverlayWidget::playbackPauseMusic() {
+@@ -6046,6 +6217,7 @@ void OverlayWidget::playbackPauseMusic() {
  void OverlayWidget::updatePlaybackState() {
  	Expects(_streamed != nullptr);
  
@@ -9491,7 +9760,7 @@ index 2acbe80..80420ad 100644
  	refreshSystemMediaControls();
  	if (!_streamed->controls && !_stories) {
  		return;
-@@ -6063,6 +6177,7 @@ void OverlayWidget::updatePlaybackState() {
+@@ -6063,6 +6235,7 @@ void OverlayWidget::updatePlaybackState() {
  			_stories->updatePlayback(state);
  		}
  	}
@@ -9499,7 +9768,7 @@ index 2acbe80..80420ad 100644
  }
  
  void OverlayWidget::setSystemMediaControls(
-@@ -6487,6 +6602,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
+@@ -6487,6 +6660,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
  				opacity);
  		}
  	}
@@ -9510,7 +9779,7 @@ index 2acbe80..80420ad 100644
  	checkGroupThumbsAnimation();
  	if (const auto radius = _window->manualRoundingRadius()) {
  		renderer->paintRoundedCorners(radius);
-@@ -7279,6 +7398,67 @@ QRect OverlayWidget::captionGeometry() const {
+@@ -7279,6 +7456,67 @@ QRect OverlayWidget::captionGeometry() const {
  		_stories ? _stories->repostCaptionPadding() : QMargins());
  }
  
@@ -9578,7 +9847,7 @@ index 2acbe80..80420ad 100644
  void OverlayWidget::paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -7328,11 +7508,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7328,11 +7566,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -9592,7 +9861,7 @@ index 2acbe80..80420ad 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7564,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7622,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -9606,7 +9875,7 @@ index 2acbe80..80420ad 100644
  			return;
  		}
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
-index 40d67d4..aa92ef8 100644
+index 40d67d4..6d2e781 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.h
 @@ -42,6 +42,10 @@ class DocumentMedia;
@@ -9620,7 +9889,7 @@ index 40d67d4..aa92ef8 100644
  namespace Ui {
  class DropdownMenu;
  class PopupMenu;
-@@ -329,6 +333,13 @@ private:
+@@ -329,6 +333,18 @@ private:
  	[[nodiscard]] TimeId shareAtVideoTimestamp() const;
  	void shareAtTime();
  
@@ -9631,10 +9900,15 @@ index 40d67d4..aa92ef8 100644
 +	void chooseSubtitles();
 +	void disableSubtitles();
 +
++	[[nodiscard]] bool canShowLyrics() const;
++	[[nodiscard]] bool hasChosenLyrics();
++	void chooseLyrics();
++	void disableLyrics();
++
  	void showSaveMsgToast(const QString &path, auto phrase);
  	void showSaveMsgToastWith(
  		const QString &path,
-@@ -552,6 +563,12 @@ private:
+@@ -552,6 +568,12 @@ private:
  		QRect clip,
  		float64 opacity);
  	[[nodiscard]] QRect captionGeometry() const;
@@ -9647,7 +9921,7 @@ index 40d67d4..aa92ef8 100644
  	void paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -735,6 +752,9 @@ private:
+@@ -735,6 +757,9 @@ private:
  	std::unique_ptr<PipWrap> _pip;
  	QImage _streamedQualityChangeFrame;
  	crl::time _streamedPosition = 0;
@@ -10119,6 +10393,151 @@ index 62b01e3..d51fd07 100644
  	[[nodiscard]] QString transport() const;
  
  	void updateAuthKey();
+diff --git a/Telegram/SourceFiles/overview/overview.style b/Telegram/SourceFiles/overview/overview.style
+index d51f1de..b23088d 100644
+--- a/Telegram/SourceFiles/overview/overview.style
++++ b/Telegram/SourceFiles/overview/overview.style
+@@ -16,6 +16,9 @@ OverviewFileLayout {
+ 	songThumbSize: pixels;
+ 	songNameTop: pixels;
+ 	songStatusTop: pixels;
++	songLyricsTop: pixels;
++	songLyricsMaxLines: int;
++	songLyricsActiveFg: color;
+ 	songIconBg: color;
+ 	songOverBg: color;
+ 	songPause: icon;
+@@ -94,6 +97,9 @@ overviewFileLayout: OverviewFileLayout {
+ 	songThumbSize: 36px;
+ 	songNameTop: 7px;
+ 	songStatusTop: 25px;
++	songLyricsTop: 4px;
++	songLyricsMaxLines: 3;
++	songLyricsActiveFg: windowActiveTextFg;
+ 	songIconBg: msgFileInBg;
+ 	songOverBg: msgFileInBgOver;
+ 	songPause: overviewSongPause;
+diff --git a/Telegram/SourceFiles/overview/overview_layout.cpp b/Telegram/SourceFiles/overview/overview_layout.cpp
+index ceae87b..ce8ddf6 100644
+--- a/Telegram/SourceFiles/overview/overview_layout.cpp
++++ b/Telegram/SourceFiles/overview/overview_layout.cpp
+@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "core/application.h"
+ #include "core/click_handler_types.h"
+ #include "core/ui_integration.h" // TextContext
++#include "exteraless/media_lyrics.h"
+ #include "data/data_document.h"
+ #include "data/data_document_resolver.h"
+ #include "data/data_session.h"
+@@ -56,6 +57,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "styles/style_chat_style.h"
+ #include "styles/style_overview.h"
+ 
++#include <algorithm>
++#include <QStringList>
++
+ namespace Overview::Layout {
+ namespace {
+ 
+@@ -1437,6 +1441,18 @@ void Document::initDimensions() {
+ 	_maxw = _st.maxWidth;
+ 	if (songLayout()) {
+ 		_minh = _st.songPadding.top() + _st.songThumbSize + _st.songPadding.bottom();
++		if (const auto found = Exteraless::MediaLyrics::Instance().find(
++				static_cast<qint64>(_data->id))) {
++			const auto &lyrics = found->lyrics;
++			if (!lyrics.lines.isEmpty()) {
++				const auto count = lyrics.synced
++					? int(lyrics.lines.size())
++					: (int(lyrics.lines.front().text.count(u'\n')) + 1);
++				_minh += _st.songLyricsTop
++					+ std::min(count, _st.songLyricsMaxLines)
++					* st::normalFont->height;
++			}
++		}
+ 	} else {
+ 		_minh = _st.filePadding.top() + _st.fileThumbSize + _st.filePadding.bottom() + st::lineWidth;
+ 	}
+@@ -1630,6 +1646,79 @@ void Document::paint(Painter &p, const QRect &clip, TextSelection selection, con
+ 		p.drawTextLeft(nameleft, datetop, _width, _date, _datew);
+ 	}
+ 
++	if (isSong) {
++		const auto track = Media::Player::instance()->getState(
++			AudioMsgId::Type::Song);
++		const auto playing = (track.id == AudioMsgId(
++			_data,
++			parent()->fullId(),
++			track.id.externalPlayId()))
++			&& !Media::Player::IsStoppedOrStopping(track.state);
++		const auto docId = static_cast<qint64>(_data->id);
++		const auto found = playing
++			? Exteraless::MediaLyrics::Instance().find(docId)
++			: nullptr;
++		if (found && !found->lyrics.lines.isEmpty()) {
++			const auto &lyrics = found->lyrics;
++			const auto maxLines = _st.songLyricsMaxLines;
++			const auto position = (track.frequency > 0)
++				? (track.position * 1000) / track.frequency
++				: qint64(0);
++			auto texts = QStringList();
++			auto active = -1;
++			if (lyrics.synced) {
++				const auto count = int(lyrics.lines.size());
++				const auto current = std::max(
++					Exteraless::MediaLyrics::Instance().activeIndex(
++						docId,
++						position),
++					0);
++				auto first = std::max(current - 1, 0);
++				if (first + maxLines > count) {
++					first = std::max(count - maxLines, 0);
++				}
++				const auto last = std::min(first + maxLines, count);
++				for (auto i = first; i != last; ++i) {
++					texts.append(lyrics.lines[i].text);
++					if (i == current) {
++						active = int(texts.size()) - 1;
++					}
++				}
++			} else {
++				const auto rows = lyrics.lines.front().text.split(u'\n');
++				for (auto i = 0; i != std::min(int(rows.size()), maxLines); ++i) {
++					texts.append(rows[i]);
++				}
++			}
++			const auto lineHeight = st::normalFont->height;
++			const auto stripTop = _st.songPadding.top()
++				+ _st.songThumbSize
++				+ _st.songPadding.bottom()
++				+ _st.songLyricsTop;
++			const auto left = _st.songPadding.left();
++			const auto width = _width - left - _st.songPadding.right();
++			const auto fit = std::max((_height - stripTop) / lineHeight, 0);
++			const auto shown = std::min(int(texts.size()), fit);
++			if (shown > 0 && width > 0) {
++				p.setFont(st::normalFont);
++				auto top = stripTop;
++				for (auto i = 0; i != shown; ++i) {
++					if (clip.intersects(style::rtlrect(left, top, width, lineHeight, _width))) {
++						p.setPen((i == active)
++							? _st.songLyricsActiveFg
++							: st::mediaInFg);
++						p.drawTextLeft(
++							left,
++							top,
++							_width,
++							st::normalFont->elided(texts[i], width));
++					}
++					top += lineHeight;
++				}
++			}
++		}
++	}
++
+ 	const auto checkDelta = (isSong ? _st.songThumbSize : _st.fileThumbSize)
+ 		+ (isSong ? st::overviewCheckSkip : -st::overviewCheckSkip)
+ 		- st::overviewSmallCheck.size;
 diff --git a/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp b/Telegram/SourceFiles/settings/sections/settings_exteraless.cpp
 new file mode 100644
 index 0000000..d98bec4
@@ -14715,10 +15134,10 @@ index 79a0a3c..87a5eaa 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..830a198
+index 0000000..155599f
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,64 @@
 +add_library(exteraless STATIC
 +    ai_client.cpp
 +    ai_client.h
@@ -14742,6 +15161,8 @@ index 0000000..830a198
 +    ghost_status.h
 +    links.cpp
 +    links.h
++    lyrics.cpp
++    lyrics.h
 +    math.cpp
 +    math.h
 +    message_menu.h
@@ -14931,10 +15352,10 @@ index 0000000..eb180ae
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..8aae1db
+index 0000000..ac29e58
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1244 @@
+@@ -0,0 +1,1253 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/config.h"
@@ -14990,6 +15411,8 @@ index 0000000..8aae1db
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 +constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 +constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
++constexpr auto kLyricsFiles = "OELyricsFiles";
++constexpr auto kLyricsFilesAlias = "lyricsFiles";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -15311,7 +15734,7 @@ index 0000000..8aae1db
 +	return true;
 +}
 +
-+[[nodiscard]] QJsonObject SanitizeSubtitlesFiles(const QJsonValue &value) {
++[[nodiscard]] QJsonObject SanitizeFileEntries(const QJsonValue &value) {
 +	if (!value.isObject()) {
 +		return QJsonObject();
 +	}
@@ -15443,6 +15866,8 @@ index 0000000..8aae1db
 +	extera[kMediaViewerMenuSubtitles] = config.mediaViewerMenuSubtitles();
 +	extera[kSubtitlesFiles] = QJsonDocument::fromJson(
 +		config.subtitlesFiles().toUtf8()).object();
++	extera[kLyricsFiles] = QJsonDocument::fromJson(
++		config.lyricsFiles().toUtf8()).object();
 +	extera[kChatMenuBoost] = config.chatMenuBoost();
 +	extera[kChatMenuLinked] = config.chatMenuLinked();
 +	extera[kChatMenuViewDeleted] = config.chatMenuViewDeleted();
@@ -15816,7 +16241,12 @@ index 0000000..8aae1db
 +			config.setMediaViewerMenuSubtitles(value.toBool());
 +		} else if (key == kSubtitlesFiles && value.isObject()) {
 +			config.setSubtitlesFiles(QString::fromUtf8(
-+				QJsonDocument(SanitizeSubtitlesFiles(value))
++				QJsonDocument(SanitizeFileEntries(value))
++					.toJson(QJsonDocument::Compact)));
++		} else if ((key == kLyricsFiles || key == kLyricsFilesAlias)
++			&& value.isObject()) {
++			config.setLyricsFiles(QString::fromUtf8(
++				QJsonDocument(SanitizeFileEntries(value))
 +					.toJson(QJsonDocument::Compact)));
 +		} else if ((key == kChatMenuBoost || key == kChatMenuBoostAlias)
 +			&& value.isBool()) {
@@ -16303,10 +16733,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..c5f85b1
+index 0000000..70f2780
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,1877 @@
+@@ -0,0 +1,1894 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/doubletap.h"
@@ -16357,6 +16787,7 @@ index 0000000..c5f85b1
 +constexpr auto kMediaViewerMenuSetProfile = "OEMediaViewerMenuSetProfile";
 +constexpr auto kMediaViewerMenuSubtitles = "OEMediaViewerMenuSubtitles";
 +constexpr auto kSubtitlesFiles = "OESubtitlesFiles";
++constexpr auto kLyricsFiles = "OELyricsFiles";
 +constexpr auto kChatMenuBoost = "OEChatsChatMenuBoost";
 +constexpr auto kChatMenuLinked = "OEChatsChatMenuLinked";
 +constexpr auto kChatMenuViewDeleted = "OEChatsChatMenuViewDeleted";
@@ -16950,6 +17381,21 @@ index 0000000..c5f85b1
 +		return;
 +	}
 +	setValue(kSubtitlesFiles, value);
++}
++
++QString Config::lyricsFiles() const {
++	const auto value = stringValue(kLyricsFiles, QString());
++	const auto document = QJsonDocument::fromJson(value.toUtf8());
++	return document.isObject() ? value : QStringLiteral("{}");
++}
++
++void Config::setLyricsFiles(const QString &value) {
++	auto error = QJsonParseError{0, QJsonParseError::NoError};
++	const auto document = QJsonDocument::fromJson(value.toUtf8(), &error);
++	if (error.error != QJsonParseError::NoError || !document.isObject()) {
++		return;
++	}
++	setValue(kLyricsFiles, value);
 +}
 +
 +bool Config::chatMenuBoost() const {
@@ -17897,6 +18343,7 @@ index 0000000..c5f85b1
 +			|| key == kMediaViewerMenuSetProfile
 +			|| key == kMediaViewerMenuSubtitles
 +			|| key == kSubtitlesFiles
++			|| key == kLyricsFiles
 +			|| key == kChatMenuBoost
 +			|| key == kChatMenuLinked
 +			|| key == kChatMenuViewDeleted
@@ -18186,10 +18633,10 @@ index 0000000..c5f85b1
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..e965671
+index 0000000..bbea3f2
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,360 @@
+@@ -0,0 +1,362 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -18299,6 +18746,8 @@ index 0000000..e965671
 +	void setMediaViewerMenuSubtitles(bool value);
 +	[[nodiscard]] QString subtitlesFiles() const;
 +	void setSubtitlesFiles(const QString &value);
++	[[nodiscard]] QString lyricsFiles() const;
++	void setLyricsFiles(const QString &value);
 +	[[nodiscard]] bool chatMenuBoost() const;
 +	void setChatMenuBoost(bool value);
 +	[[nodiscard]] bool chatMenuLinked() const;
@@ -19868,6 +20317,269 @@ index 0000000..d1191dd
 +[[nodiscard]] QString StripTracking(const QString &url);
 +[[nodiscard]] QString StripTrackingInText(const QString &text);
 +[[nodiscard]] bool IsWin32Executable(const QString &filepath);
++
++} // namespace Exteraless
+diff --git a/exteraless/lyrics.cpp b/exteraless/lyrics.cpp
+new file mode 100644
+index 0000000..8931c56
+--- /dev/null
++++ b/exteraless/lyrics.cpp
+@@ -0,0 +1,227 @@
++#include "exteraless/lyrics.h"
++
++#include <QStringList>
++
++#include <algorithm>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] QString DecodeUtf16(const QByteArray &data, bool littleEndian) {
++	const auto raw = reinterpret_cast<const uchar*>(data.constData());
++	const auto size = data.size();
++	auto result = QString();
++	result.reserve((size - 2) / 2);
++	for (auto i = 2; i + 1 < size; i += 2) {
++		const auto first = littleEndian ? raw[i] : raw[i + 1];
++		const auto second = littleEndian ? raw[i + 1] : raw[i];
++		result += QChar(ushort(first | (second << 8)));
++	}
++	return result;
++}
++
++[[nodiscard]] QString Decode(const QByteArray &data) {
++	if (data.size() >= 3
++		&& uchar(data[0]) == 0xEF
++		&& uchar(data[1]) == 0xBB
++		&& uchar(data[2]) == 0xBF) {
++		return QString::fromUtf8(data.constData() + 3, data.size() - 3);
++	} else if (data.size() >= 2
++		&& uchar(data[0]) == 0xFF
++		&& uchar(data[1]) == 0xFE) {
++		return DecodeUtf16(data, true);
++	} else if (data.size() >= 2
++		&& uchar(data[0]) == 0xFE
++		&& uchar(data[1]) == 0xFF) {
++		return DecodeUtf16(data, false);
++	}
++	return QString::fromUtf8(data);
++}
++
++[[nodiscard]] bool ParseDigits(QStringView text, qint64 limit, qint64 &value) {
++	if (text.isEmpty() || text.size() > 9) {
++		return false;
++	}
++	auto result = qint64(0);
++	for (const auto ch : text) {
++		const auto digit = int(ch.unicode()) - u'0';
++		if (digit < 0 || digit > 9) {
++			return false;
++		}
++		result = result * 10 + digit;
++	}
++	if (result > limit) {
++		return false;
++	}
++	value = result;
++	return true;
++}
++
++[[nodiscard]] bool ParseTimestamp(QStringView text, qint64 &milliseconds) {
++	text = text.trimmed();
++	const auto parts = text.split(u':');
++	if (parts.size() != 2) {
++		return false;
++	}
++	auto seconds = parts[1];
++	auto fraction = QStringView();
++	const auto dot = seconds.indexOf(u'.');
++	if (dot >= 0) {
++		fraction = seconds.mid(dot + 1);
++		seconds = seconds.left(dot);
++	}
++	if (fraction.size() > 3) {
++		return false;
++	}
++	auto minutesValue = qint64(0);
++	auto secondsValue = qint64(0);
++	auto fractionValue = qint64(0);
++	if (!ParseDigits(parts[0], 100000, minutesValue)
++		|| !ParseDigits(seconds, 59, secondsValue)) {
++		return false;
++	}
++	if (!fraction.isEmpty()) {
++		if (!ParseDigits(fraction, 999, fractionValue)) {
++			return false;
++		}
++		for (auto i = fraction.size(); i != 3; ++i) {
++			fractionValue *= 10;
++		}
++	}
++	milliseconds = (minutesValue * 60 + secondsValue) * 1000 + fractionValue;
++	return true;
++}
++
++[[nodiscard]] bool ParseOffset(QStringView text, qint64 &value) {
++	text = text.trimmed();
++	auto sign = qint64(1);
++	if (text.startsWith(u'+')) {
++		text = text.mid(1);
++	} else if (text.startsWith(u'-')) {
++		sign = -1;
++		text = text.mid(1);
++	}
++	auto magnitude = qint64(0);
++	if (!ParseDigits(text, 86400000, magnitude)) {
++		return false;
++	}
++	value = sign * magnitude;
++	return true;
++}
++
++[[nodiscard]] QString StripWordTimes(const QString &text) {
++	auto result = text;
++	auto i = qsizetype(0);
++	while (i < result.size()) {
++		if (result[i] != u'<') {
++			++i;
++			continue;
++		}
++		const auto close = result.indexOf(u'>', i + 1);
++		if (close < 0) {
++			break;
++		}
++		auto ignored = qint64(0);
++		const auto inner = QStringView(result).mid(i + 1, close - i - 1);
++		if (!ParseTimestamp(inner, ignored)) {
++			++i;
++			continue;
++		}
++		result.remove(i, close - i + 1);
++	}
++	return result;
++}
++
++} // namespace
++
++Lyrics ParseLyrics(const QByteArray &data) {
++	auto result = Lyrics();
++	if (data.isEmpty()) {
++		result.instrumental = true;
++		return result;
++	}
++	auto text = Decode(data);
++	text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
++	text.replace(u'\r', u'\n');
++
++	const auto rows = text.split(u'\n');
++	auto timed = false;
++	auto untimed = QStringList();
++	auto offset = qint64(0);
++	for (const auto &row : rows) {
++		const auto line = row.trimmed();
++		if (line.isEmpty()) {
++			continue;
++		}
++		auto times = QList<qint64>();
++		auto tagged = false;
++		auto rest = QStringView(line);
++		while (rest.startsWith(u'[')) {
++			const auto close = rest.indexOf(u']');
++			if (close < 0) {
++				break;
++			}
++			const auto inner = rest.mid(1, close - 1).trimmed();
++			auto value = qint64(0);
++			if (inner.startsWith(u"offset:")) {
++				if (ParseOffset(inner.mid(7), value)) {
++					offset = value;
++				}
++			} else if (ParseTimestamp(inner, value)) {
++				times.append(value);
++			}
++			tagged = true;
++			rest = rest.mid(close + 1);
++		}
++		if (rest.startsWith(u'[')) {
++			continue; // unterminated tag marks a broken line
++		}
++		const auto content = StripWordTimes(rest.toString()).trimmed();
++		if (content.isEmpty()) {
++			continue;
++		}
++		if (!times.isEmpty()) {
++			timed = true;
++			for (const auto time : times) {
++				result.lines.append(Line{ time, content });
++			}
++		} else if (!tagged) {
++			untimed.append(content);
++		}
++	}
++	if (timed) {
++		for (auto &line : result.lines) {
++			line.ms += offset;
++		}
++		std::stable_sort(
++			result.lines.begin(),
++			result.lines.end(),
++			[](const Line &a, const Line &b) {
++				return a.ms < b.ms;
++			});
++		result.synced = true;
++	} else if (!untimed.isEmpty()) {
++		result.lines.append(Line{ 0, untimed.join(u'\n') });
++	}
++	result.instrumental = result.lines.isEmpty();
++	return result;
++}
++
++int ActiveIndex(const Lyrics &lyrics, qint64 positionMs) {
++	const auto &lines = lyrics.lines;
++	auto left = qsizetype(0);
++	auto right = lines.size() - 1;
++	auto found = -1;
++	while (left <= right) {
++		const auto middle = left + (right - left) / 2;
++		if (lines[middle].ms <= positionMs) {
++			found = int(middle);
++			left = middle + 1;
++		} else {
++			right = middle - 1;
++		}
++	}
++	return found;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/lyrics.h b/exteraless/lyrics.h
+new file mode 100644
+index 0000000..1d919ac
+--- /dev/null
++++ b/exteraless/lyrics.h
+@@ -0,0 +1,24 @@
++#pragma once
++
++#include <QByteArray>
++#include <QList>
++#include <QString>
++
++namespace Exteraless {
++
++struct Line {
++	qint64 ms = 0;
++	QString text;
++};
++
++struct Lyrics {
++	QList<Line> lines;
++	bool synced = false;
++	bool instrumental = false;
++};
++
++[[nodiscard]] Lyrics ParseLyrics(const QByteArray &data);
++
++[[nodiscard]] int ActiveIndex(const Lyrics &lyrics, qint64 positionMs);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/math.cpp b/exteraless/math.cpp
@@ -21641,10 +22353,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..a66b7af
+index 0000000..da60daa
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3022 @@
+@@ -0,0 +1,3069 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -21656,6 +22368,7 @@ index 0000000..a66b7af
 +#include "exteraless/ghost_schedule.h"
 +#include "exteraless/ghost_status.h"
 +#include "exteraless/links.h"
++#include "exteraless/lyrics.h"
 +#include "exteraless/math.h"
 +#include "exteraless/network.h"
 +#include "exteraless/pangu.h"
@@ -21892,6 +22605,8 @@ index 0000000..a66b7af
 +		<< "  exteraless-chats-cli subtitles-parse <file>\n"
 +		<< "  exteraless-chats-cli subtitles-active <file> <pos>\n"
 +		<< "  exteraless-chats-cli subtitles-key <docId>\n"
++		<< "  exteraless-chats-cli lyrics-parse <file>\n"
++		<< "  exteraless-chats-cli lyrics-active <file> <posMs>\n"
 +		<< "  exteraless-chats-cli network\n"
 +		<< "  exteraless-chats-cli network-set-ipv6 <0|1>\n"
 +		<< "  exteraless-chats-cli network-set-dns <0|1>\n"
@@ -24665,8 +25380,64 @@ index 0000000..a66b7af
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("lyrics-parse")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		const auto lyrics = Exteraless::ParseLyrics(bytes);
++		auto lines = QJsonArray();
++		for (const auto &line : lyrics.lines) {
++			lines.append(QJsonObject{
++				{ QStringLiteral("ms"), line.ms },
++				{ QStringLiteral("text"), line.text },
++			});
++		}
++		PrintJson(QJsonObject{
++			{ QStringLiteral("lines"), lines },
++			{ QStringLiteral("synced"), lyrics.synced },
++		});
++		return 0;
++	}
++	if (mode == QStringLiteral("lyrics-active")) {
++		if (arguments.size() != 4) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto position = arguments[3].toLongLong(&ok);
++		if (!ok || position < 0) {
++			return PrintUsage();
++		}
++		auto bytes = QByteArray();
++		if (!ReadFileBytes(arguments[2], &bytes)) {
++			return PrintUsage();
++		}
++		const auto lyrics = Exteraless::ParseLyrics(bytes);
++		const auto index = Exteraless::ActiveIndex(lyrics, position);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("index"), index },
++			{ QStringLiteral("text"),
++				(index >= 0) ? lyrics.lines[index].text : QString() },
++		});
++		return 0;
++	}
 +	return PrintUsage();
 +}
+diff --git a/exteraless/tests/chats/fixtures/basic.lrc b/exteraless/tests/chats/fixtures/basic.lrc
+new file mode 100644
+index 0000000..bb9e849
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/basic.lrc
+@@ -0,0 +1,6 @@
++[ar:Test Artist]
++[ti:Basic Song]
++[offset:+1000]
++[00:01.00]First line
++[00:05.00]Second line
++[00:09.25][00:30.00]Last cue
 diff --git a/exteraless/tests/chats/fixtures/basic.srt b/exteraless/tests/chats/fixtures/basic.srt
 new file mode 100644
 index 0000000..77ffc76
@@ -24703,6 +25474,17 @@ index 0000000..a3c87c8
 +00:00:05.000 --> 00:00:06.500
 +Second vtt cue
 +
+diff --git a/exteraless/tests/chats/fixtures/bom-utf16.lrc b/exteraless/tests/chats/fixtures/bom-utf16.lrc
+new file mode 100644
+index 0000000000000000000000000000000000000000..89bb5c77f048bc0e70b109a5a9ba58b63411c4a8
+GIT binary patch
+literal 106
+zcmezWFPg!C!GOVv!GOV#K@ZH1We8;mVQ^#6WiVtgV^CnoVaR02V@PFCV8{p4Tnq?3
+Q#su}0FqAXoGjK5g0GuHZ2mk;8
+
+literal 0
+HcmV?d00001
+
 diff --git a/exteraless/tests/chats/fixtures/bom-utf16.srt b/exteraless/tests/chats/fixtures/bom-utf16.srt
 new file mode 100644
 index 0000000000000000000000000000000000000000..1cd2f17b6f592785b927a1aefe24c864193d1876
@@ -24714,6 +25496,20 @@ t0z)!GDMKoQ0z*DS9z!Yv7XufA5r+B3aNW4fH-W3bWqt`mIYU0!d;rnR7DoU8
 literal 0
 HcmV?d00001
 
+diff --git a/exteraless/tests/chats/fixtures/broken.lrc b/exteraless/tests/chats/fixtures/broken.lrc
+new file mode 100644
+index 0000000..fe62362
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/broken.lrc
+@@ -0,0 +1,8 @@
++[ar:Broken]
++[00:01.00]Valid one
++garbage without timestamp
++[00:xx.00]Bad timestamp
++[00:03.00]Valid two
++[00:05.00
++[00:07.00]
++[00:09.00]Valid three
 diff --git a/exteraless/tests/chats/fixtures/broken.srt b/exteraless/tests/chats/fixtures/broken.srt
 new file mode 100644
 index 0000000..64dc265
@@ -24826,12 +25622,30 @@ index 0000000..5c9da70
 +00:00:06,000 --> 00:00:08,000
 +{\an8}Top positioned
 +
+diff --git a/exteraless/tests/chats/fixtures/unsynced.lrc b/exteraless/tests/chats/fixtures/unsynced.lrc
+new file mode 100644
+index 0000000..c129253
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/unsynced.lrc
+@@ -0,0 +1,4 @@
++Plain first line
++Plain second line
++
++Plain third line
+diff --git a/exteraless/tests/chats/fixtures/wordtime.lrc b/exteraless/tests/chats/fixtures/wordtime.lrc
+new file mode 100644
+index 0000000..3626c71
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/wordtime.lrc
+@@ -0,0 +1,2 @@
++[00:02.00]<00:02.00>Hello <00:02.50>world
++[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..9176ccc
+index 0000000..867318f
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7287 @@
+@@ -0,0 +1,7467 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -25053,6 +25867,8 @@ index 0000000..9176ccc
 +        ("subtitles-parse without file", ["subtitles-parse"]),
 +        ("subtitles-active without position", ["subtitles-active", "a.srt"]),
 +        ("subtitles-key without id", ["subtitles-key"]),
++        ("lyrics-parse without file", ["lyrics-parse"]),
++        ("lyrics-active without position", ["lyrics-active", "a.lrc"]),
 +        ("header-style-set with wrong count", ["header-style-set"]),
 +    ]
 +    before = len(ledger.failures)
@@ -25678,7 +26494,7 @@ index 0000000..9176ccc
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 133,
++            len(section) == 134,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -25699,7 +26515,7 @@ index 0000000..9176ccc
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 138,
++            sum(len(value) for value in exported.values()) == 139,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -25719,7 +26535,7 @@ index 0000000..9176ccc
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 138,
++                data.get("applied") == 139,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -25859,6 +26675,9 @@ index 0000000..9176ccc
 +            "OESubtitlesFiles": {
 +                "doc_1": {"path": "/tmp/a.srt", "label": "en"},
 +            },
++            "OELyricsFiles": {
++                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
++            },
 +            "OEChatsAlwaysShowDownloadIcon": True,
 +            "OEPrivacyFalseBottom": True,
 +            "OEAppearanceChatDecoration": 1,
@@ -25909,7 +26728,7 @@ index 0000000..9176ccc
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 138,
++            data.get("applied") == 139,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -25953,6 +26772,12 @@ index 0000000..9176ccc
 +            "backup full plugin states sanitized",
 +            section.get("OEPluginStates") == {"plugin-a": True},
 +            section.get("OEPluginStates"))
++        ledger.check(
++            "backup full lyrics files",
++            section.get("OELyricsFiles") == {
++                "doc_2": {"path": "/tmp/a.lrc", "label": "ru"},
++            },
++            section.get("OELyricsFiles"))
 +        ledger.check(
 +            "backup full save deleted",
 +            section.get("OESaveDeletedMessages") is True,
@@ -26222,10 +27047,10 @@ index 0000000..9176ccc
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 133",
++            "backup legacy eight completed to 134",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (133, 3, 2),
++             len(sections["mainconfig"])) == (134, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -30877,6 +31702,173 @@ index 0000000..9176ccc
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_lyrics(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    def parse(name):
++        result = run(cli, ["lyrics-parse", str(FIXTURES / name)])
++        if result.returncode != 0:
++            ledger.check(
++                f"lyrics parse {name}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(f"lyrics parse {name}", False, f"json: {error}")
++            return None
++        lines = payload.get("lines")
++        if (not isinstance(lines, list)
++                or not isinstance(payload.get("synced"), bool)):
++            ledger.check(f"lyrics parse {name}", False, payload)
++            return None
++        for line in lines:
++            if (not isinstance(line, dict)
++                    or not isinstance(line.get("ms"), int)
++                    or not isinstance(line.get("text"), str)):
++                ledger.check(f"lyrics parse {name}", False, line)
++                return None
++        ledger.check(f"lyrics parse {name}", True)
++        return payload
++
++    def active(name, position):
++        result = run(
++            cli, ["lyrics-active", str(FIXTURES / name), str(position)])
++        if result.returncode != 0:
++            ledger.check(
++                f"lyrics active {name} @{position}",
++                False,
++                f"exit {result.returncode}, "
++                f"stderr {result.stderr.strip()!r}")
++            return None
++        try:
++            payload = json.loads(result.stdout)
++        except json.JSONDecodeError as error:
++            ledger.check(
++                f"lyrics active {name} @{position}",
++                False,
++                f"json: {error}")
++            return None
++        index = payload.get("index")
++        text = payload.get("text")
++        if not isinstance(index, int) or not isinstance(text, str):
++            ledger.check(
++                f"lyrics active {name} @{position}", False, payload)
++            return None
++        return index, text
++
++    payload = parse("basic.lrc")
++    if payload is not None:
++        lines = payload["lines"]
++        ledger.check("basic lyrics synced", payload["synced"] is True)
++        ledger.check("basic lyrics line count", len(lines) == 4, len(lines))
++        times = [line["ms"] for line in lines]
++        ledger.check(
++            "basic lyrics offset applied",
++            times == [2000, 6000, 10250, 31000],
++            times)
++        ledger.check(
++            "basic lyrics sorted",
++            all(first <= second for first, second in zip(times, times[1:])),
++            times)
++        texts = [line["text"] for line in lines]
++        ledger.check(
++            "basic lyrics duplicated multi timestamp",
++            texts == ["First line", "Second line", "Last cue", "Last cue"],
++            texts)
++        ledger.check(
++            "basic lyrics tags stripped",
++            all("[" not in text and "]" not in text for text in texts),
++            texts)
++
++    cases = [
++        ("before first line", 1999, (-1, "")),
++        ("at first line", 2000, (0, "First line")),
++        ("inside first line", 5999, (0, "First line")),
++        ("at third line", 10250, (2, "Last cue")),
++        ("at last line", 31000, (3, "Last cue")),
++        ("past end", 10000000, (3, "Last cue")),
++    ]
++    for name, position, expected in cases:
++        current = active("basic.lrc", position)
++        ledger.check(
++            f"basic lyrics {name}", current == expected, current)
++
++    payload = parse("wordtime.lrc")
++    if payload is not None:
++        lines = payload["lines"]
++        ledger.check("wordtime lyrics synced", payload["synced"] is True)
++        texts = [line["text"] for line in lines]
++        ledger.check(
++            "wordtime tags removed",
++            texts == ["Hello world", "Plain line"],
++            texts)
++        times = [line["ms"] for line in lines]
++        ledger.check("wordtime lyrics times", times == [2000, 4500], times)
++
++    payload = parse("unsynced.lrc")
++    if payload is not None:
++        lines = payload["lines"]
++        ledger.check("unsynced lyrics synced false", payload["synced"] is False)
++        ledger.check("unsynced lyrics single line", len(lines) == 1, len(lines))
++        text = lines[0]["text"] if lines else None
++        ledger.check(
++            "unsynced lyrics joined text",
++            text == "Plain first line\nPlain second line\nPlain third line",
++            repr(text))
++        start = lines[0]["ms"] if lines else None
++        ledger.check("unsynced lyrics start at zero", start == 0, start)
++    current = active("unsynced.lrc", 0)
++    ledger.check(
++        "unsynced lyrics active at zero",
++        current is not None and current[0] == 0,
++        current)
++
++    payload = parse("bom-utf16.lrc")
++    if payload is not None:
++        lines = payload["lines"]
++        texts = [line["text"] for line in lines]
++        ledger.check("bom lyrics line count", len(lines) == 2, len(lines))
++        ledger.check(
++            "bom lyrics utf-16 decoded",
++            texts == ["UTF-16 line one", "UTF-16 line two"],
++            texts)
++        ledger.check(
++            "bom lyrics marker dropped",
++            all("\ufeff" not in text for text in texts),
++            texts)
++
++    payload = parse("broken.lrc")
++    if payload is not None:
++        lines = payload["lines"]
++        texts = [line["text"] for line in lines]
++        ledger.check(
++            "broken lyrics skipped",
++            texts == ["Valid one", "Valid two", "Valid three"],
++            texts)
++        times = [line["ms"] for line in lines]
++        ledger.check(
++            "broken lyrics times",
++            times == [1000, 3000, 9000],
++            times)
++    current = active("broken.lrc", 3000)
++    ledger.check(
++        "broken lyrics active", current == (1, "Valid two"), current)
++
++    result = run(cli, ["lyrics-parse", str(FIXTURES / "missing.lrc")])
++    ledger.check(
++        "lyrics parse missing file",
++        result.returncode == 2 and bool(result.stderr.strip()),
++        f"exit {result.returncode}, stderr {result.stderr!r}")
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_download_boost(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -32027,6 +33019,7 @@ index 0000000..9176ccc
 +        network = check_network(ledger, cli, work)
 +        download_boost = check_download_boost(ledger, cli, work)
 +        subtitles = check_subtitles(ledger, cli, work)
++        lyrics = check_lyrics(ledger, cli, work)
 +        regex_filters = check_regex_filters(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
@@ -32106,6 +33099,7 @@ index 0000000..9176ccc
 +    print(f"network: {network[0] - network[1]} passed")
 +    print(f"download-boost: {download_boost[0] - download_boost[1]} passed")
 +    print(f"subtitles: {subtitles[0] - subtitles[1]} passed")
++    print(f"lyrics: {lyrics[0] - lyrics[1]} passed")
 +    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
 +    if ledger.failures:

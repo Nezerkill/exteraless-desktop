@@ -340,6 +340,11 @@ private:
 	void chooseSubtitles();
 	void disableSubtitles();
 
+	[[nodiscard]] bool canShowLyrics() const;
+	[[nodiscard]] bool hasChosenLyrics();
+	void chooseLyrics();
+	void disableLyrics();
+
 	void showSaveMsgToast(const QString &path, auto phrase);
 	void showSaveMsgToastWith(
 		const QString &path,

@@ -20,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "calls/calls_instance.h"
 #include "core/application.h"
 #include "exteraless/config.h"
+#include "exteraless/media_lyrics.h"
 #include "exteraless/media_subtitles.h"
 #include "core/click_handler_types.h"
 #include "core/core_screenshot_protection.h"
@@ -2384,6 +2385,18 @@ void OverlayWidget::fillContextMenuActions(
 				&st::mediaMenuIconCancel);
 		}
 	}
+	if (canShowLyrics()) {
+		addAction(
+			u"Choose Lyrics File…"_q,
+			[=] { chooseLyrics(); },
+			&st::mediaMenuIconShowInFolder);
+		if (hasChosenLyrics()) {
+			addAction(
+				u"Disable Lyrics"_q,
+				[=] { disableLyrics(); },
+				&st::mediaMenuIconCancel);
+		}
+	}
 	const auto canDelete = [&] {
 		if (story && story->canDelete()) {
 			return true;
@@ -3553,6 +3566,51 @@ void OverlayWidget::disableSubtitles() {
 	}
 	_subtitles->disable(_subtitlesDocumentId);
 	_subtitlesText.clear();
+	update();
+}
+
+bool OverlayWidget::canShowLyrics() const {
+	const auto media = _message ? _message->media() : nullptr;
+	return _document
+		&& media
+		&& _document == media->document()
+		&& _document->isAudioFile()
+		&& !media->webpage();
+}
+
+bool OverlayWidget::hasChosenLyrics() {
+	return canShowLyrics()
+		&& Exteraless::MediaLyrics::Instance().find(
+			static_cast<qint64>(_document->id)) != nullptr;
+}
+
+void OverlayWidget::chooseLyrics() {
+	if (!canShowLyrics()) {
+		return;
+	}
+	const auto documentId = static_cast<qint64>(_document->id);
+	FileDialog::GetOpenPath(
+		_window.get(),
+		u"Choose lyrics"_q,
+		u"Lyrics files (*.lrc)"_q,
+		crl::guard(_window, [=](FileDialog::OpenResult &&result) {
+			if (result.paths.isEmpty()) {
+				return;
+			}
+			if (Exteraless::MediaLyrics::Instance().load(
+					documentId,
+					result.paths.front())) {
+				update();
+			}
+		}));
+}
+
+void OverlayWidget::disableLyrics() {
+	if (!canShowLyrics()) {
+		return;
+	}
+	Exteraless::MediaLyrics::Instance().disable(
+		static_cast<qint64>(_document->id));
 	update();
 }
 

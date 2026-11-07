@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/application.h"
 #include "core/click_handler_types.h"
 #include "core/ui_integration.h" // TextContext
+#include "exteraless/media_lyrics.h"
 #include "data/data_document.h"
 #include "data/data_document_resolver.h"
 #include "data/data_session.h"
@@ -55,6 +56,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_chat_helpers.h"
 #include "styles/style_chat_style.h"
 #include "styles/style_overview.h"
+
+#include <algorithm>
+#include <QStringList>
 
 namespace Overview::Layout {
 namespace {
@@ -1437,6 +1441,18 @@ void Document::initDimensions() {
 	_maxw = _st.maxWidth;
 	if (songLayout()) {
 		_minh = _st.songPadding.top() + _st.songThumbSize + _st.songPadding.bottom();
+		if (const auto found = Exteraless::MediaLyrics::Instance().find(
+				static_cast<qint64>(_data->id))) {
+			const auto &lyrics = found->lyrics;
+			if (!lyrics.lines.isEmpty()) {
+				const auto count = lyrics.synced
+					? int(lyrics.lines.size())
+					: (int(lyrics.lines.front().text.count(u'\n')) + 1);
+				_minh += _st.songLyricsTop
+					+ std::min(count, _st.songLyricsMaxLines)
+					* st::normalFont->height;
+			}
+		}
 	} else {
 		_minh = _st.filePadding.top() + _st.fileThumbSize + _st.filePadding.bottom() + st::lineWidth;
 	}
@@ -1628,6 +1644,79 @@ void Document::paint(Painter &p, const QRect &clip, TextSelection selection, con
 			: st::normalFont);
 		p.setPen(st::mediaInFg);
 		p.drawTextLeft(nameleft, datetop, _width, _date, _datew);
+	}
+
+	if (isSong) {
+		const auto track = Media::Player::instance()->getState(
+			AudioMsgId::Type::Song);
+		const auto playing = (track.id == AudioMsgId(
+			_data,
+			parent()->fullId(),
+			track.id.externalPlayId()))
+			&& !Media::Player::IsStoppedOrStopping(track.state);
+		const auto docId = static_cast<qint64>(_data->id);
+		const auto found = playing
+			? Exteraless::MediaLyrics::Instance().find(docId)
+			: nullptr;
+		if (found && !found->lyrics.lines.isEmpty()) {
+			const auto &lyrics = found->lyrics;
+			const auto maxLines = _st.songLyricsMaxLines;
+			const auto position = (track.frequency > 0)
+				? (track.position * 1000) / track.frequency
+				: qint64(0);
+			auto texts = QStringList();
+			auto active = -1;
+			if (lyrics.synced) {
+				const auto count = int(lyrics.lines.size());
+				const auto current = std::max(
+					Exteraless::MediaLyrics::Instance().activeIndex(
+						docId,
+						position),
+					0);
+				auto first = std::max(current - 1, 0);
+				if (first + maxLines > count) {
+					first = std::max(count - maxLines, 0);
+				}
+				const auto last = std::min(first + maxLines, count);
+				for (auto i = first; i != last; ++i) {
+					texts.append(lyrics.lines[i].text);
+					if (i == current) {
+						active = int(texts.size()) - 1;
+					}
+				}
+			} else {
+				const auto rows = lyrics.lines.front().text.split(u'\n');
+				for (auto i = 0; i != std::min(int(rows.size()), maxLines); ++i) {
+					texts.append(rows[i]);
+				}
+			}
+			const auto lineHeight = st::normalFont->height;
+			const auto stripTop = _st.songPadding.top()
+				+ _st.songThumbSize
+				+ _st.songPadding.bottom()
+				+ _st.songLyricsTop;
+			const auto left = _st.songPadding.left();
+			const auto width = _width - left - _st.songPadding.right();
+			const auto fit = std::max((_height - stripTop) / lineHeight, 0);
+			const auto shown = std::min(int(texts.size()), fit);
+			if (shown > 0 && width > 0) {
+				p.setFont(st::normalFont);
+				auto top = stripTop;
+				for (auto i = 0; i != shown; ++i) {
+					if (clip.intersects(style::rtlrect(left, top, width, lineHeight, _width))) {
+						p.setPen((i == active)
+							? _st.songLyricsActiveFg
+							: st::mediaInFg);
+						p.drawTextLeft(
+							left,
+							top,
+							_width,
+							st::normalFont->elided(texts[i], width));
+					}
+					top += lineHeight;
+				}
+			}
+		}
 	}
 
 	const auto checkDelta = (isSong ? _st.songThumbSize : _st.fileThumbSize)

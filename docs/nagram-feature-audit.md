@@ -186,7 +186,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Cloud settings | `OpenExteraCloudActivity`, `CloudSettingsHelper` | 4 ключа | ❌ |
 | Pill Stack | `PillStackConfig`, `app/exteraless/pillstack/*` | 15 типов пилюль | ✅ 8 из 15 |
 | Drawer и навигация | `app/exteraless/drawer/*`, `MainMenuLayout` | 20 пунктов меню | 🟡 5 пунктов, порядок, аккаунты |
-| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | ❌ MD3-плеер, ➖ MPRIS |
+| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | 🟡 тексты песен из файла ✅ NB-50 фаза 1 (см. 6.13), ❌ MD3-плеер, ➖ MPRIS |
 | Иконпаки / эмодзи / глиф | `icons/*` (15 файлов), `appicons/*`, `glyph/*` | ~20 | ⛔/❌ (иконки tdesktop — `lib_ui` + `.style`) |
 | Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–2, 🟡 stage 3: настройки ✅ NB-79.3a (`OEPluginSettings`, `ShowPluginSettingsBox`, CLI `settings-get`/`settings-set`), меню ✅ NB-30 (`MenuItemType` `main`/`message`/`chat`, снимок `menu` в `loaded`, пункты в главном меню и в конце контекстного меню сообщения, CLI `menu-list`/`menu-click`), intents и trust-уровни — ❌ этап 3c, ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
@@ -213,7 +213,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Разделители | `dividerStyle`, `hideDividers` | ⛔ у строк списка чатов в 7.3.1 нет разделителей |
 | Эмодзи и шрифты | `useSystemEmoji`, `emojiSets`, `typeface`, `iconPacks` | ⛔/❌ (`lib_ui/ui/emoji_config.cpp`, иконки `.style`) |
 | Monet и M3-компоненты | `monetStyle`, `m3ListItems` | ⛔ динамические цвета Android 12+ |
-| Плеер | 30+ `OEPlayer*` | ❌ см. 6.14 |
+| Плеер | 30+ `OEPlayer*` | 🟡 тексты песен из файла ✅ NB-50 фаза 1, остальное (обложка, мини-плеер, очередь) ❌ — см. 6.13 |
 | Прочее | `forceSnow`, `profileMusicCard`, `titleText`, `showFeedTab`, `feedUnreadCounter` | ❌ |
 
 Отдельно: `docs/feature-mapping.md` фиксирует, что `OEAppearance*` не
@@ -416,6 +416,29 @@ MD3-плеер — 21 файл (`Md3Player`, `PlayerSheet`, `PlayerBarView`,
 `media/audio/media_audio.cpp` дают обычный плеер. Очередь, скорость и
 shuffle в upstream есть. System media controls (MPRIS) — upstream
 `media/system_media_controls_manager.cpp`, порт не нужен.
+
+Статус на 2026-11-07: 🟡 перенесены тексты песен из файла — NB-50, фаза 1.
+Парсер Qt-only: `exteraless/lyrics.{h,cpp}` — `ParseLyrics` и `ActiveIndex`.
+Формат только LRC (SRT не принимается): `[offset:±ms]` сдвигает таймстемпы,
+строка с несколькими `[mm:ss.xx]` дублируется на каждую метку, word-time
+`<mm:ss.xx>` внутри текста вырезается, BOM UTF-8/UTF-16 LE/BE распознаётся,
+прочие теги в `[...]` (`[ar:]`, `[ti:]`) отбрасываются; файл без
+таймстемпов даёт `synced: false` и одну строку от нуля, файл без текста —
+`instrumental`. Текст на видео помнит `exteraless/media_lyrics.{h,cpp}`:
+JSON-карта per-video в `OELyricsFiles` (алиас `lyricsFiles`, при импорте
+`.extera` — `SanitizeFileEntries`), активная строка — `activeText` по
+позиции. UI: в меню медиавьюера «Choose Lyrics File…» (`FileDialog`
+`*.lrc`) и «Disable Lyrics» под гейтом аудио; в overview аудио-блок
+показывает активную строку акцентом (`songLyricsActiveFg`), окно строк едет
+за ней и держит не больше трёх строк (`songLyricsMaxLines`). CLI
+`lyrics-parse`/`lyrics-active`, пять фикстур, `check_lyrics` — 32 проверки;
+раннеры 978/32/252 PASS (backup 104), `kKeysCount` не менялся (11232) —
+новых lang-ключей нет, пункты меню — литералы. ❌ Онлайн-тексты
+(LRCLIB/lrcmux, `OEPlayerLrclibAllowed`) вместе с кэшем и consent'ом,
+MD3-ребилд плеера (стиль обложки, `PlayerSheet`/`PlayerBarView`),
+мини-плеер и `PlayerMiniView`, очередь с drag (`PlayerQueueSheet`) и
+server-side транскрипция (= NB-51) не сделаны. Ограничения: выбранный файл
+виден после переоткрытия вкладки Media; Xvfb-смоук не выполнялся.
 
 ### 6.14 Иконпаки, эмодзи, глиф
 
