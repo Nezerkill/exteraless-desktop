@@ -6514,6 +6514,62 @@ def check_extra_pills(ledger, cli, work):
             invalid_xml == "",
             invalid_xml)
 
+    cbr = work / "extra-pills-cbr"
+    cbr.mkdir(parents=True, exist_ok=True)
+    cbr_nominal = cbr / "nominal.xml"
+    cbr_nominal.write_text(
+        "<?xml version='1.0' encoding='windows-1251'?>\n"
+        "<ValCurs Date='07.11.2026' name='Foreign Currency Market'>\n"
+        "<Valute><CharCode>USD</CharCode><Nominal>2</Nominal>"
+        "<Value>181,8200</Value></Valute>\n"
+        "<Valute><CharCode>EUR</CharCode><Nominal>1</Nominal>"
+        "<Value>98,5000</Value></Valute>\n"
+        "</ValCurs>\n",
+        encoding="cp1251")
+    cbr_without_eur = cbr / "no-eur.xml"
+    cbr_without_eur.write_text(
+        "<ValCurs>"
+        "<Valute><CharCode>USD</CharCode><Nominal>1</Nominal>"
+        "<Value>90,9100</Value></Valute>"
+        "<Valute><CharCode>JPY</CharCode><Nominal>100</Nominal>"
+        "<Value>5930,0000</Value></Valute>"
+        "</ValCurs>\n",
+        encoding="cp1251")
+    cbr_broken = cbr / "broken.xml"
+    cbr_broken.write_text(
+        "<Valute><CharCode>USD</CharCode>", encoding="cp1251")
+
+    cbr_usd = parse("cbr", FIXTURES / "extra-pills-cbr.xml")
+    if cbr_usd is not None:
+        ledger.check("extra pills cbr usd rate", cbr_usd == "90.91", cbr_usd)
+    cbr_eur = parse("cbr", FIXTURES / "extra-pills-cbr.xml", "EUR")
+    if cbr_eur is not None:
+        ledger.check("extra pills cbr eur rate", cbr_eur == "98.5", cbr_eur)
+    cbr_divided = parse("cbr", cbr_nominal)
+    if cbr_divided is not None:
+        ledger.check(
+            "extra pills cbr nominal division",
+            cbr_divided == "90.91",
+            cbr_divided)
+    cbr_partial = parse("cbr", cbr_without_eur)
+    if cbr_partial is not None:
+        ledger.check(
+            "extra pills cbr without eur empty",
+            cbr_partial == "",
+            cbr_partial)
+    cbr_unknown = parse("cbr", FIXTURES / "extra-pills-cbr.xml", "GBP")
+    if cbr_unknown is not None:
+        ledger.check(
+            "extra pills cbr unknown code empty",
+            cbr_unknown == "",
+            cbr_unknown)
+    cbr_invalid = parse("cbr", cbr_broken)
+    if cbr_invalid is not None:
+        ledger.check(
+            "extra pills cbr broken empty",
+            cbr_invalid == "",
+            cbr_invalid)
+
     result = run(
         cli,
         ["extra-pills-parse", "weather", str(FIXTURES / "pills-missing.json")])

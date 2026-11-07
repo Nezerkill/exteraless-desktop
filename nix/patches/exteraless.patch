@@ -20629,10 +20629,10 @@ index 0000000..b88f272
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.cpp b/exteraless/extra_pills.cpp
 new file mode 100644
-index 0000000..89b5d39
+index 0000000..ce8a0ff
 --- /dev/null
 +++ b/exteraless/extra_pills.cpp
-@@ -0,0 +1,408 @@
+@@ -0,0 +1,497 @@
 +#include "exteraless/extra_pills.h"
 +
 +#include <QElapsedTimer>
@@ -20712,6 +20712,19 @@ index 0000000..89b5d39
 +	return text.isEmpty() ? DashText() : text;
 +}
 +
++// CBR writes decimal fractions with a comma, unlike the JSON sources.
++[[nodiscard]] bool ParseCommaDecimal(const QString &text, double *value) {
++	auto normalized = text.trimmed();
++	normalized.replace(u',', u'.');
++	auto ok = false;
++	const auto parsed = normalized.toDouble(&ok);
++	if (!ok || !std::isfinite(parsed)) {
++		return false;
++	}
++	*value = parsed;
++	return true;
++}
++
 +} // namespace
 +
 +QString WeatherApiUrl() {
@@ -20741,6 +20754,10 @@ index 0000000..89b5d39
 +QString EcbDailyUrl() {
 +	return QStringLiteral(
 +		"https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml");
++}
++
++QString CbrDailyUrl() {
++	return QStringLiteral("https://www.cbr.ru/scripts/XML_daily.asp");
 +}
 +
 +QString GoldApiUrl() {
@@ -20833,6 +20850,58 @@ index 0000000..89b5d39
 +	return rates;
 +}
 +
++FiatRates ParseCbrXml(const QByteArray &data) {
++	auto rates = FiatRates();
++	// Only these ASCII fields matter, so skip the charset CBR declares.
++	auto reader = QXmlStreamReader(QString::fromLatin1(data));
++	auto usdToRub = 0.;
++	auto eurToRub = 0.;
++	auto hasUsd = false;
++	auto hasEur = false;
++	while (!reader.atEnd()) {
++		if (reader.readNext() != QXmlStreamReader::StartElement) {
++			continue;
++		}
++		if (reader.name() != QLatin1String("Valute")) {
++			continue;
++		}
++		auto code = QString();
++		auto nominal = 0.;
++		auto value = 0.;
++		auto hasNominal = false;
++		auto hasValue = false;
++		while (reader.readNextStartElement()) {
++			const auto name = reader.name();
++			const auto text = reader.readElementText();
++			if (name == QLatin1String("CharCode")) {
++				code = text.trimmed().toUpper();
++			} else if (name == QLatin1String("Nominal")) {
++				hasNominal = ParseCommaDecimal(text, &nominal);
++			} else if (name == QLatin1String("Value")) {
++				hasValue = ParseCommaDecimal(text, &value);
++			}
++		}
++		if (!hasNominal || !hasValue || nominal <= 0. || value <= 0.) {
++			continue;
++		}
++		const auto perUnit = value / nominal;
++		if (code == QStringLiteral("USD")) {
++			usdToRub = perUnit;
++			hasUsd = true;
++		} else if (code == QStringLiteral("EUR")) {
++			eurToRub = perUnit;
++			hasEur = true;
++		}
++	}
++	if (reader.hasError() || !hasUsd || !hasEur) {
++		return rates;
++	}
++	rates.ok = true;
++	rates.usdToRub = usdToRub;
++	rates.eurToRub = eurToRub;
++	return rates;
++}
++
 +QString FormatFiatRate(const FiatRates &rates, const QString &code) {
 +	if (!rates.ok) {
 +		return QString();
@@ -20871,24 +20940,35 @@ index 0000000..89b5d39
 +		bool pending = false;
 +	};
 +
++	struct RatesEntry {
++		QElapsedTimer since;
++		bool pending = false;
++		FiatRates rates;
++	};
++
 +	QNetworkAccessManager manager;
 +	std::array<Entry, kSlotCount> entries = {};
-+	bool fiatPending = false;
++	RatesEntry cbr;
++	RatesEntry ecb;
 +
 +	void refreshAll();
 +	void refreshFiat();
++	void refreshRates(
++		RatesEntry &entry,
++		const QString &url,
++		FiatRates (*parse)(const QByteArray &));
++	void updateFiatTexts();
 +	void fetch(
 +		Entry &entry,
 +		const QString &url,
 +		std::function<void(const QByteArray &)> apply);
 +
-+	[[nodiscard]] bool fresh(const Entry &entry) const;
++	[[nodiscard]] bool fresh(const QElapsedTimer &since) const;
 +	[[nodiscard]] QString text(Slot slot) const;
 +};
 +
-+bool ExtraPills::State::fresh(const Entry &entry) const {
-+	return entry.since.isValid()
-+		&& entry.since.elapsed() < kRefreshIntervalMs;
++bool ExtraPills::State::fresh(const QElapsedTimer &since) const {
++	return since.isValid() && since.elapsed() < kRefreshIntervalMs;
 +}
 +
 +QString ExtraPills::State::text(Slot slot) const {
@@ -20922,47 +21002,56 @@ index 0000000..89b5d39
 +		});
 +}
 +
-+void ExtraPills::State::refreshFiat() {
++void ExtraPills::State::refreshRates(
++		RatesEntry &entry,
++		const QString &url,
++		FiatRates (*parse)(const QByteArray &)) {
++	if (entry.pending || url.isEmpty() || fresh(entry.since)) {
++		return;
++	}
++	entry.pending = true;
++	entry.since.start();
++	auto request = QNetworkRequest(QUrl(url));
++	request.setRawHeader("User-Agent", "ExteralessDesktop");
++	const auto reply = manager.get(request);
++	QObject::connect(
++		reply,
++		&QNetworkReply::finished,
++		&manager,
++		[this, reply, &entry, parse] {
++			reply->deleteLater();
++			entry.pending = false;
++			if (reply->error() != QNetworkReply::NoError) {
++				return;
++			}
++			entry.rates = parse(reply->readAll());
++			updateFiatTexts();
++		});
++}
++
++void ExtraPills::State::updateFiatTexts() {
++	// CBR quotes the rouble directly; the ECB cross is the fallback.
++	const auto &rates = cbr.rates.ok ? cbr.rates : ecb.rates;
 +	auto &usd = entries[int(Slot::Usd)];
 +	auto &eur = entries[int(Slot::Eur)];
-+	if (fiatPending || (fresh(usd) && fresh(eur))) {
-+		return;
-+	}
-+	const auto url = EcbDailyUrl();
-+	if (url.isEmpty()) {
-+		return;
-+	}
-+	fiatPending = true;
-+	usd.pending = true;
-+	eur.pending = true;
-+	usd.since.start();
-+	eur.since.start();
-+	const auto reply = manager.get(QNetworkRequest(QUrl(url)));
-+	QObject::connect(reply, &QNetworkReply::finished, &manager, [this, reply] {
-+		reply->deleteLater();
-+		fiatPending = false;
-+		auto &usd = entries[int(Slot::Usd)];
-+		auto &eur = entries[int(Slot::Eur)];
-+		usd.pending = false;
-+		eur.pending = false;
-+		if (reply->error() != QNetworkReply::NoError) {
-+			return;
-+		}
-+		const auto rates = ParseEcbXml(reply->readAll());
-+		usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
-+		eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
-+	});
++	usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
++	eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
++}
++
++void ExtraPills::State::refreshFiat() {
++	refreshRates(cbr, CbrDailyUrl(), ParseCbrXml);
++	refreshRates(ecb, EcbDailyUrl(), ParseEcbXml);
 +}
 +
 +void ExtraPills::State::refreshAll() {
 +	auto &weather = entries[int(Slot::Weather)];
-+	if (!fresh(weather)) {
++	if (!fresh(weather.since)) {
 +		fetch(weather, WeatherApiUrl(), [this](const QByteArray &data) {
 +			entries[int(Slot::Weather)].text = ParseWeather(data);
 +		});
 +	}
 +	auto &btc = entries[int(Slot::Btc)];
-+	if (!fresh(btc)) {
++	if (!fresh(btc.since)) {
 +		fetch(
 +			btc,
 +			CoinbaseSpotUrl(QStringLiteral("BTC")),
@@ -20971,7 +21060,7 @@ index 0000000..89b5d39
 +			});
 +	}
 +	auto &eth = entries[int(Slot::Eth)];
-+	if (!fresh(eth)) {
++	if (!fresh(eth.since)) {
 +		fetch(
 +			eth,
 +			CoinbaseSpotUrl(QStringLiteral("ETH")),
@@ -20981,7 +21070,7 @@ index 0000000..89b5d39
 +	}
 +	refreshFiat();
 +	auto &gold = entries[int(Slot::Gold)];
-+	if (!fresh(gold)) {
++	if (!fresh(gold.since)) {
 +		fetch(gold, GoldApiUrl(), [this](const QByteArray &data) {
 +			entries[int(Slot::Gold)].text = ParseGoldApi(data);
 +		});
@@ -21043,10 +21132,10 @@ index 0000000..89b5d39
 +} // namespace Exteraless
 diff --git a/exteraless/extra_pills.h b/exteraless/extra_pills.h
 new file mode 100644
-index 0000000..4fc0d55
+index 0000000..f255b9e
 --- /dev/null
 +++ b/exteraless/extra_pills.h
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,53 @@
 +#pragma once
 +
 +#include <QByteArray>
@@ -21065,11 +21154,13 @@ index 0000000..4fc0d55
 +[[nodiscard]] QString WeatherApiUrl();
 +[[nodiscard]] QString CoinbaseSpotUrl(const QString &code);
 +[[nodiscard]] QString EcbDailyUrl();
++[[nodiscard]] QString CbrDailyUrl();
 +[[nodiscard]] QString GoldApiUrl();
 +
 +[[nodiscard]] QString ParseWeather(const QByteArray &data);
 +[[nodiscard]] QString ParseCoinbase(const QByteArray &data);
 +[[nodiscard]] FiatRates ParseEcbXml(const QByteArray &data);
++[[nodiscard]] FiatRates ParseCbrXml(const QByteArray &data);
 +[[nodiscard]] QString FormatFiatRate(
 +	const FiatRates &rates,
 +	const QString &code);
@@ -23980,10 +24071,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..797159f
+index 0000000..f0b263d
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3188 @@
+@@ -0,0 +1,3192 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -27156,9 +27247,13 @@ index 0000000..797159f
 +			text = Exteraless::ParseWeather(bytes);
 +		} else if (domain == QStringLiteral("coinbase")) {
 +			text = Exteraless::ParseCoinbase(bytes);
-+		} else if (domain == QStringLiteral("ecb")) {
++		} else if (domain == QStringLiteral("ecb")
++			|| domain == QStringLiteral("cbr")) {
++			const auto rates = (domain == QStringLiteral("cbr"))
++				? Exteraless::ParseCbrXml(bytes)
++				: Exteraless::ParseEcbXml(bytes);
 +			text = Exteraless::FormatFiatRate(
-+				Exteraless::ParseEcbXml(bytes),
++				rates,
 +				code.isEmpty() ? QStringLiteral("USD") : code);
 +		} else if (domain == QStringLiteral("gold")) {
 +			text = Exteraless::ParseGoldApi(bytes);
@@ -27325,6 +27420,39 @@ index 0000000..8b09fcf
 +++ b/exteraless/tests/chats/fixtures/extra-pills-broken.json
 @@ -0,0 +1 @@
 +{"current": {"temperature_2m": 12.0}
+diff --git a/exteraless/tests/chats/fixtures/extra-pills-cbr.xml b/exteraless/tests/chats/fixtures/extra-pills-cbr.xml
+new file mode 100644
+index 0000000..464f2c8
+--- /dev/null
++++ b/exteraless/tests/chats/fixtures/extra-pills-cbr.xml
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="windows-1251"?>
++<ValCurs Date="07.11.2026" name="Foreign Currency Market">
++<Valute ID="R01235">
++<NumCode>840</NumCode>
++<CharCode>USD</CharCode>
++<Nominal>1</Nominal>
++<Name>Доллар США</Name>
++<Value>90,9100</Value>
++<VunitRate>90,9100</VunitRate>
++</Valute>
++<Valute ID="R01239">
++<NumCode>978</NumCode>
++<CharCode>EUR</CharCode>
++<Nominal>1</Nominal>
++<Name>Евро</Name>
++<Value>98,5000</Value>
++<VunitRate>98,5000</VunitRate>
++</Valute>
++<Valute ID="R01820">
++<NumCode>392</NumCode>
++<CharCode>JPY</CharCode>
++<Nominal>100</Nominal>
++<Name>Японских иен</Name>
++<Value>5930,0000</Value>
++<VunitRate>59,3000</VunitRate>
++</Valute>
++</ValCurs>
 diff --git a/exteraless/tests/chats/fixtures/extra-pills-coinbase-small.json b/exteraless/tests/chats/fixtures/extra-pills-coinbase-small.json
 new file mode 100644
 index 0000000..c10405e
@@ -27560,10 +27688,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..37f8ee4
+index 0000000..44bb314
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,7958 @@
+@@ -0,0 +1,8014 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -34079,6 +34207,62 @@ index 0000000..37f8ee4
 +            "extra pills ecb broken empty",
 +            invalid_xml == "",
 +            invalid_xml)
++
++    cbr = work / "extra-pills-cbr"
++    cbr.mkdir(parents=True, exist_ok=True)
++    cbr_nominal = cbr / "nominal.xml"
++    cbr_nominal.write_text(
++        "<?xml version='1.0' encoding='windows-1251'?>\n"
++        "<ValCurs Date='07.11.2026' name='Foreign Currency Market'>\n"
++        "<Valute><CharCode>USD</CharCode><Nominal>2</Nominal>"
++        "<Value>181,8200</Value></Valute>\n"
++        "<Valute><CharCode>EUR</CharCode><Nominal>1</Nominal>"
++        "<Value>98,5000</Value></Valute>\n"
++        "</ValCurs>\n",
++        encoding="cp1251")
++    cbr_without_eur = cbr / "no-eur.xml"
++    cbr_without_eur.write_text(
++        "<ValCurs>"
++        "<Valute><CharCode>USD</CharCode><Nominal>1</Nominal>"
++        "<Value>90,9100</Value></Valute>"
++        "<Valute><CharCode>JPY</CharCode><Nominal>100</Nominal>"
++        "<Value>5930,0000</Value></Valute>"
++        "</ValCurs>\n",
++        encoding="cp1251")
++    cbr_broken = cbr / "broken.xml"
++    cbr_broken.write_text(
++        "<Valute><CharCode>USD</CharCode>", encoding="cp1251")
++
++    cbr_usd = parse("cbr", FIXTURES / "extra-pills-cbr.xml")
++    if cbr_usd is not None:
++        ledger.check("extra pills cbr usd rate", cbr_usd == "90.91", cbr_usd)
++    cbr_eur = parse("cbr", FIXTURES / "extra-pills-cbr.xml", "EUR")
++    if cbr_eur is not None:
++        ledger.check("extra pills cbr eur rate", cbr_eur == "98.5", cbr_eur)
++    cbr_divided = parse("cbr", cbr_nominal)
++    if cbr_divided is not None:
++        ledger.check(
++            "extra pills cbr nominal division",
++            cbr_divided == "90.91",
++            cbr_divided)
++    cbr_partial = parse("cbr", cbr_without_eur)
++    if cbr_partial is not None:
++        ledger.check(
++            "extra pills cbr without eur empty",
++            cbr_partial == "",
++            cbr_partial)
++    cbr_unknown = parse("cbr", FIXTURES / "extra-pills-cbr.xml", "GBP")
++    if cbr_unknown is not None:
++        ledger.check(
++            "extra pills cbr unknown code empty",
++            cbr_unknown == "",
++            cbr_unknown)
++    cbr_invalid = parse("cbr", cbr_broken)
++    if cbr_invalid is not None:
++        ledger.check(
++            "extra pills cbr broken empty",
++            cbr_invalid == "",
++            cbr_invalid)
 +
 +    result = run(
 +        cli,

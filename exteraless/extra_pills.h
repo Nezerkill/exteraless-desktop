@@ -16,11 +16,13 @@ struct FiatRates {
 [[nodiscard]] QString WeatherApiUrl();
 [[nodiscard]] QString CoinbaseSpotUrl(const QString &code);
 [[nodiscard]] QString EcbDailyUrl();
+[[nodiscard]] QString CbrDailyUrl();
 [[nodiscard]] QString GoldApiUrl();
 
 [[nodiscard]] QString ParseWeather(const QByteArray &data);
 [[nodiscard]] QString ParseCoinbase(const QByteArray &data);
 [[nodiscard]] FiatRates ParseEcbXml(const QByteArray &data);
+[[nodiscard]] FiatRates ParseCbrXml(const QByteArray &data);
 [[nodiscard]] QString FormatFiatRate(
 	const FiatRates &rates,
 	const QString &code);

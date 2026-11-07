@@ -3170,9 +3170,13 @@ int main(int argc, char *argv[]) {
 			text = Exteraless::ParseWeather(bytes);
 		} else if (domain == QStringLiteral("coinbase")) {
 			text = Exteraless::ParseCoinbase(bytes);
-		} else if (domain == QStringLiteral("ecb")) {
+		} else if (domain == QStringLiteral("ecb")
+			|| domain == QStringLiteral("cbr")) {
+			const auto rates = (domain == QStringLiteral("cbr"))
+				? Exteraless::ParseCbrXml(bytes)
+				: Exteraless::ParseEcbXml(bytes);
 			text = Exteraless::FormatFiatRate(
-				Exteraless::ParseEcbXml(bytes),
+				rates,
 				code.isEmpty() ? QStringLiteral("USD") : code);
 		} else if (domain == QStringLiteral("gold")) {
 			text = Exteraless::ParseGoldApi(bytes);

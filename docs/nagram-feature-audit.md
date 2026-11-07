@@ -398,7 +398,7 @@ error-канал SSE-парсера и параметр `stream` в `BuildReques
 | Мой статус | `LAST_SEEN(15)` | ✅ |
 | Погода | `WEATHER(1)` | ✅ NB-56, с оговоркой: `ExtraPills::Refresh` (`exteraless/extra_pills.{h,cpp}`) тянет Open-Meteo `current=temperature_2m` и троттлится 30 минутами, кэш только в памяти, пустой ответ и ошибка сети дают прочерк; координаты Москвы захардкожены — выбора города (аналог геолокации Android) нет |
 | Telegram-подписки («gram») | `GRAM(2)` | ❌ |
-| BTC / USD / EUR / ETH / GOLD | `BTC(3)`, `USD(4)`, `EUR(14)`, `ETH(13)`, `GOLD(12)` | ✅ NB-56, с оговоркой по fiat: BTC/ETH — Coinbase spot (`CoinbaseSpotUrl`), золото — `GoldApiUrl`/`ParseGoldApi`; USD/EUR — ECB XML (`EcbDailyUrl`, `ParseEcbXml` + `FormatFiatRate`: рубль из куба RUB, USD кросс-курсом `rubPerEur / usdPerEur`). ECB больше не публикует RUB, поэтому на живом endpoint fiat-пилюли показывают прочерк (follow-up — XML ЦБ РФ); кэш только в памяти |
+| BTC / USD / EUR / ETH / GOLD | `BTC(3)`, `USD(4)`, `EUR(14)`, `ETH(13)`, `GOLD(12)` | ✅ NB-56: BTC/ETH — Coinbase spot (`CoinbaseSpotUrl`), золото — `GoldApiUrl`/`ParseGoldApi`; USD/EUR — XML ЦБ РФ (`CbrDailyUrl`, `ParseCbrXml`: `CharCode`/`Nominal`/`Value`, десятичная запятая в точку, деление на `Nominal`), кросс-курс ECB (`ParseEcbXml` + `FormatFiatRate`) — только fallback, прочерк — последним; кэш только в памяти |
 | Настройка видимых и порядок | `PillStackPillsSettingsInfo`, `savePillsLayout` | 🟡 видимость есть (`OEPillStackPills`, маска 14 бит после NB-56); drag пишет `OEPillStackOrder`, `SanitizePillStackOrder` (`exteraless/config.cpp`) знает все 14 ключей (расширен в NB-56) |
 | Бесконечная прокрутка, сброс раскладки | `PillStackInfiniteScrolling`, `PillStackReset` | ❌ |
 

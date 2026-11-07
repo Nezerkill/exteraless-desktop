@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1058 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1070 проверок PASS
   (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -114,7 +114,7 @@
   19 update-channel, 32 translation, 23 ai, 13 ai-stream, 6 recognition,
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
-  27 regex-filters, 32 lyrics, 27 lrclib, 39 extra-pills, 105 backup);
+  27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 105 backup);
   плагины без изменений — 32 и 252 проверок.
 - Пилюли погоды, курсов и золота (NB-56): в `PillStack` шесть новых
   `PillStackPill` — `Weather` (256), `Btc` (512), `Eth` (1024), `Usd` (2048),
@@ -136,6 +136,21 @@
   поэтому fiat-пилюли на живом endpoint показывают прочерк (follow-up — XML
   ЦБ РФ); кэш только в памяти, после рестарта прочерк до первого fetch;
   порядок пилюль санитизируется по 14 ключам (`SanitizePillStackOrder` расширен);
+  Xvfb-смоук не выполнялся.
+- Рубль из ЦБ РФ (NB-56, follow-up): `exteraless/extra_pills.{h,cpp}` получил
+  `CbrDailyUrl` (`https://www.cbr.ru/scripts/XML_daily.asp`) и `ParseCbrXml` —
+  разбирает `Valute` по `CharCode`/`Nominal`/`Value`, переводит десятичную
+  запятую в точку (`ParseCommaDecimal`) и делит `Value` на `Nominal`, так что
+  USD и EUR приходят прямо в рублях; объявленный cp1251 не декодируется —
+  нужны только ASCII-поля. Источник выбирает `updateFiatTexts`: CBR, затем
+  кросс-курс ECB, затем прочерк. CLI `extra-pills-parse <domain> <file> [code]`
+  принимает домен `cbr`, добавлена фикстура `extra-pills-cbr.xml` (cp1251,
+  USD `90,9100`, EUR `98,5000`); `check_extra_pills` — 51 проверка (39 + 12);
+  chats-раннер 1070 (1058 + 12), плагины 32 и host-раннер 252 без изменений,
+  backup 105; `kKeysCount` 11241 без изменений, sha256 патча `c5a1ccbd…`,
+  `nix flake check` PASS. Приоритет CBR → ECB-кросс → прочерк подтверждён
+  код-ревью — сеть в тестах не используется. Не сделано: выбор города, диск-кэш
+  (значения только в памяти) и auto-fetch текстов (NB-50). Ограничения:
   Xvfb-смоук не выполнялся.
 - MD3-плеер, фаза 2 — онлайн-тексты lrclib.net (NB-50): Qt-only
   `exteraless/lrclib.{h,cpp}` — `BuildSearchUrl`/`BuildGetUrl` и разбор

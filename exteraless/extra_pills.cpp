@@ -77,6 +77,19 @@ constexpr auto kSlotCount = int(Slot::Count);
 	return text.isEmpty() ? DashText() : text;
 }
 
+// CBR writes decimal fractions with a comma, unlike the JSON sources.
+[[nodiscard]] bool ParseCommaDecimal(const QString &text, double *value) {
+	auto normalized = text.trimmed();
+	normalized.replace(u',', u'.');
+	auto ok = false;
+	const auto parsed = normalized.toDouble(&ok);
+	if (!ok || !std::isfinite(parsed)) {
+		return false;
+	}
+	*value = parsed;
+	return true;
+}
+
 } // namespace
 
 QString WeatherApiUrl() {
@@ -106,6 +119,10 @@ QString CoinbaseSpotUrl(const QString &code) {
 QString EcbDailyUrl() {
 	return QStringLiteral(
 		"https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml");
+}
+
+QString CbrDailyUrl() {
+	return QStringLiteral("https://www.cbr.ru/scripts/XML_daily.asp");
 }
 
 QString GoldApiUrl() {
@@ -198,6 +215,58 @@ FiatRates ParseEcbXml(const QByteArray &data) {
 	return rates;
 }
 
+FiatRates ParseCbrXml(const QByteArray &data) {
+	auto rates = FiatRates();
+	// Only these ASCII fields matter, so skip the charset CBR declares.
+	auto reader = QXmlStreamReader(QString::fromLatin1(data));
+	auto usdToRub = 0.;
+	auto eurToRub = 0.;
+	auto hasUsd = false;
+	auto hasEur = false;
+	while (!reader.atEnd()) {
+		if (reader.readNext() != QXmlStreamReader::StartElement) {
+			continue;
+		}
+		if (reader.name() != QLatin1String("Valute")) {
+			continue;
+		}
+		auto code = QString();
+		auto nominal = 0.;
+		auto value = 0.;
+		auto hasNominal = false;
+		auto hasValue = false;
+		while (reader.readNextStartElement()) {
+			const auto name = reader.name();
+			const auto text = reader.readElementText();
+			if (name == QLatin1String("CharCode")) {
+				code = text.trimmed().toUpper();
+			} else if (name == QLatin1String("Nominal")) {
+				hasNominal = ParseCommaDecimal(text, &nominal);
+			} else if (name == QLatin1String("Value")) {
+				hasValue = ParseCommaDecimal(text, &value);
+			}
+		}
+		if (!hasNominal || !hasValue || nominal <= 0. || value <= 0.) {
+			continue;
+		}
+		const auto perUnit = value / nominal;
+		if (code == QStringLiteral("USD")) {
+			usdToRub = perUnit;
+			hasUsd = true;
+		} else if (code == QStringLiteral("EUR")) {
+			eurToRub = perUnit;
+			hasEur = true;
+		}
+	}
+	if (reader.hasError() || !hasUsd || !hasEur) {
+		return rates;
+	}
+	rates.ok = true;
+	rates.usdToRub = usdToRub;
+	rates.eurToRub = eurToRub;
+	return rates;
+}
+
 QString FormatFiatRate(const FiatRates &rates, const QString &code) {
 	if (!rates.ok) {
 		return QString();
@@ -236,24 +305,35 @@ struct ExtraPills::State final {
 		bool pending = false;
 	};
 
+	struct RatesEntry {
+		QElapsedTimer since;
+		bool pending = false;
+		FiatRates rates;
+	};
+
 	QNetworkAccessManager manager;
 	std::array<Entry, kSlotCount> entries = {};
-	bool fiatPending = false;
+	RatesEntry cbr;
+	RatesEntry ecb;
 
 	void refreshAll();
 	void refreshFiat();
+	void refreshRates(
+		RatesEntry &entry,
+		const QString &url,
+		FiatRates (*parse)(const QByteArray &));
+	void updateFiatTexts();
 	void fetch(
 		Entry &entry,
 		const QString &url,
 		std::function<void(const QByteArray &)> apply);
 
-	[[nodiscard]] bool fresh(const Entry &entry) const;
+	[[nodiscard]] bool fresh(const QElapsedTimer &since) const;
 	[[nodiscard]] QString text(Slot slot) const;
 };
 
-bool ExtraPills::State::fresh(const Entry &entry) const {
-	return entry.since.isValid()
-		&& entry.since.elapsed() < kRefreshIntervalMs;
+bool ExtraPills::State::fresh(const QElapsedTimer &since) const {
+	return since.isValid() && since.elapsed() < kRefreshIntervalMs;
 }
 
 QString ExtraPills::State::text(Slot slot) const {
@@ -287,47 +367,56 @@ void ExtraPills::State::fetch(
 		});
 }
 
-void ExtraPills::State::refreshFiat() {
+void ExtraPills::State::refreshRates(
+		RatesEntry &entry,
+		const QString &url,
+		FiatRates (*parse)(const QByteArray &)) {
+	if (entry.pending || url.isEmpty() || fresh(entry.since)) {
+		return;
+	}
+	entry.pending = true;
+	entry.since.start();
+	auto request = QNetworkRequest(QUrl(url));
+	request.setRawHeader("User-Agent", "ExteralessDesktop");
+	const auto reply = manager.get(request);
+	QObject::connect(
+		reply,
+		&QNetworkReply::finished,
+		&manager,
+		[this, reply, &entry, parse] {
+			reply->deleteLater();
+			entry.pending = false;
+			if (reply->error() != QNetworkReply::NoError) {
+				return;
+			}
+			entry.rates = parse(reply->readAll());
+			updateFiatTexts();
+		});
+}
+
+void ExtraPills::State::updateFiatTexts() {
+	// CBR quotes the rouble directly; the ECB cross is the fallback.
+	const auto &rates = cbr.rates.ok ? cbr.rates : ecb.rates;
 	auto &usd = entries[int(Slot::Usd)];
 	auto &eur = entries[int(Slot::Eur)];
-	if (fiatPending || (fresh(usd) && fresh(eur))) {
-		return;
-	}
-	const auto url = EcbDailyUrl();
-	if (url.isEmpty()) {
-		return;
-	}
-	fiatPending = true;
-	usd.pending = true;
-	eur.pending = true;
-	usd.since.start();
-	eur.since.start();
-	const auto reply = manager.get(QNetworkRequest(QUrl(url)));
-	QObject::connect(reply, &QNetworkReply::finished, &manager, [this, reply] {
-		reply->deleteLater();
-		fiatPending = false;
-		auto &usd = entries[int(Slot::Usd)];
-		auto &eur = entries[int(Slot::Eur)];
-		usd.pending = false;
-		eur.pending = false;
-		if (reply->error() != QNetworkReply::NoError) {
-			return;
-		}
-		const auto rates = ParseEcbXml(reply->readAll());
-		usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
-		eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
-	});
+	usd.text = FormatFiatRate(rates, QStringLiteral("USD"));
+	eur.text = FormatFiatRate(rates, QStringLiteral("EUR"));
+}
+
+void ExtraPills::State::refreshFiat() {
+	refreshRates(cbr, CbrDailyUrl(), ParseCbrXml);
+	refreshRates(ecb, EcbDailyUrl(), ParseEcbXml);
 }
 
 void ExtraPills::State::refreshAll() {
 	auto &weather = entries[int(Slot::Weather)];
-	if (!fresh(weather)) {
+	if (!fresh(weather.since)) {
 		fetch(weather, WeatherApiUrl(), [this](const QByteArray &data) {
 			entries[int(Slot::Weather)].text = ParseWeather(data);
 		});
 	}
 	auto &btc = entries[int(Slot::Btc)];
-	if (!fresh(btc)) {
+	if (!fresh(btc.since)) {
 		fetch(
 			btc,
 			CoinbaseSpotUrl(QStringLiteral("BTC")),
@@ -336,7 +425,7 @@ void ExtraPills::State::refreshAll() {
 			});
 	}
 	auto &eth = entries[int(Slot::Eth)];
-	if (!fresh(eth)) {
+	if (!fresh(eth.since)) {
 		fetch(
 			eth,
 			CoinbaseSpotUrl(QStringLiteral("ETH")),
@@ -346,7 +435,7 @@ void ExtraPills::State::refreshAll() {
 	}
 	refreshFiat();
 	auto &gold = entries[int(Slot::Gold)];
-	if (!fresh(gold)) {
+	if (!fresh(gold.since)) {
 		fetch(gold, GoldApiUrl(), [this](const QByteArray &data) {
 			entries[int(Slot::Gold)].text = ParseGoldApi(data);
 		});

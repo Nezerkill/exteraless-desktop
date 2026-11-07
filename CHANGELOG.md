@@ -2,6 +2,25 @@
 
 ## 2026-11-07
 
+- Пилюли курсов из ЦБ РФ (NB-56, follow-up): Qt-only
+  `exteraless/extra_pills.{h,cpp}` получил `CbrDailyUrl`
+  (`https://www.cbr.ru/scripts/XML_daily.asp`) и `ParseCbrXml` — разбирает
+  `Valute` по `CharCode`/`Nominal`/`Value`, переводит десятичную запятую в
+  точку (`ParseCommaDecimal`) и делит `Value` на `Nominal`, поэтому USD и EUR
+  приходят прямо в рублях; объявленный cp1251 не декодируется — нужны только
+  ASCII-поля. Источник выбирает `updateFiatTexts`: сначала CBR, затем
+  кросс-курс ECB (`rubPerEur / usdPerEur`), и только потом прочерк `—`; оба
+  запроса троттлятся теми же 30 минутами и идут с User-Agent
+  `ExteralessDesktop`. CLI `extra-pills-parse` принимает домен `cbr`,
+  добавлена фикстура `extra-pills-cbr.xml` (cp1251, USD `90,9100`, EUR
+  `98,5000`), inline-фикстуры — деление по `Nominal`, отсутствие EUR и битый
+  XML; `check_extra_pills` — 51 проверка (39 + 12); chats-раннер 1070
+  (1058 + 12), плагины 32 и host-раннер 252 без изменений, backup 105;
+  `kKeysCount` 11241 без изменений, sha256 патча `c5a1ccbd…`, `nix flake
+  check` PASS. Приоритет CBR → ECB-кросс → прочерк подтверждён код-ревью —
+  сеть в тестах не используется. Не сделано: выбора города нет, диск-кэша нет
+  (значения по-прежнему только в памяти) и auto-fetch текстов (NB-50).
+  Ограничения: Xvfb-смоук не выполнялся.
 - Стриминг AI-ассистента (NB-48, follow-up MVP): SSE-разбор вынесен в
   Qt-only `exteraless/ai_client.{h,cpp}` — `SseParser::feed` копит чанки в
   буфер и режет по `\n` (терпит `\r` и разрыв строки между чанками),
