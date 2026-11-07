@@ -16327,10 +16327,10 @@ index 0000000..81b95c1
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..51561f6
+index 0000000..aa5908a
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1280 @@
+@@ -0,0 +1,1314 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/ai_client.h"
@@ -16657,6 +16657,29 @@ index 0000000..51561f6
 +constexpr auto kSectionPills = "pillstackconfig";
 +constexpr auto kSectionMain = "mainconfig";
 +
++constexpr auto kRedactedValue = "***REMOVED***";
++
++constexpr auto kSecretKeys = {
++	kTranslationGoogleCloudKey,
++	kTranslationDeepLKey,
++	kAiApiKey,
++};
++
++[[nodiscard]] bool IsSecretKey(const QString &key) {
++	for (const auto secret : kSecretKeys) {
++		if (key == QLatin1String(secret)) {
++			return true;
++		}
++	}
++	return key == QLatin1String(kTranslationGoogleCloudKeyAlias)
++		|| key == QLatin1String(kTranslationDeepLKeyAlias)
++		|| key == QLatin1String(kAiApiKeyAlias);
++}
++
++[[nodiscard]] bool IsRedactedValue(const QJsonValue &value) {
++	return value.isString() && value.toString() == QLatin1String(kRedactedValue);
++}
++
 +[[nodiscard]] QString ToBase11(int value) {
 +	auto result = QString();
 +	while (value > 0) {
@@ -16778,7 +16801,7 @@ index 0000000..51561f6
 +	return bytes;
 +}
 +
-+QString BuildBackup() {
++QString BuildBackup(bool redactSecrets) {
 +	auto &config = Config::Instance();
 +	const auto chats = config.chatsSettings();
 +
@@ -16928,6 +16951,12 @@ index 0000000..51561f6
 +	extera[kAiHistory] = config.aiHistory();
 +	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 +
++	if (redactSecrets) {
++		for (const auto secret : kSecretKeys) {
++			extera[secret] = QString::fromLatin1(kRedactedValue);
++		}
++	}
++
 +	auto pills = QJsonObject();
 +	pills[kPillStackEnabled] = config.pillStackEnabled();
 +	pills[kPillStackPills] = config.pillStackPills();
@@ -17014,6 +17043,11 @@ index 0000000..51561f6
 +				return true;
 +			}
 +			return false;
++		}
++		if (IsSecretKey(key) && IsRedactedValue(value)) {
++			// A redacted export keeps the secret slot for structure only;
++			// importing it must leave the local secret untouched.
++			return true;
 +		}
 +		if (key == kRelativeLastSeen && value.isBool()) {
 +			config.setRelativeLastSeen(value.toBool());
@@ -17613,7 +17647,7 @@ index 0000000..51561f6
 +} // namespace Exteraless
 diff --git a/exteraless/backup.h b/exteraless/backup.h
 new file mode 100644
-index 0000000..7551af5
+index 0000000..fe3a20e
 --- /dev/null
 +++ b/exteraless/backup.h
 @@ -0,0 +1,22 @@
@@ -17635,7 +17669,7 @@ index 0000000..7551af5
 +[[nodiscard]] QString EncodeInvisible(const QByteArray &json);
 +[[nodiscard]] QByteArray DecodeInvisible(const QString &text);
 +
-+[[nodiscard]] QString BuildBackup();
++[[nodiscard]] QString BuildBackup(bool redactSecrets = false);
 +[[nodiscard]] BackupImportResult ApplyBackup(const QString &text);
 +
 +} // namespace Exteraless
@@ -24378,10 +24412,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..745c3f6
+index 0000000..d3a10b1
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3293 @@
+@@ -0,0 +1,3301 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
@@ -24637,6 +24671,7 @@ index 0000000..745c3f6
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
 +		<< "  exteraless-chats-cli backup-export-current\n"
++		<< "  exteraless-chats-cli backup-export-redacted\n"
 +		<< "  exteraless-chats-cli backup-import <base64>\n"
 +		<< "  exteraless-chats-cli backup-import-json <json>\n"
 +		<< "  exteraless-chats-cli subtitles-parse <file>\n"
@@ -25026,8 +25061,8 @@ index 0000000..745c3f6
 +	return QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
 +}
 +
-+void PrintBackup() {
-+	const auto encoded = Exteraless::BuildBackup();
++void PrintBackup(bool redactSecrets = false) {
++	const auto encoded = Exteraless::BuildBackup(redactSecrets);
 +	const auto document = QJsonDocument::fromJson(
 +		Exteraless::DecodeInvisible(encoded));
 +	const auto object = document.object();
@@ -27479,6 +27514,13 @@ index 0000000..745c3f6
 +		PrintBackup();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("backup-export-redacted")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		PrintBackup(true);
++		return 0;
++	}
 +	if (mode == QStringLiteral("backup-import")) {
 +		if (arguments.size() != 3) {
 +			return PrintUsage();
@@ -28112,10 +28154,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..c0cf3ad
+index 0000000..8d7fcb3
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8197 @@
+@@ -0,0 +1,8328 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -29775,6 +29817,135 @@ index 0000000..c0cf3ad
 +            "backup old name cache defaults",
 +            data.get("chats") == EXPECTED_DEFAULTS,
 +            data.get("chats"))
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++REDACTED_MARK = "***REMOVED***"
++SECRET_KEYS = (
++    "OEAiApiKey",
++    "OETranslationGoogleCloudKey",
++    "OETranslationDeepLKey",
++)
++LIVE_SECRETS = {
++    "OEAiApiKey": "sk-live-redacted-check",
++    "OETranslationGoogleCloudKey": "AIza-live-google-check",
++    "OETranslationDeepLKey": "deepl-live-check",
++}
++
++
++def check_backup_redacted(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    env = make_env(work / "backup-redacted")
++    for name, arguments in (
++            ("ai key", ["ai-config-set-key", LIVE_SECRETS["OEAiApiKey"]]),
++            ("google key", ["translation-keys-set", "google",
++                            LIVE_SECRETS["OETranslationGoogleCloudKey"]]),
++            ("deepl key", ["translation-keys-set", "deepl",
++                           LIVE_SECRETS["OETranslationDeepLKey"]])):
++        json_call(ledger, cli, arguments, env, f"backup redacted set {name}")
++
++    result = run(cli, ["backup-export-redacted"], env=env)
++    data = None
++    try:
++        data = json.loads(result.stdout)
++    except json.JSONDecodeError:
++        data = None
++    ledger.check(
++        "backup redacted export",
++        result.returncode == 0 and isinstance(data, dict),
++        f"exit {result.returncode}, stderr {result.stderr.strip()!r}")
++
++    encoded = None
++    if data is not None:
++        ledger.check(
++            "backup redacted leaks no live secret",
++            not any(secret in result.stdout for secret in LIVE_SECRETS.values()),
++            [secret for secret in LIVE_SECRETS.values()
++             if secret in result.stdout])
++        sections = backup_sections(data)
++        section = sections["exteraconfig"]
++        ledger.check(
++            "backup redacted marks every secret",
++            all(section.get(key) == REDACTED_MARK for key in SECRET_KEYS),
++            {key: section.get(key) for key in SECRET_KEYS})
++        ledger.check(
++            "backup redacted keeps other keys",
++            section.get("removeMessageTail") is True
++            and section.get("OEGhostSendOnline") is True
++            and section.get("OETranslationProvider") == 0,
++            {key: section.get(key) for key in (
++                "removeMessageTail",
++                "OEGhostSendOnline",
++                "OETranslationProvider")})
++        ledger.check(
++            "backup redacted key counts",
++            len(section) == 141
++            and sum(len(value) for value in sections.values()) == 146,
++            {name: len(value) for name, value in sections.items()})
++        encoded = data.get("backup_base64")
++        ledger.check(
++            "backup redacted base64 present",
++            isinstance(encoded, str) and bool(encoded),
++            encoded)
++
++    plain = json_call(
++        ledger, cli, ["backup-export-current"], env, "backup plain export")
++    if plain is not None:
++        plain_section = backup_sections(plain)["exteraconfig"]
++        ledger.check(
++            "backup plain export omits secrets",
++            all(key not in plain_section for key in SECRET_KEYS),
++            [key for key in SECRET_KEYS if key in plain_section])
++
++    if encoded:
++        imported = json_call(
++            ledger, cli, ["backup-import", encoded], env,
++            "backup redacted import")
++        if imported is not None:
++            ledger.check(
++                "backup redacted import applied",
++                imported.get("ok") is True
++                and imported.get("unknown") == []
++                and imported.get("applied") == 146,
++                imported)
++        raw = json_call(
++            ledger, cli, ["config-raw"], env, "backup redacted local config")
++        if raw is not None:
++            local = raw.get("exteraconfig") or {}
++            ledger.check(
++                "backup redacted import keeps local secrets",
++                all(local.get(key) == secret
++                    for key, secret in LIVE_SECRETS.items()),
++                {key: local.get(key) for key in SECRET_KEYS})
++
++    clean = make_env(work / "backup-redacted-clean")
++    if encoded:
++        imported = json_call(
++            ledger, cli, ["backup-import", encoded], clean,
++            "backup redacted import clean")
++        if imported is not None:
++            ledger.check(
++                "backup redacted import clean ok",
++                imported.get("ok") is True
++                and imported.get("unknown") == [],
++                imported)
++        raw = json_call(
++            ledger, cli, ["config-raw"], clean,
++            "backup redacted clean config")
++        if raw is not None:
++            values = (raw.get("exteraconfig") or {}).values()
++            ledger.check(
++                "backup redacted import stores no placeholder",
++                REDACTED_MARK not in values
++                and all(not raw.get("exteraconfig", {}).get(key)
++                        for key in SECRET_KEYS),
++                {key: (raw.get("exteraconfig") or {}).get(key)
++                 for key in SECRET_KEYS})
 +
 +    return (
 +        ledger.checks - before_checks,
@@ -36218,6 +36389,7 @@ index 0000000..c0cf3ad
 +        extra_pills = check_extra_pills(ledger, cli, work)
 +        regex_filters = check_regex_filters(ledger, cli, work)
 +        backup = check_backup(ledger, cli, work)
++        backup_redacted = check_backup_redacted(ledger, cli, work)
 +    print(f"strip: {strips[0] - strips[1]} passed")
 +    print(f"reactions: {reactions[0] - reactions[1]} passed")
 +    print(f"cli: {cli_args[0] - cli_args[1]} passed")
@@ -36302,6 +36474,7 @@ index 0000000..c0cf3ad
 +    print(f"extra-pills: {extra_pills[0] - extra_pills[1]} passed")
 +    print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
 +    print(f"backup: {backup[0] - backup[1]} passed")
++    print(f"backup-redacted: {backup_redacted[0] - backup_redacted[1]} passed")
 +    if ledger.failures:
 +        print(
 +            f"RESULT: FAIL ({len(ledger.failures)} failed "

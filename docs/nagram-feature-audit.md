@@ -193,7 +193,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Медиа: субтитры, качество | `utils/VideoSubtitlesHelper`, `NaConfig`/`NekoConfig` | ~12 | 🟡 субтитры ✅ NB-32, качество/кодеки ❌ |
 | Текст, математика, типографика | `math/*`, `tw/nekomimi/nekogram/{filters,syntaxhighlight,shamsicalendar}` | ~30 | ✅ NB-58 (персидский календарь): `OEGeneralUsePersianCalendar`/`OEGeneralPersianCalendarLatin` и `Exteraless::PersianDateText` через `QCalendar` Jalali (12 месяцев, цифры ASCII или `U+06F0`), подмена в `langDayOfMonth*`/`langDateTime*` меняет только `lt_date`; остальное ❌ |
 | Речь: Vosk и транскрипция | `speech/*` (5 файлов), `helpers/TranscribeHelper` | 4 провайдера + офлайн | 🟡 stub ✅ NB-51: язык распознавания (`OEGeneralRecognitionLanguage`, строка, default `ru`, алиас `recognitionLanguage`, 6 языков в селекторе) сохраняется, пункт «Transcribe offline» в меню голосовых показывает тост `lng_media_view_transcribe_offline_na`; самого Vosk (нет в nixpkgs), моделей и провайдеров транскрипции нет |
-| Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 1 формат (25 ключей) |
+| Бэкапы и миграция | `backup/*`, `SettingsBackupHelper`, `FaveStickersBackup` | 7 форматов | 🟡 2 формата: `.extera` и полный JSON ✅ NB-57 (whitelist + redaction, 2026-11-07); плагины, стикеры и облако ❌ |
 | WEB proxy (desktop-only) | — | ~3.1k строк | 🟡 код есть, сервер нет |
 
 ### 6.2 Appearance (74 пункта `AppearanceConfig`)
@@ -588,7 +588,7 @@ link-filter в `InitElementTextPart`, тот же флаг на `_textCache` в
 | Формат | Android | Desktop |
 |---|---|---|
 | `.extera` (невидимые Unicode + JSON) | `EtgBackup`, `InvisibleEncryptor` | ✅ `exteraless/backup.cpp`, 25 ключей |
-| Полный `.json` всех настроек | `SettingsBackupHelper` | ❌ |
+| Полный `.json` всех настроек | `SettingsBackupHelper` | ✅ NB-57 (2026-11-07): `exteraless/backup.cpp` — `BuildBackup(bool redactSecrets = false)` выгружает полный набор ключей по whitelist, импорт пропускает неизвестные; redacted-вариант кладёт `***REMOVED***` в 3 слота `kSecretKeys` (`OEAiApiKey`, `OETranslationGoogleCloudKey`, `OETranslationDeepLKey`) и при импорте их не затирает; «25 ключей» в строке выше — состояние до NB-57 |
 | Импорт базы AyuGram | `AyuDatabaseImport` | ❌ |
 | Бэкап плагинов | `PluginsBackup` | ❌ |
 | Бэкап избранных стикеров | `FaveStickersBackup` | ❌ |

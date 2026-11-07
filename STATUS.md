@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1096 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1107 проверок PASS
   (44 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -115,8 +115,21 @@
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 51 extra-pills, 26 ai-roles,
-  105 backup);
+  105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 252 проверок.
+- Полный JSON-бэкап (NB-57, решение пользователя — whitelist + redaction):
+  `BuildBackup(bool redactSecrets = false)` (`exteraless/backup.{h,cpp}`)
+  экспортирует полный набор ключей по whitelist; GUI-путь (`BuildBackup()`
+  без аргументов) не тронут. Секреты перечислены в `kSecretKeys` (3:
+  `OEAiApiKey`, `OETranslationGoogleCloudKey`, `OETranslationDeepLKey`),
+  redacted-вариант кладёт вместо них 3 слота `***REMOVED***` (надмножество
+  обычного экспорта), а импорт это значение пропускает — локальные секреты
+  не затираются, в чистом профиле не сохраняются. CLI
+  `backup-export-redacted`, `check_backup_redacted` — 11 проверок; раннеры
+  1107/32/252 PASS (backup 105). `kKeysCount` 11241 без изменений, sha256
+  патча `220dd587…`, `nix flake check` PASS. Не сделано: GUI-кнопка
+  redacted-экспорта. Ограничения: новый секрет надо вручную добавлять в
+  `kSecretKeys`; Xvfb-смоук не выполнялся.
 - Роли и история AI (NB-48, follow-up): `OEAiRoles`, `OEAiActiveRole`,
   `OEAiHistory` + алиасы; селектор роли и in-memory turns (cap 20) в боксе;
   `check_ai_roles` — 26 проверок; раннеры 1096/32/252 PASS.

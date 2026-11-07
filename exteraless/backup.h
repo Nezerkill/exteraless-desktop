@@ -16,7 +16,7 @@ struct BackupImportResult {
 [[nodiscard]] QString EncodeInvisible(const QByteArray &json);
 [[nodiscard]] QByteArray DecodeInvisible(const QString &text);
 
-[[nodiscard]] QString BuildBackup();
+[[nodiscard]] QString BuildBackup(bool redactSecrets = false);
 [[nodiscard]] BackupImportResult ApplyBackup(const QString &text);
 
 } // namespace Exteraless

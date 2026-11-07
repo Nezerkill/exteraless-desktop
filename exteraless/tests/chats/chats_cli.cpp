@@ -253,6 +253,7 @@ using Exteraless::ChatsSettings;
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
 		<< "  exteraless-chats-cli backup-export-current\n"
+		<< "  exteraless-chats-cli backup-export-redacted\n"
 		<< "  exteraless-chats-cli backup-import <base64>\n"
 		<< "  exteraless-chats-cli backup-import-json <json>\n"
 		<< "  exteraless-chats-cli subtitles-parse <file>\n"
@@ -642,8 +643,8 @@ void PrintImportResult(const Exteraless::BackupImportResult &result) {
 	return QString::fromUtf8(QByteArray::fromBase64(text.toLatin1()));
 }
 
-void PrintBackup() {
-	const auto encoded = Exteraless::BuildBackup();
+void PrintBackup(bool redactSecrets = false) {
+	const auto encoded = Exteraless::BuildBackup(redactSecrets);
 	const auto document = QJsonDocument::fromJson(
 		Exteraless::DecodeInvisible(encoded));
 	const auto object = document.object();
@@ -3093,6 +3094,13 @@ int main(int argc, char *argv[]) {
 			return PrintUsage();
 		}
 		PrintBackup();
+		return 0;
+	}
+	if (mode == QStringLiteral("backup-export-redacted")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		PrintBackup(true);
 		return 0;
 	}
 	if (mode == QStringLiteral("backup-import")) {

@@ -324,6 +324,29 @@ constexpr auto kSectionExtera = "exteraconfig";
 constexpr auto kSectionPills = "pillstackconfig";
 constexpr auto kSectionMain = "mainconfig";
 
+constexpr auto kRedactedValue = "***REMOVED***";
+
+constexpr auto kSecretKeys = {
+	kTranslationGoogleCloudKey,
+	kTranslationDeepLKey,
+	kAiApiKey,
+};
+
+[[nodiscard]] bool IsSecretKey(const QString &key) {
+	for (const auto secret : kSecretKeys) {
+		if (key == QLatin1String(secret)) {
+			return true;
+		}
+	}
+	return key == QLatin1String(kTranslationGoogleCloudKeyAlias)
+		|| key == QLatin1String(kTranslationDeepLKeyAlias)
+		|| key == QLatin1String(kAiApiKeyAlias);
+}
+
+[[nodiscard]] bool IsRedactedValue(const QJsonValue &value) {
+	return value.isString() && value.toString() == QLatin1String(kRedactedValue);
+}
+
 [[nodiscard]] QString ToBase11(int value) {
 	auto result = QString();
 	while (value > 0) {
@@ -445,7 +468,7 @@ QByteArray DecodeInvisible(const QString &text) {
 	return bytes;
 }
 
-QString BuildBackup() {
+QString BuildBackup(bool redactSecrets) {
 	auto &config = Config::Instance();
 	const auto chats = config.chatsSettings();
 
@@ -595,6 +618,12 @@ QString BuildBackup() {
 	extera[kAiHistory] = config.aiHistory();
 	extera[kGeneralRecognitionLanguage] = config.recognitionLanguage();
 
+	if (redactSecrets) {
+		for (const auto secret : kSecretKeys) {
+			extera[secret] = QString::fromLatin1(kRedactedValue);
+		}
+	}
+
 	auto pills = QJsonObject();
 	pills[kPillStackEnabled] = config.pillStackEnabled();
 	pills[kPillStackPills] = config.pillStackPills();
@@ -681,6 +710,11 @@ BackupImportResult ApplyBackup(const QString &text) {
 				return true;
 			}
 			return false;
+		}
+		if (IsSecretKey(key) && IsRedactedValue(value)) {
+			// A redacted export keeps the secret slot for structure only;
+			// importing it must leave the local secret untouched.
+			return true;
 		}
 		if (key == kRelativeLastSeen && value.isBool()) {
 			config.setRelativeLastSeen(value.toBool());

@@ -1663,6 +1663,135 @@ def check_backup(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+REDACTED_MARK = "***REMOVED***"
+SECRET_KEYS = (
+    "OEAiApiKey",
+    "OETranslationGoogleCloudKey",
+    "OETranslationDeepLKey",
+)
+LIVE_SECRETS = {
+    "OEAiApiKey": "sk-live-redacted-check",
+    "OETranslationGoogleCloudKey": "AIza-live-google-check",
+    "OETranslationDeepLKey": "deepl-live-check",
+}
+
+
+def check_backup_redacted(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    env = make_env(work / "backup-redacted")
+    for name, arguments in (
+            ("ai key", ["ai-config-set-key", LIVE_SECRETS["OEAiApiKey"]]),
+            ("google key", ["translation-keys-set", "google",
+                            LIVE_SECRETS["OETranslationGoogleCloudKey"]]),
+            ("deepl key", ["translation-keys-set", "deepl",
+                           LIVE_SECRETS["OETranslationDeepLKey"]])):
+        json_call(ledger, cli, arguments, env, f"backup redacted set {name}")
+
+    result = run(cli, ["backup-export-redacted"], env=env)
+    data = None
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        data = None
+    ledger.check(
+        "backup redacted export",
+        result.returncode == 0 and isinstance(data, dict),
+        f"exit {result.returncode}, stderr {result.stderr.strip()!r}")
+
+    encoded = None
+    if data is not None:
+        ledger.check(
+            "backup redacted leaks no live secret",
+            not any(secret in result.stdout for secret in LIVE_SECRETS.values()),
+            [secret for secret in LIVE_SECRETS.values()
+             if secret in result.stdout])
+        sections = backup_sections(data)
+        section = sections["exteraconfig"]
+        ledger.check(
+            "backup redacted marks every secret",
+            all(section.get(key) == REDACTED_MARK for key in SECRET_KEYS),
+            {key: section.get(key) for key in SECRET_KEYS})
+        ledger.check(
+            "backup redacted keeps other keys",
+            section.get("removeMessageTail") is True
+            and section.get("OEGhostSendOnline") is True
+            and section.get("OETranslationProvider") == 0,
+            {key: section.get(key) for key in (
+                "removeMessageTail",
+                "OEGhostSendOnline",
+                "OETranslationProvider")})
+        ledger.check(
+            "backup redacted key counts",
+            len(section) == 141
+            and sum(len(value) for value in sections.values()) == 146,
+            {name: len(value) for name, value in sections.items()})
+        encoded = data.get("backup_base64")
+        ledger.check(
+            "backup redacted base64 present",
+            isinstance(encoded, str) and bool(encoded),
+            encoded)
+
+    plain = json_call(
+        ledger, cli, ["backup-export-current"], env, "backup plain export")
+    if plain is not None:
+        plain_section = backup_sections(plain)["exteraconfig"]
+        ledger.check(
+            "backup plain export omits secrets",
+            all(key not in plain_section for key in SECRET_KEYS),
+            [key for key in SECRET_KEYS if key in plain_section])
+
+    if encoded:
+        imported = json_call(
+            ledger, cli, ["backup-import", encoded], env,
+            "backup redacted import")
+        if imported is not None:
+            ledger.check(
+                "backup redacted import applied",
+                imported.get("ok") is True
+                and imported.get("unknown") == []
+                and imported.get("applied") == 146,
+                imported)
+        raw = json_call(
+            ledger, cli, ["config-raw"], env, "backup redacted local config")
+        if raw is not None:
+            local = raw.get("exteraconfig") or {}
+            ledger.check(
+                "backup redacted import keeps local secrets",
+                all(local.get(key) == secret
+                    for key, secret in LIVE_SECRETS.items()),
+                {key: local.get(key) for key in SECRET_KEYS})
+
+    clean = make_env(work / "backup-redacted-clean")
+    if encoded:
+        imported = json_call(
+            ledger, cli, ["backup-import", encoded], clean,
+            "backup redacted import clean")
+        if imported is not None:
+            ledger.check(
+                "backup redacted import clean ok",
+                imported.get("ok") is True
+                and imported.get("unknown") == [],
+                imported)
+        raw = json_call(
+            ledger, cli, ["config-raw"], clean,
+            "backup redacted clean config")
+        if raw is not None:
+            values = (raw.get("exteraconfig") or {}).values()
+            ledger.check(
+                "backup redacted import stores no placeholder",
+                REDACTED_MARK not in values
+                and all(not raw.get("exteraconfig", {}).get(key)
+                        for key in SECRET_KEYS),
+                {key: (raw.get("exteraconfig") or {}).get(key)
+                 for key in SECRET_KEYS})
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_deleted(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -8100,6 +8229,7 @@ def main():
         extra_pills = check_extra_pills(ledger, cli, work)
         regex_filters = check_regex_filters(ledger, cli, work)
         backup = check_backup(ledger, cli, work)
+        backup_redacted = check_backup_redacted(ledger, cli, work)
     print(f"strip: {strips[0] - strips[1]} passed")
     print(f"reactions: {reactions[0] - reactions[1]} passed")
     print(f"cli: {cli_args[0] - cli_args[1]} passed")
@@ -8184,6 +8314,7 @@ def main():
     print(f"extra-pills: {extra_pills[0] - extra_pills[1]} passed")
     print(f"regex-filters: {regex_filters[0] - regex_filters[1]} passed")
     print(f"backup: {backup[0] - backup[1]} passed")
+    print(f"backup-redacted: {backup_redacted[0] - backup_redacted[1]} passed")
     if ledger.failures:
         print(
             f"RESULT: FAIL ({len(ledger.failures)} failed "

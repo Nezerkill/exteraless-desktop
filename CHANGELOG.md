@@ -2,6 +2,21 @@
 
 ## 2026-11-07
 
+- Полный JSON-бэкап (NB-57, решение пользователя — whitelist + redaction):
+  `BuildBackup(bool redactSecrets = false)` (`exteraless/backup.{h,cpp}`)
+  экспортирует полный набор ключей по whitelist; GUI-путь (`BuildBackup()`
+  без аргументов) не тронут — redaction по умолчанию выключен. Секреты
+  перечислены в `kSecretKeys` (3: `OEAiApiKey`,
+  `OETranslationGoogleCloudKey`, `OETranslationDeepLKey`; их алиасы
+  принимаются при импорте) — в redacted-экспорте вместо них 3 слота
+  `***REMOVED***` (надмножество обычного экспорта). Импорт пропускает
+  значение `***REMOVED***`: локальные секреты не затираются, а в чистом
+  профиле не сохраняются. CLI `backup-export-redacted`,
+  `check_backup_redacted` — 11 проверок, раннеры 1107/32/252 PASS
+  (backup 105); `kKeysCount` 11241 без изменений; sha256 патча
+  `220dd587…`, `nix flake check` PASS. Не сделано: GUI-кнопка
+  redacted-экспорта (one-line follow-up). Ограничения: новый секрет надо
+  вручную добавлять в `kSecretKeys`; Xvfb-смоук не выполнялся.
 - Роли и история диалога AI-ассистента (NB-48, follow-up): `OEAiRoles`
   (JSON `[{"name","prompt"}]`, ≤32, prompt ≤4KiB), `OEAiActiveRole`,
   `OEAiHistory` (default true) + алиасы; `ParseAiRoles` с валидацией,
