@@ -2,6 +2,14 @@
 
 ## 2026-11-08
 
+- Качество отправки и приёма медиа (NB-88, follow-up): `OEGalleryAlwaysSendHd`
+  (дефолт send-as-photos), `OEGalleryEnhancedVideoBitrate` (потолок 14 Mbps,
+  только video-пути, source-cap цел), `OEGalleryPreferOriginalQuality`
+  (original-поток, manual=1, adaptive off); CLI 6 режимов + 17 проверок;
+  раннеры 1201/32/279 PASS; `kKeysCount` без изменений (11251); патч
+  `7b1d4bb6…`, flake PASS. Не сделано: GUI-тумблеры (только CLI).
+  Ограничения: гонка потолка при тумбле во время загрузки; Xvfb-смоук
+  не выполнялся.
 - Очередь воспроизведения (NB-50, v3): `Exteraless::PlayerQueue`
   (ordered-модель + sync по `playlistChanges`, `playlistTrackIds`
   accessor); сайд-лист `player_queue_sheet.*` (строки, палитра-акцент

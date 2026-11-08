@@ -1303,6 +1303,9 @@ void SendFilesBox::initSendWay() {
 			&& (_list.files.size() > 1)) {
 			result.setGroupFiles(true);
 		}
+		if (Exteraless::Config::Instance().galleryAlwaysSendHd()) {
+			result.setSendImagesAsPhotos(true);
+		}
 		if (_list.overrideSendImagesAsPhotos == false) {
 			if (!(_limits & SendFilesAllow::OnlyOne)
 				|| !_list.hasSticker()) {

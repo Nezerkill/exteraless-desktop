@@ -185,6 +185,12 @@ using Exteraless::ChatsSettings;
 		<< "<copyPhoto> <setProfile>\n"
 		<< "  exteraless-chats-cli media-quality\n"
 		<< "  exteraless-chats-cli media-quality-set <0..2>\n"
+		<< "  exteraless-chats-cli media-quality-hd\n"
+		<< "  exteraless-chats-cli media-quality-hd-set <0|1>\n"
+		<< "  exteraless-chats-cli media-quality-enhanced\n"
+		<< "  exteraless-chats-cli media-quality-enhanced-set <0|1>\n"
+		<< "  exteraless-chats-cli media-quality-original\n"
+		<< "  exteraless-chats-cli media-quality-original-set <0|1>\n"
 		<< "  exteraless-chats-cli hw-accel\n"
 		<< "  exteraless-chats-cli hw-accel-set <0|1>\n"
 		<< "  exteraless-chats-cli gif-as-video\n"
@@ -1867,6 +1873,46 @@ int main(int argc, char *argv[]) {
 			{ QStringLiteral("quality"),
 				Exteraless::Config::Instance().defaultVideoQuality() },
 		});
+		return 0;
+	}
+	if (mode == QStringLiteral("media-quality-hd")
+		|| mode == QStringLiteral("media-quality-enhanced")
+		|| mode == QStringLiteral("media-quality-original")) {
+		if (arguments.size() != 2) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		const auto value = (mode == QStringLiteral("media-quality-hd"))
+			? config.galleryAlwaysSendHd()
+			: (mode == QStringLiteral("media-quality-enhanced"))
+			? config.galleryEnhancedVideoBitrate()
+			: config.galleryPreferOriginalQuality();
+		PrintJson(QJsonObject{ { QStringLiteral("enabled"), value } });
+		return 0;
+	}
+	if (mode == QStringLiteral("media-quality-hd-set")
+		|| mode == QStringLiteral("media-quality-enhanced-set")
+		|| mode == QStringLiteral("media-quality-original-set")) {
+		if (arguments.size() != 3) {
+			return PrintUsage();
+		}
+		auto value = false;
+		if (!ReadFlag(arguments[2], &value)) {
+			return PrintUsage();
+		}
+		auto &config = Exteraless::Config::Instance();
+		auto applied = false;
+		if (mode == QStringLiteral("media-quality-hd-set")) {
+			config.setGalleryAlwaysSendHd(value);
+			applied = config.galleryAlwaysSendHd();
+		} else if (mode == QStringLiteral("media-quality-enhanced-set")) {
+			config.setGalleryEnhancedVideoBitrate(value);
+			applied = config.galleryEnhancedVideoBitrate();
+		} else {
+			config.setGalleryPreferOriginalQuality(value);
+			applied = config.galleryPreferOriginalQuality();
+		}
+		PrintJson(QJsonObject{ { QStringLiteral("enabled"), applied } });
 		return 0;
 	}
 	if (mode == QStringLiteral("hw-accel")) {

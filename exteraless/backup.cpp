@@ -148,6 +148,13 @@ constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
+constexpr auto kGalleryAlwaysSendHd = "OEGalleryAlwaysSendHd";
+constexpr auto kGalleryEnhancedVideoBitrate = "OEGalleryEnhancedVideoBitrate";
+constexpr auto kGalleryPreferOriginalQuality
+	= "OEGalleryPreferOriginalQuality";
+constexpr auto kGalleryAlwaysSendHdAlias = "alwaysSendHd";
+constexpr auto kGalleryEnhancedVideoBitrateAlias = "enhancedVideoBitrate";
+constexpr auto kGalleryPreferOriginalQualityAlias = "preferOriginalQuality";
 constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
@@ -489,6 +496,10 @@ QString BuildBackup(bool redactSecrets) {
 	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
 	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
 	extera[kGeneralCustomAudioBitrate] = config.customAudioBitrate();
+	extera[kGalleryAlwaysSendHd] = config.galleryAlwaysSendHd();
+	extera[kGalleryEnhancedVideoBitrate] = config.galleryEnhancedVideoBitrate();
+	extera[kGalleryPreferOriginalQuality]
+		= config.galleryPreferOriginalQuality();
 	extera[kGeneralAutoUpdateChannel] = config.autoUpdateChannel();
 	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
 	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
@@ -757,6 +768,18 @@ BackupImportResult ApplyBackup(const QString &text) {
 			|| key == kCustomAudioBitrateAlias)
 			&& value.isDouble()) {
 			config.setCustomAudioBitrate(value.toInt());
+		} else if ((key == kGalleryAlwaysSendHd
+			|| key == kGalleryAlwaysSendHdAlias)
+			&& value.isBool()) {
+			config.setGalleryAlwaysSendHd(value.toBool());
+		} else if ((key == kGalleryEnhancedVideoBitrate
+			|| key == kGalleryEnhancedVideoBitrateAlias)
+			&& value.isBool()) {
+			config.setGalleryEnhancedVideoBitrate(value.toBool());
+		} else if ((key == kGalleryPreferOriginalQuality
+			|| key == kGalleryPreferOriginalQualityAlias)
+			&& value.isBool()) {
+			config.setGalleryPreferOriginalQuality(value.toBool());
 		} else if ((key == kGeneralAutoUpdateChannel
 			|| key == kAutoUpdateChannelAlias)
 			&& IntegralInRange(value, 0, 2)) {

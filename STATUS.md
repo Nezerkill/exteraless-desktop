@@ -112,8 +112,8 @@
   сделано: `readMessageContents` без peer не привязать; `inputPeerSelf` в
   CLI — только через mirror. Ограничения: hand-парсинг TL (нестабилен к
   смене раскладки); Xvfb-смоук не выполнялся.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1182 проверок PASS
-  (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
+- Chats: `exteraless/tests/chats/run_checks.py` — 1201 проверок PASS
+  (57 strip, 10 reactions, 65 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 15 ghost-peer, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
@@ -128,8 +128,12 @@
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
-  9 weather-city, 12 stt, 11 ayu-import, 105 backup, 11 backup-redacted);
+  9 weather-city, 12 stt, 11 ayu-import, 17 media-quality-extend,
+  105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- Качество медиа (NB-88, follow-up): 3 ключа OEGallery*, HD-дефолт,
+  потолок 14 Mbps, original-поток; CLI + 17 проверок; раннеры
+  1201/32/279 PASS.
 - Очередь воспроизведения (NB-50, v3): ordered-модель + sync, сайд-лист с drag и палитрой-акцентом; раннеры 1182/32/279 PASS (без изменений).
 - Полноэкранный лист плеера (NB-50, v2): `media/player/player_sheet.{h,cpp}`
   — `Exteraless::PlayerSheet` на `Ui::LayerWidget` показывает состояние

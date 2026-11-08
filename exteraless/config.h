@@ -177,6 +177,13 @@ public:
 	[[nodiscard]] int customAudioBitrate() const;
 	void setCustomAudioBitrate(int value);
 
+	[[nodiscard]] bool galleryAlwaysSendHd() const;
+	void setGalleryAlwaysSendHd(bool value);
+	[[nodiscard]] bool galleryEnhancedVideoBitrate() const;
+	void setGalleryEnhancedVideoBitrate(bool value);
+	[[nodiscard]] bool galleryPreferOriginalQuality() const;
+	void setGalleryPreferOriginalQuality(bool value);
+
 	[[nodiscard]] bool botPrivacyEnabled() const;
 	void setBotPrivacyEnabled(bool value);
 	[[nodiscard]] int botPrivacyAccount() const;

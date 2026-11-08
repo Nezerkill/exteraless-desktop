@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "media/media_video_encode.h"
 
+#include "exteraless/config.h"
+
 #include "ffmpeg/ffmpeg_bytes_io_wrap.h"
 #include "ffmpeg/ffmpeg_frame_generator.h"
 #include "ffmpeg/ffmpeg_utility.h"
@@ -30,6 +32,8 @@ using namespace FFmpeg;
 constexpr auto kVideoTimeBase = AVRational{ 1, 1'000'000 };
 constexpr auto kMinBitrate = 600'000;
 constexpr auto kMaxBitrate = 6'800'000;
+// Stills keep kMaxBitrate; only the video path may raise it.
+constexpr auto kEnhancedMaxBitrate = 14'000'000;
 constexpr auto kWebmStickerCrf = 28;
 constexpr auto kWebmStickerCrfLadder = std::array<std::optional<int>, 6>{
 	std::nullopt,
@@ -80,10 +84,20 @@ constexpr auto kSilentAudioFillMargin = crl::time(1000);
 	return (fps > 1. && fps < 121.) ? fps : 30.;
 }
 
-[[nodiscard]] int TargetBitrate(QSize size, float64 fps) {
+[[nodiscard]] int VideoMaxBitrate() {
+	return Exteraless::Config::Instance().galleryEnhancedVideoBitrate()
+		? kEnhancedMaxBitrate
+		: kMaxBitrate;
+}
+
+[[nodiscard]] int TargetBitrate(
+		QSize size,
+		float64 fps,
+		int maxBitrate = kMaxBitrate) {
 	const auto pixels = int64(size.width()) * size.height();
 	const auto bits = float64(pixels) * SanitizedFps(fps) * 0.07;
-	return int(std::clamp(bits, float64(kMinBitrate), float64(kMaxBitrate)));
+	const auto ceiling = std::max(maxBitrate, kMinBitrate);
+	return int(std::clamp(bits, float64(kMinBitrate), float64(ceiling)));
 }
 
 void CopyDisplayMatrix(not_null<AVStream*> from, not_null<AVStream*> to) {
@@ -1915,7 +1929,10 @@ int64 EstimateTranscodedSize(
 		if (copyVideo) {
 			return float64(info.videoBitrate);
 		}
-		const auto wanted = int64(TargetBitrate(target, fps));
+		const auto wanted = int64(TargetBitrate(
+			target,
+			fps,
+			VideoMaxBitrate()));
 		// Quality mode never spends much more than the source did.
 		const auto bitrate = (info.videoBitrate > 0)
 			? std::min(wanted, info.videoBitrate)
@@ -2138,7 +2155,10 @@ struct TranscodeAttempt {
 	const auto sourceBitrate = int64((inVideoStream->codecpar->bit_rate > 0)
 		? inVideoStream->codecpar->bit_rate
 		: input->bit_rate);
-	const auto targetBitrate = int64(TargetBitrate(target, fps));
+	const auto targetBitrate = int64(TargetBitrate(
+		target,
+		fps,
+		VideoMaxBitrate()));
 	const auto bitrate = (!plan.bake && sourceBitrate > 0)
 		? std::min(targetBitrate, sourceBitrate)
 		: targetBitrate;

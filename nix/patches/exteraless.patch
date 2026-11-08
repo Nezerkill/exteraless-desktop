@@ -1120,7 +1120,7 @@ index bb53eeb..499baaf 100644
  
  void EditCaptionBox::setupFieldAutocomplete() {
 diff --git a/Telegram/SourceFiles/boxes/send_files_box.cpp b/Telegram/SourceFiles/boxes/send_files_box.cpp
-index 9ef989e..cc3a26a 100644
+index 9ef989e..0b290d1 100644
 --- a/Telegram/SourceFiles/boxes/send_files_box.cpp
 +++ b/Telegram/SourceFiles/boxes/send_files_box.cpp
 @@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1142,6 +1142,16 @@ index 9ef989e..cc3a26a 100644
  			const auto aiButton = Ui::SetupCaptionAiButton({
  				.parent = field->parentWidget(),
  				.field = field,
+@@ -1298,6 +1303,9 @@ void SendFilesBox::initSendWay() {
+ 			&& (_list.files.size() > 1)) {
+ 			result.setGroupFiles(true);
+ 		}
++		if (Exteraless::Config::Instance().galleryAlwaysSendHd()) {
++			result.setSendImagesAsPhotos(true);
++		}
+ 		if (_list.overrideSendImagesAsPhotos == false) {
+ 			if (!(_limits & SendFilesAllow::OnlyOne)
+ 				|| !_list.hasSticker()) {
 diff --git a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp b/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
 index df4816a..20dcf64 100644
 --- a/Telegram/SourceFiles/chat_helpers/emoji_interactions.cpp
@@ -11100,6 +11110,75 @@ index c816566..b5842ae 100644
  	}
  
  	// Alloc source samples
+diff --git a/Telegram/SourceFiles/media/media_video_encode.cpp b/Telegram/SourceFiles/media/media_video_encode.cpp
+index cbe23f2..a75afeb 100644
+--- a/Telegram/SourceFiles/media/media_video_encode.cpp
++++ b/Telegram/SourceFiles/media/media_video_encode.cpp
+@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ */
+ #include "media/media_video_encode.h"
+ 
++#include "exteraless/config.h"
++
+ #include "ffmpeg/ffmpeg_bytes_io_wrap.h"
+ #include "ffmpeg/ffmpeg_frame_generator.h"
+ #include "ffmpeg/ffmpeg_utility.h"
+@@ -30,6 +32,8 @@ using namespace FFmpeg;
+ constexpr auto kVideoTimeBase = AVRational{ 1, 1'000'000 };
+ constexpr auto kMinBitrate = 600'000;
+ constexpr auto kMaxBitrate = 6'800'000;
++// Stills keep kMaxBitrate; only the video path may raise it.
++constexpr auto kEnhancedMaxBitrate = 14'000'000;
+ constexpr auto kWebmStickerCrf = 28;
+ constexpr auto kWebmStickerCrfLadder = std::array<std::optional<int>, 6>{
+ 	std::nullopt,
+@@ -80,10 +84,20 @@ constexpr auto kSilentAudioFillMargin = crl::time(1000);
+ 	return (fps > 1. && fps < 121.) ? fps : 30.;
+ }
+ 
+-[[nodiscard]] int TargetBitrate(QSize size, float64 fps) {
++[[nodiscard]] int VideoMaxBitrate() {
++	return Exteraless::Config::Instance().galleryEnhancedVideoBitrate()
++		? kEnhancedMaxBitrate
++		: kMaxBitrate;
++}
++
++[[nodiscard]] int TargetBitrate(
++		QSize size,
++		float64 fps,
++		int maxBitrate = kMaxBitrate) {
+ 	const auto pixels = int64(size.width()) * size.height();
+ 	const auto bits = float64(pixels) * SanitizedFps(fps) * 0.07;
+-	return int(std::clamp(bits, float64(kMinBitrate), float64(kMaxBitrate)));
++	const auto ceiling = std::max(maxBitrate, kMinBitrate);
++	return int(std::clamp(bits, float64(kMinBitrate), float64(ceiling)));
+ }
+ 
+ void CopyDisplayMatrix(not_null<AVStream*> from, not_null<AVStream*> to) {
+@@ -1915,7 +1929,10 @@ int64 EstimateTranscodedSize(
+ 		if (copyVideo) {
+ 			return float64(info.videoBitrate);
+ 		}
+-		const auto wanted = int64(TargetBitrate(target, fps));
++		const auto wanted = int64(TargetBitrate(
++			target,
++			fps,
++			VideoMaxBitrate()));
+ 		// Quality mode never spends much more than the source did.
+ 		const auto bitrate = (info.videoBitrate > 0)
+ 			? std::min(wanted, info.videoBitrate)
+@@ -2138,7 +2155,10 @@ struct TranscodeAttempt {
+ 	const auto sourceBitrate = int64((inVideoStream->codecpar->bit_rate > 0)
+ 		? inVideoStream->codecpar->bit_rate
+ 		: input->bit_rate);
+-	const auto targetBitrate = int64(TargetBitrate(target, fps));
++	const auto targetBitrate = int64(TargetBitrate(
++		target,
++		fps,
++		VideoMaxBitrate()));
+ 	const auto bitrate = (!plan.bake && sourceBitrate > 0)
+ 		? std::min(targetBitrate, sourceBitrate)
+ 		: targetBitrate;
 diff --git a/Telegram/SourceFiles/media/player/media_player.style b/Telegram/SourceFiles/media/player/media_player.style
 index 8070609..f21ab5d 100644
 --- a/Telegram/SourceFiles/media/player/media_player.style
@@ -13402,7 +13481,7 @@ index 059d22f..bd2e53e 100644
  	void paintRoundedCorners(int radius) override;
  	void paintStoriesSiblingPart(
 diff --git a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
-index 2acbe80..81a05df 100644
+index 2acbe80..268d9e2 100644
 --- a/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 +++ b/Telegram/SourceFiles/media/view/media_view_overlay_widget.cpp
 @@ -19,6 +19,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -13415,11 +13494,14 @@ index 2acbe80..81a05df 100644
  #include "core/click_handler_types.h"
  #include "core/core_screenshot_protection.h"
  #include "core/file_utilities.h"
-@@ -139,6 +142,12 @@ namespace Media {
+@@ -139,6 +142,15 @@ namespace Media {
  namespace View {
  namespace {
  
 +[[nodiscard]] Media::VideoQuality ExteralessVideoQuality() {
++	if (Exteraless::Config::Instance().galleryPreferOriginalQuality()) {
++		return { .manual = 1u, .original = 1u };
++	}
 +	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
 +	const auto height = (tier <= 0) ? 480 : (tier == 1 ? 720 : 1080);
 +	return { .height = uint32(height) };
@@ -13428,7 +13510,7 @@ index 2acbe80..81a05df 100644
  struct RecognitionId {
  	uint64 sessionUniqueId = 0;
  	PhotoId photoId = 0;
-@@ -205,8 +214,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
+@@ -205,8 +217,13 @@ constexpr auto kMaxZoomLevel = 7; // x8
  constexpr auto kZoomToScreenLevel = 1024;
  constexpr auto kPinchZoomStep = 0.25;
  constexpr auto kOverlayLoaderPriority = 2;
@@ -13444,7 +13526,7 @@ index 2acbe80..81a05df 100644
  constexpr auto kFrameStepFallbackFps = 30.;
  constexpr auto kFrameStepThrottleMs = crl::time(150);
  
-@@ -2296,15 +2310,20 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2296,15 +2313,20 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { copyRecognitionSelection(); },
  			&st::mediaMenuIconCopy);
  	}
@@ -13474,7 +13556,7 @@ index 2acbe80..81a05df 100644
  	}
  	if ((_photo && _photo->hasAttachedStickers())
  		|| (_document && _document->hasAttachedStickers())) {
-@@ -2313,7 +2332,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2313,7 +2335,9 @@ void OverlayWidget::fillContextMenuActions(
  			[=] { showAttachedStickers(); },
  			&st::mediaMenuIconStickers);
  	}
@@ -13485,7 +13567,7 @@ index 2acbe80..81a05df 100644
  		addAction(
  			tr::lng_mediaview_forward(tr::now),
  			[=] { forwardMedia(); },
-@@ -2344,11 +2365,44 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2344,11 +2368,44 @@ void OverlayWidget::fillContextMenuActions(
  			}, state->lifetime);
  		}
  	}
@@ -13531,7 +13613,7 @@ index 2acbe80..81a05df 100644
  	const auto canDelete = [&] {
  		if (story && story->canDelete()) {
  			return true;
-@@ -2416,6 +2470,9 @@ void OverlayWidget::fillContextMenuActions(
+@@ -2416,6 +2473,9 @@ void OverlayWidget::fillContextMenuActions(
  		} else {
  			return;
  		}
@@ -13541,7 +13623,7 @@ index 2acbe80..81a05df 100644
  		const auto photo = _photo;
  		const auto peer = _peer;
  		addAction(tr::lng_mediaview_set_userpic(tr::now), [=] {
-@@ -3025,7 +3082,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
+@@ -3025,7 +3085,7 @@ void OverlayWidget::assignMediaPointer(DocumentData *document) {
  		_streamedQualityChangeFinished = false;
  		if ((_document = document)) {
  			_quality = _document->initialPlaybackVideoQuality(
@@ -13550,7 +13632,7 @@ index 2acbe80..81a05df 100644
  			_chosenQuality = _document->chooseQuality(_message, _quality);
  			_documentMedia = _document->createMediaView();
  			_videoCover = LookupVideoCover(_document, _message);
-@@ -3445,6 +3502,149 @@ void OverlayWidget::shareAtTime() {
+@@ -3445,6 +3505,149 @@ void OverlayWidget::shareAtTime() {
  	show->show(Stories::PrepareShareAtTimeBox(show, _message, timestamp));
  }
  
@@ -13700,7 +13782,7 @@ index 2acbe80..81a05df 100644
  void OverlayWidget::downloadMedia() {
  	if (!_photo && !_document) {
  		return;
-@@ -5284,6 +5484,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
+@@ -5284,6 +5487,7 @@ void OverlayWidget::handleStreamingUpdate(Streaming::Update &&update) {
  		Core::App().updateNonIdle();
  		updatePlaybackState();
  		_streamedPosition = update.position;
@@ -13708,7 +13790,7 @@ index 2acbe80..81a05df 100644
  	}, [&](PreloadedAudio) {
  		updatePlaybackState();
  	}, [&](UpdateAudio) {
-@@ -5597,7 +5798,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
+@@ -5597,7 +5801,8 @@ void OverlayWidget::restartAtSeekPosition(crl::time position) {
  			&& _document->hasDuration())
  			? _document->duration()
  			: crl::time(0)),
@@ -13718,7 +13800,7 @@ index 2acbe80..81a05df 100644
  		.seekable = !_stories,
  	};
  	if (!_streamed->withSound) {
-@@ -6046,6 +6248,7 @@ void OverlayWidget::playbackPauseMusic() {
+@@ -6046,6 +6251,7 @@ void OverlayWidget::playbackPauseMusic() {
  void OverlayWidget::updatePlaybackState() {
  	Expects(_streamed != nullptr);
  
@@ -13726,7 +13808,7 @@ index 2acbe80..81a05df 100644
  	refreshSystemMediaControls();
  	if (!_streamed->controls && !_stories) {
  		return;
-@@ -6063,6 +6266,7 @@ void OverlayWidget::updatePlaybackState() {
+@@ -6063,6 +6269,7 @@ void OverlayWidget::updatePlaybackState() {
  			_stories->updatePlayback(state);
  		}
  	}
@@ -13734,7 +13816,7 @@ index 2acbe80..81a05df 100644
  }
  
  void OverlayWidget::setSystemMediaControls(
-@@ -6487,6 +6691,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
+@@ -6487,6 +6694,10 @@ void OverlayWidget::paint(not_null<Renderer*> renderer) {
  				opacity);
  		}
  	}
@@ -13745,7 +13827,7 @@ index 2acbe80..81a05df 100644
  	checkGroupThumbsAnimation();
  	if (const auto radius = _window->manualRoundingRadius()) {
  		renderer->paintRoundedCorners(radius);
-@@ -7279,6 +7487,67 @@ QRect OverlayWidget::captionGeometry() const {
+@@ -7279,6 +7490,67 @@ QRect OverlayWidget::captionGeometry() const {
  		_stories ? _stories->repostCaptionPadding() : QMargins());
  }
  
@@ -13813,7 +13895,7 @@ index 2acbe80..81a05df 100644
  void OverlayWidget::paintGroupThumbsContent(
  		Painter &p,
  		QRect outer,
-@@ -7328,11 +7597,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7328,11 +7600,11 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  			return;
  		} else if (key == Qt::Key_J) {
  			activateControls();
@@ -13827,7 +13909,7 @@ index 2acbe80..81a05df 100644
  			return;
  		} else if ((key == Qt::Key_Period || key == Qt::Key_Comma)
  			&& _streamed->instance.player().paused()) {
-@@ -7384,10 +7653,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
+@@ -7384,10 +7656,10 @@ void OverlayWidget::handleKeyPress(not_null<QKeyEvent*> e) {
  				restartAtProgress(index / 10.0);
  			} else if (key == Qt::Key_Left) {
  				activateControls();
@@ -20399,10 +20481,10 @@ index 0000000..c87f7d6
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
 new file mode 100644
-index 0000000..9b7ccc2
+index 0000000..3903772
 --- /dev/null
 +++ b/exteraless/backup.cpp
-@@ -0,0 +1,1330 @@
+@@ -0,0 +1,1353 @@
 +#include "exteraless/backup.h"
 +
 +#include "exteraless/ai_client.h"
@@ -20553,6 +20635,13 @@ index 0000000..9b7ccc2
 +constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 +constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 +constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
++constexpr auto kGalleryAlwaysSendHd = "OEGalleryAlwaysSendHd";
++constexpr auto kGalleryEnhancedVideoBitrate = "OEGalleryEnhancedVideoBitrate";
++constexpr auto kGalleryPreferOriginalQuality
++	= "OEGalleryPreferOriginalQuality";
++constexpr auto kGalleryAlwaysSendHdAlias = "alwaysSendHd";
++constexpr auto kGalleryEnhancedVideoBitrateAlias = "enhancedVideoBitrate";
++constexpr auto kGalleryPreferOriginalQualityAlias = "preferOriginalQuality";
 +constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 +constexpr auto kGeneralBotPrivacyEnabled = "OEGeneralBotPrivacyEnabled";
 +constexpr auto kGeneralBotPrivacyAccount = "OEGeneralBotPrivacyAccount";
@@ -20894,6 +20983,10 @@ index 0000000..9b7ccc2
 +	extera[kGeneralHardwareAcceleration] = config.hardwareAcceleration();
 +	extera[kChatsTakeGifAsVideo] = config.takeGifAsVideo();
 +	extera[kGeneralCustomAudioBitrate] = config.customAudioBitrate();
++	extera[kGalleryAlwaysSendHd] = config.galleryAlwaysSendHd();
++	extera[kGalleryEnhancedVideoBitrate] = config.galleryEnhancedVideoBitrate();
++	extera[kGalleryPreferOriginalQuality]
++		= config.galleryPreferOriginalQuality();
 +	extera[kGeneralAutoUpdateChannel] = config.autoUpdateChannel();
 +	extera[kGeneralBotPrivacyEnabled] = config.botPrivacyEnabled();
 +	extera[kGeneralBotPrivacyAccount] = config.botPrivacyAccount();
@@ -21162,6 +21255,18 @@ index 0000000..9b7ccc2
 +			|| key == kCustomAudioBitrateAlias)
 +			&& value.isDouble()) {
 +			config.setCustomAudioBitrate(value.toInt());
++		} else if ((key == kGalleryAlwaysSendHd
++			|| key == kGalleryAlwaysSendHdAlias)
++			&& value.isBool()) {
++			config.setGalleryAlwaysSendHd(value.toBool());
++		} else if ((key == kGalleryEnhancedVideoBitrate
++			|| key == kGalleryEnhancedVideoBitrateAlias)
++			&& value.isBool()) {
++			config.setGalleryEnhancedVideoBitrate(value.toBool());
++		} else if ((key == kGalleryPreferOriginalQuality
++			|| key == kGalleryPreferOriginalQualityAlias)
++			&& value.isBool()) {
++			config.setGalleryPreferOriginalQuality(value.toBool());
 +		} else if ((key == kGeneralAutoUpdateChannel
 +			|| key == kAutoUpdateChannelAlias)
 +			&& IntegralInRange(value, 0, 2)) {
@@ -21857,10 +21962,10 @@ index 0000000..101be39
 +} // namespace Exteraless
 diff --git a/exteraless/config.cpp b/exteraless/config.cpp
 new file mode 100644
-index 0000000..7b04be3
+index 0000000..54141a8
 --- /dev/null
 +++ b/exteraless/config.cpp
-@@ -0,0 +1,2097 @@
+@@ -0,0 +1,2128 @@
 +#include "exteraless/config.h"
 +
 +#include "exteraless/ai_client.h"
@@ -22048,6 +22153,10 @@ index 0000000..7b04be3
 +constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 +constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 +constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
++constexpr auto kGalleryAlwaysSendHd = "OEGalleryAlwaysSendHd";
++constexpr auto kGalleryEnhancedVideoBitrate = "OEGalleryEnhancedVideoBitrate";
++constexpr auto kGalleryPreferOriginalQuality
++	= "OEGalleryPreferOriginalQuality";
 +constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 +constexpr auto kTranslationProvider = "OETranslationProvider";
 +constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
@@ -22830,6 +22939,30 @@ index 0000000..7b04be3
 +
 +void Config::setCustomAudioBitrate(int value) {
 +	setValue(kGeneralCustomAudioBitrate, SanitizeAudioBitrate(value));
++}
++
++bool Config::galleryAlwaysSendHd() const {
++	return boolValue(kGalleryAlwaysSendHd, false);
++}
++
++void Config::setGalleryAlwaysSendHd(bool value) {
++	setValue(kGalleryAlwaysSendHd, value);
++}
++
++bool Config::galleryEnhancedVideoBitrate() const {
++	return boolValue(kGalleryEnhancedVideoBitrate, false);
++}
++
++void Config::setGalleryEnhancedVideoBitrate(bool value) {
++	setValue(kGalleryEnhancedVideoBitrate, value);
++}
++
++bool Config::galleryPreferOriginalQuality() const {
++	return boolValue(kGalleryPreferOriginalQuality, false);
++}
++
++void Config::setGalleryPreferOriginalQuality(bool value) {
++	setValue(kGalleryPreferOriginalQuality, value);
 +}
 +
 +bool Config::botPrivacyEnabled() const {
@@ -23654,6 +23787,9 @@ index 0000000..7b04be3
 +			|| key == kGeneralHardwareAcceleration
 +			|| key == kChatsTakeGifAsVideo
 +			|| key == kGeneralCustomAudioBitrate
++			|| key == kGalleryAlwaysSendHd
++			|| key == kGalleryEnhancedVideoBitrate
++			|| key == kGalleryPreferOriginalQuality
 +			|| key == kGeneralAutoUpdateChannel
 +			|| key == kGeneralBotPrivacyEnabled
 +			|| key == kGeneralBotPrivacyAccount
@@ -23960,10 +24096,10 @@ index 0000000..7b04be3
 +} // namespace Exteraless
 diff --git a/exteraless/config.h b/exteraless/config.h
 new file mode 100644
-index 0000000..c2bab94
+index 0000000..82b6f1f
 --- /dev/null
 +++ b/exteraless/config.h
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,389 @@
 +#pragma once
 +
 +#include "exteraless/chats.h"
@@ -24142,6 +24278,13 @@ index 0000000..c2bab94
 +	void setTakeGifAsVideo(bool value);
 +	[[nodiscard]] int customAudioBitrate() const;
 +	void setCustomAudioBitrate(int value);
++
++	[[nodiscard]] bool galleryAlwaysSendHd() const;
++	void setGalleryAlwaysSendHd(bool value);
++	[[nodiscard]] bool galleryEnhancedVideoBitrate() const;
++	void setGalleryEnhancedVideoBitrate(bool value);
++	[[nodiscard]] bool galleryPreferOriginalQuality() const;
++	void setGalleryPreferOriginalQuality(bool value);
 +
 +	[[nodiscard]] bool botPrivacyEnabled() const;
 +	void setBotPrivacyEnabled(bool value);
@@ -29480,10 +29623,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..b462e57
+index 0000000..4586447
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3644 @@
+@@ -0,0 +1,3690 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/ayu_import.h"
 +#include "exteraless/backup.h"
@@ -29671,6 +29814,12 @@ index 0000000..b462e57
 +		<< "<copyPhoto> <setProfile>\n"
 +		<< "  exteraless-chats-cli media-quality\n"
 +		<< "  exteraless-chats-cli media-quality-set <0..2>\n"
++		<< "  exteraless-chats-cli media-quality-hd\n"
++		<< "  exteraless-chats-cli media-quality-hd-set <0|1>\n"
++		<< "  exteraless-chats-cli media-quality-enhanced\n"
++		<< "  exteraless-chats-cli media-quality-enhanced-set <0|1>\n"
++		<< "  exteraless-chats-cli media-quality-original\n"
++		<< "  exteraless-chats-cli media-quality-original-set <0|1>\n"
 +		<< "  exteraless-chats-cli hw-accel\n"
 +		<< "  exteraless-chats-cli hw-accel-set <0|1>\n"
 +		<< "  exteraless-chats-cli gif-as-video\n"
@@ -31353,6 +31502,46 @@ index 0000000..b462e57
 +			{ QStringLiteral("quality"),
 +				Exteraless::Config::Instance().defaultVideoQuality() },
 +		});
++		return 0;
++	}
++	if (mode == QStringLiteral("media-quality-hd")
++		|| mode == QStringLiteral("media-quality-enhanced")
++		|| mode == QStringLiteral("media-quality-original")) {
++		if (arguments.size() != 2) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		const auto value = (mode == QStringLiteral("media-quality-hd"))
++			? config.galleryAlwaysSendHd()
++			: (mode == QStringLiteral("media-quality-enhanced"))
++			? config.galleryEnhancedVideoBitrate()
++			: config.galleryPreferOriginalQuality();
++		PrintJson(QJsonObject{ { QStringLiteral("enabled"), value } });
++		return 0;
++	}
++	if (mode == QStringLiteral("media-quality-hd-set")
++		|| mode == QStringLiteral("media-quality-enhanced-set")
++		|| mode == QStringLiteral("media-quality-original-set")) {
++		if (arguments.size() != 3) {
++			return PrintUsage();
++		}
++		auto value = false;
++		if (!ReadFlag(arguments[2], &value)) {
++			return PrintUsage();
++		}
++		auto &config = Exteraless::Config::Instance();
++		auto applied = false;
++		if (mode == QStringLiteral("media-quality-hd-set")) {
++			config.setGalleryAlwaysSendHd(value);
++			applied = config.galleryAlwaysSendHd();
++		} else if (mode == QStringLiteral("media-quality-enhanced-set")) {
++			config.setGalleryEnhancedVideoBitrate(value);
++			applied = config.galleryEnhancedVideoBitrate();
++		} else {
++			config.setGalleryPreferOriginalQuality(value);
++			applied = config.galleryPreferOriginalQuality();
++		}
++		PrintJson(QJsonObject{ { QStringLiteral("enabled"), applied } });
 +		return 0;
 +	}
 +	if (mode == QStringLiteral("hw-accel")) {
@@ -33612,10 +33801,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..34c708b
+index 0000000..b5d9c12
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8992 @@
+@@ -0,0 +1,9138 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -33846,6 +34035,8 @@ index 0000000..34c708b
 +        ("lyrics-parse without file", ["lyrics-parse"]),
 +        ("lyrics-active without position", ["lyrics-active", "a.lrc"]),
 +        ("header-style-set with wrong count", ["header-style-set"]),
++        ("media-quality-hd-set with wrong count", ["media-quality-hd-set"]),
++        ("media-quality-original with args", ["media-quality-original", "1"]),
 +    ]
 +    before = len(ledger.failures)
 +    for name, arguments in cases:
@@ -34470,7 +34661,7 @@ index 0000000..34c708b
 +             section.get("OEChatsDoubleTapOut")))
 +        ledger.check(
 +            "backup extera key count",
-+            len(section) == 140,
++            len(section) == 143,
 +            sorted(section))
 +        ledger.check(
 +            "backup pill keys",
@@ -34491,7 +34682,7 @@ index 0000000..34c708b
 +            exported["mainconfig"])
 +        ledger.check(
 +            "backup total key count",
-+            sum(len(value) for value in exported.values()) == 145,
++            sum(len(value) for value in exported.values()) == 148,
 +            {name: len(value) for name, value in exported.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -34511,7 +34702,7 @@ index 0000000..34c708b
 +                data.get("ok"))
 +            ledger.check(
 +                "backup import applied all keys",
-+                data.get("applied") == 145,
++                data.get("applied") == 148,
 +                data.get("applied"))
 +            ledger.check(
 +                "backup import unknown empty",
@@ -34614,6 +34805,9 @@ index 0000000..34c708b
 +            "OEGeneralHardwareAcceleration": False,
 +            "OEChatsTakeGifAsVideo": True,
 +            "OEGeneralCustomAudioBitrate": 24,
++            "OEGalleryAlwaysSendHd": True,
++            "OEGalleryEnhancedVideoBitrate": True,
++            "OEGalleryPreferOriginalQuality": True,
 +            "OEGeneralAutoUpdateChannel": 2,
 +            "OEGeneralSaveToChatSubfolder": True,
 +            "OEGhostScheduledSend": True,
@@ -34712,7 +34906,7 @@ index 0000000..34c708b
 +            data.get("ok"))
 +        ledger.check(
 +            "backup import full applied",
-+            data.get("applied") == 145,
++            data.get("applied") == 148,
 +            data.get("applied"))
 +        ledger.check(
 +            "backup import full unknown empty",
@@ -35037,10 +35231,10 @@ index 0000000..34c708b
 +    if current is not None:
 +        sections = backup_sections(current)
 +        ledger.check(
-+            "backup legacy eight completed to 140",
++            "backup legacy eight completed to 143",
 +            (len(sections["exteraconfig"]),
 +             len(sections["pillstackconfig"]),
-+             len(sections["mainconfig"])) == (140, 3, 2),
++             len(sections["mainconfig"])) == (143, 3, 2),
 +            {name: len(value) for name, value in sections.items()})
 +        ledger.check(
 +            "backup legacy eight values",
@@ -35352,8 +35546,8 @@ index 0000000..34c708b
 +                "OETranslationProvider")})
 +        ledger.check(
 +            "backup redacted key counts",
-+            len(section) == 143
-+            and sum(len(value) for value in sections.values()) == 148,
++            len(section) == 146
++            and sum(len(value) for value in sections.values()) == 151,
 +            {name: len(value) for name, value in sections.items()})
 +        encoded = data.get("backup_base64")
 +        ledger.check(
@@ -35379,7 +35573,7 @@ index 0000000..34c708b
 +                "backup redacted import applied",
 +                imported.get("ok") is True
 +                and imported.get("unknown") == []
-+                and imported.get("applied") == 148,
++                and imported.get("applied") == 151,
 +                imported)
 +        raw = json_call(
 +            ledger, cli, ["config-raw"], env, "backup redacted local config")
@@ -41154,6 +41348,143 @@ index 0000000..34c708b
 +        len(ledger.failures) - before_failures)
 +
 +
++def check_media_quality_extend(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    read_modes = (
++        ("hd", "media-quality-hd"),
++        ("enhanced", "media-quality-enhanced"),
++        ("original", "media-quality-original"))
++    write_modes = (
++        ("hd", "media-quality-hd-set"),
++        ("enhanced", "media-quality-enhanced-set"),
++        ("original", "media-quality-original-set"))
++
++    env = make_env(work / "media-quality-extend-defaults")
++    for name, mode in read_modes:
++        data = json_call(ledger, cli, [mode], env, f"{name} default")
++        if data is not None:
++            ledger.check(
++                f"media quality extend {name} default off",
++                data.get("enabled") is False,
++                data)
++
++    for name, mode in write_modes:
++        data = json_call(ledger, cli, [mode, "1"], env, f"{name} set on")
++        if data is not None:
++            ledger.check(
++                f"media quality extend {name} set on",
++                data.get("enabled") is True,
++                data)
++
++    for name, mode in read_modes:
++        reloaded = json_call(ledger, cli, [mode], env, f"{name} reload")
++        if reloaded is not None:
++            ledger.check(
++                f"media quality extend {name} persisted",
++                reloaded.get("enabled") is True,
++                reloaded)
++
++    exported = json_call(
++        ledger, cli, ["backup-export-current"], env, "extend export")
++    if exported is not None:
++        section = backup_sections(exported)["exteraconfig"]
++        ledger.check(
++            "media quality extend backup keys",
++            section.get("OEGalleryAlwaysSendHd") is True
++            and section.get("OEGalleryEnhancedVideoBitrate") is True
++            and section.get("OEGalleryPreferOriginalQuality") is True,
++            {key: section.get(key) for key in (
++                "OEGalleryAlwaysSendHd",
++                "OEGalleryEnhancedVideoBitrate",
++                "OEGalleryPreferOriginalQuality")})
++
++    alias_env = make_env(work / "media-quality-extend-alias")
++    alias_root = {
++        "version": 1,
++        "exteraconfig": {
++            "alwaysSendHd": True,
++            "enhancedVideoBitrate": True,
++            "preferOriginalQuality": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(alias_root)],
++        alias_env, "extend alias import")
++    if data is not None:
++        ledger.check(
++            "media quality extend alias applied",
++            data.get("applied") == 3,
++            data.get("applied"))
++        ledger.check(
++            "media quality extend alias unknown empty",
++            data.get("unknown") == [],
++            data.get("unknown"))
++    values = []
++    for name, mode in read_modes:
++        reloaded = json_call(
++            ledger, cli, [mode], alias_env, f"{name} alias read")
++        if reloaded is not None:
++            values.append(reloaded.get("enabled"))
++    ledger.check(
++        "media quality extend alias values",
++        values == [True, True, True],
++        values)
++
++    canonical_env = make_env(work / "media-quality-extend-canonical")
++    canonical_root = {
++        "version": 1,
++        "exteraconfig": {
++            "OEGalleryAlwaysSendHd": True,
++            "OEGalleryEnhancedVideoBitrate": True,
++            "OEGalleryPreferOriginalQuality": True,
++        },
++    }
++    data = json_call(
++        ledger, cli, ["backup-import-json", json.dumps(canonical_root)],
++        canonical_env, "extend canonical import")
++    if data is not None:
++        ledger.check(
++            "media quality extend canonical applied",
++            data.get("applied") == 3 and data.get("unknown") == [],
++            data)
++    values = []
++    for name, mode in read_modes:
++        reloaded = json_call(
++            ledger, cli, [mode], canonical_env, f"{name} canonical read")
++        if reloaded is not None:
++            values.append(reloaded.get("enabled"))
++    ledger.check(
++        "media quality extend canonical values",
++        values == [True, True, True],
++        values)
++
++    whitelist_env = make_env(work / "media-quality-extend-whitelist")
++    data = json_call(
++        ledger, cli,
++        ["config-fromjson", json.dumps(canonical_root["exteraconfig"])],
++        whitelist_env, "extend whitelist")
++    if data is not None:
++        ledger.check(
++            "media quality extend whitelisted",
++            data.get("accepted") is True and data.get("unknown") == [],
++            (data.get("accepted"), data.get("unknown")))
++
++    data = json_call(
++        ledger, cli, ["media-quality-enhanced-set", "0"], env,
++        "enhanced set off")
++    if data is not None:
++        ledger.check(
++            "media quality extend enhanced set off",
++            data.get("enabled") is False,
++            data)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
 +def check_update_channel(ledger, cli, work):
 +    before_checks = ledger.checks
 +    before_failures = len(ledger.failures)
@@ -42491,6 +42822,8 @@ index 0000000..34c708b
 +        chat_misc = check_chat_misc(ledger, cli, work)
 +        persian = check_persian(ledger, cli, work)
 +        media_quality = check_media_quality(ledger, cli, work)
++        media_quality_extend = check_media_quality_extend(
++            ledger, cli, work)
 +        update_channel = check_update_channel(ledger, cli, work)
 +        translation = check_translation(ledger, cli, work)
 +        ai = check_ai(ledger, cli, work)
@@ -42579,6 +42912,8 @@ index 0000000..34c708b
 +    print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
 +    print(f"persian: {persian[0] - persian[1]} passed")
 +    print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
++    print(f"media-quality-extend: "
++          f"{media_quality_extend[0] - media_quality_extend[1]} passed")
 +    print(f"update-channel: "
 +          f"{update_channel[0] - update_channel[1]} passed")
 +    print(f"translation: {translation[0] - translation[1]} passed")

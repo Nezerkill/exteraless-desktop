@@ -185,6 +185,10 @@ constexpr auto kGeneralDefaultVideoQuality = "OEGeneralDefaultVideoQuality";
 constexpr auto kGeneralHardwareAcceleration = "OEGeneralHardwareAcceleration";
 constexpr auto kChatsTakeGifAsVideo = "OEChatsTakeGifAsVideo";
 constexpr auto kGeneralCustomAudioBitrate = "OEGeneralCustomAudioBitrate";
+constexpr auto kGalleryAlwaysSendHd = "OEGalleryAlwaysSendHd";
+constexpr auto kGalleryEnhancedVideoBitrate = "OEGalleryEnhancedVideoBitrate";
+constexpr auto kGalleryPreferOriginalQuality
+	= "OEGalleryPreferOriginalQuality";
 constexpr auto kGeneralAutoUpdateChannel = "OEGeneralAutoUpdateChannel";
 constexpr auto kTranslationProvider = "OETranslationProvider";
 constexpr auto kTranslationGoogleCloudKey = "OETranslationGoogleCloudKey";
@@ -967,6 +971,30 @@ int Config::customAudioBitrate() const {
 
 void Config::setCustomAudioBitrate(int value) {
 	setValue(kGeneralCustomAudioBitrate, SanitizeAudioBitrate(value));
+}
+
+bool Config::galleryAlwaysSendHd() const {
+	return boolValue(kGalleryAlwaysSendHd, false);
+}
+
+void Config::setGalleryAlwaysSendHd(bool value) {
+	setValue(kGalleryAlwaysSendHd, value);
+}
+
+bool Config::galleryEnhancedVideoBitrate() const {
+	return boolValue(kGalleryEnhancedVideoBitrate, false);
+}
+
+void Config::setGalleryEnhancedVideoBitrate(bool value) {
+	setValue(kGalleryEnhancedVideoBitrate, value);
+}
+
+bool Config::galleryPreferOriginalQuality() const {
+	return boolValue(kGalleryPreferOriginalQuality, false);
+}
+
+void Config::setGalleryPreferOriginalQuality(bool value) {
+	setValue(kGalleryPreferOriginalQuality, value);
 }
 
 bool Config::botPrivacyEnabled() const {
@@ -1791,6 +1819,9 @@ bool Config::fromJson(const QJsonObject &root, QStringList *unknown) {
 			|| key == kGeneralHardwareAcceleration
 			|| key == kChatsTakeGifAsVideo
 			|| key == kGeneralCustomAudioBitrate
+			|| key == kGalleryAlwaysSendHd
+			|| key == kGalleryEnhancedVideoBitrate
+			|| key == kGalleryPreferOriginalQuality
 			|| key == kGeneralAutoUpdateChannel
 			|| key == kGeneralBotPrivacyEnabled
 			|| key == kGeneralBotPrivacyAccount

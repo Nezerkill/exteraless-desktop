@@ -228,6 +228,8 @@ def check_cli_args(ledger, cli):
         ("lyrics-parse without file", ["lyrics-parse"]),
         ("lyrics-active without position", ["lyrics-active", "a.lrc"]),
         ("header-style-set with wrong count", ["header-style-set"]),
+        ("media-quality-hd-set with wrong count", ["media-quality-hd-set"]),
+        ("media-quality-original with args", ["media-quality-original", "1"]),
     ]
     before = len(ledger.failures)
     for name, arguments in cases:
@@ -852,7 +854,7 @@ def check_backup(ledger, cli, work):
              section.get("OEChatsDoubleTapOut")))
         ledger.check(
             "backup extera key count",
-            len(section) == 140,
+            len(section) == 143,
             sorted(section))
         ledger.check(
             "backup pill keys",
@@ -873,7 +875,7 @@ def check_backup(ledger, cli, work):
             exported["mainconfig"])
         ledger.check(
             "backup total key count",
-            sum(len(value) for value in exported.values()) == 145,
+            sum(len(value) for value in exported.values()) == 148,
             {name: len(value) for name, value in exported.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -893,7 +895,7 @@ def check_backup(ledger, cli, work):
                 data.get("ok"))
             ledger.check(
                 "backup import applied all keys",
-                data.get("applied") == 145,
+                data.get("applied") == 148,
                 data.get("applied"))
             ledger.check(
                 "backup import unknown empty",
@@ -996,6 +998,9 @@ def check_backup(ledger, cli, work):
             "OEGeneralHardwareAcceleration": False,
             "OEChatsTakeGifAsVideo": True,
             "OEGeneralCustomAudioBitrate": 24,
+            "OEGalleryAlwaysSendHd": True,
+            "OEGalleryEnhancedVideoBitrate": True,
+            "OEGalleryPreferOriginalQuality": True,
             "OEGeneralAutoUpdateChannel": 2,
             "OEGeneralSaveToChatSubfolder": True,
             "OEGhostScheduledSend": True,
@@ -1094,7 +1099,7 @@ def check_backup(ledger, cli, work):
             data.get("ok"))
         ledger.check(
             "backup import full applied",
-            data.get("applied") == 145,
+            data.get("applied") == 148,
             data.get("applied"))
         ledger.check(
             "backup import full unknown empty",
@@ -1419,10 +1424,10 @@ def check_backup(ledger, cli, work):
     if current is not None:
         sections = backup_sections(current)
         ledger.check(
-            "backup legacy eight completed to 140",
+            "backup legacy eight completed to 143",
             (len(sections["exteraconfig"]),
              len(sections["pillstackconfig"]),
-             len(sections["mainconfig"])) == (140, 3, 2),
+             len(sections["mainconfig"])) == (143, 3, 2),
             {name: len(value) for name, value in sections.items()})
         ledger.check(
             "backup legacy eight values",
@@ -1734,8 +1739,8 @@ def check_backup_redacted(ledger, cli, work):
                 "OETranslationProvider")})
         ledger.check(
             "backup redacted key counts",
-            len(section) == 143
-            and sum(len(value) for value in sections.values()) == 148,
+            len(section) == 146
+            and sum(len(value) for value in sections.values()) == 151,
             {name: len(value) for name, value in sections.items()})
         encoded = data.get("backup_base64")
         ledger.check(
@@ -1761,7 +1766,7 @@ def check_backup_redacted(ledger, cli, work):
                 "backup redacted import applied",
                 imported.get("ok") is True
                 and imported.get("unknown") == []
-                and imported.get("applied") == 148,
+                and imported.get("applied") == 151,
                 imported)
         raw = json_call(
             ledger, cli, ["config-raw"], env, "backup redacted local config")
@@ -7536,6 +7541,143 @@ def check_media_quality(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+def check_media_quality_extend(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    read_modes = (
+        ("hd", "media-quality-hd"),
+        ("enhanced", "media-quality-enhanced"),
+        ("original", "media-quality-original"))
+    write_modes = (
+        ("hd", "media-quality-hd-set"),
+        ("enhanced", "media-quality-enhanced-set"),
+        ("original", "media-quality-original-set"))
+
+    env = make_env(work / "media-quality-extend-defaults")
+    for name, mode in read_modes:
+        data = json_call(ledger, cli, [mode], env, f"{name} default")
+        if data is not None:
+            ledger.check(
+                f"media quality extend {name} default off",
+                data.get("enabled") is False,
+                data)
+
+    for name, mode in write_modes:
+        data = json_call(ledger, cli, [mode, "1"], env, f"{name} set on")
+        if data is not None:
+            ledger.check(
+                f"media quality extend {name} set on",
+                data.get("enabled") is True,
+                data)
+
+    for name, mode in read_modes:
+        reloaded = json_call(ledger, cli, [mode], env, f"{name} reload")
+        if reloaded is not None:
+            ledger.check(
+                f"media quality extend {name} persisted",
+                reloaded.get("enabled") is True,
+                reloaded)
+
+    exported = json_call(
+        ledger, cli, ["backup-export-current"], env, "extend export")
+    if exported is not None:
+        section = backup_sections(exported)["exteraconfig"]
+        ledger.check(
+            "media quality extend backup keys",
+            section.get("OEGalleryAlwaysSendHd") is True
+            and section.get("OEGalleryEnhancedVideoBitrate") is True
+            and section.get("OEGalleryPreferOriginalQuality") is True,
+            {key: section.get(key) for key in (
+                "OEGalleryAlwaysSendHd",
+                "OEGalleryEnhancedVideoBitrate",
+                "OEGalleryPreferOriginalQuality")})
+
+    alias_env = make_env(work / "media-quality-extend-alias")
+    alias_root = {
+        "version": 1,
+        "exteraconfig": {
+            "alwaysSendHd": True,
+            "enhancedVideoBitrate": True,
+            "preferOriginalQuality": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(alias_root)],
+        alias_env, "extend alias import")
+    if data is not None:
+        ledger.check(
+            "media quality extend alias applied",
+            data.get("applied") == 3,
+            data.get("applied"))
+        ledger.check(
+            "media quality extend alias unknown empty",
+            data.get("unknown") == [],
+            data.get("unknown"))
+    values = []
+    for name, mode in read_modes:
+        reloaded = json_call(
+            ledger, cli, [mode], alias_env, f"{name} alias read")
+        if reloaded is not None:
+            values.append(reloaded.get("enabled"))
+    ledger.check(
+        "media quality extend alias values",
+        values == [True, True, True],
+        values)
+
+    canonical_env = make_env(work / "media-quality-extend-canonical")
+    canonical_root = {
+        "version": 1,
+        "exteraconfig": {
+            "OEGalleryAlwaysSendHd": True,
+            "OEGalleryEnhancedVideoBitrate": True,
+            "OEGalleryPreferOriginalQuality": True,
+        },
+    }
+    data = json_call(
+        ledger, cli, ["backup-import-json", json.dumps(canonical_root)],
+        canonical_env, "extend canonical import")
+    if data is not None:
+        ledger.check(
+            "media quality extend canonical applied",
+            data.get("applied") == 3 and data.get("unknown") == [],
+            data)
+    values = []
+    for name, mode in read_modes:
+        reloaded = json_call(
+            ledger, cli, [mode], canonical_env, f"{name} canonical read")
+        if reloaded is not None:
+            values.append(reloaded.get("enabled"))
+    ledger.check(
+        "media quality extend canonical values",
+        values == [True, True, True],
+        values)
+
+    whitelist_env = make_env(work / "media-quality-extend-whitelist")
+    data = json_call(
+        ledger, cli,
+        ["config-fromjson", json.dumps(canonical_root["exteraconfig"])],
+        whitelist_env, "extend whitelist")
+    if data is not None:
+        ledger.check(
+            "media quality extend whitelisted",
+            data.get("accepted") is True and data.get("unknown") == [],
+            (data.get("accepted"), data.get("unknown")))
+
+    data = json_call(
+        ledger, cli, ["media-quality-enhanced-set", "0"], env,
+        "enhanced set off")
+    if data is not None:
+        ledger.check(
+            "media quality extend enhanced set off",
+            data.get("enabled") is False,
+            data)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_update_channel(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -8873,6 +9015,8 @@ def main():
         chat_misc = check_chat_misc(ledger, cli, work)
         persian = check_persian(ledger, cli, work)
         media_quality = check_media_quality(ledger, cli, work)
+        media_quality_extend = check_media_quality_extend(
+            ledger, cli, work)
         update_channel = check_update_channel(ledger, cli, work)
         translation = check_translation(ledger, cli, work)
         ai = check_ai(ledger, cli, work)
@@ -8961,6 +9105,8 @@ def main():
     print(f"chat-misc: {chat_misc[0] - chat_misc[1]} passed")
     print(f"persian: {persian[0] - persian[1]} passed")
     print(f"media-quality: {media_quality[0] - media_quality[1]} passed")
+    print(f"media-quality-extend: "
+          f"{media_quality_extend[0] - media_quality_extend[1]} passed")
     print(f"update-channel: "
           f"{update_channel[0] - update_channel[1]} passed")
     print(f"translation: {translation[0] - translation[1]} passed")

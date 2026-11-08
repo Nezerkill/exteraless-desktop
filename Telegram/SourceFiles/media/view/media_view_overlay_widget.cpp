@@ -143,6 +143,9 @@ namespace View {
 namespace {
 
 [[nodiscard]] Media::VideoQuality ExteralessVideoQuality() {
+	if (Exteraless::Config::Instance().galleryPreferOriginalQuality()) {
+		return { .manual = 1u, .original = 1u };
+	}
 	const auto tier = Exteraless::Config::Instance().defaultVideoQuality();
 	const auto height = (tier <= 0) ? 480 : (tier == 1 ? 720 : 1080);
 	return { .height = uint32(height) };
