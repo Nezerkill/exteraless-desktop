@@ -1,4 +1,5 @@
 find_package(PkgConfig QUIET)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Sql REQUIRED)
 set(SHERPA_ONNX_ROOT "" CACHE PATH
     "sherpa-onnx prefix, used when pkg-config cannot locate sherpa-onnx")
 
@@ -25,6 +26,8 @@ endif()
 add_library(exteraless STATIC
     ai_client.cpp
     ai_client.h
+    ayu_import.cpp
+    ayu_import.h
     backup.cpp
     backup.h
     chats.cpp
@@ -83,6 +86,7 @@ PUBLIC
     desktop-app::common_options
     Qt::Core
     Qt::Network
+    Qt::Sql
 )
 
 target_include_directories(exteraless

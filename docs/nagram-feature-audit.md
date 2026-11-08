@@ -286,7 +286,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Regex-фильтры и фильтр реакций | `regexFilters*`, `blockedChannelsData`, `customFilteredUsersData` | ✅ regex-фильтры (NB-22): `OEChatsRegexFilters*` (5 ключей), движок `exteraless/regex_filters.{h,cpp}`, гейт в `pushItem` (`history/view/history_view_list_widget.cpp`), три тумблера в Chats, CLI 5 команд и импорт `.extera`; UI-редактора списка и бара «N скрыто» нет. `blockedChannelsData`/`customFilteredUsersData` (фильтр реакций и каналов) — ❌ не переносились |
 | Ghost-отправка «как отложенное» | `ghostScheduledSend` | ❌ |
 | Ответ на удалённое цитатой | `replyToDeletedAsQuote` | ✅ NB-33: Reply у плейсхолдера вставляет blockquote-цитату (`DeletedMessages::BuildQuotePrefix`, `ComposeControls::setText`), но ответом не становится — `_replyTo` и `reply_to_msg_id` не затрагиваются; медиа и реакции в цитату не попадают |
-| Импорт базы AyuGram | `OEAyuDatabaseImport`, `ClearMessageDatabase` | ❌ |
+| Импорт базы AyuGram | `OEAyuDatabaseImport`, `ClearMessageDatabase` | ✅ NB-21 (2026-11-08), только удалённые сообщения: `exteraless/ayu_import.{h,cpp}` — QSQLITE на чтение (`immutable=1` fallback), `PRAGMA user_version` вне `[21,27]` — отказ, 11 колонок `deletedmessage` → `DeletedEntry` (даты ×1000, мс), дедуп `(peerId, msgId)`, кап приложения, `QSaveFile` в формате v2; entities/реакции/медиа/out/read не маппятся, `ClearMessageDatabase` не переносился, GUI-кнопки нет — только CLI `deleted-import-ayu` |
 
 Схемы хранения расходятся принципиально: Android — Room с таблицами
 `DeletedMessage`, `DeletedMessageFull`, `EditedMessage`, `DeletedDialog`,
@@ -589,7 +589,7 @@ link-filter в `InitElementTextPart`, тот же флаг на `_textCache` в
 |---|---|---|
 | `.extera` (невидимые Unicode + JSON) | `EtgBackup`, `InvisibleEncryptor` | ✅ `exteraless/backup.cpp`, 25 ключей |
 | Полный `.json` всех настроек | `SettingsBackupHelper` | ✅ NB-57 (2026-11-07): `exteraless/backup.cpp` — `BuildBackup(bool redactSecrets = false)` выгружает полный набор ключей по whitelist, импорт пропускает неизвестные; redacted-вариант кладёт `***REMOVED***` в 3 слота `kSecretKeys` (`OEAiApiKey`, `OETranslationGoogleCloudKey`, `OETranslationDeepLKey`) и при импорте их не затирает; «25 ключей» в строке выше — состояние до NB-57 |
-| Импорт базы AyuGram | `AyuDatabaseImport` | ❌ |
+| Импорт базы AyuGram | `AyuDatabaseImport` | ✅ NB-21 (2026-11-08): CLI `deleted-import-ayu <db> [--account id]` на QtSql (`exteraless/ayu_import.{h,cpp}`), только удалённые сообщения — подробности в 6.5 |
 | Бэкап плагинов | `PluginsBackup` | ❌ |
 | Бэкап избранных стикеров | `FaveStickersBackup` | ❌ |
 | Облачный синк | `CloudSettingsHelper` | ❌ |

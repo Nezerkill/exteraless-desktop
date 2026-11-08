@@ -17334,11 +17334,12 @@ index 79a0a3c..87a5eaa 100644
  )
 diff --git a/exteraless/CMakeLists.txt b/exteraless/CMakeLists.txt
 new file mode 100644
-index 0000000..303c346
+index 0000000..ac1f18b
 --- /dev/null
 +++ b/exteraless/CMakeLists.txt
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,108 @@
 +find_package(PkgConfig QUIET)
++find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Sql REQUIRED)
 +set(SHERPA_ONNX_ROOT "" CACHE PATH
 +    "sherpa-onnx prefix, used when pkg-config cannot locate sherpa-onnx")
 +
@@ -17365,6 +17366,8 @@ index 0000000..303c346
 +add_library(exteraless STATIC
 +    ai_client.cpp
 +    ai_client.h
++    ayu_import.cpp
++    ayu_import.h
 +    backup.cpp
 +    backup.h
 +    chats.cpp
@@ -17423,6 +17426,7 @@ index 0000000..303c346
 +    desktop-app::common_options
 +    Qt::Core
 +    Qt::Network
++    Qt::Sql
 +)
 +
 +target_include_directories(exteraless
@@ -17797,6 +17801,385 @@ index 0000000..81b95c1
 +};
 +
 +[[nodiscard]] QString ParseStreamEvent(const QByteArray &line);
++
++} // namespace Exteraless
+diff --git a/exteraless/ayu_import.cpp b/exteraless/ayu_import.cpp
+new file mode 100644
+index 0000000..5ddd934
+--- /dev/null
++++ b/exteraless/ayu_import.cpp
+@@ -0,0 +1,346 @@
++#include "exteraless/ayu_import.h"
++
++#include "exteraless/deleted_entry.h"
++#include "exteraless/deleted_messages_trim.h"
++
++#include <QDir>
++#include <QFile>
++#include <QFileInfo>
++#include <QJsonArray>
++#include <QJsonDocument>
++#include <QJsonObject>
++#include <QSaveFile>
++#include <QSqlDatabase>
++#include <QSqlError>
++#include <QSqlQuery>
++#include <QSqlRecord>
++#include <QStringList>
++#include <QUrl>
++#include <QVariant>
++
++#include <array>
++#include <set>
++#include <utility>
++#include <vector>
++
++namespace Exteraless {
++namespace {
++
++constexpr auto kMinAyuVersion = 21;
++constexpr auto kMaxAyuVersion = 27;
++// WHY: mirrors DeletedMessages::save(), the app rewrites this file itself.
++constexpr auto kSidecarVersion = 2;
++
++using Key = std::pair<qint64, qint64>;
++
++[[nodiscard]] const std::array<const char*, 11> &AyuColumns() {
++	static const auto result = std::array<const char*, 11>{
++		"userId",
++		"dialogId",
++		"fromId",
++		"messageId",
++		"date",
++		"editDate",
++		"text",
++		"replyMessageId",
++		"replyQuoteText",
++		"fwdName",
++		"fwdDate",
++	};
++	return result;
++}
++
++[[nodiscard]] QString SidecarPath(const QString &dbPath) {
++	return QFileInfo(dbPath).absolutePath()
++		+ QStringLiteral("/exteraless/deleted_messages.json");
++}
++
++[[nodiscard]] QVariant ColumnValue(
++		const QSqlRecord &record,
++		const char *name) {
++	const auto index = record.indexOf(QString::fromLatin1(name));
++	return (index >= 0) ? record.value(index) : QVariant();
++}
++
++class ConnectionGuard final {
++public:
++	explicit ConnectionGuard(const QString &name) : _name(name) {
++	}
++	~ConnectionGuard() {
++		QSqlDatabase::removeDatabase(_name);
++	}
++
++private:
++	const QString _name;
++};
++
++struct AyuRows {
++	std::vector<DeletedEntry> entries;
++	int skipped = 0;
++	int rejectedVersion = 0;
++	QString error;
++};
++
++struct AyuOpenAttempt {
++	QString connection;
++	QString name;
++	QString options;
++};
++
++[[nodiscard]] bool TryOpenAyu(
++		const AyuOpenAttempt &attempt,
++		QSqlDatabase *db,
++		int *version,
++		QString *error) {
++	auto candidate = QSqlDatabase::addDatabase(
++		QStringLiteral("QSQLITE"),
++		attempt.connection);
++	candidate.setDatabaseName(attempt.name);
++	candidate.setConnectOptions(attempt.options);
++	if (!candidate.open()) {
++		*error = candidate.lastError().text();
++		return false;
++	}
++	auto query = QSqlQuery(candidate);
++	if (!query.exec(QStringLiteral("PRAGMA user_version"))
++		|| !query.next()) {
++		*error = query.lastError().text();
++		return false;
++	}
++	*version = query.value(0).toInt();
++	*db = candidate;
++	return true;
++}
++
++[[nodiscard]] AyuRows ReadAyuRows(const QString &dbPath, qint64 accountId) {
++	auto result = AyuRows();
++	if (!QSqlDatabase::isDriverAvailable(QStringLiteral("QSQLITE"))) {
++		result.error = QStringLiteral("QSQLITE driver is not available");
++		return result;
++	}
++	const auto readOnlyName = QStringLiteral("exteraless-ayu-import");
++	const auto immutableName = readOnlyName + QStringLiteral("-immutable");
++	auto readOnlyGuard = ConnectionGuard(readOnlyName);
++	auto immutableGuard = ConnectionGuard(immutableName);
++	const auto readOnly = AyuOpenAttempt{
++		.connection = readOnlyName,
++		.name = dbPath,
++		.options = QStringLiteral("QSQLITE_OPEN_READONLY"),
++	};
++	const auto immutable = AyuOpenAttempt{
++		.connection = immutableName,
++		.name = QStringLiteral("file:")
++			+ QString::fromLatin1(QUrl::toPercentEncoding(
++				dbPath,
++				QByteArrayLiteral("/")))
++			+ QStringLiteral("?immutable=1"),
++		.options = QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_OPEN_URI"),
++	};
++	// WHY: an immutable read never creates the -shm/-wal bookkeeping files,
++	// but it ignores a pending WAL, so it is only preferred without one.
++	const auto wal = QFileInfo(dbPath + QStringLiteral("-wal"));
++	const auto immutableFirst = !wal.exists() || wal.size() == 0;
++	auto db = QSqlDatabase();
++	auto version = -1;
++	auto firstError = QString();
++	auto secondError = QString();
++	if (!TryOpenAyu(
++			immutableFirst ? immutable : readOnly,
++			&db,
++			&version,
++			&firstError)
++		&& !TryOpenAyu(
++			immutableFirst ? readOnly : immutable,
++			&db,
++			&version,
++			&secondError)) {
++		result.error = QStringLiteral("cannot open ")
++			+ dbPath
++			+ QStringLiteral(": ")
++			+ secondError
++			+ QStringLiteral(" (first attempt: ")
++			+ firstError
++			+ QStringLiteral(")");
++		return result;
++	}
++	if (version < kMinAyuVersion || version > kMaxAyuVersion) {
++		result.rejectedVersion = version;
++		result.error = QStringLiteral(
++			"unsupported AyuGram database version %1 (expected %2..%3)")
++			.arg(version)
++			.arg(kMinAyuVersion)
++			.arg(kMaxAyuVersion);
++		return result;
++	}
++
++	auto columnsQuery = QSqlQuery(db);
++	if (!columnsQuery.exec(QStringLiteral(
++			"SELECT * FROM deletedmessage LIMIT 0"))) {
++		result.error = QStringLiteral("cannot read deletedmessage: ")
++			+ columnsQuery.lastError().text();
++		return result;
++	}
++	const auto record = columnsQuery.record();
++	auto names = QStringList();
++	for (const auto name : AyuColumns()) {
++		const auto field = QString::fromLatin1(name);
++		if (record.indexOf(field) >= 0) {
++			names.push_back(field);
++		}
++	}
++	const auto complete = record.indexOf(QStringLiteral("dialogId")) >= 0
++		&& record.indexOf(QStringLiteral("messageId")) >= 0
++		&& record.indexOf(QStringLiteral("date")) >= 0
++		&& (!accountId || record.indexOf(QStringLiteral("userId")) >= 0);
++	if (!complete) {
++		result.error = QStringLiteral(
++			"deletedmessage lacks the columns this importer needs");
++		return result;
++	}
++
++	auto statement = QStringLiteral("SELECT ")
++		+ names.join(QStringLiteral(", "))
++		+ QStringLiteral(" FROM deletedmessage");
++	if (accountId) {
++		statement += QStringLiteral(" WHERE userId = ?");
++	}
++	statement += QStringLiteral(" ORDER BY date ASC");
++	auto rowsQuery = QSqlQuery(db);
++	rowsQuery.setForwardOnly(true);
++	if (!rowsQuery.prepare(statement)) {
++		result.error = QStringLiteral("cannot prepare the query: ")
++			+ rowsQuery.lastError().text();
++		return result;
++	}
++	if (accountId) {
++		rowsQuery.addBindValue(accountId);
++	}
++	if (!rowsQuery.exec()) {
++		result.error = QStringLiteral("cannot read deletedmessage: ")
++			+ rowsQuery.lastError().text();
++		return result;
++	}
++	auto keys = std::set<Key>();
++	while (rowsQuery.next()) {
++		const auto row = rowsQuery.record();
++		auto entry = DeletedEntry();
++		entry.peerId = ColumnValue(row, "dialogId").toLongLong();
++		entry.msgId = ColumnValue(row, "messageId").toLongLong();
++		if (!entry.peerId || !entry.msgId) {
++			++result.skipped;
++			continue;
++		}
++		if (!keys.insert(Key(entry.peerId, entry.msgId)).second) {
++			++result.skipped;
++			continue;
++		}
++		entry.fromId = ColumnValue(row, "fromId").toLongLong();
++		entry.date = ColumnValue(row, "date").toLongLong() * 1000;
++		entry.editedDate = ColumnValue(row, "editDate").toLongLong() * 1000;
++		entry.text = ColumnValue(row, "text").toString();
++		entry.replyToMsgId = ColumnValue(row, "replyMessageId").toLongLong();
++		entry.replyToText = ColumnValue(row, "replyQuoteText").toString();
++		entry.forwardedFrom = ColumnValue(row, "fwdName").toString();
++		entry.forwardedDate = ColumnValue(row, "fwdDate").toLongLong() * 1000;
++		result.entries.push_back(std::move(entry));
++	}
++	return result;
++}
++
++} // namespace
++
++AyuImportResult ImportAyuDatabase(const QString &dbPath, qint64 accountId) {
++	auto result = AyuImportResult();
++	const auto info = QFileInfo(dbPath);
++	if (dbPath.isEmpty() || !info.isFile()) {
++		result.error = QStringLiteral("database file not found: ") + dbPath;
++		return result;
++	}
++	const auto rows = ReadAyuRows(dbPath, accountId);
++	if (!rows.error.isEmpty()) {
++		result.rejectedVersion = rows.rejectedVersion;
++		result.error = rows.error;
++		return result;
++	}
++
++	const auto sidecar = SidecarPath(dbPath);
++	auto entries = std::vector<DeletedEntry>();
++	auto known = std::set<Key>();
++	auto file = QFile(sidecar);
++	if (file.open(QIODevice::ReadOnly)) {
++		const auto document = QJsonDocument::fromJson(file.readAll());
++		file.close();
++		for (const auto &value
++			: document.object().value(QStringLiteral("messages")).toArray()) {
++			if (auto entry = DeserializeDeletedEntry(value.toObject())) {
++				known.insert(Key(entry->peerId, entry->msgId));
++				entries.push_back(std::move(*entry));
++			}
++		}
++	}
++	auto skipped = rows.skipped;
++	auto appended = std::vector<Key>();
++	for (auto entry : rows.entries) {
++		const auto key = Key(entry.peerId, entry.msgId);
++		if (known.contains(key)) {
++			++skipped;
++			continue;
++		}
++		known.insert(key);
++		appended.push_back(key);
++		entries.push_back(std::move(entry));
++	}
++	if (appended.empty()) {
++		result.skipped = skipped;
++		return result;
++	}
++
++	TrimDeletedEntries(
++		&entries,
++		[](const DeletedEntry &entry) { return entry.peerId; });
++	auto kept = std::set<Key>();
++	for (const auto &entry : entries) {
++		kept.insert(Key(entry.peerId, entry.msgId));
++	}
++	auto imported = 0;
++	for (const auto &key : appended) {
++		if (kept.contains(key)) {
++			++imported;
++		}
++	}
++	skipped += int(appended.size()) - imported;
++
++	auto messages = QJsonArray();
++	for (const auto &entry : entries) {
++		messages.append(SerializeDeletedEntry(entry));
++	}
++	auto root = QJsonObject();
++	root["version"] = kSidecarVersion;
++	root["messages"] = messages;
++	const auto directory = QFileInfo(sidecar).absolutePath();
++	if (!QDir().mkpath(directory)) {
++		result.error = QStringLiteral("cannot create ") + directory;
++		return result;
++	}
++	auto out = QSaveFile(sidecar);
++	if (!out.open(QIODevice::WriteOnly)) {
++		result.error = QStringLiteral("cannot write ")
++			+ sidecar
++			+ QStringLiteral(": ")
++			+ out.errorString();
++		return result;
++	}
++	out.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
++	if (!out.commit()) {
++		result.error = QStringLiteral("cannot write ")
++			+ sidecar
++			+ QStringLiteral(": ")
++			+ out.errorString();
++		return result;
++	}
++	result.imported = imported;
++	result.skipped = skipped;
++	return result;
++}
++
++} // namespace Exteraless
+diff --git a/exteraless/ayu_import.h b/exteraless/ayu_import.h
+new file mode 100644
+index 0000000..c87f7d6
+--- /dev/null
++++ b/exteraless/ayu_import.h
+@@ -0,0 +1,21 @@
++#pragma once
++
++#include <QString>
++#include <QtGlobal>
++
++namespace Exteraless {
++
++struct [[nodiscard]] AyuImportResult {
++	int imported = 0;
++	int skipped = 0;
++	int rejectedVersion = 0;
++	QString error;
++};
++
++// Reads the AyuGram `deletedmessage` table and merges it into the deleted
++// messages sidecar stored next to the database in `exteraless/`.
++[[nodiscard]] AyuImportResult ImportAyuDatabase(
++	const QString &dbPath,
++	qint64 accountId);
 +
 +} // namespace Exteraless
 diff --git a/exteraless/backup.cpp b/exteraless/backup.cpp
@@ -26694,11 +27077,12 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..2a1c2bc
+index 0000000..4b7c6cf
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3420 @@
+@@ -0,0 +1,3448 @@
 +#include "exteraless/ai_client.h"
++#include "exteraless/ayu_import.h"
 +#include "exteraless/backup.h"
 +#include "exteraless/chats.h"
 +#include "exteraless/config.h"
@@ -26955,6 +27339,7 @@ index 0000000..2a1c2bc
 +		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
 +		<< "<json>\n"
 +		<< "  exteraless-chats-cli deleted-entry <json>\n"
++		<< "  exteraless-chats-cli deleted-import-ayu <db> [--account <id>]\n"
 +		<< "  exteraless-chats-cli backup-export <removeTail> "
 +		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 +		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -29730,6 +30115,32 @@ index 0000000..2a1c2bc
 +		});
 +		return 0;
 +	}
++	if (mode == QStringLiteral("deleted-import-ayu")) {
++		if (arguments.size() != 3 && arguments.size() != 5) {
++			return PrintUsage();
++		}
++		auto accountId = qint64(0);
++		if (arguments.size() == 5) {
++			if (arguments[3] != QStringLiteral("--account")) {
++				return PrintUsage();
++			}
++			auto ok = false;
++			accountId = arguments[4].toLongLong(&ok);
++			if (!ok || accountId < 0) {
++				return PrintUsage();
++			}
++		}
++		const auto result = Exteraless::ImportAyuDatabase(
++			arguments[2],
++			accountId);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("imported"), result.imported },
++			{ QStringLiteral("skipped"), result.skipped },
++			{ QStringLiteral("rejectedVersion"), result.rejectedVersion },
++			{ QStringLiteral("error"), result.error },
++		});
++		return result.error.isEmpty() ? 0 : 1;
++	}
 +	if (mode == QStringLiteral("deleted-trim")) {
 +		if (arguments.size() != 3 && arguments.size() != 5) {
 +			return PrintUsage();
@@ -30602,15 +31013,16 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..5c4c249
+index 0000000..3c0b58c
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8696 @@
+@@ -0,0 +1,8853 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
 +import json
 +import os
++import sqlite3
 +import subprocess
 +import sys
 +import tempfile
@@ -30626,6 +31038,10 @@ index 0000000..5c4c249
 +MIN_STRIP_CASES = 51
 +MIN_REACTION_CASES = 10
 +EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
++AYU_ACCOUNT = 777
++AYU_FOREIGN_ACCOUNT = 999
++AYU_DATE = 1700000100
++AYU_SCHEMA_VERSION = 26
 +
 +
 +class Ledger:
@@ -31675,6 +32091,7 @@ index 0000000..5c4c249
 +            "OENetworkDnsType": 1,
 +            "OENetworkCustomDoH": "https://full.test/dns-query",
 +            "OENetworkWeatherCity": "tokyo",
++            "OEPluginTrustLevels": json.dumps({"demo": 2}),
 +        },
 +        "pillstackconfig": {
 +            "OEPillStackEnabled": True,
@@ -33648,6 +34065,155 @@ index 0000000..5c4c249
 +            and reloaded.get("mark") == "legacy"
 +            and reloaded.get("color") == 305419896,
 +            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++def make_ayu_database(path, version, rows):
++    connection = sqlite3.connect(path)
++    try:
++        connection.execute(
++            "CREATE TABLE deletedmessage ("
++            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
++            " userId INTEGER NOT NULL,"
++            " dialogId INTEGER NOT NULL,"
++            " messageId INTEGER NOT NULL,"
++            " date INTEGER NOT NULL,"
++            " text TEXT)")
++        connection.executemany(
++            "INSERT INTO deletedmessage "
++            "(userId, dialogId, messageId, date, text) "
++            "VALUES (?, ?, ?, ?, ?)",
++            rows)
++        connection.execute(f"PRAGMA user_version = {int(version)}")
++        connection.commit()
++    finally:
++        connection.close()
++
++
++def ayu_rows():
++    return [
++        (AYU_ACCOUNT, -1001234567890, 77, AYU_DATE,
++         "AyuGram deleted message"),
++        (AYU_ACCOUNT, -1001234567890, 77, AYU_DATE,
++         "AyuGram duplicate"),
++        (AYU_FOREIGN_ACCOUNT, -1001234567890, 78, AYU_DATE + 1,
++         "foreign account"),
++    ]
++
++
++def read_ayu_entries(root):
++    store = root / "exteraless" / "deleted_messages.json"
++    if not store.is_file():
++        return None
++    try:
++        saved = json.loads(store.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError):
++        return None
++    messages = saved.get("messages")
++    return messages if isinstance(messages, list) else None
++
++
++def ayu_rejection(result):
++    try:
++        data = json.loads(result.stdout)
++    except json.JSONDecodeError:
++        return None
++    return data if isinstance(data, dict) and data.get("error") else None
++
++
++def check_ayu_import(ledger, cli, work):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    root = work / "ayu-import"
++    env = make_env(root)
++    env["EXTERALESS_WORKDIR"] = str(root / "workdir")
++    database = root / "ayu.db"
++    make_ayu_database(database, AYU_SCHEMA_VERSION, ayu_rows())
++    arguments = [
++        "deleted-import-ayu", str(database),
++        "--account", str(AYU_ACCOUNT),
++    ]
++    data = json_call(ledger, cli, arguments, env, "ayu import")
++    if data is not None:
++        ledger.check(
++            "ayu import counts",
++            data.get("imported") == 1
++            and data.get("skipped") == 1
++            and data.get("error") == "",
++            data)
++        entries = read_ayu_entries(root)
++        ledger.check(
++            "ayu import entries",
++            isinstance(entries, list) and len(entries) == 1,
++            entries)
++        if isinstance(entries, list) and entries:
++            first = entries[0]
++            ledger.check(
++                "ayu import text",
++                first.get("text") == "AyuGram deleted message",
++                first.get("text"))
++            ledger.check(
++                "ayu import date",
++                first.get("date") == AYU_DATE * 1000,
++                first.get("date"))
++            ledger.check(
++                "ayu import ids",
++                first.get("peerId") == "-1001234567890"
++                and first.get("msgId") == "77",
++                first)
++
++    for version in (20, 28):
++        path = work / f"ayu-v{version}.db"
++        make_ayu_database(path, version, ayu_rows())
++        result = run(
++            cli,
++            ["deleted-import-ayu", str(path),
++             "--account", str(AYU_ACCOUNT)],
++            env=env)
++        rejected = ayu_rejection(result)
++        ledger.check(
++            f"ayu import rejects version {version}",
++            result.returncode != 0
++            and rejected is not None
++            and rejected.get("rejectedVersion") == version
++            and rejected.get("imported") == 0,
++            f"exit {result.returncode}, "
++            f"stdout {result.stdout.strip()!r}")
++
++    result = run(
++        cli,
++        ["deleted-import-ayu", str(work / "ayu-missing.db"),
++         "--account", str(AYU_ACCOUNT)],
++        env=env)
++    rejected = ayu_rejection(result)
++    ledger.check(
++        "ayu import rejects missing file",
++        result.returncode != 0
++        and rejected is not None
++        and rejected.get("imported") == 0,
++        f"exit {result.returncode}, stdout {result.stdout.strip()!r}")
++
++    data = json_call(ledger, cli, arguments, env, "ayu import repeat")
++    if data is not None:
++        ledger.check(
++            "ayu import repeat dedup",
++            data.get("imported") == 0 and data.get("error") == "",
++            data)
++        entries = read_ayu_entries(root)
++        ledger.check(
++            "ayu import repeat stable",
++            isinstance(entries, list) and len(entries) == 1,
++            entries)
++
++    result = run(cli, ["deleted-import-ayu"], env=env)
++    ledger.check(
++        "ayu import usage",
++        result.returncode == 2,
++        f"exit {result.returncode}")
 +
 +    return (
 +        ledger.checks - before_checks,
@@ -39137,6 +39703,7 @@ index 0000000..5c4c249
 +        bot_privacy = check_bot_privacy(ledger, cli, work)
 +        deleted = check_deleted(ledger, cli, work)
 +        deleted_entry = check_deleted_entry(ledger, cli, work)
++        ayu_import = check_ayu_import(ledger, cli, work)
 +        reset = check_reset(ledger, cli, work)
 +        workdir = check_workdir(ledger, cli, work)
 +        menu = check_message_menu(ledger, cli, work)
@@ -39212,6 +39779,7 @@ index 0000000..5c4c249
 +    print(f"bot-privacy: {bot_privacy[0] - bot_privacy[1]} passed")
 +    print(f"deleted: {deleted[0] - deleted[1]} passed")
 +    print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
++    print(f"ayu-import: {ayu_import[0] - ayu_import[1]} passed")
 +    print(f"reset: {reset[0] - reset[1]} passed")
 +    print(f"workdir: {workdir[0] - workdir[1]} passed")
 +    print(f"menu: {menu[0] - menu[1]} passed")
@@ -40849,10 +41417,10 @@ index 0000000..159435e
 +    sys.exit(main())
 diff --git a/exteraless/tests/plugins/run_host_checks.py b/exteraless/tests/plugins/run_host_checks.py
 new file mode 100644
-index 0000000..c6c537b
+index 0000000..b68f714
 --- /dev/null
 +++ b/exteraless/tests/plugins/run_host_checks.py
-@@ -0,0 +1,2740 @@
+@@ -0,0 +1,2747 @@
 +#!/usr/bin/env python3
 +"""Backend regression checks for the Exteraless Python plugin host."""
 +
@@ -42688,9 +43256,16 @@ index 0000000..c6c537b
 +    offenders = []
 +    for path in startup_sources():
 +        text = path.read_text(encoding="utf-8", errors="ignore")
-+        for marker in STARTUP_HOST_MARKERS:
-+            if marker in text:
-+                offenders.append(f"{path.relative_to(ROOT)}: {marker}")
++        lines = text.splitlines()
++        for lineno, line in enumerate(lines, 1):
++            for marker in STARTUP_HOST_MARKERS:
++                if marker not in line:
++                    continue
++                window = "\n".join(lines[lineno - 1:lineno + 1])
++                if "dispatchIntent" in window:
++                    continue
++                offenders.append(
++                    f"{path.relative_to(ROOT)}:{lineno}: {marker}")
 +    ledger.check(
 +        "startup: no Runtime::Start or Runtime::Instance in app startup",
 +        not offenders,

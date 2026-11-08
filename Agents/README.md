@@ -15,6 +15,11 @@ sibling-чекаутом: `../exteraless`.
   - `ghost_mode.*` — фильтр исходящих MTProto-запросов;
   - `deleted_entry.*` и `deleted_messages.*` — JSON-sidecar удалённых
     сообщений (схема v2: реакции, reply, forward, entities, правка, read);
+  - `ayu_import.*` — импорт базы AyuGram (NB-21): QSQLITE только на чтение
+    (`immutable=1` как fallback), отказ при схеме вне `[21,27]`, 11 колонок
+    `deletedmessage` → `DeletedEntry`, дедуп `(peerId, msgId)`, запись
+    `QSaveFile` в формате v2; entities, реакции, медиа, out и read не
+    переносятся (задокументированная потеря);
   - `backup.*` — формат `.extera` и полный JSON-бэкап (`BuildBackup`,
     whitelist ключей); `BuildBackup(true)` заменяет секреты из `kSecretKeys`
     (`OEAiApiKey`, `OETranslationGoogleCloudKey`, `OETranslationDeepLKey`)
@@ -103,7 +108,7 @@ sibling-чекаутом: `../exteraless`.
   `fixtures/runtime/`; в приложение не входят.
 - `exteraless/tests/chats/` — CLI `exteraless-chats-cli`, фикстуры
   `fixtures/strip.tsv` и `fixtures/reactions.tsv`, `run_checks.py`
-  (1156 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, ai-stream, recognition, network, download-boost, subtitles, lyrics, lrclib, extra-pills, ai-roles, weather-city, stt, avatar-corners, section-radius, regex-filters, backup, backup-redacted);
+  (1167 проверок: strip, reactions, CLI, config, general, bot-privacy, deleted, deleted-entry, reset, workdir, menu, doubletap, stickertime, sticker-size, pillorder, ghost, deletedmark, vpn, proxy-rules, pangu, zalgo, spoilers-direct, formatting-buttons, silent, sections, ai-editor, pluginops, send-as, profile-buttons, inline-math, save-subfolder, ghost-schedule, seek-duration, edited-mark, forward-date, sender-mini-avatars, header-style, media-menu, chat-menu, disable-link-preview, hide-all-chats, hide-archive-sort, always-show-download, show-results-before-voting, false-bottom, decoration, shortcuts, message-menu-style, reply-style, wide-posts, chat-misc, persian, autodownload-rules, media-quality, update-channel, translation, ai, ai-stream, recognition, network, download-boost, subtitles, lyrics, lrclib, extra-pills, ai-roles, weather-city, stt, ayu-import, avatar-corners, section-radius, regex-filters, backup, backup-redacted);
   в приложение не входят.
 - `Telegram/SourceFiles/settings/sections/settings_exteraless.cpp` — раздел настроек;
   пункт «Avatar corners» (`OEChatsAvatarRadius`, int `-1..32`) выбирает форму

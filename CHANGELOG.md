@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-08
+
+- Импорт базы AyuGram (NB-21): `exteraless/ayu_import.{h,cpp}` открывает
+  чужую БД как QSQLITE только на чтение (`immutable=1` — fallback), отвергает
+  её при `PRAGMA user_version` вне `[21,27]` и переносит 11 колонок
+  `deletedmessage` в `DeletedEntry` (даты `date`/`editDate`/`fwdDate` ×1000,
+  то есть мс), дедуп по `(peerId, msgId)`, обрезка по капу приложения, запись
+  через `QSaveFile` в формате v2; entities, реакции, медиа, out и read не
+  маппятся (задокументированная потеря). CMake: `find_package(Qt6 Sql)` плюс
+  `Qt::Sql`; CLI `deleted-import-ayu <db> [--account id]` →
+  `{imported, skipped, rejectedVersion, error}`; `check_ayu_import` — 11
+  проверок (БД генерируется на лету через python `sqlite3`), раннеры
+  1167/32/279 PASS (backup 105, backup-redacted 11); `kKeysCount` 11248 без
+  изменений (новых lang нет); патч `13c4d0fb…`, flake PASS. Не сделано:
+  кнопки импорта в GUI нет; `peerName`/`fromName` остаются пустыми.
+  Ограничения: Xvfb-смоук не выполнялся.
+
 ## 2026-11-07
 
 - WEB proxy в документации (NB-90, решение пользователя — только доки):

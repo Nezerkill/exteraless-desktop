@@ -1,4 +1,5 @@
 #include "exteraless/ai_client.h"
+#include "exteraless/ayu_import.h"
 #include "exteraless/backup.h"
 #include "exteraless/chats.h"
 #include "exteraless/config.h"
@@ -255,6 +256,7 @@ using Exteraless::ChatsSettings;
 		<< "  exteraless-chats-cli deleted-trim [<maxEntries> <maxPerPeer>] "
 		<< "<json>\n"
 		<< "  exteraless-chats-cli deleted-entry <json>\n"
+		<< "  exteraless-chats-cli deleted-import-ayu <db> [--account <id>]\n"
 		<< "  exteraless-chats-cli backup-export <removeTail> "
 		<< "<hideChannels> <hideGroups> <hidePrivate> <stripTracking> "
 		<< "<stripTrackingPaste> <unreadCapsule>\n"
@@ -3029,6 +3031,32 @@ int main(int argc, char *argv[]) {
 				Exteraless::SerializeDeletedEntry(*entry) },
 		});
 		return 0;
+	}
+	if (mode == QStringLiteral("deleted-import-ayu")) {
+		if (arguments.size() != 3 && arguments.size() != 5) {
+			return PrintUsage();
+		}
+		auto accountId = qint64(0);
+		if (arguments.size() == 5) {
+			if (arguments[3] != QStringLiteral("--account")) {
+				return PrintUsage();
+			}
+			auto ok = false;
+			accountId = arguments[4].toLongLong(&ok);
+			if (!ok || accountId < 0) {
+				return PrintUsage();
+			}
+		}
+		const auto result = Exteraless::ImportAyuDatabase(
+			arguments[2],
+			accountId);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("imported"), result.imported },
+			{ QStringLiteral("skipped"), result.skipped },
+			{ QStringLiteral("rejectedVersion"), result.rejectedVersion },
+			{ QStringLiteral("error"), result.error },
+		});
+		return result.error.isEmpty() ? 0 : 1;
 	}
 	if (mode == QStringLiteral("deleted-trim")) {
 		if (arguments.size() != 3 && arguments.size() != 5) {

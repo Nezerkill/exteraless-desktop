@@ -3,6 +3,7 @@
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,10 @@ RUN_TIMEOUT = 30
 MIN_STRIP_CASES = 51
 MIN_REACTION_CASES = 10
 EXPECTED_DEFAULTS = [True, False, False, False, True, True, False]
+AYU_ACCOUNT = 777
+AYU_FOREIGN_ACCOUNT = 999
+AYU_DATE = 1700000100
+AYU_SCHEMA_VERSION = 26
 
 
 class Ledger:
@@ -3041,6 +3046,155 @@ def check_deleted_mark(ledger, cli, work):
             and reloaded.get("mark") == "legacy"
             and reloaded.get("color") == 305419896,
             reloaded)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
+def make_ayu_database(path, version, rows):
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "CREATE TABLE deletedmessage ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " userId INTEGER NOT NULL,"
+            " dialogId INTEGER NOT NULL,"
+            " messageId INTEGER NOT NULL,"
+            " date INTEGER NOT NULL,"
+            " text TEXT)")
+        connection.executemany(
+            "INSERT INTO deletedmessage "
+            "(userId, dialogId, messageId, date, text) "
+            "VALUES (?, ?, ?, ?, ?)",
+            rows)
+        connection.execute(f"PRAGMA user_version = {int(version)}")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def ayu_rows():
+    return [
+        (AYU_ACCOUNT, -1001234567890, 77, AYU_DATE,
+         "AyuGram deleted message"),
+        (AYU_ACCOUNT, -1001234567890, 77, AYU_DATE,
+         "AyuGram duplicate"),
+        (AYU_FOREIGN_ACCOUNT, -1001234567890, 78, AYU_DATE + 1,
+         "foreign account"),
+    ]
+
+
+def read_ayu_entries(root):
+    store = root / "exteraless" / "deleted_messages.json"
+    if not store.is_file():
+        return None
+    try:
+        saved = json.loads(store.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    messages = saved.get("messages")
+    return messages if isinstance(messages, list) else None
+
+
+def ayu_rejection(result):
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) and data.get("error") else None
+
+
+def check_ayu_import(ledger, cli, work):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    root = work / "ayu-import"
+    env = make_env(root)
+    env["EXTERALESS_WORKDIR"] = str(root / "workdir")
+    database = root / "ayu.db"
+    make_ayu_database(database, AYU_SCHEMA_VERSION, ayu_rows())
+    arguments = [
+        "deleted-import-ayu", str(database),
+        "--account", str(AYU_ACCOUNT),
+    ]
+    data = json_call(ledger, cli, arguments, env, "ayu import")
+    if data is not None:
+        ledger.check(
+            "ayu import counts",
+            data.get("imported") == 1
+            and data.get("skipped") == 1
+            and data.get("error") == "",
+            data)
+        entries = read_ayu_entries(root)
+        ledger.check(
+            "ayu import entries",
+            isinstance(entries, list) and len(entries) == 1,
+            entries)
+        if isinstance(entries, list) and entries:
+            first = entries[0]
+            ledger.check(
+                "ayu import text",
+                first.get("text") == "AyuGram deleted message",
+                first.get("text"))
+            ledger.check(
+                "ayu import date",
+                first.get("date") == AYU_DATE * 1000,
+                first.get("date"))
+            ledger.check(
+                "ayu import ids",
+                first.get("peerId") == "-1001234567890"
+                and first.get("msgId") == "77",
+                first)
+
+    for version in (20, 28):
+        path = work / f"ayu-v{version}.db"
+        make_ayu_database(path, version, ayu_rows())
+        result = run(
+            cli,
+            ["deleted-import-ayu", str(path),
+             "--account", str(AYU_ACCOUNT)],
+            env=env)
+        rejected = ayu_rejection(result)
+        ledger.check(
+            f"ayu import rejects version {version}",
+            result.returncode != 0
+            and rejected is not None
+            and rejected.get("rejectedVersion") == version
+            and rejected.get("imported") == 0,
+            f"exit {result.returncode}, "
+            f"stdout {result.stdout.strip()!r}")
+
+    result = run(
+        cli,
+        ["deleted-import-ayu", str(work / "ayu-missing.db"),
+         "--account", str(AYU_ACCOUNT)],
+        env=env)
+    rejected = ayu_rejection(result)
+    ledger.check(
+        "ayu import rejects missing file",
+        result.returncode != 0
+        and rejected is not None
+        and rejected.get("imported") == 0,
+        f"exit {result.returncode}, stdout {result.stdout.strip()!r}")
+
+    data = json_call(ledger, cli, arguments, env, "ayu import repeat")
+    if data is not None:
+        ledger.check(
+            "ayu import repeat dedup",
+            data.get("imported") == 0 and data.get("error") == "",
+            data)
+        entries = read_ayu_entries(root)
+        ledger.check(
+            "ayu import repeat stable",
+            isinstance(entries, list) and len(entries) == 1,
+            entries)
+
+    result = run(cli, ["deleted-import-ayu"], env=env)
+    ledger.check(
+        "ayu import usage",
+        result.returncode == 2,
+        f"exit {result.returncode}")
 
     return (
         ledger.checks - before_checks,
@@ -8530,6 +8684,7 @@ def main():
         bot_privacy = check_bot_privacy(ledger, cli, work)
         deleted = check_deleted(ledger, cli, work)
         deleted_entry = check_deleted_entry(ledger, cli, work)
+        ayu_import = check_ayu_import(ledger, cli, work)
         reset = check_reset(ledger, cli, work)
         workdir = check_workdir(ledger, cli, work)
         menu = check_message_menu(ledger, cli, work)
@@ -8605,6 +8760,7 @@ def main():
     print(f"bot-privacy: {bot_privacy[0] - bot_privacy[1]} passed")
     print(f"deleted: {deleted[0] - deleted[1]} passed")
     print(f"deleted-entry: {deleted_entry[0] - deleted_entry[1]} passed")
+    print(f"ayu-import: {ayu_import[0] - ayu_import[1]} passed")
     print(f"reset: {reset[0] - reset[1]} passed")
     print(f"workdir: {workdir[0] - workdir[1]} passed")
     print(f"menu: {menu[0] - menu[1]} passed")

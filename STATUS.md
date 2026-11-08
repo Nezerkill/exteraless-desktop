@@ -99,7 +99,7 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1156 проверок PASS
+- Chats: `exteraless/tests/chats/run_checks.py` — 1167 проверок PASS
   (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
   14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
@@ -115,8 +115,22 @@
   17 network, 10 download-boost, 48 subtitles, 7 avatar-corners,
   8 header-style, 7 spoilers-direct, 7 formatting-buttons, 11 section-radius,
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
-  9 weather-city, 12 stt, 105 backup, 11 backup-redacted);
+  9 weather-city, 12 stt, 11 ayu-import, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- Импорт базы AyuGram (NB-21): `exteraless/ayu_import.{h,cpp}` читает чужую
+  БД через QSQLITE только на чтение (`immutable=1` как fallback), версия
+  схемы `PRAGMA user_version` вне `[21,27]` — отказ; 11 колонок
+  `deletedmessage` → `DeletedEntry` (даты ×1000, мс), дедуп
+  `(peerId, msgId)`, обрезка по капу приложения, запись `QSaveFile` в
+  формате v2. entities, реакции, медиа, out и read не маппятся
+  (задокументированная потеря). CMake: `find_package(Qt6 Sql)` + `Qt::Sql`;
+  CLI `deleted-import-ayu <db> [--account id]` →
+  `{imported, skipped, rejectedVersion, error}`; `check_ayu_import` — 11
+  проверок (БД генерируется на лету через python sqlite3), раннеры
+  1167/32/279 PASS (backup 105, backup-redacted 11); `kKeysCount` 11248 без
+  изменений (новых lang нет); патч `13c4d0fb…`, flake PASS. Не сделано:
+  кнопка импорта в GUI; `peerName`/`fromName` пустые. Ограничения:
+  Xvfb-смоук не выполнялся.
 - WEB proxy в документации (NB-90, только доки по решению пользователя).
 - Плагины, этап 3c — intents и уровни доступа (NB-79.3c): `OEPluginTrustLevels`
   — JSON `id → 0|1|2` с default `1` (Gated): отклонение от Android
@@ -1072,7 +1086,7 @@
   не покрыты, preload/streaming остались 128K, CLI и раннеры проверяют
   только парсер — проверки меню и пер-видео памяти нет, Xvfb-смоук не
   выполнялся, `nix flake check` не запускался в docs-задаче.
-- Отложены: NB-21 (нужен SQLite), NB-33 (item виден, нужна sidecar-цитата),
+- Отложены: NB-33 (item виден, нужна sidecar-цитата),
   NB-43 (peer в MTP-фильтре).
 - Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
   активном online-ghost отправляет новые текстовые сообщения как отложенные
