@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -101,6 +102,8 @@ using Exteraless::ChatsSettings;
 		<< "<sendOnline> <self> <secret> <bot> <user>\n"
 		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 		<< "<typing>\n"
+		<< "  exteraless-chats-cli ghost-extract-peer <type-hex> "
+		<< "[<word-hex>...]\n"
 		<< "  exteraless-chats-cli deletedmark\n"
 		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 		<< "<mark> <color>\n"
@@ -693,6 +696,175 @@ void PrintBackup(bool redactSecrets = false) {
 		{ QStringLiteral("mainconfig"),
 			object.value(QStringLiteral("mainconfig")).toObject() },
 	});
+}
+
+// WHY: GhostMode::ExtractPeerKey lives in ghost_mode.cpp, which only the
+// Telegram target compiles, so this copy of its peer parsing keeps the CLI
+// linkable; ghost-extract-peer mirrors that helper's contract exactly.
+constexpr auto kGhostReadHistory = quint32(0x0e306d3a);
+constexpr auto kGhostReadMentions = quint32(0x36e5bf4d);
+constexpr auto kGhostReadDiscussion = quint32(0xf731a9f4);
+constexpr auto kGhostChannelsReadHistory = quint32(0xcc104937);
+
+constexpr auto kGhostInputPeerEmpty = quint32(0x7f3b18ea);
+constexpr auto kGhostInputPeerSelf = quint32(0x7da07ec9);
+constexpr auto kGhostInputPeerChat = quint32(0x35a95cb9);
+constexpr auto kGhostInputPeerUser = quint32(0xdde8a54c);
+constexpr auto kGhostInputPeerChannel = quint32(0x27bcbbfc);
+constexpr auto kGhostInputPeerUserFromMessage = quint32(0xa87b0a1c);
+constexpr auto kGhostInputPeerChannelFromMessage = quint32(0xbd2a0840);
+constexpr auto kGhostInputChannel = quint32(0xf35aec28);
+constexpr auto kGhostInputChannelFromMessage = quint32(0x5b934f9d);
+constexpr auto kGhostReadSavedHistory = quint32(0xba4a3b5b);
+constexpr auto kGhostSelfPeerKey = qint64(-1);
+
+constexpr auto kGhostChatShift = quint64(1);
+constexpr auto kGhostChannelShift = quint64(2);
+constexpr auto kGhostShiftOffset = 48;
+
+[[nodiscard]] qint64 GhostPeerKey(quint64 bare, quint64 shift) {
+	return qint64(bare | (shift << kGhostShiftOffset));
+}
+
+[[nodiscard]] std::optional<qint64> GhostReadLong(
+		const std::vector<quint32> &buffer,
+		int pos) {
+	if (pos < 0 || pos + 1 >= int(buffer.size())) {
+		return std::nullopt;
+	}
+	return qint64(quint64(buffer[pos]) | (quint64(buffer[pos + 1]) << 32));
+}
+
+[[nodiscard]] int GhostSkipInputPeer(
+		const std::vector<quint32> &buffer,
+		int pos) {
+	const auto end = int(buffer.size());
+	if (pos >= end) {
+		return end;
+	}
+	switch (buffer[pos]) {
+	case kGhostInputPeerEmpty:
+	case kGhostInputPeerSelf:
+		return pos + 1;
+	case kGhostInputPeerChat:
+		return pos + 3;
+	case kGhostInputPeerUser:
+	case kGhostInputPeerChannel:
+		return pos + 5;
+	case kGhostInputPeerUserFromMessage:
+	case kGhostInputPeerChannelFromMessage: {
+		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
+		return (end - nested >= 3) ? (nested + 3) : end;
+	}
+	default:
+		return end;
+	}
+}
+
+[[nodiscard]] std::optional<qint64> GhostInputPeerKey(
+		const std::vector<quint32> &buffer,
+		int pos) {
+	const auto end = int(buffer.size());
+	if (pos >= end) {
+		return std::nullopt;
+	}
+	const auto available = end - pos;
+	switch (buffer[pos]) {
+	case kGhostInputPeerSelf:
+		return kGhostSelfPeerKey;
+	case kGhostInputPeerUser: {
+		const auto id = (available >= 5)
+			? GhostReadLong(buffer, pos + 1)
+			: std::nullopt;
+		return id ? std::optional<qint64>(GhostPeerKey(*id, 0))
+			: std::nullopt;
+	}
+	case kGhostInputPeerChat: {
+		const auto id = (available >= 3)
+			? GhostReadLong(buffer, pos + 1)
+			: std::nullopt;
+		return id ? std::optional<qint64>(
+			GhostPeerKey(*id, kGhostChatShift)) : std::nullopt;
+	}
+	case kGhostInputPeerChannel: {
+		const auto id = (available >= 5)
+			? GhostReadLong(buffer, pos + 1)
+			: std::nullopt;
+		return id ? std::optional<qint64>(
+			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
+	}
+	case kGhostInputPeerUserFromMessage:
+	case kGhostInputPeerChannelFromMessage: {
+		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
+		if (end - nested < 3) {
+			return std::nullopt;
+		}
+		const auto id = GhostReadLong(buffer, nested + 1);
+		if (!id) {
+			return std::nullopt;
+		}
+		return GhostPeerKey(
+			*id,
+			(buffer[pos] == kGhostInputPeerUserFromMessage)
+				? 0
+				: kGhostChannelShift);
+	}
+	default:
+		return std::nullopt;
+	}
+}
+
+[[nodiscard]] std::optional<qint64> GhostInputChannelKey(
+		const std::vector<quint32> &buffer,
+		int pos) {
+	const auto end = int(buffer.size());
+	if (pos >= end) {
+		return std::nullopt;
+	}
+	const auto available = end - pos;
+	switch (buffer[pos]) {
+	case kGhostInputChannel: {
+		const auto id = (available >= 5)
+			? GhostReadLong(buffer, pos + 1)
+			: std::nullopt;
+		return id ? std::optional<qint64>(
+			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
+	}
+	case kGhostInputChannelFromMessage: {
+		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
+		if (end - nested < 3) {
+			return std::nullopt;
+		}
+		const auto id = GhostReadLong(buffer, nested + 1);
+		return id ? std::optional<qint64>(
+			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
+	}
+	default:
+		return std::nullopt;
+	}
+}
+
+[[nodiscard]] std::optional<qint64> GhostExtractPeerKey(
+		const std::vector<quint32> &buffer,
+		quint32 type) {
+	if (buffer.empty()) {
+		return std::nullopt;
+	}
+	switch (type) {
+	case kGhostReadHistory:
+	case kGhostReadDiscussion:
+		return GhostInputPeerKey(buffer, 1);
+	case kGhostReadMentions:
+		return GhostInputPeerKey(buffer, 2);
+	case kGhostChannelsReadHistory:
+		return GhostInputChannelKey(buffer, 1);
+	case kGhostReadSavedHistory: {
+		const auto second = GhostSkipInputPeer(buffer, 1);
+		return GhostInputPeerKey(buffer, second);
+	}
+	default:
+		return std::nullopt;
+	}
 }
 
 } // namespace
@@ -2947,6 +3119,30 @@ int main(int argc, char *argv[]) {
 		}
 		Exteraless::Config::Instance().setGhostShowStatus(value);
 		PrintGhost();
+		return 0;
+	}
+	if (mode == QStringLiteral("ghost-extract-peer")) {
+		if (arguments.size() < 3) {
+			return PrintUsage();
+		}
+		auto ok = false;
+		const auto type = arguments[2].toUInt(&ok, 16);
+		if (!ok) {
+			return PrintUsage();
+		}
+		auto buffer = std::vector<quint32>{ type };
+		for (auto i = 3; i != arguments.size(); ++i) {
+			const auto word = arguments[i].toUInt(&ok, 16);
+			if (!ok) {
+				return PrintUsage();
+			}
+			buffer.push_back(word);
+		}
+		const auto peer = GhostExtractPeerKey(buffer, type);
+		PrintJson(QJsonObject{
+			{ QStringLiteral("peer"),
+				peer ? QJsonValue(qint64(*peer)) : QJsonValue() },
+		});
 		return 0;
 	}
 	if (mode == QStringLiteral("pillorder")) {

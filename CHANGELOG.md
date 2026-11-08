@@ -2,6 +2,19 @@
 
 ## 2026-11-08
 
+- Ghost-allowance привязан к peer (NB-43): `MTP::RequestFilterInfo` получил
+  `body`/`bodySize` (send-сигнатуры не менялись), `Allowance` —
+  4 слота под мьютексом (`peerKey`/`remaining`/`until`);
+  `ExtractPeerKey` достаёт peer из тела (`readHistory`, `Discussion`,
+  `Mentions`, `channels.readHistory`, `ReadSavedHistory` — второй peer;
+  `inputPeerSelf` → `kSelfPeerKey = -1`; неизвестное → `0` = глобал);
+  `AllowReadPacketsForSelf(PeerId)` плюс isSelf-ветки в `data_histories`/
+  `saved_sublist`; CLI `ghost-extract-peer`, `check_ghost_peer` — 15 проверок,
+  раннеры 1182/32/279 PASS (backup 105); `kKeysCount` 11248 без изменений;
+  патч `74a6864b…`, flake PASS. Не сделано: `readMessageContents` без peer
+  не привязать; `inputPeerSelf` в CLI — только через mirror
+  (`ghost_mode.cpp` не линкуется в CLI). Ограничения: hand-парсинг TL
+  (нестабилен к смене раскладки); Xvfb-смоук не выполнялся.
 - Импорт базы AyuGram (NB-21): `exteraless/ayu_import.{h,cpp}` открывает
   чужую БД как QSQLITE только на чтение (`immutable=1` — fallback), отвергает
   её при `PRAGMA user_version` вне `[21,27]` и переносит 11 колонок

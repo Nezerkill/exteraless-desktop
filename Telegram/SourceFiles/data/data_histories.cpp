@@ -764,7 +764,12 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
 			sendReadRequests();
 			finish();
 		};
-		Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
+		if (history->peer->isSelf()) {
+			Exteraless::GhostMode::AllowReadPacketsForSelf(
+				history->peer->id);
+		} else {
+			Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
+		}
 		if (const auto channel = history->peer->asChannel()) {
 			return session().api().request(MTPchannels_ReadHistory(
 				channel->inputChannel(),

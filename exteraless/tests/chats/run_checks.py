@@ -2827,6 +2827,143 @@ def check_ghost(ledger, cli, work):
         len(ledger.failures) - before_failures)
 
 
+GHOST_PEER_READ_HISTORY = "0e306d3a"
+GHOST_PEER_READ_MENTIONS = "36e5bf4d"
+GHOST_PEER_CHANNELS_READ_HISTORY = "cc104937"
+GHOST_PEER_READ_CONTENTS = "36a73f77"
+GHOST_PEER_READ_SAVED_HISTORY = "ba4a3b5b"
+GHOST_PEER_SELF_KEY = -1
+GHOST_PEER_CHAT_SHIFT = 1 << 48
+GHOST_PEER_CHANNEL_SHIFT = 2 << 48
+
+
+def ghost_peer_long(value):
+    value &= 0xFFFFFFFFFFFFFFFF
+    return [
+        f"{value & 0xFFFFFFFF:x}",
+        f"{(value >> 32) & 0xFFFFFFFF:x}",
+    ]
+
+
+def check_ghost_peer(ledger, cli):
+    before_checks = ledger.checks
+    before_failures = len(ledger.failures)
+
+    user_id = 1000042
+    chat_id = 11
+    channel_id = 2000001
+    access_hash = 0x1122334455667788
+    input_peer_user = "dde8a54c"
+    input_peer_chat = "35a95cb9"
+    input_peer_channel = "27bcbbfc"
+    input_peer_self = "7da07ec9"
+    input_peer_user_from_message = "a87b0a1c"
+    input_channel = "f35aec28"
+
+    def user_peer(value=user_id):
+        return [input_peer_user, *ghost_peer_long(value),
+                *ghost_peer_long(access_hash)]
+
+    def channel_peer(value=channel_id):
+        return [input_peer_channel, *ghost_peer_long(value),
+                *ghost_peer_long(access_hash)]
+
+    def expect(name, type_hex, words, expected):
+        data = json_call(
+            ledger,
+            cli,
+            ["ghost-extract-peer", type_hex, *words],
+            None,
+            f"ghost extract peer {name}")
+        if data is not None:
+            ledger.check(name, data.get("peer") == expected, data)
+
+    expect(
+        "ghost peer readHistory user",
+        GHOST_PEER_READ_HISTORY,
+        [*user_peer(), *ghost_peer_long(0)],
+        user_id)
+    expect(
+        "ghost peer readHistory chat",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_chat, *ghost_peer_long(chat_id),
+         *ghost_peer_long(0)],
+        chat_id + GHOST_PEER_CHAT_SHIFT)
+    expect(
+        "ghost peer readHistory channel",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_channel, *ghost_peer_long(channel_id),
+         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
+        channel_id + GHOST_PEER_CHANNEL_SHIFT)
+    expect(
+        "ghost peer readHistory self",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_self],
+        GHOST_PEER_SELF_KEY)
+    expect(
+        "ghost peer readMentions",
+        GHOST_PEER_READ_MENTIONS,
+        ["0", *user_peer()],
+        user_id)
+    expect(
+        "ghost peer readMentions topic",
+        GHOST_PEER_READ_MENTIONS,
+        ["1", input_peer_channel, *ghost_peer_long(channel_id),
+         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
+        channel_id + GHOST_PEER_CHANNEL_SHIFT)
+    expect(
+        "ghost peer channels readHistory",
+        GHOST_PEER_CHANNELS_READ_HISTORY,
+        [input_channel, *ghost_peer_long(channel_id),
+         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
+        channel_id + GHOST_PEER_CHANNEL_SHIFT)
+    expect(
+        "ghost peer fromMessage",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_user_from_message, *user_peer(), "0",
+         *ghost_peer_long(42)],
+        42)
+    expect(
+        "ghost peer unknown type",
+        GHOST_PEER_READ_CONTENTS,
+        [*user_peer()],
+        None)
+    expect(
+        "ghost peer empty body",
+        GHOST_PEER_READ_HISTORY,
+        [],
+        None)
+    expect(
+        "ghost peer truncated body",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_user, "0"],
+        None)
+    expect(
+        "ghost peer truncated user",
+        GHOST_PEER_READ_HISTORY,
+        [input_peer_user, *ghost_peer_long(user_id), "55667788"],
+        None)
+    expect(
+        "ghost peer savedHistory user",
+        GHOST_PEER_READ_SAVED_HISTORY,
+        [*channel_peer(7), *user_peer(42)],
+        42)
+    expect(
+        "ghost peer savedHistory self",
+        GHOST_PEER_READ_SAVED_HISTORY,
+        [*channel_peer(7), input_peer_self],
+        GHOST_PEER_SELF_KEY)
+    expect(
+        "ghost peer savedHistory truncated parent",
+        GHOST_PEER_READ_SAVED_HISTORY,
+        [input_peer_channel, *ghost_peer_long(7)],
+        None)
+
+    return (
+        ledger.checks - before_checks,
+        len(ledger.failures) - before_failures)
+
+
 def check_deleted_entry(ledger, cli, work):
     before_checks = ledger.checks
     before_failures = len(ledger.failures)
@@ -8692,6 +8829,7 @@ def main():
         stickertime = check_sticker_time(ledger, cli, work)
         pillorder = check_pill_order(ledger, cli, work)
         ghost = check_ghost(ledger, cli, work)
+        ghost_peer = check_ghost_peer(ledger, cli)
         deleted_mark = check_deleted_mark(ledger, cli, work)
         vpn = check_vpn(ledger, cli)
         proxy_rules = check_proxy_rules(ledger, cli)
@@ -8768,6 +8906,7 @@ def main():
     print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
     print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
     print(f"ghost: {ghost[0] - ghost[1]} passed")
+    print(f"ghost-peer: {ghost_peer[0] - ghost_peer[1]} passed")
     print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
     print(f"vpn: {vpn[0] - vpn[1]} passed")
     print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")

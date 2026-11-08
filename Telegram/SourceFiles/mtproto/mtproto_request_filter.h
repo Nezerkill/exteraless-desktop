@@ -8,6 +8,8 @@ namespace MTP {
 struct RequestFilterInfo {
 	mtpRequestId requestId = 0;
 	mtpTypeId type = 0;
+	const mtpPrime *body = nullptr;
+	uint32 bodySize = 0;
 };
 
 enum class RequestFilterResult {

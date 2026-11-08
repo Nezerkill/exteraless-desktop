@@ -1620,7 +1620,7 @@ index 1eb7369..105f8e6 100644
  			data->save(origin, savename);
  			if (started) {
 diff --git a/Telegram/SourceFiles/data/data_histories.cpp b/Telegram/SourceFiles/data/data_histories.cpp
-index b499715..75945d9 100644
+index b499715..7f8d460 100644
 --- a/Telegram/SourceFiles/data/data_histories.cpp
 +++ b/Telegram/SourceFiles/data/data_histories.cpp
 @@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1631,11 +1631,16 @@ index b499715..75945d9 100644
  #include "data/components/welcome_messages.h"
  #include "data/notify/data_notify_settings.h"
  #include "data/data_channel.h"
-@@ -763,6 +764,7 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
+@@ -763,6 +764,12 @@ void Histories::sendReadRequest(not_null<History*> history, State &state) {
  			sendReadRequests();
  			finish();
  		};
-+		Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
++		if (history->peer->isSelf()) {
++			Exteraless::GhostMode::AllowReadPacketsForSelf(
++				history->peer->id);
++		} else {
++			Exteraless::GhostMode::AllowReadPacketsFor(history->peer->id);
++		}
  		if (const auto channel = history->peer->asChannel()) {
  			return session().api().request(MTPchannels_ReadHistory(
  				channel->inputChannel(),
@@ -1792,7 +1797,7 @@ index 7ddd752..5cc03d6 100644
  		_history->peer->input(),
  		MTP_int(_rootId),
 diff --git a/Telegram/SourceFiles/data/data_saved_sublist.cpp b/Telegram/SourceFiles/data/data_saved_sublist.cpp
-index 68290f4..cfe0e9e 100644
+index 68290f4..17a542e 100644
 --- a/Telegram/SourceFiles/data/data_saved_sublist.cpp
 +++ b/Telegram/SourceFiles/data/data_saved_sublist.cpp
 @@ -14,6 +14,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -1803,11 +1808,16 @@ index 68290f4..cfe0e9e 100644
  #include "data/data_messages.h"
  #include "data/data_peer.h"
  #include "data/data_saved_messages.h"
-@@ -708,6 +709,7 @@ void SavedSublist::sendReadTillRequest() {
+@@ -708,6 +709,12 @@ void SavedSublist::sendReadTillRequest() {
  	api->request(base::take(_readRequestId)).cancel();
  
  	_sentReadTill = computeInboxReadTillFull();
-+	Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
++	if (sublistPeer()->isSelf()) {
++		Exteraless::GhostMode::AllowReadPacketsForSelf(
++			sublistPeer()->id);
++	} else {
++		Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
++	}
  	_readRequestId = api->request(MTPmessages_ReadSavedHistory(
  		parentChat->input(),
  		sublistPeer()->input(),
@@ -11926,7 +11936,7 @@ index cb1979b..a5cbae4 100644
  	void requestFinished(
  		const AttemptKey &key,
 diff --git a/Telegram/SourceFiles/mtproto/mtp_instance.cpp b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
-index d25fe3b..59d169d 100644
+index d25fe3b..7989d7c 100644
 --- a/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 +++ b/Telegram/SourceFiles/mtproto/mtp_instance.cpp
 @@ -107,6 +107,7 @@ public:
@@ -11976,7 +11986,7 @@ index d25fe3b..59d169d 100644
  void Instance::Private::ping() {
  	getSession(0)->ping();
  }
-@@ -1028,6 +1047,29 @@ void Instance::Private::sendRequest(
+@@ -1028,6 +1047,33 @@ void Instance::Private::sendRequest(
  		mtpRequestId afterRequestId) {
  	const auto session = getSession(shiftedDcId);
  
@@ -11984,7 +11994,11 @@ index d25fe3b..59d169d 100644
 +		&& request->size() > SerializedRequest::kMessageBodyPosition) {
 +		const auto type = mtpTypeId((*request)[
 +			SerializedRequest::kMessageBodyPosition]);
-+		if (_requestFilter({ requestId, type })
++		const auto bodyStart = (*request).constData()
++			+ SerializedRequest::kMessageBodyPosition;
++		const auto bodySize = uint32(
++			request->size() - SerializedRequest::kMessageBodyPosition);
++		if (_requestFilter({ requestId, type, bodyStart, bodySize })
 +			== RequestFilterResult::Drop) {
 +			auto response = Response();
 +			response.requestId = requestId;
@@ -12006,7 +12020,7 @@ index d25fe3b..59d169d 100644
  	request->requestId = requestId;
  	storeRequest(requestId, request, std::move(callbacks));
  
-@@ -1893,6 +1935,10 @@ void Instance::Private::setUpdatesHandler(
+@@ -1893,6 +1939,10 @@ void Instance::Private::setUpdatesHandler(
  	_updatesHandler = std::move(handler);
  }
  
@@ -12017,7 +12031,7 @@ index d25fe3b..59d169d 100644
  void Instance::Private::setGlobalFailHandler(
  		Fn<void(const Error&, const Response&)> handler) {
  	_globalFailHandler = std::move(handler);
-@@ -2050,6 +2096,10 @@ QString Instance::dctransport(ShiftedDcId shiftedDcId) {
+@@ -2050,6 +2100,10 @@ QString Instance::dctransport(ShiftedDcId shiftedDcId) {
  	return _private->dctransport(shiftedDcId);
  }
  
@@ -12028,7 +12042,7 @@ index d25fe3b..59d169d 100644
  void Instance::ping() {
  	_private->ping();
  }
-@@ -2137,6 +2187,10 @@ void Instance::setGlobalFailHandler(
+@@ -2137,6 +2191,10 @@ void Instance::setGlobalFailHandler(
  	_private->setGlobalFailHandler(std::move(handler));
  }
  
@@ -12069,10 +12083,10 @@ index eeb56d2..ca3859b 100644
  	void setStateChangedHandler(
 diff --git a/Telegram/SourceFiles/mtproto/mtproto_request_filter.h b/Telegram/SourceFiles/mtproto/mtproto_request_filter.h
 new file mode 100644
-index 0000000..5e394d8
+index 0000000..993ee5c
 --- /dev/null
 +++ b/Telegram/SourceFiles/mtproto/mtproto_request_filter.h
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,22 @@
 +#pragma once
 +
 +#include "base/basic_types.h"
@@ -12083,6 +12097,8 @@ index 0000000..5e394d8
 +struct RequestFilterInfo {
 +	mtpRequestId requestId = 0;
 +	mtpTypeId type = 0;
++	const mtpPrime *body = nullptr;
++	uint32 bodySize = 0;
 +};
 +
 +enum class RequestFilterResult {
@@ -23932,10 +23948,10 @@ index 0000000..8eb3d82
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.cpp b/exteraless/ghost_mode.cpp
 new file mode 100644
-index 0000000..d19d19c
+index 0000000..4be73a2
 --- /dev/null
 +++ b/exteraless/ghost_mode.cpp
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,333 @@
 +#include "exteraless/ghost_mode.h"
 +
 +#include "exteraless/config.h"
@@ -23943,7 +23959,9 @@ index 0000000..d19d19c
 +
 +#include <crl/crl.h>
 +
++#include <array>
 +#include <atomic>
++#include <mutex>
 +
 +namespace Exteraless {
 +namespace {
@@ -23959,9 +23977,31 @@ index 0000000..d19d19c
 +constexpr auto kIncrementStoryViews = mtpTypeId(0xb2028afb);
 +constexpr auto kReadDiscussion = mtpTypeId(0xf731a9f4);
 +constexpr auto kReadSavedHistory = mtpTypeId(0xba4a3b5b);
++constexpr auto kReadMentions = mtpTypeId(0x36e5bf4d);
 +
-+std::atomic<int> Allowance = 0;
-+std::atomic<crl::time> AllowanceUntil = 0;
++constexpr auto kInputPeerEmpty = mtpTypeId(0x7f3b18ea);
++constexpr auto kInputPeerSelf = mtpTypeId(0x7da07ec9);
++constexpr auto kInputPeerChat = mtpTypeId(0x35a95cb9);
++constexpr auto kInputPeerUser = mtpTypeId(0xdde8a54c);
++constexpr auto kInputPeerChannel = mtpTypeId(0x27bcbbfc);
++constexpr auto kInputPeerUserFromMessage = mtpTypeId(0xa87b0a1c);
++constexpr auto kInputPeerChannelFromMessage = mtpTypeId(0xbd2a0840);
++constexpr auto kInputChannel = mtpTypeId(0xf35aec28);
++constexpr auto kInputChannelFromMessage = mtpTypeId(0x5b934f9d);
++
++constexpr auto kSelfPeerKey = qint64(-1); // WHY: inputPeerSelf carries no id.
++
++struct ReadSlot {
++	qint64 peerKey = 0;
++	int remaining = 0;
++	crl::time until = 0;
++};
++
++constexpr auto kReadSlots = 4;
++
++std::mutex ReadAllowanceLock;
++std::array<ReadSlot, kReadSlots> ReadSlots;
++
 +std::atomic<int> TypingAllowance = 0;
 +std::atomic<crl::time> TypingAllowanceUntil = 0;
 +std::atomic<int> StoryAllowance = 0;
@@ -23969,6 +24009,162 @@ index 0000000..d19d19c
 +
 +[[nodiscard]] qint64 PeerKey(PeerId peerId) {
 +	return qint64(peerId.value);
++}
++
++[[nodiscard]] BareId ReadLong(const mtpPrime *from) {
++	return BareId(quint32(from[0])) | (BareId(quint32(from[1])) << 32);
++}
++
++[[nodiscard]] const mtpPrime *SkipInputPeer(
++		const mtpPrime *from,
++		const mtpPrime *end) {
++	if (from >= end) {
++		return end;
++	}
++	switch (mtpTypeId(*from)) {
++	case kInputPeerEmpty:
++	case kInputPeerSelf:
++		return from + 1;
++	case kInputPeerChat:
++		return from + 3;
++	case kInputPeerUser:
++	case kInputPeerChannel:
++		return from + 5;
++	case kInputPeerUserFromMessage:
++	case kInputPeerChannelFromMessage: {
++		const auto nested = SkipInputPeer(from + 1, end);
++		return (end - nested >= 3) ? (nested + 3) : end;
++	}
++	default:
++		return end;
++	}
++}
++
++[[nodiscard]] qint64 InputPeerKey(const mtpPrime *from, const mtpPrime *end) {
++	if (from >= end) {
++		return 0;
++	}
++	const auto available = end - from;
++	switch (mtpTypeId(*from)) {
++	case kInputPeerSelf:
++		return kSelfPeerKey;
++	case kInputPeerUser:
++		return (available >= 5)
++			? PeerKey(peerFromUser(UserId(ReadLong(from + 1))))
++			: 0;
++	case kInputPeerChat:
++		return (available >= 3)
++			? PeerKey(peerFromChat(ChatId(ReadLong(from + 1))))
++			: 0;
++	case kInputPeerChannel:
++		return (available >= 5)
++			? PeerKey(peerFromChannel(ChannelId(ReadLong(from + 1))))
++			: 0;
++	case kInputPeerUserFromMessage:
++	case kInputPeerChannelFromMessage: {
++		const auto nested = SkipInputPeer(from + 1, end);
++		if (end - nested < 3) {
++			return 0;
++		}
++		const auto id = ReadLong(nested + 1);
++		return (mtpTypeId(*from) == kInputPeerUserFromMessage)
++			? PeerKey(peerFromUser(UserId(id)))
++			: PeerKey(peerFromChannel(ChannelId(id)));
++	}
++	default:
++		return 0;
++	}
++}
++
++[[nodiscard]] qint64 InputChannelKey(
++		const mtpPrime *from,
++		const mtpPrime *end) {
++	if (from >= end) {
++		return 0;
++	}
++	const auto available = end - from;
++	switch (mtpTypeId(*from)) {
++	case kInputChannel:
++		return (available >= 5)
++			? PeerKey(peerFromChannel(ChannelId(ReadLong(from + 1))))
++			: 0;
++	case kInputChannelFromMessage: {
++		const auto nested = SkipInputPeer(from + 1, end);
++		return (end - nested >= 3)
++			? PeerKey(peerFromChannel(ChannelId(ReadLong(nested + 1))))
++			: 0;
++	}
++	default:
++		return 0;
++	}
++}
++
++[[nodiscard]] qint64 ExtractPeerKey(const MTP::RequestFilterInfo &info) {
++	if (!info.body || !info.bodySize) {
++		return 0;
++	}
++	const auto end = info.body + info.bodySize;
++	switch (info.type) {
++	case kReadHistory:
++	case kReadDiscussion:
++		return InputPeerKey(info.body + 1, end);
++	case kReadMentions:
++		return InputPeerKey(info.body + 2, end);
++	case kChannelsReadHistory:
++		return InputChannelKey(info.body + 1, end);
++	case kReadSavedHistory: {
++		const auto second = SkipInputPeer(info.body + 1, end);
++		return InputPeerKey(second, end);
++	}
++	default:
++		return 0;
++	}
++}
++
++[[nodiscard]] ReadSlot *FindReadSlot(qint64 peerKey, crl::time now) {
++	for (auto &slot : ReadSlots) {
++		if (slot.peerKey == peerKey
++			&& slot.remaining > 0
++			&& now <= slot.until) {
++			return &slot;
++		}
++	}
++	return nullptr;
++}
++
++[[nodiscard]] ReadSlot &ReserveReadSlot(qint64 peerKey, crl::time now) {
++	ReadSlot *free = nullptr;
++	auto oldest = &ReadSlots.front();
++	for (auto &slot : ReadSlots) {
++		if (slot.peerKey == peerKey) {
++			return slot;
++		}
++		if (!free && (slot.remaining <= 0 || now > slot.until)) {
++			free = &slot;
++		}
++		if (slot.until < oldest->until) {
++			oldest = &slot;
++		}
++	}
++	return *(free ? free : oldest);
++}
++
++[[nodiscard]] bool ConsumeReadSlot(qint64 peerKey, crl::time now) {
++	const auto slot = FindReadSlot(peerKey, now);
++	if (!slot) {
++		return false;
++	}
++	--slot->remaining;
++	return true;
++}
++
++void AllowReadSlot(qint64 peerKey, int count) {
++	const auto now = crl::now();
++	auto guard = std::lock_guard(ReadAllowanceLock);
++	auto &slot = ReserveReadSlot(peerKey, now);
++	slot.peerKey = peerKey;
++	slot.remaining = count;
++	slot.until = now + kAllowanceTtl;
 +}
 +
 +[[nodiscard]] bool IsReadRequest(mtpTypeId type) {
@@ -23995,7 +24191,7 @@ index 0000000..d19d19c
 +
 +	auto &config = Config::Instance();
 +	if (IsReadRequest(info.type)) {
-+		if (ConsumeReadAllowance()) {
++		if (ConsumeReadAllowance(ExtractPeerKey(info))) {
 +			return MTP::RequestFilterResult::Pass;
 +		}
 +		return config.ghostSendReadPackets()
@@ -24024,13 +24220,18 @@ index 0000000..d19d19c
 +}
 +
 +void GhostMode::AllowReadPackets(int count) {
-+	Allowance.store(count);
-+	AllowanceUntil.store(crl::now() + kAllowanceTtl);
++	AllowReadSlot(0, count);
 +}
 +
 +void GhostMode::AllowReadPacketsFor(PeerId peerId) {
 +	if (Config::Instance().ghostReadExcluded(PeerKey(peerId))) {
-+		AllowReadPackets(1);
++		AllowReadSlot(PeerKey(peerId), 1);
++	}
++}
++
++void GhostMode::AllowReadPacketsForSelf(PeerId selfId) {
++	if (Config::Instance().ghostReadExcluded(PeerKey(selfId))) {
++		AllowReadSlot(kSelfPeerKey, 1);
 +	}
 +}
 +
@@ -24056,11 +24257,13 @@ index 0000000..d19d19c
 +	StoryAllowanceUntil.store(crl::now() + kAllowanceTtl);
 +}
 +
-+bool GhostMode::ConsumeReadAllowance() {
-+	if (Allowance.load() <= 0 || crl::now() > AllowanceUntil.load()) {
-+		return false;
++bool GhostMode::ConsumeReadAllowance(qint64 peerKey) {
++	const auto now = crl::now();
++	auto guard = std::lock_guard(ReadAllowanceLock);
++	if (peerKey && ConsumeReadSlot(peerKey, now)) {
++		return true;
 +	}
-+	return Allowance.fetch_sub(1) > 0;
++	return ConsumeReadSlot(0, now); // WHY: no peer slot keeps the old global allowance.
 +}
 +
 +bool GhostMode::ConsumeTypingAllowance() {
@@ -24084,10 +24287,10 @@ index 0000000..d19d19c
 +} // namespace Exteraless
 diff --git a/exteraless/ghost_mode.h b/exteraless/ghost_mode.h
 new file mode 100644
-index 0000000..d87ffc2
+index 0000000..b1bc07a
 --- /dev/null
 +++ b/exteraless/ghost_mode.h
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,33 @@
 +#pragma once
 +
 +#include "exteraless/ghost_status.h"
@@ -24106,11 +24309,12 @@ index 0000000..d87ffc2
 +	static MTP::RequestFilterResult Filter(const MTP::RequestFilterInfo &info);
 +	static void AllowReadPackets(int count = 1);
 +	static void AllowReadPacketsFor(PeerId peerId);
++	static void AllowReadPacketsForSelf(PeerId selfId);
 +	static void AllowTypingPacketsFor(PeerId peerId);
 +	static void AllowStoryPacketsFor(PeerId peerId);
 +
 +private:
-+	static bool ConsumeReadAllowance();
++	static bool ConsumeReadAllowance(qint64 peerKey);
 +	static bool ConsumeTypingAllowance();
 +	static bool ConsumeStoryAllowance();
 +	static void AllowTypingPackets(int count);
@@ -27077,10 +27281,10 @@ index 0000000..05215b8
 +)
 diff --git a/exteraless/tests/chats/chats_cli.cpp b/exteraless/tests/chats/chats_cli.cpp
 new file mode 100644
-index 0000000..4b7c6cf
+index 0000000..b462e57
 --- /dev/null
 +++ b/exteraless/tests/chats/chats_cli.cpp
-@@ -0,0 +1,3448 @@
+@@ -0,0 +1,3644 @@
 +#include "exteraless/ai_client.h"
 +#include "exteraless/ayu_import.h"
 +#include "exteraless/backup.h"
@@ -27122,6 +27326,7 @@ index 0000000..4b7c6cf
 +#include <algorithm>
 +#include <array>
 +#include <iostream>
++#include <optional>
 +#include <vector>
 +
 +namespace {
@@ -27184,6 +27389,8 @@ index 0000000..4b7c6cf
 +		<< "<sendOnline> <self> <secret> <bot> <user>\n"
 +		<< "  exteraless-chats-cli ghost-lock <read> <stories> <online> "
 +		<< "<typing>\n"
++		<< "  exteraless-chats-cli ghost-extract-peer <type-hex> "
++		<< "[<word-hex>...]\n"
 +		<< "  exteraless-chats-cli deletedmark\n"
 +		<< "  exteraless-chats-cli deletedmark-set <translucent> <icon> "
 +		<< "<mark> <color>\n"
@@ -27776,6 +27983,175 @@ index 0000000..4b7c6cf
 +		{ QStringLiteral("mainconfig"),
 +			object.value(QStringLiteral("mainconfig")).toObject() },
 +	});
++}
++
++// WHY: GhostMode::ExtractPeerKey lives in ghost_mode.cpp, which only the
++// Telegram target compiles, so this copy of its peer parsing keeps the CLI
++// linkable; ghost-extract-peer mirrors that helper's contract exactly.
++constexpr auto kGhostReadHistory = quint32(0x0e306d3a);
++constexpr auto kGhostReadMentions = quint32(0x36e5bf4d);
++constexpr auto kGhostReadDiscussion = quint32(0xf731a9f4);
++constexpr auto kGhostChannelsReadHistory = quint32(0xcc104937);
++
++constexpr auto kGhostInputPeerEmpty = quint32(0x7f3b18ea);
++constexpr auto kGhostInputPeerSelf = quint32(0x7da07ec9);
++constexpr auto kGhostInputPeerChat = quint32(0x35a95cb9);
++constexpr auto kGhostInputPeerUser = quint32(0xdde8a54c);
++constexpr auto kGhostInputPeerChannel = quint32(0x27bcbbfc);
++constexpr auto kGhostInputPeerUserFromMessage = quint32(0xa87b0a1c);
++constexpr auto kGhostInputPeerChannelFromMessage = quint32(0xbd2a0840);
++constexpr auto kGhostInputChannel = quint32(0xf35aec28);
++constexpr auto kGhostInputChannelFromMessage = quint32(0x5b934f9d);
++constexpr auto kGhostReadSavedHistory = quint32(0xba4a3b5b);
++constexpr auto kGhostSelfPeerKey = qint64(-1);
++
++constexpr auto kGhostChatShift = quint64(1);
++constexpr auto kGhostChannelShift = quint64(2);
++constexpr auto kGhostShiftOffset = 48;
++
++[[nodiscard]] qint64 GhostPeerKey(quint64 bare, quint64 shift) {
++	return qint64(bare | (shift << kGhostShiftOffset));
++}
++
++[[nodiscard]] std::optional<qint64> GhostReadLong(
++		const std::vector<quint32> &buffer,
++		int pos) {
++	if (pos < 0 || pos + 1 >= int(buffer.size())) {
++		return std::nullopt;
++	}
++	return qint64(quint64(buffer[pos]) | (quint64(buffer[pos + 1]) << 32));
++}
++
++[[nodiscard]] int GhostSkipInputPeer(
++		const std::vector<quint32> &buffer,
++		int pos) {
++	const auto end = int(buffer.size());
++	if (pos >= end) {
++		return end;
++	}
++	switch (buffer[pos]) {
++	case kGhostInputPeerEmpty:
++	case kGhostInputPeerSelf:
++		return pos + 1;
++	case kGhostInputPeerChat:
++		return pos + 3;
++	case kGhostInputPeerUser:
++	case kGhostInputPeerChannel:
++		return pos + 5;
++	case kGhostInputPeerUserFromMessage:
++	case kGhostInputPeerChannelFromMessage: {
++		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
++		return (end - nested >= 3) ? (nested + 3) : end;
++	}
++	default:
++		return end;
++	}
++}
++
++[[nodiscard]] std::optional<qint64> GhostInputPeerKey(
++		const std::vector<quint32> &buffer,
++		int pos) {
++	const auto end = int(buffer.size());
++	if (pos >= end) {
++		return std::nullopt;
++	}
++	const auto available = end - pos;
++	switch (buffer[pos]) {
++	case kGhostInputPeerSelf:
++		return kGhostSelfPeerKey;
++	case kGhostInputPeerUser: {
++		const auto id = (available >= 5)
++			? GhostReadLong(buffer, pos + 1)
++			: std::nullopt;
++		return id ? std::optional<qint64>(GhostPeerKey(*id, 0))
++			: std::nullopt;
++	}
++	case kGhostInputPeerChat: {
++		const auto id = (available >= 3)
++			? GhostReadLong(buffer, pos + 1)
++			: std::nullopt;
++		return id ? std::optional<qint64>(
++			GhostPeerKey(*id, kGhostChatShift)) : std::nullopt;
++	}
++	case kGhostInputPeerChannel: {
++		const auto id = (available >= 5)
++			? GhostReadLong(buffer, pos + 1)
++			: std::nullopt;
++		return id ? std::optional<qint64>(
++			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
++	}
++	case kGhostInputPeerUserFromMessage:
++	case kGhostInputPeerChannelFromMessage: {
++		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
++		if (end - nested < 3) {
++			return std::nullopt;
++		}
++		const auto id = GhostReadLong(buffer, nested + 1);
++		if (!id) {
++			return std::nullopt;
++		}
++		return GhostPeerKey(
++			*id,
++			(buffer[pos] == kGhostInputPeerUserFromMessage)
++				? 0
++				: kGhostChannelShift);
++	}
++	default:
++		return std::nullopt;
++	}
++}
++
++[[nodiscard]] std::optional<qint64> GhostInputChannelKey(
++		const std::vector<quint32> &buffer,
++		int pos) {
++	const auto end = int(buffer.size());
++	if (pos >= end) {
++		return std::nullopt;
++	}
++	const auto available = end - pos;
++	switch (buffer[pos]) {
++	case kGhostInputChannel: {
++		const auto id = (available >= 5)
++			? GhostReadLong(buffer, pos + 1)
++			: std::nullopt;
++		return id ? std::optional<qint64>(
++			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
++	}
++	case kGhostInputChannelFromMessage: {
++		const auto nested = GhostSkipInputPeer(buffer, pos + 1);
++		if (end - nested < 3) {
++			return std::nullopt;
++		}
++		const auto id = GhostReadLong(buffer, nested + 1);
++		return id ? std::optional<qint64>(
++			GhostPeerKey(*id, kGhostChannelShift)) : std::nullopt;
++	}
++	default:
++		return std::nullopt;
++	}
++}
++
++[[nodiscard]] std::optional<qint64> GhostExtractPeerKey(
++		const std::vector<quint32> &buffer,
++		quint32 type) {
++	if (buffer.empty()) {
++		return std::nullopt;
++	}
++	switch (type) {
++	case kGhostReadHistory:
++	case kGhostReadDiscussion:
++		return GhostInputPeerKey(buffer, 1);
++	case kGhostReadMentions:
++		return GhostInputPeerKey(buffer, 2);
++	case kGhostChannelsReadHistory:
++		return GhostInputChannelKey(buffer, 1);
++	case kGhostReadSavedHistory: {
++		const auto second = GhostSkipInputPeer(buffer, 1);
++		return GhostInputPeerKey(buffer, second);
++	}
++	default:
++		return std::nullopt;
++	}
 +}
 +
 +} // namespace
@@ -30032,6 +30408,30 @@ index 0000000..4b7c6cf
 +		PrintGhost();
 +		return 0;
 +	}
++	if (mode == QStringLiteral("ghost-extract-peer")) {
++		if (arguments.size() < 3) {
++			return PrintUsage();
++		}
++		auto ok = false;
++		const auto type = arguments[2].toUInt(&ok, 16);
++		if (!ok) {
++			return PrintUsage();
++		}
++		auto buffer = std::vector<quint32>{ type };
++		for (auto i = 3; i != arguments.size(); ++i) {
++			const auto word = arguments[i].toUInt(&ok, 16);
++			if (!ok) {
++				return PrintUsage();
++			}
++			buffer.push_back(word);
++		}
++		const auto peer = GhostExtractPeerKey(buffer, type);
++		PrintJson(QJsonObject{
++			{ QStringLiteral("peer"),
++				peer ? QJsonValue(qint64(*peer)) : QJsonValue() },
++		});
++		return 0;
++	}
 +	if (mode == QStringLiteral("pillorder")) {
 +		if (arguments.size() != 2) {
 +			return PrintUsage();
@@ -31013,10 +31413,10 @@ index 0000000..3626c71
 +[00:04.50]Plain line
 diff --git a/exteraless/tests/chats/run_checks.py b/exteraless/tests/chats/run_checks.py
 new file mode 100755
-index 0000000..3c0b58c
+index 0000000..34c708b
 --- /dev/null
 +++ b/exteraless/tests/chats/run_checks.py
-@@ -0,0 +1,8853 @@
+@@ -0,0 +1,8992 @@
 +#!/usr/bin/env python3
 +"""Regression checks for the Exteraless chats helpers and config/backup."""
 +
@@ -33840,6 +34240,143 @@ index 0000000..3c0b58c
 +            and reloaded.get("onlineLocked") is True
 +            and reloaded.get("unlocked") == 2,
 +            reloaded)
++
++    return (
++        ledger.checks - before_checks,
++        len(ledger.failures) - before_failures)
++
++
++GHOST_PEER_READ_HISTORY = "0e306d3a"
++GHOST_PEER_READ_MENTIONS = "36e5bf4d"
++GHOST_PEER_CHANNELS_READ_HISTORY = "cc104937"
++GHOST_PEER_READ_CONTENTS = "36a73f77"
++GHOST_PEER_READ_SAVED_HISTORY = "ba4a3b5b"
++GHOST_PEER_SELF_KEY = -1
++GHOST_PEER_CHAT_SHIFT = 1 << 48
++GHOST_PEER_CHANNEL_SHIFT = 2 << 48
++
++
++def ghost_peer_long(value):
++    value &= 0xFFFFFFFFFFFFFFFF
++    return [
++        f"{value & 0xFFFFFFFF:x}",
++        f"{(value >> 32) & 0xFFFFFFFF:x}",
++    ]
++
++
++def check_ghost_peer(ledger, cli):
++    before_checks = ledger.checks
++    before_failures = len(ledger.failures)
++
++    user_id = 1000042
++    chat_id = 11
++    channel_id = 2000001
++    access_hash = 0x1122334455667788
++    input_peer_user = "dde8a54c"
++    input_peer_chat = "35a95cb9"
++    input_peer_channel = "27bcbbfc"
++    input_peer_self = "7da07ec9"
++    input_peer_user_from_message = "a87b0a1c"
++    input_channel = "f35aec28"
++
++    def user_peer(value=user_id):
++        return [input_peer_user, *ghost_peer_long(value),
++                *ghost_peer_long(access_hash)]
++
++    def channel_peer(value=channel_id):
++        return [input_peer_channel, *ghost_peer_long(value),
++                *ghost_peer_long(access_hash)]
++
++    def expect(name, type_hex, words, expected):
++        data = json_call(
++            ledger,
++            cli,
++            ["ghost-extract-peer", type_hex, *words],
++            None,
++            f"ghost extract peer {name}")
++        if data is not None:
++            ledger.check(name, data.get("peer") == expected, data)
++
++    expect(
++        "ghost peer readHistory user",
++        GHOST_PEER_READ_HISTORY,
++        [*user_peer(), *ghost_peer_long(0)],
++        user_id)
++    expect(
++        "ghost peer readHistory chat",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_chat, *ghost_peer_long(chat_id),
++         *ghost_peer_long(0)],
++        chat_id + GHOST_PEER_CHAT_SHIFT)
++    expect(
++        "ghost peer readHistory channel",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_channel, *ghost_peer_long(channel_id),
++         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
++        channel_id + GHOST_PEER_CHANNEL_SHIFT)
++    expect(
++        "ghost peer readHistory self",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_self],
++        GHOST_PEER_SELF_KEY)
++    expect(
++        "ghost peer readMentions",
++        GHOST_PEER_READ_MENTIONS,
++        ["0", *user_peer()],
++        user_id)
++    expect(
++        "ghost peer readMentions topic",
++        GHOST_PEER_READ_MENTIONS,
++        ["1", input_peer_channel, *ghost_peer_long(channel_id),
++         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
++        channel_id + GHOST_PEER_CHANNEL_SHIFT)
++    expect(
++        "ghost peer channels readHistory",
++        GHOST_PEER_CHANNELS_READ_HISTORY,
++        [input_channel, *ghost_peer_long(channel_id),
++         *ghost_peer_long(access_hash), *ghost_peer_long(0)],
++        channel_id + GHOST_PEER_CHANNEL_SHIFT)
++    expect(
++        "ghost peer fromMessage",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_user_from_message, *user_peer(), "0",
++         *ghost_peer_long(42)],
++        42)
++    expect(
++        "ghost peer unknown type",
++        GHOST_PEER_READ_CONTENTS,
++        [*user_peer()],
++        None)
++    expect(
++        "ghost peer empty body",
++        GHOST_PEER_READ_HISTORY,
++        [],
++        None)
++    expect(
++        "ghost peer truncated body",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_user, "0"],
++        None)
++    expect(
++        "ghost peer truncated user",
++        GHOST_PEER_READ_HISTORY,
++        [input_peer_user, *ghost_peer_long(user_id), "55667788"],
++        None)
++    expect(
++        "ghost peer savedHistory user",
++        GHOST_PEER_READ_SAVED_HISTORY,
++        [*channel_peer(7), *user_peer(42)],
++        42)
++    expect(
++        "ghost peer savedHistory self",
++        GHOST_PEER_READ_SAVED_HISTORY,
++        [*channel_peer(7), input_peer_self],
++        GHOST_PEER_SELF_KEY)
++    expect(
++        "ghost peer savedHistory truncated parent",
++        GHOST_PEER_READ_SAVED_HISTORY,
++        [input_peer_channel, *ghost_peer_long(7)],
++        None)
 +
 +    return (
 +        ledger.checks - before_checks,
@@ -39711,6 +40248,7 @@ index 0000000..3c0b58c
 +        stickertime = check_sticker_time(ledger, cli, work)
 +        pillorder = check_pill_order(ledger, cli, work)
 +        ghost = check_ghost(ledger, cli, work)
++        ghost_peer = check_ghost_peer(ledger, cli)
 +        deleted_mark = check_deleted_mark(ledger, cli, work)
 +        vpn = check_vpn(ledger, cli)
 +        proxy_rules = check_proxy_rules(ledger, cli)
@@ -39787,6 +40325,7 @@ index 0000000..3c0b58c
 +    print(f"stickertime: {stickertime[0] - stickertime[1]} passed")
 +    print(f"pillorder: {pillorder[0] - pillorder[1]} passed")
 +    print(f"ghost: {ghost[0] - ghost[1]} passed")
++    print(f"ghost-peer: {ghost_peer[0] - ghost_peer[1]} passed")
 +    print(f"deletedmark: {deleted_mark[0] - deleted_mark[1]} passed")
 +    print(f"vpn: {vpn[0] - vpn[1]} passed")
 +    print(f"proxy-rules: {proxy_rules[0] - proxy_rules[1]} passed")

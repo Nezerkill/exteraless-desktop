@@ -1,6 +1,6 @@
 # Статус порта Exteraless Desktop
 
-Обновлено: 2026-11-07.
+Обновлено: 2026-11-08.
 
 ## Готово
 
@@ -99,10 +99,23 @@
   `OEGhostSendOfflineAfterOnlineLocked` удалены из config, `.extera` и UI;
   в `.extera` осталось 86 ключей. CLI-тесты PASS (363), Xvfb не требовался —
   изменение только удаляет неиспользуемую настройку.
-- Chats: `exteraless/tests/chats/run_checks.py` — 1167 проверок PASS
+- Ghost-allowance (NB-43): разрешение на read-квитанцию привязано к peer.
+  `MTP::RequestFilterInfo` получил `body`/`bodySize` (send-сигнатуры не
+  менялись), `Allowance` — 4 слота под мьютексом (`peerKey`/`remaining`/
+  `until`), `ExtractPeerKey` достаёт peer из тела (`readHistory`,
+  `Discussion`, `Mentions`, `channels.readHistory`, `ReadSavedHistory` —
+  второй peer; `inputPeerSelf` → `kSelfPeerKey = -1`; неизвестное → `0` =
+  глобал), `AllowReadPacketsForSelf(PeerId)` и isSelf-ветки в
+  `data_histories`/`saved_sublist`. CLI `ghost-extract-peer`,
+  `check_ghost_peer` — 15 проверок, раннеры 1182/32/279 PASS (backup 105);
+  `kKeysCount` 11248 без изменений; патч `74a6864b…`, flake PASS. Не
+  сделано: `readMessageContents` без peer не привязать; `inputPeerSelf` в
+  CLI — только через mirror. Ограничения: hand-парсинг TL (нестабилен к
+  смене раскладки); Xvfb-смоук не выполнялся.
+- Chats: `exteraless/tests/chats/run_checks.py` — 1182 проверок PASS
   (57 strip, 10 reactions, 63 CLI, 7 config, 22 general, 9 bot-privacy,
   27 deleted, 7 deleted-entry, 7 reset, 8 workdir, 8 menu, 24 doubletap,
-  14 stickertime, 11 pillorder, 19 ghost, 10 deletedmark, 10 vpn,
+  14 stickertime, 11 pillorder, 19 ghost, 15 ghost-peer, 10 deletedmark, 10 vpn,
   6 proxy-rules, 15 pangu, 17 zalgo, 5 silent, 5 sections, 5 ai-editor,
   19 pluginops, 5 send-as, 5 profile-buttons, 31 inline-math,
   15 save-subfolder, 12 ghost-schedule, 8 seek-duration, 21 sticker-size,
@@ -1086,8 +1099,7 @@
   не покрыты, preload/streaming остались 128K, CLI и раннеры проверяют
   только парсер — проверки меню и пер-видео памяти нет, Xvfb-смоук не
   выполнялся, `nix flake check` не запускался в docs-задаче.
-- Отложены: NB-33 (item виден, нужна sidecar-цитата),
-  NB-43 (peer в MTP-фильтре).
+- Отложены: NB-33 (item виден, нужна sidecar-цитата).
 - Ghost scheduled send (NB-23): `OEGhostScheduledSend` (default `false`) при
   активном online-ghost отправляет новые текстовые сообщения как отложенные
   на 12 секунд (`SendOptions.scheduled`), исключая self, ботов и секретные

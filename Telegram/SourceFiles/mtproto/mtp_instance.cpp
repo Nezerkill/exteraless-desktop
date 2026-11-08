@@ -1051,7 +1051,11 @@ void Instance::Private::sendRequest(
 		&& request->size() > SerializedRequest::kMessageBodyPosition) {
 		const auto type = mtpTypeId((*request)[
 			SerializedRequest::kMessageBodyPosition]);
-		if (_requestFilter({ requestId, type })
+		const auto bodyStart = (*request).constData()
+			+ SerializedRequest::kMessageBodyPosition;
+		const auto bodySize = uint32(
+			request->size() - SerializedRequest::kMessageBodyPosition);
+		if (_requestFilter({ requestId, type, bodyStart, bodySize })
 			== RequestFilterResult::Drop) {
 			auto response = Response();
 			response.requestId = requestId;

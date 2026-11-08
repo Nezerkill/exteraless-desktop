@@ -709,7 +709,12 @@ void SavedSublist::sendReadTillRequest() {
 	api->request(base::take(_readRequestId)).cancel();
 
 	_sentReadTill = computeInboxReadTillFull();
-	Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
+	if (sublistPeer()->isSelf()) {
+		Exteraless::GhostMode::AllowReadPacketsForSelf(
+			sublistPeer()->id);
+	} else {
+		Exteraless::GhostMode::AllowReadPacketsFor(sublistPeer()->id);
+	}
 	_readRequestId = api->request(MTPmessages_ReadSavedHistory(
 		parentChat->input(),
 		sublistPeer()->input(),
