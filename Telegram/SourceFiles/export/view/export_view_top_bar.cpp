@@ -29,7 +29,7 @@ TopBar::TopBar(QWidget *parent, Content &&content)
 , _shadow(this)
 , _progress(this, st::mediaPlayerPlayback)
 , _button(this) {
-	resize(width(), st::mediaPlayerHeight + st::lineWidth);
+	resize(width(), st::exportTopBarHeight + st::lineWidth);
 	_infoMiddle->setElisionMiddle(true);
 	_progress->setAttribute(Qt::WA_TransparentForMouseEvents);
 	updateData(std::move(content));
@@ -108,7 +108,7 @@ void TopBar::resizeEvent(QResizeEvent *e) {
 void TopBar::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
 	auto fill = e->rect().intersected(
-		QRect(0, 0, width(), st::mediaPlayerHeight + st::lineWidth));
+		QRect(0, 0, width(), st::exportTopBarHeight + st::lineWidth));
 	if (!fill.isEmpty()) {
 		p.fillRect(fill, st::mediaPlayerBg);
 	}

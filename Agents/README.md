@@ -69,6 +69,9 @@ sibling-чекаутом: `../exteraless`.
     `OELyricsAllowNetwork` с диск-кэшем `tdata/lrclib` на 30 дней и
     псевдо-путём `lrclib:<docId>`; пункт «Find Lyrics Online» в меню
     медиавьюера — только при включённом гейте.
+  - `media_player.*` — рестайл мини-плеера v1 (NB-50): скруглённая обложка,
+    MD3-типографика, pill-сикбар; всё через `media_player.style`
+    (`mediaPlayerHeight: 42px`); экспорт отвязан отдельным ключом.
   - `stt.*` — офлайн-распознавание речи (NB-51): sherpa-onnx 1.13.8 из
     pinned nixpkgs (`buildInputs` + FOD модели + `EXTERALESS_STT_MODEL`),
     WAV-декод + собственный реземплер в mono 16k, `TranscribePcm`

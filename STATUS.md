@@ -130,6 +130,10 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 11 ayu-import, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- MD3-рестайл мини-плеера (NB-50, v1): скруглённая обложка, MD3-типографика,
+  новый сикбар; всё через `media_player.style` (`mediaPlayerHeight: 42px`);
+  экспортная полоса отвязана (`exportTopBarHeight: 35px`); раннеры
+  1182/32/279 PASS (без изменений).
 - Импорт базы AyuGram (NB-21): `exteraless/ayu_import.{h,cpp}` читает чужую
   БД через QSQLITE только на чтение (`immutable=1` как fallback), версия
   схемы `PRAGMA user_version` вне `[21,27]` — отказ; 11 колонок

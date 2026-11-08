@@ -9,10 +9,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "platform/platform_specific.h"
 #include "data/data_document.h"
+#include "data/data_document_media.h"
+#include "data/data_file_origin.h"
 #include "data/data_session.h"
 #include "data/data_peer.h"
 #include "core/application.h"
 #include "core/core_settings.h"
+#include "ui/image/image.h"
+#include "ui/painter.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/continuous_sliders.h"
 #include "ui/widgets/shadow.h"
@@ -38,8 +42,23 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/window_session_controller.h"
 #include "styles/style_media_player.h"
 
+#include <QtGui/QPainterPath>
+
 namespace Media {
 namespace Player {
+namespace {
+
+[[nodiscard]] Image *CoverImage(
+		const std::shared_ptr<Data::DocumentMedia> &media) {
+	if (!media) {
+		return nullptr;
+	}
+	return media->thumbnail()
+		? media->thumbnail()
+		: media->thumbnailInline();
+}
+
+} // namespace
 
 Widget::Widget(
 	QWidget *parent,
@@ -48,7 +67,8 @@ Widget::Widget(
 : RpWidget(parent)
 , _controller(controller)
 , _orderMenuParent(dropdownsParent)
-, _nameLabel(this, st::mediaPlayerName)
+, _nameLabel(this, st::mediaPlayerTitle)
+, _performerLabel(this, st::mediaPlayerPerformer)
 , _rightControls(this, object_ptr<Ui::RpWidget>(this))
 , _timeLabel(rightControls(), st::mediaPlayerTime)
 , _playPause(this, st::mediaPlayerPlayButton)
@@ -58,7 +78,7 @@ Widget::Widget(
 , _speedToggle(rightControls(), st::mediaPlayerSpeedButton)
 , _close(this, st::mediaPlayerClose)
 , _shadow(this)
-, _playbackSlider(this, st::mediaPlayerPlayback)
+, _playbackSlider(this, st::mediaPlayerSeekInput)
 , _volume(std::in_place, dropdownsParent.get())
 , _playbackProgress(std::make_unique<View::PlaybackProgress>())
 , _orderController(
@@ -98,6 +118,7 @@ Widget::Widget(
 	_close->setAccessibleName(tr::lng_sr_player_close(tr::now));
 
 	_nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+	_performerLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 	_timeLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 
 	_playbackProgress->setInLoadingStateChangedCallback([=](bool loading) {
@@ -105,6 +126,7 @@ Widget::Widget(
 	});
 	_playbackProgress->setValueChangedCallback([=](float64 value, float64) {
 		_playbackSlider->setValue(value);
+		update();
 	});
 	_playbackSlider->setChangeProgressCallback([=](float64 value) {
 		if (_type != AudioMsgId::Type::Song) {
@@ -136,6 +158,14 @@ Widget::Widget(
 	Core::App().settings().songVolumeChanges(
 	) | rpl::on_next([=] {
 		updateVolumeToggleIcon();
+	}, lifetime());
+
+	_controller->session().downloaderTaskFinished(
+	) | rpl::on_next([=] {
+		if (_coverPending && CoverImage(_coverMedia)) {
+			_coverPending = false;
+			update();
+		}
 	}, lifetime());
 
 	Core::App().settings().playerRepeatModeValue(
@@ -392,6 +422,7 @@ void Widget::handleSeekProgress(float64 progress) {
 	if (_seekPositionMs != positionMs) {
 		_seekPositionMs = positionMs;
 		updateTimeLabel();
+		update();
 
 		instance()->startSeeking(_type);
 	}
@@ -402,6 +433,7 @@ void Widget::handleSeekFinished(float64 progress) {
 
 	_seekPositionMs = -1;
 
+	update();
 	instance()->finishSeeking(_type, progress);
 }
 
@@ -412,26 +444,31 @@ void Widget::resizeEvent(QResizeEvent *e) {
 }
 
 void Widget::updateControlsGeometry() {
-	_close->moveToRight(st::mediaPlayerCloseRight, st::mediaPlayerPlayTop);
+	_close->moveToRight(st::mediaPlayerCloseRight, st::mediaPlayerControlsTop);
 	auto right = 0;
 	if (hasPlaybackSpeedControl()) {
-		_speedToggle->moveToRight(right, 0); right += _speedToggle->width();
+		_speedToggle->moveToRight(right, st::mediaPlayerControlsTop);
+		right += _speedToggle->width();
 	}
 	if (_type == AudioMsgId::Type::Song) {
-		_repeatToggle->moveToRight(right, 0); right += _repeatToggle->width();
-		_orderToggle->moveToRight(right, 0); right += _orderToggle->width();
+		_repeatToggle->moveToRight(right, st::mediaPlayerControlsTop);
+		right += _repeatToggle->width();
+		_orderToggle->moveToRight(right, st::mediaPlayerControlsTop);
+		right += _orderToggle->width();
 	}
-	_volumeToggle->moveToRight(right, 0); right += _volumeToggle->width();
+	_volumeToggle->moveToRight(right, st::mediaPlayerControlsTop);
+	right += _volumeToggle->width();
 
 	updateControlsWrapGeometry();
 
 	updatePlayPrevNextPositions();
 
+	const auto &seek = st::mediaPlayerSeekbar;
 	_playbackSlider->setGeometry(
-		0,
-		height() - st::mediaPlayerPlayback.fullWidth,
-		width(),
-		st::mediaPlayerPlayback.fullWidth);
+		seek.side,
+		height() - seek.hitHeight,
+		std::max(width() - 2 * seek.side, 0),
+		seek.hitHeight);
 
 	updateDropdownsGeometry();
 }
@@ -442,7 +479,7 @@ void Widget::updateControlsWrapGeometry() {
 	rightControls()->resize(controls, _repeatToggle->height());
 	_rightControls->move(
 		width() - st::mediaPlayerCloseRight - _close->width() - controls,
-		st::mediaPlayerPlayTop);
+		st::mediaPlayerControlsTop);
 }
 
 void Widget::updateControlsWrapVisibility() {
@@ -453,10 +490,75 @@ void Widget::updateControlsWrapVisibility() {
 
 void Widget::paintEvent(QPaintEvent *e) {
 	auto p = QPainter(this);
-	auto fill = e->rect().intersected(
+	const auto fill = e->rect().intersected(
 		QRect(0, 0, width(), st::mediaPlayerHeight + st::lineWidth));
-	if (!fill.isEmpty()) {
-		p.fillRect(fill, st::mediaPlayerBg);
+	if (fill.isEmpty()) {
+		return;
+	}
+	p.fillRect(fill, st::mediaPlayerBg);
+	paintCover(p, e->rect());
+	paintSeekbar(p, e->rect());
+}
+
+void Widget::paintCover(QPainter &p, QRect clip) {
+	const auto rect = QRect(
+		st::mediaPlayerCoverLeft,
+		st::mediaPlayerCoverTop,
+		st::mediaPlayerCoverSize,
+		st::mediaPlayerCoverSize);
+	if (!rect.intersects(clip)) {
+		return;
+	}
+	auto hq = PainterHighQualityEnabler(p);
+	auto path = QPainterPath();
+	const auto radius = st::mediaPlayerCoverRadius;
+	path.addRoundedRect(rect, radius, radius);
+	p.save();
+	p.setClipPath(path);
+	if (const auto image = CoverImage(_coverMedia)) {
+		const auto scaled = image->size().scaled(
+			rect.size(),
+			Qt::KeepAspectRatioByExpanding);
+		p.drawPixmap(
+			rect.x() + (rect.width() - scaled.width()) / 2,
+			rect.y() + (rect.height() - scaled.height()) / 2,
+			image->pixSingle(scaled));
+	} else {
+		p.fillRect(rect, st::mediaPlayerCoverBg);
+	}
+	p.restore();
+}
+
+void Widget::paintSeekbar(QPainter &p, QRect clip) {
+	if (_playbackSlider->isHidden()) {
+		return;
+	}
+	const auto &seek = st::mediaPlayerSeekbar;
+	const auto rect = QRect(
+		seek.side,
+		height() - seek.bottom - seek.height,
+		width() - 2 * seek.side,
+		seek.height);
+	if (rect.width() <= 0 || !rect.intersects(clip)) {
+		return;
+	}
+	auto hq = PainterHighQualityEnabler(p);
+	const auto disabled = _playbackSlider->isDisabled();
+	const auto progress = _playbackSlider->value();
+	const auto filled = std::min(
+		std::max(
+			int(base::SafeRound(progress * rect.width())),
+			seek.radius * 2),
+		rect.width());
+	p.setPen(Qt::NoPen);
+	p.setBrush(disabled ? seek.disabledFg : seek.inactiveFg);
+	p.drawRoundedRect(rect, seek.radius, seek.radius);
+	if (filled > 0) {
+		p.setBrush(disabled ? seek.disabledFg : seek.activeFg);
+		p.drawRoundedRect(
+			QRect(rect.x(), rect.y(), filled, rect.height()),
+			seek.radius,
+			seek.radius);
 	}
 }
 
@@ -544,7 +646,11 @@ void Widget::updateOverLabelsState(QPoint pos) {
 		- _rightControls->x()
 		- _rightControls->width()
 		+ getTimeRight();
-	const auto labels = myrtlrect(left, 0, width() - right - left, height() - st::mediaPlayerPlayback.fullWidth);
+	const auto labels = myrtlrect(
+		left,
+		0,
+		width() - right - left,
+		height() - st::mediaPlayerSeekbar.bottom - st::mediaPlayerSeekbar.height);
 	const auto over = labels.contains(pos);
 	updateOverLabelsState(over);
 }
@@ -559,8 +665,10 @@ void Widget::updateOverLabelsState(bool over) {
 }
 
 void Widget::updatePlayPrevNextPositions() {
-	auto left = st::mediaPlayerPlayLeft;
-	auto top = st::mediaPlayerPlayTop;
+	auto left = st::mediaPlayerCoverLeft
+		+ st::mediaPlayerCoverSize
+		+ st::mediaPlayerCoverGap;
+	const auto top = st::mediaPlayerControlsTop;
 	if (_previousTrack) {
 		_previousTrack->moveToLeft(left, top); left += _previousTrack->width() + st::mediaPlayerPlaySkip;
 		_playPause->moveToLeft(left, top); left += _playPause->width() + st::mediaPlayerPlaySkip;
@@ -572,7 +680,10 @@ void Widget::updatePlayPrevNextPositions() {
 }
 
 int Widget::getNameLeft() const {
-	auto result = st::mediaPlayerPlayLeft + _playPause->width();
+	auto result = st::mediaPlayerCoverLeft
+		+ st::mediaPlayerCoverSize
+		+ st::mediaPlayerCoverGap
+		+ _playPause->width();
 	if (_previousTrack) {
 		result += _previousTrack->width() + st::mediaPlayerPlaySkip + _nextTrack->width() + st::mediaPlayerPlaySkip;
 	}
@@ -606,10 +717,12 @@ void Widget::updateLabelsGeometry() {
 		- left
 		- getNameRight();
 	_nameLabel->resizeToNaturalWidth(widthForName);
-	_nameLabel->moveToLeft(left, st::mediaPlayerNameTop - st::mediaPlayerName.style.font->ascent);
+	_nameLabel->moveToLeft(left, st::mediaPlayerTitleTop);
+	_performerLabel->resizeToNaturalWidth(widthForName);
+	_performerLabel->moveToLeft(left, st::mediaPlayerPerformerTop);
 
 	const auto right = getTimeRight();
-	_timeLabel->moveToRight(right, st::mediaPlayerNameTop - st::mediaPlayerTime.font->ascent);
+	_timeLabel->moveToRight(right, st::mediaPlayerTimeTop);
 
 	updateControlsWrapGeometry();
 }
@@ -733,6 +846,7 @@ void Widget::updateTimeText(const TrackState &state) {
 		_time = Ui::FormatDurationText(display);
 		_playbackSlider->setDisabled(false);
 	}
+	update();
 	if (_seekPositionMs < 0) {
 		updateTimeLabel();
 	}
@@ -766,16 +880,34 @@ void Widget::handleSongChange() {
 	_lastSongId = current;
 	_speedController->reloadFromLookup();
 
-	auto textWithEntities = TextWithEntities();
-	if (document->isVoiceMessage() || document->isVideoMessage()) {
-		textWithEntities = Ui::Text::FormatVoiceName(
+	auto title = QString();
+	auto performer = QString();
+	if (const auto song = document->song()) {
+		title = song->title;
+		performer = song->performer;
+	} else if (document->isVoiceMessage() || document->isVideoMessage()) {
+		const auto composed = Ui::Text::FormatVoiceName(
 			document,
-			current.contextId()).textWithEntities(true);
+			current.contextId()).composedName();
+		title = composed.performer;
+		performer = composed.title;
 	} else {
-		textWithEntities = Ui::Text::FormatSongNameFor(document)
-			.textWithEntities(true);
+		const auto composed = Ui::Text::FormatSongNameFor(
+			document).composedName();
+		title = composed.title;
+		performer = composed.performer;
 	}
-	_nameLabel->setMarkedText(textWithEntities);
+	if (title.isEmpty()) {
+		title = Ui::Text::FormatSongNameFor(document).composedName().title;
+	}
+	_nameLabel->setText(title);
+	_performerLabel->setText(performer);
+
+	_coverMedia = document->createMediaView();
+	_coverMedia->thumbnailWanted(Data::FileOrigin(current.contextId()));
+	_coverPending = !CoverImage(_coverMedia);
+	update();
+
 	handlePlaylistUpdate();
 	updateLabelsGeometry();
 }

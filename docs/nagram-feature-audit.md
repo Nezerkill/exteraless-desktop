@@ -186,7 +186,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Cloud settings | `OpenExteraCloudActivity`, `CloudSettingsHelper` | 4 ключа | ❌ |
 | Pill Stack | `PillStackConfig`, `app/exteraless/pillstack/*` | 15 типов пилюль | ✅ 8 из 15 |
 | Drawer и навигация | `app/exteraless/drawer/*`, `MainMenuLayout` | 20 пунктов меню | 🟡 5 пунктов, порядок, аккаунты |
-| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | 🟡 тексты песен из файла и онлайн (lrclib.net) ✅ NB-50 фазы 1–2 (см. 6.13), ❌ MD3-плеер, ➖ MPRIS |
+| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | 🟡 тексты песен из файла и онлайн (lrclib.net) ✅ NB-50 фазы 1–2 (см. 6.13), рестайл мини-плеера v1 ✅, ❌ MD3 PlayerSheet/очередь, ➖ MPRIS |
 | Иконпаки / эмодзи / глиф | `icons/*` (15 файлов), `appicons/*`, `glyph/*` | ~20 | ⛔/❌ (иконки tdesktop — `lib_ui` + `.style`) |
 | Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–3: настройки ✅ NB-79.3a (`OEPluginSettings`, `ShowPluginSettingsBox`, CLI `settings-get`/`settings-set`), меню ✅ NB-30 (`MenuItemType` `main`/`message`/`chat`, снимок `menu` в `loaded`, пункты в главном меню и в конце контекстного меню сообщения, CLI `menu-list`/`menu-click`), intents и trust-уровни ✅ NB-79.3c (`OEPluginTrustLevels` JSON `id → 0/1/2`, default `1` — Gated; снимок `intents` в `loaded`, `cmd:intent` → `intent-result` с таймаутом 2 с, `Runtime::dispatchIntent` из хука `openLocalUrl` в фазах before/after, селектор Isolated/Gated/Trusted в боксе, CLI `plugin-level`/`plugin-level-set`/`intent-test`, `check_plugin_intents` 27 → host 279), ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
@@ -213,7 +213,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Разделители | `dividerStyle`, `hideDividers` | ⛔ у строк списка чатов в 7.3.1 нет разделителей |
 | Эмодзи и шрифты | `useSystemEmoji`, `emojiSets`, `typeface`, `iconPacks` | ⛔/❌ (`lib_ui/ui/emoji_config.cpp`, иконки `.style`) |
 | Monet и M3-компоненты | `monetStyle`, `m3ListItems` | ⛔ динамические цвета Android 12+ |
-| Плеер | 30+ `OEPlayer*` | 🟡 тексты песен из файла и онлайн ✅ NB-50 фазы 1–2, остальное (обложка, мини-плеер, очередь) ❌ — см. 6.13 |
+| Плеер | 30+ `OEPlayer*` | 🟡 тексты песен из файла и онлайн ✅ NB-50 фазы 1–2, рестайл мини-плеера v1 ✅, остальное (PlayerSheet, очередь) ❌ — см. 6.13 |
 | Прочее | `forceSnow`, `profileMusicCard`, `titleText`, `showFeedTab`, `feedUnreadCounter` | ❌ |
 
 Отдельно: `docs/feature-mapping.md` фиксирует, что `OEAppearance*` не
@@ -462,7 +462,7 @@ search (lrclib.net)» стоит в настройках; 3 lang-ключа. CLI
 фикстур (`lrclib-search`, `lrclib-get-synced`, `lrclib-get-plain`,
 `lrclib-get-instrumental`, `lrclib-broken`), `check_lrclib` — 27 проверок;
 раннеры 1006/32/252 PASS (backup 105), `kKeysCount` 11235 (+3).
-❌ MD3-ребилд плеера (стиль обложки, `PlayerSheet`/`PlayerBarView`),
+❌ MD3 PlayerSheet/очередь (v1 мини-плеера ✅: обложка/типографика/сикбар),
 мини-плеер и `PlayerMiniView`, очередь с drag (`PlayerQueueSheet`),
 auto-fetch по совпадению и server-side транскрипция (= NB-51) не сделаны.
 Ограничения: выбранный файл виден после переоткрытия вкладки Media;

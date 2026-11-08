@@ -47,6 +47,7 @@ exportErrorLabel: FlatLabel(boxLabel) {
 }
 
 exportProgressDuration: 200;
+exportTopBarHeight: 35px;
 exportProgressRowHeight: 30px;
 exportProgressRowPadding: margins(22px, 10px, 22px, 10px);
 exportProgressRowSkip: 10px;

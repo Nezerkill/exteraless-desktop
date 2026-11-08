@@ -80,8 +80,19 @@ MediaSpeedButton {
 	menuPosition: point;
 }
 
+MediaPlayerSeekbar {
+	height: pixels;
+	radius: pixels;
+	bottom: pixels;
+	side: pixels;
+	hitHeight: pixels;
+	activeFg: color;
+	inactiveFg: color;
+	disabledFg: color;
+}
+
 mediaPlayerWideWidth: 460px;
-mediaPlayerHeight: 35px;
+mediaPlayerHeight: 42px;
 mediaPlayerPadding: 8px;
 mediaPlayerNameTop: 22px;
 mediaPlayerPlayLeft: 9px;
@@ -89,10 +100,35 @@ mediaPlayerPlaySkip: 1px;
 mediaPlayerPlayTop: 0px;
 mediaPlayerCloseRight: 0px;
 
+mediaPlayerControlsTop: 6px;
+mediaPlayerCoverLeft: 8px;
+mediaPlayerCoverTop: 4px;
+mediaPlayerCoverSize: 28px;
+mediaPlayerCoverRadius: 8px;
+mediaPlayerCoverGap: 10px;
+mediaPlayerCoverBg: windowBgOver;
+mediaPlayerTitleTop: 4px;
+mediaPlayerPerformerTop: 21px;
+mediaPlayerTimeTop: 6px;
+
 mediaPlayerName: FlatLabel(defaultFlatLabel) {
 	maxHeight: 20px;
 }
+mediaPlayerTitle: FlatLabel(defaultFlatLabel) {
+	maxHeight: 18px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(13px semibold);
+	}
+}
+mediaPlayerPerformer: FlatLabel(defaultFlatLabel) {
+	maxHeight: 15px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(11px);
+	}
+}
 mediaPlayerTime: LabelSimple(defaultLabelSimple) {
+	font: font(11px);
 	textFg: windowSubTextFg;
 }
 
@@ -302,6 +338,25 @@ mediaPlayerClose: IconButton(mediaPlayerRepeatButton) {
 mediaPlayerPlayback: FilledSlider {
 	fullWidth: 6px;
 	lineWidth: 2px;
+	activeFg: mediaPlayerActiveFg;
+	inactiveFg: mediaPlayerInactiveFg;
+	disabledFg: mediaPlayerDisabledFg;
+	duration: 150;
+}
+
+mediaPlayerSeekbar: MediaPlayerSeekbar {
+	height: 4px;
+	radius: 2px;
+	bottom: 2px;
+	side: 8px;
+	hitHeight: 12px;
+	activeFg: mediaPlayerActiveFg;
+	inactiveFg: mediaPlayerInactiveFg;
+	disabledFg: mediaPlayerDisabledFg;
+}
+mediaPlayerSeekInput: FilledSlider {
+	fullWidth: 0px;
+	lineWidth: 0px;
 	activeFg: mediaPlayerActiveFg;
 	inactiveFg: mediaPlayerInactiveFg;
 	disabledFg: mediaPlayerDisabledFg;

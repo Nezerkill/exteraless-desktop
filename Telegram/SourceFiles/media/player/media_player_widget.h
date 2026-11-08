@@ -11,7 +11,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/rp_widget.h"
 #include "base/object_ptr.h"
 
+#include <memory>
+
 class AudioMsgId;
+class QPainter;
+
+namespace Data {
+class DocumentMedia;
+} // namespace Data
 
 namespace Ui {
 class FlatLabel;
@@ -68,6 +75,9 @@ public:
 private:
 	void resizeEvent(QResizeEvent *e) override;
 	void paintEvent(QPaintEvent *e) override;
+
+	void paintCover(QPainter &p, QRect clip);
+	void paintSeekbar(QPainter &p, QRect clip);
 
 	void enterEventHook(QEnterEvent *e) override;
 	void leaveEventHook(QEvent *e) override;
@@ -145,6 +155,7 @@ private:
 	bool _volumeHidden = false;
 
 	object_ptr<Ui::FlatLabel> _nameLabel;
+	object_ptr<Ui::FlatLabel> _performerLabel;
 	object_ptr<Ui::FadeWrap<Ui::RpWidget>> _rightControls;
 	object_ptr<Ui::LabelSimple> _timeLabel;
 	object_ptr<Ui::IconButton> _previousTrack = { nullptr };
@@ -157,6 +168,8 @@ private:
 	object_ptr<Ui::IconButton> _close;
 	object_ptr<Ui::PlainShadow> _shadow = { nullptr };
 	object_ptr<Ui::FilledSlider> _playbackSlider;
+	std::shared_ptr<Data::DocumentMedia> _coverMedia;
+	bool _coverPending = false;
 	base::unique_qptr<Dropdown> _volume;
 	std::unique_ptr<View::PlaybackProgress> _playbackProgress;
 	std::unique_ptr<OrderController> _orderController;
