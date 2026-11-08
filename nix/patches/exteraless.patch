@@ -9,7 +9,7 @@ index e762a3c..2ad057e 100644
 +add_subdirectory(exteraless)
  add_subdirectory(Telegram)
 diff --git a/Telegram/CMakeLists.txt b/Telegram/CMakeLists.txt
-index 811707d..4d8d276 100644
+index 811707d..2bbafaa 100644
 --- a/Telegram/CMakeLists.txt
 +++ b/Telegram/CMakeLists.txt
 @@ -70,6 +70,41 @@ endif()
@@ -92,7 +92,16 @@ index 811707d..4d8d276 100644
      lang/translate_mtproto_provider.cpp
      lang/translate_mtproto_provider.h
      lang/translate_provider.cpp
-@@ -1680,6 +1725,7 @@ PRIVATE
+@@ -1549,6 +1594,8 @@ PRIVATE
+     media/player/media_player_volume_controller.h
+     media/player/media_player_widget.cpp
+     media/player/media_player_widget.h
++    media/player/player_sheet.cpp
++    media/player/player_sheet.h
+     media/stories/media_stories_caption_full_view.cpp
+     media/stories/media_stories_caption_full_view.h
+     media/stories/media_stories_controller.cpp
+@@ -1680,6 +1727,7 @@ PRIVATE
      mtproto/facade.h
      mtproto/mtp_instance.cpp
      mtproto/mtp_instance.h
@@ -100,7 +109,7 @@ index 811707d..4d8d276 100644
      mtproto/proxy_check.cpp
      mtproto/proxy_check.h
      mtproto/sender.h
-@@ -1897,6 +1943,8 @@ PRIVATE
+@@ -1897,6 +1945,8 @@ PRIVATE
      settings/sections/settings_advanced.h
      settings/sections/settings_chat.cpp
      settings/sections/settings_chat.h
@@ -109,7 +118,7 @@ index 811707d..4d8d276 100644
      settings/sections/settings_blocked_peers.cpp
      settings/sections/settings_blocked_peers.h
      settings/sections/settings_business.cpp
-@@ -2530,6 +2578,10 @@ else()
+@@ -2530,6 +2580,10 @@ else()
      generate_dbus(Telegram org.freedesktop.portal. FlatpakPortal ${src_loc}/platform/linux/org.freedesktop.portal.Flatpak.xml)
      generate_dbus(Telegram org.freedesktop. XdgNotifications ${src_loc}/platform/linux/org.freedesktop.Notifications.xml)
      generate_dbus(Telegram org.freedesktop.login1. Logind ${src_loc}/platform/linux/org.freedesktop.login1.Manager.xml)
@@ -121,7 +130,7 @@ index 811707d..4d8d276 100644
  
  if (build_macstore)
 diff --git a/Telegram/Resources/langs/lang.strings b/Telegram/Resources/langs/lang.strings
-index ffc8ec9..e937909 100644
+index ffc8ec9..d245bca 100644
 --- a/Telegram/Resources/langs/lang.strings
 +++ b/Telegram/Resources/langs/lang.strings
 @@ -5566,6 +5566,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -151,7 +160,15 @@ index ffc8ec9..e937909 100644
  "lng_filters_setup" = "Edit";
  "lng_filters_title" = "Folders";
  "lng_filters_subtitle" = "My folders";
-@@ -9182,4 +9188,246 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -8700,6 +8706,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ 
+ "lng_sr_playback_order" = "Playback order";
+ "lng_sr_player_close" = "Close media player";
++"lng_sr_player_expand" = "Open full player";
+ "lng_sr_group_call_menu" = "Video chat menu";
+ "lng_sr_search_date" = "Search by date";
+ "lng_sr_cancel_search" = "Cancel search";
+@@ -9182,4 +9189,246 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
  "lng_passcode_strength_advice_variety" = "Make it longer and mix in more kinds of characters.";
  "lng_passcode_strength_advice_fine" = "This passcode is hard to guess.";
  
@@ -11078,7 +11095,7 @@ index c816566..b5842ae 100644
  
  	// Alloc source samples
 diff --git a/Telegram/SourceFiles/media/player/media_player.style b/Telegram/SourceFiles/media/player/media_player.style
-index 8070609..93ba536 100644
+index 8070609..1a574eb 100644
 --- a/Telegram/SourceFiles/media/player/media_player.style
 +++ b/Telegram/SourceFiles/media/player/media_player.style
 @@ -80,8 +80,19 @@ MediaSpeedButton {
@@ -11164,8 +11181,144 @@ index 8070609..93ba536 100644
  mediaPlayerPanelMarginLeft: 10px;
  mediaPlayerPanelMarginBottom: 10px;
  mediaPlayerPanelWidth: 344px;
+@@ -347,3 +402,135 @@ mediaPlayerOrderIconReverse: icon{{ "player/player_order", windowFg }};
+ mediaPlayerOrderIconReverseActive: icon{{ "player/player_order", windowActiveTextFg }};
+ mediaPlayerOrderIconShuffle: icon{{ "player/player_shuffle", windowFg }};
+ mediaPlayerOrderIconShuffleActive: icon{{ "player/player_shuffle", windowActiveTextFg }};
++
++playerSheetWidth: 360px;
++playerSheetPadding: 18px;
++playerSheetGap: 12px;
++playerSheetRadius: 16px;
++playerSheetBorderWidth: 1px;
++playerSheetBg: boxBg;
++playerSheetBorderFg: windowBgOver;
++
++playerSheetCover: 96px;
++playerSheetCoverRadius: 12px;
++playerSheetCoverBg: windowBgOver;
++playerSheetCoverIcon: icon {
++	{ "player/player_play", windowSubTextFg }
++};
++
++playerSheetTitleSkip: 2px;
++playerSheetSeekHeight: 24px;
++playerSheetTimeWidth: 56px;
++playerSheetTimeSkip: 6px;
++playerSheetTransportHeight: 48px;
++playerSheetTransportSkip: 18px;
++playerSheetActionsHeight: 40px;
++
++playerSheetTitle: FlatLabel(defaultFlatLabel) {
++	maxHeight: 22px;
++	textFg: windowFg;
++	style: TextStyle(defaultTextStyle) {
++		font: font(15px semibold);
++	}
++}
++playerSheetPerformer: FlatLabel(defaultFlatLabel) {
++	maxHeight: 18px;
++	textFg: windowSubTextFg;
++	style: TextStyle(defaultTextStyle) {
++		font: font(12px);
++	}
++}
++playerSheetTime: LabelSimple(defaultLabelSimple) {
++	font: font(11px);
++	textFg: windowSubTextFg;
++}
++
++playerSheetSeek: MediaSlider(defaultContinuousSlider) {
++	width: 4px;
++	seekSize: size(10px, 10px);
++	activeFg: mediaPlayerActiveFg;
++	inactiveFg: windowBgOver;
++	activeFgOver: mediaPlayerActiveFg;
++	inactiveFgOver: windowBgOver;
++	activeFgDisabled: windowBgOver;
++	inactiveFgDisabled: windowBgOver;
++	receivedTillFg: windowBgOver;
++}
++playerSheetVolume: MediaSlider(defaultContinuousSlider) {
++	width: 4px;
++	seekSize: size(8px, 8px);
++	activeFg: mediaPlayerActiveFg;
++	inactiveFg: windowBgOver;
++	activeFgOver: mediaPlayerActiveFg;
++	inactiveFgOver: windowBgOver;
++	activeFgDisabled: windowBgOver;
++	inactiveFgDisabled: windowBgOver;
++	receivedTillFg: windowBgOver;
++}
++
++playerSheetPlayIcon: icon {
++	{ "player/player_play", mediaPlayerActiveFg }
++};
++playerSheetPauseIcon: icon {
++	{ "player/player_pause", mediaPlayerActiveFg }
++};
++playerSheetShowIcon: icon {
++	{ "filled_go_to_message", windowSubTextFg }
++};
++playerSheetForwardIcon: icon {
++	{ "menu/forward", windowSubTextFg }
++};
++playerSheetLinkIcon: icon {
++	{ "menu/link", windowSubTextFg }
++};
++playerSheetDownloadIcon: icon {
++	{ "menu/download", windowSubTextFg }
++};
++
++playerSheetPlay: IconButton(mediaPlayerRepeatButton) {
++	width: 48px;
++	height: 48px;
++	icon: playerSheetPlayIcon;
++	iconPosition: point(12px, 12px);
++	rippleAreaPosition: point(12px, 12px);
++	rippleAreaSize: 24px;
++}
++playerSheetPrevious: IconButton(mediaPlayerPreviousButton) {
++	width: 40px;
++	height: 40px;
++	iconPosition: point(8px, 8px);
++	rippleAreaPosition: point(8px, 8px);
++	rippleAreaSize: 24px;
++}
++playerSheetNext: IconButton(mediaPlayerNextButton) {
++	width: 40px;
++	height: 40px;
++	iconPosition: point(8px, 8px);
++	rippleAreaPosition: point(8px, 8px);
++	rippleAreaSize: 24px;
++}
++playerSheetAction: IconButton(mediaPlayerRepeatButton) {
++	width: 40px;
++	height: 40px;
++	iconPosition: point(8px, 8px);
++	rippleAreaPosition: point(8px, 8px);
++	rippleAreaSize: 24px;
++}
++playerSheetSpeed: RoundButton(defaultActiveButton) {
++	textFg: windowFg;
++	textFgOver: windowFg;
++	numbersTextFg: windowSubTextFg;
++	numbersTextFgOver: windowSubTextFg;
++	textBg: windowBgOver;
++	textBgOver: windowBgOver;
++	width: 46px;
++	height: 24px;
++	radius: 12px;
++	textTop: 4px;
++	style: TextStyle(defaultTextStyle) {
++		font: font(11px semibold);
++	}
++	ripple: RippleAnimation(defaultRippleAnimation) {
++		color: lightButtonBgOver;
++	}
++}
 diff --git a/Telegram/SourceFiles/media/player/media_player_widget.cpp b/Telegram/SourceFiles/media/player/media_player_widget.cpp
-index c5c5ec9..1a916a6 100644
+index c5c5ec9..56b533a 100644
 --- a/Telegram/SourceFiles/media/player/media_player_widget.cpp
 +++ b/Telegram/SourceFiles/media/player/media_player_widget.cpp
 @@ -9,10 +9,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -11183,12 +11336,18 @@ index c5c5ec9..1a916a6 100644
  #include "ui/widgets/labels.h"
  #include "ui/widgets/continuous_sliders.h"
  #include "ui/widgets/shadow.h"
-@@ -38,8 +42,23 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+@@ -37,9 +41,29 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
+ #include "main/main_session.h"
  #include "window/window_session_controller.h"
  #include "styles/style_media_player.h"
- 
-+#include <QtGui/QPainterPath>
++#include "styles/style_menu_icons.h"
 +
++#if __has_include("media/player/player_sheet.h")
++#include "media/player/player_sheet.h"
++#endif // __has_include("media/player/player_sheet.h")
++
++#include <QtGui/QPainterPath>
+ 
  namespace Media {
  namespace Player {
 +namespace {
@@ -11207,7 +11366,7 @@ index c5c5ec9..1a916a6 100644
  
  Widget::Widget(
  	QWidget *parent,
-@@ -48,7 +67,8 @@ Widget::Widget(
+@@ -48,7 +72,8 @@ Widget::Widget(
  : RpWidget(parent)
  , _controller(controller)
  , _orderMenuParent(dropdownsParent)
@@ -11217,7 +11376,7 @@ index c5c5ec9..1a916a6 100644
  , _rightControls(this, object_ptr<Ui::RpWidget>(this))
  , _timeLabel(rightControls(), st::mediaPlayerTime)
  , _playPause(this, st::mediaPlayerPlayButton)
-@@ -58,7 +78,7 @@ Widget::Widget(
+@@ -58,7 +83,7 @@ Widget::Widget(
  , _speedToggle(rightControls(), st::mediaPlayerSpeedButton)
  , _close(this, st::mediaPlayerClose)
  , _shadow(this)
@@ -11226,7 +11385,24 @@ index c5c5ec9..1a916a6 100644
  , _volume(std::in_place, dropdownsParent.get())
  , _playbackProgress(std::make_unique<View::PlaybackProgress>())
  , _orderController(
-@@ -98,6 +118,7 @@ Widget::Widget(
+@@ -92,12 +117,24 @@ Widget::Widget(
+ 
+ 	setupRightControls();
+ 
++#if __has_include("media/player/player_sheet.h")
++	_expand.create(this, st::mediaPlayerRepeatButton);
++	_expand->setIconOverride(&st::menuIconExpand);
++	_expand->setAccessibleName(tr::lng_sr_player_expand(tr::now));
++	_expand->setClickedCallback([=] {
++		Exteraless::PlayerSheet::Show(_controller);
++	});
++	_expand->show();
++	hidePlaylistOn(_expand);
++#endif // __has_include("media/player/player_sheet.h")
++
+ 	_volumeToggle->setAccessibleName(tr::lng_ringtones_box_volume(tr::now));
+ 	_repeatToggle->setAccessibleName(tr::lng_schedule_repeat_label(tr::now));
+ 	_orderToggle->setAccessibleName(tr::lng_sr_playback_order(tr::now));
  	_close->setAccessibleName(tr::lng_sr_player_close(tr::now));
  
  	_nameLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -11234,7 +11410,7 @@ index c5c5ec9..1a916a6 100644
  	_timeLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
  
  	_playbackProgress->setInLoadingStateChangedCallback([=](bool loading) {
-@@ -105,6 +126,7 @@ Widget::Widget(
+@@ -105,6 +142,7 @@ Widget::Widget(
  	});
  	_playbackProgress->setValueChangedCallback([=](float64 value, float64) {
  		_playbackSlider->setValue(value);
@@ -11242,7 +11418,7 @@ index c5c5ec9..1a916a6 100644
  	});
  	_playbackSlider->setChangeProgressCallback([=](float64 value) {
  		if (_type != AudioMsgId::Type::Song) {
-@@ -138,6 +160,14 @@ Widget::Widget(
+@@ -138,6 +176,14 @@ Widget::Widget(
  		updateVolumeToggleIcon();
  	}, lifetime());
  
@@ -11257,7 +11433,7 @@ index c5c5ec9..1a916a6 100644
  	Core::App().settings().playerRepeatModeValue(
  	) | rpl::on_next([=] {
  		updateRepeatToggleIcon();
-@@ -392,6 +422,7 @@ void Widget::handleSeekProgress(float64 progress) {
+@@ -392,6 +438,7 @@ void Widget::handleSeekProgress(float64 progress) {
  	if (_seekPositionMs != positionMs) {
  		_seekPositionMs = positionMs;
  		updateTimeLabel();
@@ -11265,7 +11441,7 @@ index c5c5ec9..1a916a6 100644
  
  		instance()->startSeeking(_type);
  	}
-@@ -402,6 +433,7 @@ void Widget::handleSeekFinished(float64 progress) {
+@@ -402,6 +449,7 @@ void Widget::handleSeekFinished(float64 progress) {
  
  	_seekPositionMs = -1;
  
@@ -11273,13 +11449,18 @@ index c5c5ec9..1a916a6 100644
  	instance()->finishSeeking(_type, progress);
  }
  
-@@ -412,26 +444,31 @@ void Widget::resizeEvent(QResizeEvent *e) {
+@@ -412,26 +460,36 @@ void Widget::resizeEvent(QResizeEvent *e) {
  }
  
  void Widget::updateControlsGeometry() {
 -	_close->moveToRight(st::mediaPlayerCloseRight, st::mediaPlayerPlayTop);
 +	_close->moveToRight(st::mediaPlayerCloseRight, st::mediaPlayerControlsTop);
  	auto right = 0;
++	if (_expand) {
++		_expand->moveToRight(
++			st::mediaPlayerCloseRight + _close->width(),
++			st::mediaPlayerControlsTop);
++	}
  	if (hasPlaybackSpeedControl()) {
 -		_speedToggle->moveToRight(right, 0); right += _speedToggle->width();
 +		_speedToggle->moveToRight(right, st::mediaPlayerControlsTop);
@@ -11314,16 +11495,22 @@ index c5c5ec9..1a916a6 100644
  
  	updateDropdownsGeometry();
  }
-@@ -442,7 +479,7 @@ void Widget::updateControlsWrapGeometry() {
+@@ -441,8 +499,12 @@ void Widget::updateControlsWrapGeometry() {
+ 	const auto controls = getTimeRight() + _timeLabel->width() + fade;
  	rightControls()->resize(controls, _repeatToggle->height());
  	_rightControls->move(
- 		width() - st::mediaPlayerCloseRight - _close->width() - controls,
+-		width() - st::mediaPlayerCloseRight - _close->width() - controls,
 -		st::mediaPlayerPlayTop);
++		width()
++			- st::mediaPlayerCloseRight
++			- _close->width()
++			- (_expand ? _expand->width() : 0)
++			- controls,
 +		st::mediaPlayerControlsTop);
  }
  
  void Widget::updateControlsWrapVisibility() {
-@@ -453,10 +490,75 @@ void Widget::updateControlsWrapVisibility() {
+@@ -453,10 +515,75 @@ void Widget::updateControlsWrapVisibility() {
  
  void Widget::paintEvent(QPaintEvent *e) {
  	auto p = QPainter(this);
@@ -11402,7 +11589,7 @@ index c5c5ec9..1a916a6 100644
  	}
  }
  
-@@ -544,7 +646,11 @@ void Widget::updateOverLabelsState(QPoint pos) {
+@@ -544,7 +671,11 @@ void Widget::updateOverLabelsState(QPoint pos) {
  		- _rightControls->x()
  		- _rightControls->width()
  		+ getTimeRight();
@@ -11415,7 +11602,7 @@ index c5c5ec9..1a916a6 100644
  	const auto over = labels.contains(pos);
  	updateOverLabelsState(over);
  }
-@@ -559,8 +665,10 @@ void Widget::updateOverLabelsState(bool over) {
+@@ -559,8 +690,10 @@ void Widget::updateOverLabelsState(bool over) {
  }
  
  void Widget::updatePlayPrevNextPositions() {
@@ -11428,7 +11615,7 @@ index c5c5ec9..1a916a6 100644
  	if (_previousTrack) {
  		_previousTrack->moveToLeft(left, top); left += _previousTrack->width() + st::mediaPlayerPlaySkip;
  		_playPause->moveToLeft(left, top); left += _playPause->width() + st::mediaPlayerPlaySkip;
-@@ -572,7 +680,10 @@ void Widget::updatePlayPrevNextPositions() {
+@@ -572,7 +705,10 @@ void Widget::updatePlayPrevNextPositions() {
  }
  
  int Widget::getNameLeft() const {
@@ -11440,7 +11627,15 @@ index c5c5ec9..1a916a6 100644
  	if (_previousTrack) {
  		result += _previousTrack->width() + st::mediaPlayerPlaySkip + _nextTrack->width() + st::mediaPlayerPlaySkip;
  	}
-@@ -606,10 +717,12 @@ void Widget::updateLabelsGeometry() {
+@@ -583,6 +719,7 @@ int Widget::getNameLeft() const {
+ int Widget::getNameRight() const {
+ 	return st::mediaPlayerCloseRight
+ 		+ _close->width()
++		+ (_expand ? _expand->width() : 0)
+ 		+ st::mediaPlayerPadding;
+ }
+ 
+@@ -606,10 +743,12 @@ void Widget::updateLabelsGeometry() {
  		- left
  		- getNameRight();
  	_nameLabel->resizeToNaturalWidth(widthForName);
@@ -11455,7 +11650,7 @@ index c5c5ec9..1a916a6 100644
  
  	updateControlsWrapGeometry();
  }
-@@ -733,6 +846,7 @@ void Widget::updateTimeText(const TrackState &state) {
+@@ -733,6 +872,7 @@ void Widget::updateTimeText(const TrackState &state) {
  		_time = Ui::FormatDurationText(display);
  		_playbackSlider->setDisabled(false);
  	}
@@ -11463,7 +11658,7 @@ index c5c5ec9..1a916a6 100644
  	if (_seekPositionMs < 0) {
  		updateTimeLabel();
  	}
-@@ -766,16 +880,34 @@ void Widget::handleSongChange() {
+@@ -766,16 +906,34 @@ void Widget::handleSongChange() {
  	_lastSongId = current;
  	_speedController->reloadFromLookup();
  
@@ -11489,11 +11684,11 @@ index c5c5ec9..1a916a6 100644
 +			document).composedName();
 +		title = composed.title;
 +		performer = composed.performer;
- 	}
--	_nameLabel->setMarkedText(textWithEntities);
++	}
 +	if (title.isEmpty()) {
 +		title = Ui::Text::FormatSongNameFor(document).composedName().title;
-+	}
+ 	}
+-	_nameLabel->setMarkedText(textWithEntities);
 +	_nameLabel->setText(title);
 +	_performerLabel->setText(performer);
 +
@@ -11506,7 +11701,7 @@ index c5c5ec9..1a916a6 100644
  	updateLabelsGeometry();
  }
 diff --git a/Telegram/SourceFiles/media/player/media_player_widget.h b/Telegram/SourceFiles/media/player/media_player_widget.h
-index a6a8fe7..4fba3c2 100644
+index a6a8fe7..dc5d072 100644
 --- a/Telegram/SourceFiles/media/player/media_player_widget.h
 +++ b/Telegram/SourceFiles/media/player/media_player_widget.h
 @@ -11,7 +11,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
@@ -11542,8 +11737,11 @@ index a6a8fe7..4fba3c2 100644
  	object_ptr<Ui::FadeWrap<Ui::RpWidget>> _rightControls;
  	object_ptr<Ui::LabelSimple> _timeLabel;
  	object_ptr<Ui::IconButton> _previousTrack = { nullptr };
-@@ -157,6 +168,8 @@ private:
+@@ -155,8 +166,11 @@ private:
+ 	object_ptr<Ui::IconButton> _orderToggle;
+ 	object_ptr<SpeedButton> _speedToggle;
  	object_ptr<Ui::IconButton> _close;
++	object_ptr<Ui::IconButton> _expand = { nullptr };
  	object_ptr<Ui::PlainShadow> _shadow = { nullptr };
  	object_ptr<Ui::FilledSlider> _playbackSlider;
 +	std::shared_ptr<Data::DocumentMedia> _coverMedia;
@@ -11551,6 +11749,650 @@ index a6a8fe7..4fba3c2 100644
  	base::unique_qptr<Dropdown> _volume;
  	std::unique_ptr<View::PlaybackProgress> _playbackProgress;
  	std::unique_ptr<OrderController> _orderController;
+diff --git a/Telegram/SourceFiles/media/player/player_sheet.cpp b/Telegram/SourceFiles/media/player/player_sheet.cpp
+new file mode 100644
+index 0000000..f4c55e3
+--- /dev/null
++++ b/Telegram/SourceFiles/media/player/player_sheet.cpp
+@@ -0,0 +1,530 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#include "media/player/player_sheet.h"
++
++#include "base/algorithm.h"
++#include "core/application.h"
++#include "core/core_settings.h"
++#include "data/data_document.h"
++#include "data/data_document_media.h"
++#include "data/data_file_click_handler.h"
++#include "data/data_file_origin.h"
++#include "data/data_session.h"
++#include "data/data_types.h"
++#include "history/history_item.h"
++#include "history/view/history_view_context_menu.h"
++#include "history/view/history_view_element.h"
++#include "lang/lang_keys.h"
++#include "main/main_session.h"
++#include "media/audio/media_audio.h"
++#include "media/media_common.h"
++#include "media/player/media_player_instance.h"
++#include "ui/image/image.h"
++#include "ui/painter.h"
++#include "ui/style/style_core.h"
++#include "ui/text/format_song_document_name.h"
++#include "ui/text/format_values.h"
++#include "ui/widgets/buttons.h"
++#include "ui/widgets/continuous_sliders.h"
++#include "ui/widgets/labels.h"
++#include "window/window_peer_menu.h"
++#include "window/window_session_controller.h"
++#include "styles/style_media_player.h"
++
++#include <QtGui/QPainterPath>
++#include <QtGui/QPen>
++
++#include <algorithm>
++#include <array>
++
++namespace Exteraless {
++namespace {
++
++[[nodiscard]] Image *CoverImage(
++		const std::shared_ptr<Data::DocumentMedia> &media) {
++	if (!media) {
++		return nullptr;
++	}
++	return media->thumbnail() ? media->thumbnail() : media->thumbnailInline();
++}
++
++[[nodiscard]] std::array<float64, 4> PlaybackRates() {
++	return { 0.5, 1., 1.5, 2. };
++}
++
++} // namespace
++
++PlayerSheet::PlayerSheet(
++	QWidget *parent,
++	not_null<Window::SessionController*> controller)
++: LayerWidget(parent)
++, _controller(controller)
++, _title(this, st::playerSheetTitle)
++, _performer(this, st::playerSheetPerformer)
++, _elapsed(this, st::playerSheetTime)
++, _total(this, st::playerSheetTime)
++, _previous(this, st::playerSheetPrevious)
++, _playPause(this, st::playerSheetPlay)
++, _next(this, st::playerSheetNext)
++, _seek(this, st::playerSheetSeek)
++, _volume(this, st::playerSheetVolume)
++, _show(this, st::playerSheetAction)
++, _forward(this, st::playerSheetAction)
++, _link(this, st::playerSheetAction)
++, _download(this, st::playerSheetAction)
++, _corners(
++	Ui::PrepareCornerPixmaps(
++		st::playerSheetRadius,
++		st::playerSheetBg)) {
++	_rate.create(this, rpl::single(QString()), st::playerSheetSpeed);
++
++	style::PaletteChanged(
++	) | rpl::on_next([=] {
++		_corners = Ui::PrepareCornerPixmaps(
++			st::playerSheetRadius,
++			st::playerSheetBg);
++		update();
++	}, lifetime());
++
++	setupControls();
++	setupSubscriptions();
++
++	refreshTrack();
++	refreshRate();
++	refreshVolume();
++
++	const auto state = Media::Player::instance()->getState(
++		AudioMsgId::Type::Song);
++	updateState(state);
++	layoutChildren();
++}
++
++PlayerSheet::~PlayerSheet() = default;
++
++void PlayerSheet::Show(not_null<Window::SessionController*> controller) {
++	controller->showLayer(
++		std::make_unique<PlayerSheet>(nullptr, controller),
++		Ui::LayerOption::CloseOther);
++}
++
++void PlayerSheet::setupControls() {
++	_title->setAttribute(Qt::WA_TransparentForMouseEvents);
++	_performer->setAttribute(Qt::WA_TransparentForMouseEvents);
++	_elapsed->setAttribute(Qt::WA_TransparentForMouseEvents);
++	_total->setAttribute(Qt::WA_TransparentForMouseEvents);
++
++	_show->setIconOverride(&st::playerSheetShowIcon);
++	_forward->setIconOverride(&st::playerSheetForwardIcon);
++	_link->setIconOverride(&st::playerSheetLinkIcon);
++	_download->setIconOverride(&st::playerSheetDownloadIcon);
++
++	_playPause->setClickedCallback([=] {
++		Media::Player::instance()->playPauseCancelClicked(AudioMsgId::Type::Song);
++	});
++	_previous->setClickedCallback([=] {
++		Media::Player::instance()->previous(AudioMsgId::Type::Song);
++	});
++	_next->setClickedCallback([=] {
++		Media::Player::instance()->next(AudioMsgId::Type::Song);
++	});
++
++	_playPause->setAccessibleName(tr::lng_shortcuts_media_play(tr::now));
++	_previous->setAccessibleName(tr::lng_shortcuts_media_previous(tr::now));
++	_next->setAccessibleName(tr::lng_shortcuts_media_next(tr::now));
++	_show->setAccessibleName(tr::lng_reply_show_in_chat(tr::now));
++	_forward->setAccessibleName(tr::lng_context_forward_msg(tr::now));
++	_link->setAccessibleName(tr::lng_context_copy_message_link(tr::now));
++	_download->setAccessibleName(tr::lng_mediaview_save_as(tr::now));
++
++	_show->setClickedCallback([=] { showInChat(); });
++	_forward->setClickedCallback([=] { forwardTrack(); });
++	_link->setClickedCallback([=] { copyLink(); });
++	_download->setClickedCallback([=] { downloadTrack(); });
++
++	_seek->setChangeProgressCallback([=](float64 progress) {
++		if (!Media::Player::instance()->isSeeking(AudioMsgId::Type::Song)) {
++			Media::Player::instance()->startSeeking(AudioMsgId::Type::Song);
++		}
++		updateElapsed(crl::time(_durationMs * progress));
++	});
++	_seek->setChangeFinishedCallback([=](float64 progress) {
++		Media::Player::instance()->finishSeeking(AudioMsgId::Type::Song, progress);
++	});
++
++	const auto applyVolume = [=](float64 volume) {
++		auto &settings = Core::App().settings();
++		if (volume != settings.songVolume()) {
++			Media::Player::mixer()->setSongVolume(volume);
++			settings.setSongVolume(volume);
++		}
++	};
++	_volume->setChangeProgressCallback([=](float64 volume) {
++		applyVolume(volume);
++	});
++	_volume->setChangeFinishedCallback([=](float64 volume) {
++		if (volume > 0) {
++			Core::App().settings().setRememberedSongVolume(volume);
++		}
++		applyVolume(volume);
++		Core::App().saveSettingsDelayed();
++	});
++
++	_rate->setClickedCallback([=] {
++		const auto rates = PlaybackRates();
++		const auto current = Core::App().settings().audioPlaybackSpeed();
++		auto index = 0;
++		for (auto i = 0; i != int(rates.size()); ++i) {
++			if (Media::EqualSpeeds(rates[i], current)) {
++				index = i;
++				break;
++			}
++		}
++		const auto speed = rates[(index + 1) % rates.size()];
++		Core::App().settings().setAudioPlaybackSpeed(speed);
++		Core::App().saveSettingsDelayed();
++		Media::Player::instance()->updatePlaybackSpeed();
++		refreshRate();
++	});
++}
++
++void PlayerSheet::setupSubscriptions() {
++	Media::Player::instance()->updatedNotifier(
++	) | rpl::on_next([=](const Media::Player::TrackState &state) {
++		updateState(state);
++	}, lifetime());
++
++	Media::Player::instance()->trackChanged(
++	) | rpl::filter([=](AudioMsgId::Type type) {
++		return (type == AudioMsgId::Type::Song);
++	}) | rpl::on_next([=] {
++		refreshTrack();
++	}, lifetime());
++
++	Media::Player::instance()->playlistChanges(
++		AudioMsgId::Type::Song
++	) | rpl::on_next([=] {
++		refreshControls();
++	}, lifetime());
++
++	Media::Player::instance()->stops(
++		AudioMsgId::Type::Song
++	) | rpl::on_next([=] {
++		closeLayer();
++	}, lifetime());
++
++	Core::App().settings().songVolumeChanges(
++	) | rpl::on_next([=] {
++		refreshVolume();
++	}, lifetime());
++
++	Core::App().settings().audioPlaybackSpeedChanges(
++	) | rpl::on_next([=] {
++		refreshRate();
++	}, lifetime());
++
++	_controller->session().downloaderTaskFinished(
++	) | rpl::on_next([=] {
++		if (_coverPending && CoverImage(_coverMedia)) {
++			_coverPending = false;
++			update();
++		}
++	}, lifetime());
++}
++
++void PlayerSheet::parentResized() {
++	layoutChildren();
++}
++
++void PlayerSheet::layoutChildren() {
++	const auto width = st::playerSheetWidth;
++	const auto padding = st::playerSheetPadding;
++	const auto gap = st::playerSheetGap;
++	const auto inner = width - 2 * padding;
++	const auto noteHeight = st::playerSheetSeekHeight;
++	const auto timeWidth = st::playerSheetTimeWidth;
++	const auto timeSkip = st::playerSheetTimeSkip;
++	auto y = padding + st::playerSheetCover + gap;
++
++	_title->resizeToNaturalWidth(inner);
++	_title->moveToLeft(padding + (inner - _title->width()) / 2, y);
++	y += _title->height() + st::playerSheetTitleSkip;
++
++	_performer->resizeToNaturalWidth(inner);
++	_performer->moveToLeft(padding + (inner - _performer->width()) / 2, y);
++	y += _performer->height() + gap;
++
++	_elapsed->moveToLeft(
++		padding,
++		y + (noteHeight - _elapsed->height()) / 2);
++	_total->moveToLeft(
++		padding + inner - timeWidth + (timeWidth - _total->width()) / 2,
++		y + (noteHeight - _total->height()) / 2);
++	_seek->setGeometry(
++		padding + timeWidth + timeSkip,
++		y,
++		inner - 2 * (timeWidth + timeSkip),
++		noteHeight);
++	y += noteHeight + gap;
++
++	const auto transportSkip = st::playerSheetTransportSkip;
++	const auto transportWidth = _previous->width()
++		+ _playPause->width()
++		+ _next->width()
++		+ 2 * transportSkip;
++	const auto transportHeight = st::playerSheetTransportHeight;
++	auto left = (width - transportWidth) / 2;
++	_previous->moveToLeft(
++		left,
++		y + (transportHeight - _previous->height()) / 2);
++	left += _previous->width() + transportSkip;
++	_playPause->moveToLeft(
++		left,
++		y + (transportHeight - _playPause->height()) / 2);
++	left += _playPause->width() + transportSkip;
++	_next->moveToLeft(
++		left,
++		y + (transportHeight - _next->height()) / 2);
++	y += transportHeight + gap;
++
++	_rate->moveToLeft(
++		padding + inner - _rate->width(),
++		y + (noteHeight - _rate->height()) / 2);
++	_volume->setGeometry(
++		padding,
++		y,
++		inner - _rate->width() - gap,
++		noteHeight);
++	y += noteHeight + gap;
++
++	const auto actions = {
++		_show.data(),
++		_forward.data(),
++		_link.data(),
++		_download.data()
++	};
++	const auto slot = inner / int(actions.size());
++	auto index = 0;
++	for (auto *button : actions) {
++		button->moveToLeft(
++			padding + slot * index + (slot - button->width()) / 2,
++			y + (st::playerSheetActionsHeight - button->height()) / 2);
++		++index;
++	}
++	y += st::playerSheetActionsHeight + padding;
++
++	if (size() != QSize(width, y)) {
++		resize(width, y);
++	}
++	if (const auto parent = parentWidget()) {
++		moveToLeft(
++			(parent->width() - width) / 2,
++			(parent->height() - y) / 2);
++	}
++}
++
++void PlayerSheet::refreshTrack() {
++	const auto song = AudioMsgId::Type::Song;
++	const auto current = Media::Player::instance()->current(song);
++	_current = current;
++	const auto document = current.audio();
++	if (!document) {
++		_title->setText(QString());
++		_performer->setText(QString());
++		_coverMedia = nullptr;
++		_coverPending = false;
++		_elapsed->setText(Ui::FormatDurationText(0));
++		_total->setText(Ui::FormatDurationText(0));
++		_seek->setValue(0.);
++		refreshControls();
++		layoutChildren();
++		update();
++		return;
++	}
++
++	auto title = QString();
++	auto performer = QString();
++	if (const auto data = document->song()) {
++		title = data->title;
++		performer = data->performer;
++	} else {
++		const auto composed = Ui::Text::FormatSongNameFor(
++			document).composedName();
++		title = composed.title;
++		performer = composed.performer;
++	}
++	_title->setText(title);
++	_performer->setText(performer);
++
++	_coverMedia = document->createMediaView();
++	_coverMedia->thumbnailWanted(Data::FileOrigin(current.contextId()));
++	_coverPending = !CoverImage(_coverMedia);
++
++	refreshControls();
++	layoutChildren();
++	update();
++}
++
++void PlayerSheet::updateState(const Media::Player::TrackState &state) {
++	const auto document = state.id.audio();
++	if (state.id.type() != AudioMsgId::Type::Song || !document) {
++		return;
++	}
++	if (_current.audio() != document
++		|| _current.contextId() != state.id.contextId()) {
++		refreshTrack();
++	}
++	const auto frequency = std::max(state.frequency, 1);
++	_durationMs = (state.length * 1000LL) / frequency;
++	_total->setText(Ui::FormatDurationText(_durationMs / 1000));
++	_seek->setDisabled(document->loading());
++	if (!_seek->isChanging()) {
++		const auto progress = state.length
++			? std::clamp(float64(state.position) / state.length, 0., 1.)
++			: 0.;
++		_seek->setValue(progress);
++		updateElapsed((state.position * 1000LL) / frequency);
++	}
++	const auto pause = Media::Player::ShowPauseIcon(state.state)
++		|| Media::Player::instance()->isSeeking(AudioMsgId::Type::Song);
++	_playPause->setIconOverride(pause ? &st::playerSheetPauseIcon : nullptr);
++}
++
++void PlayerSheet::updateElapsed(crl::time position) {
++	_elapsed->setText(Ui::FormatDurationText(position / 1000));
++}
++
++void PlayerSheet::refreshControls() {
++	const auto song = AudioMsgId::Type::Song;
++	_previous->setIconOverride(Media::Player::instance()->previousAvailable(song)
++		? nullptr
++		: &st::mediaPlayerPreviousDisabledIcon);
++	_next->setIconOverride(Media::Player::instance()->nextAvailable(song)
++		? nullptr
++		: &st::mediaPlayerNextDisabledIcon);
++
++	const auto item = currentItem();
++	for (auto *button : {
++			_show.data(),
++			_forward.data(),
++			_link.data(),
++			_download.data() }) {
++		button->setEnabled(item != nullptr);
++	}
++	_link->setEnabled(item && item->hasDirectLink());
++}
++
++void PlayerSheet::refreshRate() {
++	const auto speed = Core::App().settings().audioPlaybackSpeed();
++	const auto text = QString::number(base::SafeRound(speed * 10) / 10.)
++		+ u"x"_q;
++	_rate->setText(rpl::single(text));
++	_rate->setAccessibleName(tr::lng_mediaview_playback_speed(
++		tr::now,
++		lt_speed,
++		text));
++}
++
++void PlayerSheet::refreshVolume() {
++	if (!_volume->isChanging()) {
++		_volume->setValue(Core::App().settings().songVolume());
++	}
++}
++
++HistoryItem *PlayerSheet::currentItem() const {
++	const auto id = currentId();
++	return id ? _controller->session().data().message(id) : nullptr;
++}
++
++FullMsgId PlayerSheet::currentId() const {
++	return Media::Player::instance()->current(AudioMsgId::Type::Song).contextId();
++}
++
++void PlayerSheet::showInChat() {
++	if (const auto item = currentItem()) {
++		closeLayer();
++		_controller->showMessage(item);
++	}
++}
++
++void PlayerSheet::forwardTrack() {
++	if (const auto id = currentId(); id) {
++		Window::ShowForwardMessagesBox(
++			_controller,
++			MessageIdsList{ id },
++			nullptr);
++	}
++}
++
++void PlayerSheet::copyLink() {
++	if (const auto id = currentId(); id) {
++		HistoryView::CopyPostLink(
++			_controller,
++			id,
++			HistoryView::Context::History);
++	}
++}
++
++void PlayerSheet::downloadTrack() {
++	const auto current = Media::Player::instance()->current(
++		AudioMsgId::Type::Song);
++	const auto document = current.audio();
++	if (document && current.contextId()) {
++		DocumentSaveClickHandler::SaveAndTrack(
++			current.contextId(),
++			document);
++	}
++}
++
++void PlayerSheet::paintEvent(QPaintEvent *e) {
++	auto p = QPainter(this);
++	auto hq = PainterHighQualityEnabler(p);
++	Ui::FillRoundRect(p, rect(), st::playerSheetBg, _corners);
++
++	const auto border = st::playerSheetBorderWidth;
++	if (border > 0) {
++		auto pen = QPen(st::playerSheetBorderFg->c);
++		pen.setWidthF(border);
++		p.setPen(pen);
++		p.setBrush(Qt::NoBrush);
++		const auto half = border / 2.;
++		p.drawRoundedRect(
++			QRectF(rect()).adjusted(half, half, -half, -half),
++			st::playerSheetRadius * 1.,
++			st::playerSheetRadius * 1.);
++	}
++
++	const auto cover = QRect(
++		(width() - st::playerSheetCover) / 2,
++		st::playerSheetPadding,
++		st::playerSheetCover,
++		st::playerSheetCover);
++	paintCover(p, cover);
++}
++
++void PlayerSheet::paintCover(QPainter &p, QRect rect) {
++	auto path = QPainterPath();
++	const auto radius = st::playerSheetCoverRadius * 1.;
++	path.addRoundedRect(rect, radius, radius);
++	p.save();
++	p.setClipPath(path);
++	if (const auto image = CoverImage(_coverMedia)) {
++		const auto scaled = image->size().scaled(
++			rect.size(),
++			Qt::KeepAspectRatioByExpanding);
++		p.drawPixmap(
++			rect.x() + (rect.width() - scaled.width()) / 2,
++			rect.y() + (rect.height() - scaled.height()) / 2,
++			image->pixSingle(scaled));
++	} else {
++		p.fillRect(rect, st::playerSheetCoverBg);
++		st::playerSheetCoverIcon.paintInCenter(p, rect);
++	}
++	p.restore();
++}
++
++} // namespace Exteraless
+diff --git a/Telegram/SourceFiles/media/player/player_sheet.h b/Telegram/SourceFiles/media/player/player_sheet.h
+new file mode 100644
+index 0000000..a56bd6b
+--- /dev/null
++++ b/Telegram/SourceFiles/media/player/player_sheet.h
+@@ -0,0 +1,102 @@
++/*
++This file is part of Telegram Desktop,
++the official desktop application for the Telegram messaging service.
++
++For license and copyright information please follow this link:
++https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
++*/
++#pragma once
++
++#include "data/data_audio_msg_id.h"
++#include "ui/cached_round_corners.h"
++#include "ui/layers/layer_widget.h"
++#include "base/object_ptr.h"
++
++#include <memory>
++
++class HistoryItem;
++class QPainter;
++
++namespace Data {
++class DocumentMedia;
++} // namespace Data
++
++namespace Ui {
++class FlatLabel;
++class LabelSimple;
++class IconButton;
++class RoundButton;
++class MediaSlider;
++} // namespace Ui
++
++namespace Window {
++class SessionController;
++} // namespace Window
++
++namespace Media::Player {
++struct TrackState;
++} // namespace Media::Player
++
++namespace Exteraless {
++
++class PlayerSheet final : public Ui::LayerWidget {
++public:
++	PlayerSheet(
++		QWidget *parent,
++		not_null<Window::SessionController*> controller);
++	~PlayerSheet();
++
++	static void Show(not_null<Window::SessionController*> controller);
++
++	void parentResized() override;
++
++private:
++	void setupControls();
++	void setupSubscriptions();
++	void layoutChildren();
++
++	void refreshTrack();
++	void updateState(const Media::Player::TrackState &state);
++	void updateElapsed(crl::time position);
++	void refreshControls();
++	void refreshRate();
++	void refreshVolume();
++
++	[[nodiscard]] HistoryItem *currentItem() const;
++	[[nodiscard]] FullMsgId currentId() const;
++
++	void showInChat();
++	void forwardTrack();
++	void copyLink();
++	void downloadTrack();
++
++	void paintEvent(QPaintEvent *e) override;
++	void paintCover(QPainter &p, QRect rect);
++
++	const not_null<Window::SessionController*> _controller;
++
++	object_ptr<Ui::FlatLabel> _title = { nullptr };
++	object_ptr<Ui::FlatLabel> _performer = { nullptr };
++	object_ptr<Ui::LabelSimple> _elapsed = { nullptr };
++	object_ptr<Ui::LabelSimple> _total = { nullptr };
++	object_ptr<Ui::IconButton> _previous = { nullptr };
++	object_ptr<Ui::IconButton> _playPause = { nullptr };
++	object_ptr<Ui::IconButton> _next = { nullptr };
++	object_ptr<Ui::MediaSlider> _seek = { nullptr };
++	object_ptr<Ui::MediaSlider> _volume = { nullptr };
++	object_ptr<Ui::RoundButton> _rate = { nullptr };
++	object_ptr<Ui::IconButton> _show = { nullptr };
++	object_ptr<Ui::IconButton> _forward = { nullptr };
++	object_ptr<Ui::IconButton> _link = { nullptr };
++	object_ptr<Ui::IconButton> _download = { nullptr };
++
++	AudioMsgId _current;
++	std::shared_ptr<Data::DocumentMedia> _coverMedia;
++	Ui::CornersPixmaps _corners;
++
++	crl::time _durationMs = 0;
++	bool _coverPending = false;
++
++};
++
++} // namespace Exteraless
 diff --git a/Telegram/SourceFiles/media/view/media_view.style b/Telegram/SourceFiles/media/view/media_view.style
 index 8e69f8d..6913998 100644
 --- a/Telegram/SourceFiles/media/view/media_view.style

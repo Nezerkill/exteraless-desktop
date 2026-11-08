@@ -71,7 +71,14 @@ sibling-чекаутом: `../exteraless`.
     медиавьюера — только при включённом гейте.
   - `media_player.*` — рестайл мини-плеера v1 (NB-50): скруглённая обложка,
     MD3-типографика, pill-сикбар; всё через `media_player.style`
-    (`mediaPlayerHeight: 42px`); экспорт отвязан отдельным ключом.
+    (`mediaPlayerHeight: 42px`); экспорт отвязан отдельным ключом. v2 —
+    полноэкранный `PlayerSheet` (`media/player/player_sheet.*`,
+    `Exteraless::PlayerSheet` на `Ui::LayerWidget`) показывает состояние
+    `Media::Player::Instance` без своего плеера: обложка, титул/исполнитель,
+    контролы, сикбар и громкость, скорость, четыре действия (показать в
+    чате, переслать, копировать ссылку, скачать); вход — только
+    expand-кнопка мини-плеера; стиль — блок `playerSheet*`, ключ
+    `lng_sr_player_expand`.
   - `stt.*` — офлайн-распознавание речи (NB-51): sherpa-onnx 1.13.8 из
     pinned nixpkgs (`buildInputs` + FOD модели + `EXTERALESS_STT_MODEL`),
     WAV-декод + собственный реземплер в mono 16k, `TranscribePcm`

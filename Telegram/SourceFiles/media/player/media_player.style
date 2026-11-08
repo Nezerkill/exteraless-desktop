@@ -402,3 +402,135 @@ mediaPlayerOrderIconReverse: icon{{ "player/player_order", windowFg }};
 mediaPlayerOrderIconReverseActive: icon{{ "player/player_order", windowActiveTextFg }};
 mediaPlayerOrderIconShuffle: icon{{ "player/player_shuffle", windowFg }};
 mediaPlayerOrderIconShuffleActive: icon{{ "player/player_shuffle", windowActiveTextFg }};
+
+playerSheetWidth: 360px;
+playerSheetPadding: 18px;
+playerSheetGap: 12px;
+playerSheetRadius: 16px;
+playerSheetBorderWidth: 1px;
+playerSheetBg: boxBg;
+playerSheetBorderFg: windowBgOver;
+
+playerSheetCover: 96px;
+playerSheetCoverRadius: 12px;
+playerSheetCoverBg: windowBgOver;
+playerSheetCoverIcon: icon {
+	{ "player/player_play", windowSubTextFg }
+};
+
+playerSheetTitleSkip: 2px;
+playerSheetSeekHeight: 24px;
+playerSheetTimeWidth: 56px;
+playerSheetTimeSkip: 6px;
+playerSheetTransportHeight: 48px;
+playerSheetTransportSkip: 18px;
+playerSheetActionsHeight: 40px;
+
+playerSheetTitle: FlatLabel(defaultFlatLabel) {
+	maxHeight: 22px;
+	textFg: windowFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(15px semibold);
+	}
+}
+playerSheetPerformer: FlatLabel(defaultFlatLabel) {
+	maxHeight: 18px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+playerSheetTime: LabelSimple(defaultLabelSimple) {
+	font: font(11px);
+	textFg: windowSubTextFg;
+}
+
+playerSheetSeek: MediaSlider(defaultContinuousSlider) {
+	width: 4px;
+	seekSize: size(10px, 10px);
+	activeFg: mediaPlayerActiveFg;
+	inactiveFg: windowBgOver;
+	activeFgOver: mediaPlayerActiveFg;
+	inactiveFgOver: windowBgOver;
+	activeFgDisabled: windowBgOver;
+	inactiveFgDisabled: windowBgOver;
+	receivedTillFg: windowBgOver;
+}
+playerSheetVolume: MediaSlider(defaultContinuousSlider) {
+	width: 4px;
+	seekSize: size(8px, 8px);
+	activeFg: mediaPlayerActiveFg;
+	inactiveFg: windowBgOver;
+	activeFgOver: mediaPlayerActiveFg;
+	inactiveFgOver: windowBgOver;
+	activeFgDisabled: windowBgOver;
+	inactiveFgDisabled: windowBgOver;
+	receivedTillFg: windowBgOver;
+}
+
+playerSheetPlayIcon: icon {
+	{ "player/player_play", mediaPlayerActiveFg }
+};
+playerSheetPauseIcon: icon {
+	{ "player/player_pause", mediaPlayerActiveFg }
+};
+playerSheetShowIcon: icon {
+	{ "filled_go_to_message", windowSubTextFg }
+};
+playerSheetForwardIcon: icon {
+	{ "menu/forward", windowSubTextFg }
+};
+playerSheetLinkIcon: icon {
+	{ "menu/link", windowSubTextFg }
+};
+playerSheetDownloadIcon: icon {
+	{ "menu/download", windowSubTextFg }
+};
+
+playerSheetPlay: IconButton(mediaPlayerRepeatButton) {
+	width: 48px;
+	height: 48px;
+	icon: playerSheetPlayIcon;
+	iconPosition: point(12px, 12px);
+	rippleAreaPosition: point(12px, 12px);
+	rippleAreaSize: 24px;
+}
+playerSheetPrevious: IconButton(mediaPlayerPreviousButton) {
+	width: 40px;
+	height: 40px;
+	iconPosition: point(8px, 8px);
+	rippleAreaPosition: point(8px, 8px);
+	rippleAreaSize: 24px;
+}
+playerSheetNext: IconButton(mediaPlayerNextButton) {
+	width: 40px;
+	height: 40px;
+	iconPosition: point(8px, 8px);
+	rippleAreaPosition: point(8px, 8px);
+	rippleAreaSize: 24px;
+}
+playerSheetAction: IconButton(mediaPlayerRepeatButton) {
+	width: 40px;
+	height: 40px;
+	iconPosition: point(8px, 8px);
+	rippleAreaPosition: point(8px, 8px);
+	rippleAreaSize: 24px;
+}
+playerSheetSpeed: RoundButton(defaultActiveButton) {
+	textFg: windowFg;
+	textFgOver: windowFg;
+	numbersTextFg: windowSubTextFg;
+	numbersTextFgOver: windowSubTextFg;
+	textBg: windowBgOver;
+	textBgOver: windowBgOver;
+	width: 46px;
+	height: 24px;
+	radius: 12px;
+	textTop: 4px;
+	style: TextStyle(defaultTextStyle) {
+		font: font(11px semibold);
+	}
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: lightButtonBgOver;
+	}
+}

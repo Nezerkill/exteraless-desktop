@@ -41,6 +41,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "window/window_session_controller.h"
 #include "styles/style_media_player.h"
+#include "styles/style_menu_icons.h"
+
+#if __has_include("media/player/player_sheet.h")
+#include "media/player/player_sheet.h"
+#endif // __has_include("media/player/player_sheet.h")
 
 #include <QtGui/QPainterPath>
 
@@ -111,6 +116,17 @@ Widget::Widget(
 	resize(width(), st::mediaPlayerHeight + st::lineWidth);
 
 	setupRightControls();
+
+#if __has_include("media/player/player_sheet.h")
+	_expand.create(this, st::mediaPlayerRepeatButton);
+	_expand->setIconOverride(&st::menuIconExpand);
+	_expand->setAccessibleName(tr::lng_sr_player_expand(tr::now));
+	_expand->setClickedCallback([=] {
+		Exteraless::PlayerSheet::Show(_controller);
+	});
+	_expand->show();
+	hidePlaylistOn(_expand);
+#endif // __has_include("media/player/player_sheet.h")
 
 	_volumeToggle->setAccessibleName(tr::lng_ringtones_box_volume(tr::now));
 	_repeatToggle->setAccessibleName(tr::lng_schedule_repeat_label(tr::now));
@@ -446,6 +462,11 @@ void Widget::resizeEvent(QResizeEvent *e) {
 void Widget::updateControlsGeometry() {
 	_close->moveToRight(st::mediaPlayerCloseRight, st::mediaPlayerControlsTop);
 	auto right = 0;
+	if (_expand) {
+		_expand->moveToRight(
+			st::mediaPlayerCloseRight + _close->width(),
+			st::mediaPlayerControlsTop);
+	}
 	if (hasPlaybackSpeedControl()) {
 		_speedToggle->moveToRight(right, st::mediaPlayerControlsTop);
 		right += _speedToggle->width();
@@ -478,7 +499,11 @@ void Widget::updateControlsWrapGeometry() {
 	const auto controls = getTimeRight() + _timeLabel->width() + fade;
 	rightControls()->resize(controls, _repeatToggle->height());
 	_rightControls->move(
-		width() - st::mediaPlayerCloseRight - _close->width() - controls,
+		width()
+			- st::mediaPlayerCloseRight
+			- _close->width()
+			- (_expand ? _expand->width() : 0)
+			- controls,
 		st::mediaPlayerControlsTop);
 }
 
@@ -694,6 +719,7 @@ int Widget::getNameLeft() const {
 int Widget::getNameRight() const {
 	return st::mediaPlayerCloseRight
 		+ _close->width()
+		+ (_expand ? _expand->width() : 0)
 		+ st::mediaPlayerPadding;
 }
 

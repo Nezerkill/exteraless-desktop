@@ -130,6 +130,18 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 11 ayu-import, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- Полноэкранный лист плеера (NB-50, v2): `media/player/player_sheet.{h,cpp}`
+  — `Exteraless::PlayerSheet` на `Ui::LayerWidget` показывает состояние
+  `Media::Player::Instance` (view-only, своего состояния не заводит):
+  обложка, титул/исполнитель, контролы, сикбар и громкость, скорость.
+  Четыре действия: показать в чате, переслать, копировать ссылку, скачать.
+  Вход только из мини-плеера — expand-кнопка (`menuIconExpand` под
+  `__has_include`-адаптацией); из share/peer-меню листа нет. Стиль — блок
+  `playerSheet*` в `media_player.style`, 1 lang-ключ
+  `lng_sr_player_expand`, CMake +2. Раннеры 1182/32/279 PASS (без
+  изменений); `kKeysCount` 11249 (+1 ключ, +1 retired-слот); патч
+  `cc1f6075…`, flake PASS. Не сделано: очередь и drag (v3), палитра.
+  Ограничения: Xvfb-смоук не выполнялся.
 - MD3-рестайл мини-плеера (NB-50, v1): скруглённая обложка, MD3-типографика,
   новый сикбар; всё через `media_player.style` (`mediaPlayerHeight: 42px`);
   экспортная полоса отвязана (`exportTopBarHeight: 35px`); раннеры
