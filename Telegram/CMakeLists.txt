@@ -1594,6 +1594,10 @@ PRIVATE
     media/player/media_player_volume_controller.h
     media/player/media_player_widget.cpp
     media/player/media_player_widget.h
+    media/player/player_queue.cpp
+    media/player/player_queue.h
+    media/player/player_queue_sheet.cpp
+    media/player/player_queue_sheet.h
     media/player/player_sheet.cpp
     media/player/player_sheet.h
     media/stories/media_stories_caption_full_view.cpp

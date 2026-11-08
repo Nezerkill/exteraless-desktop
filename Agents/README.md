@@ -78,7 +78,9 @@ sibling-чекаутом: `../exteraless`.
     контролы, сикбар и громкость, скорость, четыре действия (показать в
     чате, переслать, копировать ссылку, скачать); вход — только
     expand-кнопка мини-плеера; стиль — блок `playerSheet*`, ключ
-    `lng_sr_player_expand`.
+    `lng_sr_player_expand`. v3 — очередь: `Exteraless::PlayerQueue`
+    (ordered-модель + sync) и `QueueSheet` (строки, палитра-акцент
+    с кэшем, drag, кнопка входа); playback читает слайс.
   - `stt.*` — офлайн-распознавание речи (NB-51): sherpa-onnx 1.13.8 из
     pinned nixpkgs (`buildInputs` + FOD модели + `EXTERALESS_STT_MODEL`),
     WAV-декод + собственный реземплер в mono 16k, `TranscribePcm`

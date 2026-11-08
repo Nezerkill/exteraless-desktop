@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "media/player/media_player_widget.h"
 
+#include "base/qt/qt_string_view.h"
 #include "platform/platform_specific.h"
 #include "data/data_document.h"
 #include "data/data_document_media.h"
@@ -17,6 +18,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/core_settings.h"
 #include "ui/image/image.h"
 #include "ui/painter.h"
+#include "ui/qt_object_factory.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/continuous_sliders.h"
 #include "ui/widgets/shadow.h"
@@ -46,6 +48,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #if __has_include("media/player/player_sheet.h")
 #include "media/player/player_sheet.h"
 #endif // __has_include("media/player/player_sheet.h")
+
+#if __has_include("media/player/player_queue_sheet.h")
+#include "media/player/player_queue_sheet.h"
+#endif // __has_include("media/player/player_queue_sheet.h")
 
 #include <QtGui/QPainterPath>
 
@@ -127,6 +133,19 @@ Widget::Widget(
 	_expand->show();
 	hidePlaylistOn(_expand);
 #endif // __has_include("media/player/player_sheet.h")
+
+#if __has_include("media/player/player_queue_sheet.h")
+	_queue.create(
+		this,
+		st::mediaPlayerRepeatButton);
+	_queue->setIconOverride(&st::menuIconReorder);
+	_queue->setAccessibleName(tr::lng_sr_player_queue(tr::now));
+	_queue->setClickedCallback([=] {
+		Exteraless::QueueSheet::Show(_controller);
+	});
+	_queue->show();
+	hidePlaylistOn(_queue);
+#endif // __has_include("media/player/player_queue_sheet.h")
 
 	_volumeToggle->setAccessibleName(tr::lng_ringtones_box_volume(tr::now));
 	_repeatToggle->setAccessibleName(tr::lng_schedule_repeat_label(tr::now));
@@ -467,6 +486,13 @@ void Widget::updateControlsGeometry() {
 			st::mediaPlayerCloseRight + _close->width(),
 			st::mediaPlayerControlsTop);
 	}
+	if (const auto queue = _queue.data()) {
+		queue->moveToRight(
+			st::mediaPlayerCloseRight
+				+ _close->width()
+				+ (_expand ? _expand->width() : 0),
+			st::mediaPlayerControlsTop);
+	}
 	if (hasPlaybackSpeedControl()) {
 		_speedToggle->moveToRight(right, st::mediaPlayerControlsTop);
 		right += _speedToggle->width();
@@ -497,12 +523,14 @@ void Widget::updateControlsGeometry() {
 void Widget::updateControlsWrapGeometry() {
 	const auto fade = st::mediaPlayerControlsFade.width();
 	const auto controls = getTimeRight() + _timeLabel->width() + fade;
+	const auto queue = _queue.data();
 	rightControls()->resize(controls, _repeatToggle->height());
 	_rightControls->move(
 		width()
 			- st::mediaPlayerCloseRight
 			- _close->width()
 			- (_expand ? _expand->width() : 0)
+			- (queue ? queue->width() : 0)
 			- controls,
 		st::mediaPlayerControlsTop);
 }
@@ -717,9 +745,11 @@ int Widget::getNameLeft() const {
 }
 
 int Widget::getNameRight() const {
+	const auto queue = _queue.data();
 	return st::mediaPlayerCloseRight
 		+ _close->width()
 		+ (_expand ? _expand->width() : 0)
+		+ (queue ? queue->width() : 0)
 		+ st::mediaPlayerPadding;
 }
 

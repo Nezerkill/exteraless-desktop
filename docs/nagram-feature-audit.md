@@ -186,7 +186,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Cloud settings | `OpenExteraCloudActivity`, `CloudSettingsHelper` | 4 ключа | ❌ |
 | Pill Stack | `PillStackConfig`, `app/exteraless/pillstack/*` | 15 типов пилюль | ✅ 8 из 15 |
 | Drawer и навигация | `app/exteraless/drawer/*`, `MainMenuLayout` | 20 пунктов меню | 🟡 5 пунктов, порядок, аккаунты |
-| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | 🟡 тексты песен из файла и онлайн (lrclib.net) ✅ NB-50 фазы 1–2 (см. 6.13), рестайл мини-плеера v1 ✅, полноэкранный PlayerSheet ✅ NB-50 v2, ❌ очередь с drag, ➖ MPRIS |
+| Плеер и now playing | `app/exteraless/player/*` (21 файл), `nowplaying/*` | 30+ ключей | 🟡 тексты песен из файла и онлайн (lrclib.net) ✅ NB-50 фазы 1–2 (см. 6.13), рестайл мини-плеера v1 ✅, полноэкранный PlayerSheet ✅ NB-50 v2, очередь с drag ✅ NB-50 v3 (playback — слайс), ➖ MPRIS |
 | Иконпаки / эмодзи / глиф | `icons/*` (15 файлов), `appicons/*`, `glyph/*` | ~20 | ⛔/❌ (иконки tdesktop — `lib_ui` + `.style`) |
 | Плагины | `plugins/*`, `src/main/python/*`, `ExteraConfig` шим | 9 разрешений, 3 уровня | ✅ stage 1–3: настройки ✅ NB-79.3a (`OEPluginSettings`, `ShowPluginSettingsBox`, CLI `settings-get`/`settings-set`), меню ✅ NB-30 (`MenuItemType` `main`/`message`/`chat`, снимок `menu` в `loaded`, пункты в главном меню и в конце контекстного меню сообщения, CLI `menu-list`/`menu-click`), intents и trust-уровни ✅ NB-79.3c (`OEPluginTrustLevels` JSON `id → 0/1/2`, default `1` — Gated; снимок `intents` в `loaded`, `cmd:intent` → `intent-result` с таймаутом 2 с, `Runtime::dispatchIntent` из хука `openLocalUrl` в фазах before/after, селектор Isolated/Gated/Trusted в боксе, CLI `plugin-level`/`plugin-level-set`/`intent-test`, `check_plugin_intents` 27 → host 279), ⛔ Xposed |
 | Приватность | `app/exteraless/privacy/*`, `NekoConfig` | ~8 | ❌, ➖ локальный пароль |
@@ -213,7 +213,7 @@ Nix-сборка её содержат и у неё есть отдельные 
 | Разделители | `dividerStyle`, `hideDividers` | ⛔ у строк списка чатов в 7.3.1 нет разделителей |
 | Эмодзи и шрифты | `useSystemEmoji`, `emojiSets`, `typeface`, `iconPacks` | ⛔/❌ (`lib_ui/ui/emoji_config.cpp`, иконки `.style`) |
 | Monet и M3-компоненты | `monetStyle`, `m3ListItems` | ⛔ динамические цвета Android 12+ |
-| Плеер | 30+ `OEPlayer*` | 🟡 тексты песен из файла и онлайн ✅ NB-50 фазы 1–2, рестайл мини-плеера v1 ✅, полноэкранный PlayerSheet ✅ NB-50 v2, остальное (очередь с drag, палитра) ❌ — см. 6.13 |
+| Плеер | 30+ `OEPlayer*` | 🟡 тексты песен из файла и онлайн ✅ NB-50 фазы 1–2, рестайл мини-плеера v1 ✅, полноэкранный PlayerSheet ✅ NB-50 v2, очередь с drag ✅ NB-50 v3 (playback — слайс), палитра ❌ (только акцент) — см. 6.13 |
 | Прочее | `forceSnow`, `profileMusicCard`, `titleText`, `showFeedTab`, `feedUnreadCounter` | ❌ |
 
 Отдельно: `docs/feature-mapping.md` фиксирует, что `OEAppearance*` не
@@ -475,9 +475,7 @@ share/peer-меню лист не открывается. Стиль — бло�
 `media_player.style`, 1 lang-ключ `lng_sr_player_expand`, CMake +2;
 раннеры 1182/32/279 PASS (без изменений), `kKeysCount` 11249
 (+1 ключ, +1 retired-слот), патч `cc1f6075…`.
-❌ очередь с drag (`PlayerQueueSheet`) и палитра (`PlayerStyleEditor`)
-не сделаны (v3); auto-fetch по совпадению и server-side транскрипция
-(= NB-51) — тоже; отдельного `PlayerMiniView` нет.
+✅ очередь с drag v3 (`PlayerQueue` + `QueueSheet`, playback читает слайс; палитра — только акцент активной строки, без `PlayerStyleEditor`); auto-fetch по совпадению и server-side транскрипция (= NB-51) — нет; отдельного `PlayerMiniView` нет.
 Ограничения: выбранный файл виден после переоткрытия вкладки Media;
 онлайн — только ручной поиск; Xvfb-смоук не выполнялся.
 

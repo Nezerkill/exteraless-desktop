@@ -2,6 +2,14 @@
 
 ## 2026-11-08
 
+- Очередь воспроизведения (NB-50, v3): `Exteraless::PlayerQueue`
+  (ordered-модель + sync по `playlistChanges`, `playlistTrackIds`
+  accessor); сайд-лист `player_queue_sheet.*` (строки, палитра-акцент
+  из `DominantCanvasBackground` с кэшем, drag-перестановка, кнопка входа
+  в мини-плеере); раннеры 1182/32/279 PASS (без изменений);
+  `kKeysCount` 11251 (+2); патч `d77785ad…`, flake PASS. Ограничения:
+  порядок живёт пока открыт лист; drag без edge-autoscroll; playback
+  читает слайс, а не локальный порядок; Xvfb-смоук не выполнялся.
 - Полноэкранный лист плеера (NB-50, v2): `media/player/player_sheet.{h,cpp}` —
   `Exteraless::PlayerSheet` на `Ui::LayerWidget` показывает состояние
   `Media::Player::Instance` (view-only, своего состояния не заводит): обложка,

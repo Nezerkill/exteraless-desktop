@@ -856,6 +856,20 @@ rpl::producer<> Media::Player::Instance::playlistChanges(
 		repeatChanges(data) | rpl::to_empty);
 }
 
+std::vector<FullMsgId> Media::Player::Instance::playlistTrackIds(
+		AudioMsgId::Type type) const {
+	const auto data = getData(type);
+	if (!data || !data->playlistSlice) {
+		return {};
+	}
+	auto result = std::vector<FullMsgId>();
+	result.reserve(data->playlistSlice->size());
+	for (auto i = 0; i != data->playlistSlice->size(); ++i) {
+		result.push_back((*data->playlistSlice)[i]);
+	}
+	return result;
+}
+
 rpl::producer<> Media::Player::Instance::stops(AudioMsgId::Type type) const {
 	return _playerStopped.events(
 	) | rpl::filter([=](auto t) {

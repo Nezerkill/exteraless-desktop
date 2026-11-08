@@ -130,6 +130,7 @@
   27 regex-filters, 32 lyrics, 27 lrclib, 66 extra-pills, 26 ai-roles,
   9 weather-city, 12 stt, 11 ayu-import, 105 backup, 11 backup-redacted);
   плагины без изменений — 32 и 279 проверок.
+- Очередь воспроизведения (NB-50, v3): ordered-модель + sync, сайд-лист с drag и палитрой-акцентом; раннеры 1182/32/279 PASS (без изменений).
 - Полноэкранный лист плеера (NB-50, v2): `media/player/player_sheet.{h,cpp}`
   — `Exteraless::PlayerSheet` на `Ui::LayerWidget` показывает состояние
   `Media::Player::Instance` (view-only, своего состояния не заводит):

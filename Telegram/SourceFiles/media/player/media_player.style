@@ -534,3 +534,48 @@ playerSheetSpeed: RoundButton(defaultActiveButton) {
 		color: lightButtonBgOver;
 	}
 }
+
+queueSheetWidth: 360px;
+queueSheetPadding: 18px;
+queueSheetRadius: 16px;
+queueSheetBorderWidth: 1px;
+queueSheetBg: boxBg;
+queueSheetBorderFg: windowBgOver;
+queueSheetDivider: windowBgOver;
+queueSheetActiveBg: windowBgOver;
+
+queueSheetHeaderHeight: 44px;
+queueSheetRowHeight: 56px;
+queueSheetRowRadius: 10px;
+queueSheetRowBarSkip: 10px;
+queueSheetAccentWidth: 3px;
+queueSheetEmptyHeight: 96px;
+queueSheetMaxHeight: 480px;
+queueSheetScrollStep: 48px;
+queueSheetDragThreshold: 6px;
+queueSheetRowPadding: margins(12px, 8px, 12px, 8px);
+queueSheetTimeWidth: 44px;
+queueSheetTimeSkip: 8px;
+
+queueSheetTitle: FlatLabel(defaultFlatLabel) {
+	maxHeight: 22px;
+	textFg: windowFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(14px semibold);
+	}
+}
+queueSheetPerformer: FlatLabel(defaultFlatLabel) {
+	maxHeight: 18px;
+	textFg: windowSubTextFg;
+	style: TextStyle(defaultTextStyle) {
+		font: font(12px);
+	}
+}
+queueSheetTime: LabelSimple(defaultLabelSimple) {
+	font: font(11px);
+	textFg: windowSubTextFg;
+}
+queueSheetEmpty: LabelSimple(defaultLabelSimple) {
+	font: font(13px);
+	textFg: windowSubTextFg;
+}

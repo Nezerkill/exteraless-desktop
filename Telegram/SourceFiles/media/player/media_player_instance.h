@@ -174,6 +174,9 @@ public:
 	[[nodiscard]] rpl::producer<> playlistChanges(
 		AudioMsgId::Type type) const;
 
+	[[nodiscard]] std::vector<FullMsgId> playlistTrackIds(
+		AudioMsgId::Type type) const;
+
 	[[nodiscard]] rpl::producer<TrackState> updatedNotifier() const {
 		return _updatedNotifier.events();
 	}

@@ -9430,5 +9430,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_exteraless_plugins_level_isolated" = "Isolated";
 "lng_settings_exteraless_plugins_level_gated" = "Gated";
 "lng_settings_exteraless_plugins_level_trusted" = "Trusted";
+"lng_sr_player_queue" = "Play queue";
+"lng_sr_player_queue_empty" = "Queue is empty";
 
 // Keys finished
